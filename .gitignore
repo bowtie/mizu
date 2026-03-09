@@ -1,0 +1,11 @@
+animefillerguard
+animefillerguard.exe
+*.exe
+vendor/
+web/node_modules/
+internal/web/dist/
+config.yml
+*.db
+.DS_Store
+Thumbs.db
+

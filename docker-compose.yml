@@ -1,0 +1,49 @@
+# =============================================================================
+# AnimeFillerGuard - Docker Compose Example
+# Add this to your existing *arr stack docker-compose.yml
+# =============================================================================
+
+version: "3.8"
+
+services:
+  animefillerguard:
+    build: .
+    # Or use the published image:
+    # image: ghcr.io/animefillerguard/animefillerguard:latest
+    container_name: animefillerguard
+    restart: unless-stopped
+    ports:
+      - "8978:8978"
+    environment:
+      - SONARR_URL=http://sonarr:8989   # Use container name if on same network
+      - SONARR_API_KEY=your-api-key-here
+      - SCAN_INTERVAL=6h
+      - LOG_LEVEL=info
+      - TZ=America/New_York              # Your timezone
+    volumes:
+      - ./config/animefillerguard:/config
+    networks:
+      - arr-network
+    depends_on:
+      - sonarr
+
+  # --- Your existing *arr services (example) ---
+  # sonarr:
+  #   image: lscr.io/linuxserver/sonarr:latest
+  #   container_name: sonarr
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=America/New_York
+  #   volumes:
+  #     - ./config/sonarr:/config
+  #     - /path/to/media:/media
+  #   ports:
+  #     - "8989:8989"
+  #   restart: unless-stopped
+  #   networks:
+  #     - arr-network
+
+networks:
+  arr-network:
+    driver: bridge
