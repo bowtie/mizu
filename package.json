@@ -1,0 +1,8 @@
+{
+  "name": "mizu-dev",
+  "private": true,
+  "scripts": {
+    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
+    "dev:backend": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-backend.ps1"
+  }
+}

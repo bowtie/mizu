@@ -6,10 +6,10 @@
 
 {#if center}
   <div class="spinner-center">
-    <div>
+    <div class="spinner-stack">
       <div class="spinner" class:spinner-lg={size === 'lg'}></div>
       {#if message}
-        <p style="margin-top:12px;color:var(--text-secondary);font-size:13px;text-align:center">{message}</p>
+        <p class="spinner-message">{message}</p>
       {/if}
     </div>
   </div>
@@ -17,3 +17,19 @@
   <span class="spinner" class:spinner-lg={size === 'lg'}></span>
 {/if}
 
+<style>
+  .spinner-stack {
+    display: grid;
+    justify-items: center;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .spinner-message {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+  }
+</style>

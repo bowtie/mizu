@@ -109,6 +109,10 @@ export function getSettings() {
   return request('GET', '/settings');
 }
 
+export function getStoredSonarrApiKey() {
+  return request('GET', '/settings/sonarr-api-key');
+}
+
 export function updateSettings(data) {
   return request('PUT', '/settings', data);
 }

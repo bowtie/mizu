@@ -10,6 +10,7 @@ const (
 	EpisodeMixedCanon EpisodeType = "mixed_canon"
 	EpisodeAnimeCanon EpisodeType = "anime_canon"
 	EpisodeFiller     EpisodeType = "filler"
+	EpisodeSpecial    EpisodeType = "special"
 	EpisodeUnknown    EpisodeType = "unknown"
 )
 
@@ -58,12 +59,18 @@ type ShowMapping struct {
 
 // EpisodeInfo holds filler data for a single episode.
 type EpisodeInfo struct {
-	ID          int64       `json:"id"`
-	MappingID   int64       `json:"mapping_id"`
-	EpisodeNum  int         `json:"episode_num"` // AFL absolute episode number
-	Title       string      `json:"title"`
-	Type        EpisodeType `json:"type"`
-	LastScraped time.Time   `json:"last_scraped"`
+	ID                    int64       `json:"id"`
+	MappingID             int64       `json:"mapping_id"`
+	EpisodeNum            int         `json:"episode_num"` // UI identity/display number
+	AFLEpisodeNumber      int         `json:"afl_episode_number,omitempty"`
+	Title                 string      `json:"title"`
+	Type                  EpisodeType `json:"type"`
+	LastScraped           time.Time   `json:"last_scraped"`
+	SonarrEpisodeID       int         `json:"sonarr_episode_id,omitempty"`
+	SeasonNumber          int         `json:"season_number,omitempty"`
+	SonarrEpisodeNumber   int         `json:"sonarr_episode_number,omitempty"`
+	AbsoluteEpisodeNumber *int        `json:"absolute_episode_number,omitempty"`
+	Monitored             bool        `json:"monitored,omitempty"`
 }
 
 // SyncLogItem records the per-anime result of a sync run.
@@ -175,4 +182,3 @@ type AFLEpisode struct {
 	Title  string      `json:"title"`
 	Type   EpisodeType `json:"type"`
 }
-

@@ -7,19 +7,18 @@
   import Badge from '../components/Badge.svelte';
   import Modal from '../components/Modal.svelte';
   import IconMagnifyingGlassRegular from 'phosphor-icons-svelte/IconMagnifyingGlassRegular.svelte';
-  import IconArrowsClockwiseRegular from 'phosphor-icons-svelte/IconArrowsClockwiseRegular.svelte';
   import IconPlusRegular from 'phosphor-icons-svelte/IconPlusRegular.svelte';
   import IconCheckCircleRegular from 'phosphor-icons-svelte/IconCheckCircleRegular.svelte';
   import IconWarningCircleRegular from 'phosphor-icons-svelte/IconWarningCircleRegular.svelte';
   import IconWaveSineRegular from 'phosphor-icons-svelte/IconWaveSineRegular.svelte';
+  import IconCheckRegular from 'phosphor-icons-svelte/IconCheckRegular.svelte';
+  import IconXRegular from 'phosphor-icons-svelte/IconXRegular.svelte';
 
   const START_FROM_BEGINNING = 'from_beginning';
   const START_FROM_CURRENT = 'from_current_progress';
 
   let loading = true;
-  let syncing = false;
   let filter = '';
-  let lastUpdatedAt = null;
   let sonarrConnected = false;
 
   let allSeries = [];
@@ -50,9 +49,6 @@
     return {
       ...show,
       poster: posterUrl(series),
-      episodeCount: series?.statistics?.episodeCount ?? null,
-      fileCount: series?.statistics?.episodeFileCount ?? null,
-      seriesStatus: series?.status ?? '',
     };
   });
 
@@ -79,27 +75,10 @@
       sonarrConnected = statusRes.status === 'fulfilled' && statusRes.value?.status === 'ok';
       allSeries = seriesRes.status === 'fulfilled' ? (seriesRes.value || []) : [];
       seriesById = Object.fromEntries(allSeries.map((series) => [series.id, series]));
-      lastUpdatedAt = nextShows.reduce((latest, show) => {
-        if (!show.updated_at) return latest;
-        const time = new Date(show.updated_at).getTime();
-        return time > latest ? time : latest;
-      }, 0);
     } catch (err) {
-      addNotification('Failed to load Mizu library: ' + err.message, 'error');
+      addNotification('Failed to load Mizu anime: ' + err.message, 'error');
     }
     loading = false;
-  }
-
-  async function handleSync() {
-    syncing = true;
-    try {
-      await triggerSync();
-      addNotification('Sync triggered successfully', 'success');
-      setTimeout(loadLanding, 1800);
-    } catch (err) {
-      addNotification('Failed to trigger sync: ' + err.message, 'error');
-    }
-    syncing = false;
   }
 
   function posterUrl(series) {
@@ -115,24 +94,12 @@
     return (title || 'Mizu').split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase();
   }
 
-  function fileStat(show) {
-    if (show.fileCount == null && show.episodeCount == null) return 'Episodes --';
-    if (show.fileCount == null) return `${show.episodeCount} eps`;
-    if (show.episodeCount == null) return `${show.fileCount} files`;
-    return `${show.fileCount}/${show.episodeCount} files`;
-  }
-
   function markerChip(show) {
     return show.sync_watermark > 0 ? `#${show.sync_watermark}` : '#0';
   }
 
   function syncChip(show) {
-    return show.enabled ? 'Sync on' : 'Sync off';
-  }
-
-  function formatUpdated(time) {
-    if (!time) return 'Never';
-    return new Date(time).toLocaleDateString();
+    return show.enabled ? 'Syncing' : 'Paused';
   }
 
   function openShow(showId) {
@@ -241,7 +208,7 @@
       const mapped = ($shows || []).find((show) => show.sonarr_series_id === selectedSonarr.id);
       if (mapped) openShow(mapped.id);
     } catch (err) {
-      addNotification('Failed to map anime: ' + err.message, 'error');
+      addNotification('Failed to sync anime: ' + err.message, 'error');
     }
     confirming = false;
   }
@@ -256,34 +223,28 @@
 </script>
 
 <svelte:head>
-  <title>Mizu - Shows</title>
+  <title>Mizu - Anime</title>
 </svelte:head>
 
 <div class="library-shell">
-  <section class="page-heading">
+  <section class="page-heading anime-heading">
     <div>
-      <h1>Synced anime</h1>
-      <p>{($shows || []).length} synced anime{lastUpdatedAt ? ` • updated ${formatUpdated(lastUpdatedAt)}` : ''}</p>
+      <h1>Anime</h1>
+      <p>{($shows || []).length} synced in Mizu</p>
     </div>
-  </section>
-
-  <section class="library-toolbar card">
-    <label class="search-shell" aria-label="Search synced anime">
-      <IconMagnifyingGlassRegular size={18} weight="regular" />
-      <input class="landing-search" type="text" placeholder="Search or jump to an anime..." bind:value={filter} />
-    </label>
-    <button class="btn btn-secondary toolbar-button" on:click={handleSync} disabled={syncing}>
-      <IconArrowsClockwiseRegular size={18} weight="regular" />
-      <span>{syncing ? 'Syncing...' : 'Sync'}</span>
-    </button>
-    <button class="btn btn-primary toolbar-button" on:click={openAddModal}>
+    <button class="btn btn-primary anime-heading-action" on:click={openAddModal} aria-label="Add anime" title="Add anime">
       <IconPlusRegular size={18} weight="regular" />
       <span>Add Anime</span>
     </button>
   </section>
 
+  <label class="search-shell anime-search-row" aria-label="Search synced anime">
+    <IconMagnifyingGlassRegular size={18} weight="regular" />
+    <input class="landing-search" type="text" placeholder="Search anime..." bind:value={filter} />
+  </label>
+
   {#if loading}
-    <Spinner center size="lg" message="Loading Mizu library..." />
+    <Spinner center size="lg" message="Loading Mizu anime..." />
   {:else if filteredShows.length === 0 && ($shows || []).length === 0}
     <div class="card landing-empty">
       <div class="empty-state compact-empty">
@@ -338,7 +299,7 @@
     {:else if availableSeries.length === 0}
       <div class="empty-state compact-empty" style="padding:20px">
         <h3>No unmapped series</h3>
-        <p>Everything in Sonarr is already mapped, or Sonarr returned no anime series.</p>
+        <p>Everything in Sonarr is already synced, or Sonarr returned no anime series.</p>
       </div>
     {:else}
       <div class="select-list">
@@ -366,7 +327,7 @@
               <span>{manualSearching ? 'Searching...' : 'Search'}</span>
             </button>
           </div>
-          <div class="form-hint" style="margin-top:8px">No strong automatic suggestions were found for this series.</div>
+          <div class="form-hint" style="margin-top:8px">No strong automatic suggestions were found for this anime.</div>
         </div>
       {/if}
 
@@ -396,27 +357,21 @@
       {#if selectedAfl}
         <div class="review-panel">
           <h3>Initial rules</h3>
-          <div class="check-list compact-check-list">
-            <label class="check-card compact">
+          <div class="rule-pill-row" role="group" aria-label="Initial tracking rules">
+            <label class="rule-pill rule-pill-anime" class:active={addTrackAnimeCanon}>
               <input type="checkbox" bind:checked={addTrackAnimeCanon} />
-              <div>
-                <strong>Track anime canon</strong>
-                <small>Monitor anime-only canon episodes above the marker.</small>
-              </div>
+              {#if addTrackAnimeCanon}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+              <span>Anime canon</span>
             </label>
-            <label class="check-card compact">
+            <label class="rule-pill rule-pill-mixed" class:active={addTrackMixed}>
               <input type="checkbox" bind:checked={addTrackMixed} />
-              <div>
-                <strong>Track mixed canon</strong>
-                <small>Monitor mixed canon episodes above the marker.</small>
-              </div>
+              {#if addTrackMixed}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+              <span>Mixed canon</span>
             </label>
-            <label class="check-card compact">
+            <label class="rule-pill rule-pill-filler" class:active={addTrackFiller}>
               <input type="checkbox" bind:checked={addTrackFiller} />
-              <div>
-                <strong>Track filler</strong>
-                <small>Monitor filler episodes above the marker.</small>
-              </div>
+              {#if addTrackFiller}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+              <span>Filler</span>
             </label>
           </div>
           <div class="form-group" style="margin-top:14px;margin-bottom:0">
@@ -442,7 +397,7 @@
     {/if}
     {#if addStep === 'match' && selectedAfl}
       <button class="btn btn-primary" on:click={handleConfirmMatch} disabled={confirming}>
-        {#if confirming}<span class="spinner"></span> Mapping...{:else}Confirm match{/if}
+        {#if confirming}<span class="spinner"></span> Syncing...{:else}Confirm match{/if}
       </button>
     {/if}
   </svelte:fragment>
@@ -452,43 +407,47 @@
   .library-shell {
     display: grid;
     gap: 20px;
-    max-width: 1180px;
+    max-width: 960px;
     margin: 0 auto;
   }
 
-  .page-heading {
-    padding-inline: 4px;
+  .anime-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
   }
 
-  .page-heading h1 {
+  .anime-heading h1 {
     margin-bottom: 4px;
-    font-size: clamp(1.75rem, 2vw, 2.1rem);
+    font-size: 2rem;
+    line-height: 1.1;
   }
 
-  .page-heading p {
+  .anime-heading p {
     color: var(--text-secondary);
   }
 
-  .library-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 14px;
-    padding: 12px;
+  .anime-heading-action {
+    display: inline-flex;
     align-items: center;
-    border-radius: 28px;
+    gap: 8px;
   }
 
   .search-shell {
     display: flex;
     align-items: center;
-    gap: 12px;
-    min-height: 54px;
-    padding: 0 18px;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
     border-radius: 999px;
-    border: 1px solid rgba(118, 167, 203, 0.18);
-    background: rgba(10, 18, 31, 0.84);
-    box-shadow: inset 0 1px 0 rgba(194, 226, 255, 0.04);
+    background: rgba(12, 26, 46, 0.92);
     color: var(--text-muted);
+  }
+
+  .anime-search-row {
+    width: 100%;
   }
 
   .landing-search {
@@ -498,61 +457,56 @@
     outline: none;
     background: transparent;
     font: inherit;
+    color: var(--text-primary);
+    caret-color: var(--accent-cream);
   }
 
-  .toolbar-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 54px;
-    padding-inline: 18px;
+  .landing-search::placeholder {
+    color: var(--text-muted);
   }
 
   .shows-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 18px;
-    align-items: start;
+    gap: 16px;
   }
 
   .show-card {
     overflow: hidden;
     min-width: 0;
-    min-height: 360px;
-    border: 1px solid rgba(118, 167, 203, 0.16);
-    border-radius: 26px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
     background: rgba(7, 14, 24, 0.94);
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
-    transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
-    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+    transition: border-color var(--transition), background var(--transition);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
   }
 
   .show-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(102, 195, 225, 0.34);
-    box-shadow: 0 24px 54px rgba(0, 0, 0, 0.28);
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+    box-shadow: 0 20px 42px rgba(3, 10, 20, 0.34);
   }
 
   .show-card-media {
     position: relative;
-    min-height: 360px;
+    min-height: 340px;
     overflow: hidden;
-    background: linear-gradient(145deg, #0d2240 0%, #113e72 45%, #1fa1c6 100%);
+    background: linear-gradient(180deg, #1d3558 0%, #10203a 100%);
   }
 
   .show-card-media::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(3, 10, 18, 0.04) 10%, rgba(3, 10, 18, 0.2) 42%, rgba(3, 10, 18, 0.76) 78%, rgba(3, 10, 18, 0.94) 100%);
+    background: linear-gradient(180deg, rgba(3, 8, 16, 0.02) 16%, rgba(3, 8, 16, 0.2) 44%, rgba(3, 8, 16, 0.9) 100%);
   }
 
   .show-card-media img {
     width: 100%;
     height: 100%;
-    display: block;
     object-fit: cover;
   }
 
@@ -563,18 +517,18 @@
   }
 
   .show-card-fallback {
-    width: 88px;
-    height: 88px;
-    border-radius: 24px;
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(194, 226, 255, 0.16);
+    background: rgba(252, 250, 242, 0.08);
+    border: 1px solid rgba(252, 250, 242, 0.14);
     font-family: 'Figtree', sans-serif;
-    font-size: 1.7rem;
+    font-size: 1.35rem;
     font-weight: 700;
-    color: #f4fbff;
+    color: var(--accent-cream);
     position: relative;
     z-index: 1;
   }
@@ -584,13 +538,14 @@
     inset: auto 0 0;
     z-index: 1;
     display: grid;
-    gap: 14px;
-    padding: 18px;
+    gap: 8px;
+    padding: 14px;
   }
 
-  .show-card-copy {
-    display: grid;
-    gap: 8px;
+  .show-card-copy h3 {
+    font-size: 1.1rem;
+    line-height: 1.18;
+    color: var(--accent-cream);
   }
 
   .show-card-chips {
@@ -603,38 +558,30 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    min-height: 28px;
-    padding: 0 10px;
+    min-height: 26px;
+    padding: 0 9px;
     border-radius: 999px;
-    background: rgba(9, 22, 38, 0.7);
-    border: 1px solid rgba(149, 202, 234, 0.16);
-    backdrop-filter: blur(10px);
-    color: #dfedf9;
+    background: rgba(9, 20, 34, 0.9);
+    border: 1px solid rgba(138, 182, 244, 0.14);
+    color: var(--accent-cream);
     font-size: 11px;
     font-weight: 700;
   }
 
   .info-chip-on {
-    background: rgba(34, 197, 94, 0.16);
-    border-color: rgba(74, 222, 128, 0.2);
-    color: #dcfce7;
+    background: var(--success-bg);
+    border-color: rgba(111, 219, 141, 0.3);
+    color: #eefbe9;
   }
 
   .info-chip-off {
-    background: rgba(239, 68, 68, 0.16);
-    border-color: rgba(248, 113, 113, 0.2);
-    color: #fecaca;
-  }
-
-  .show-card-copy h3 {
-    font-size: 1.08rem;
-    line-height: 1.22;
-    color: #f6fbff;
-    text-shadow: 0 10px 24px rgba(0, 0, 0, 0.42);
+    background: var(--danger-bg);
+    border-color: rgba(243, 93, 78, 0.3);
+    color: #ffe3dd;
   }
 
   .landing-empty {
-    min-height: 280px;
+    min-height: 240px;
   }
 
   .compact-empty {
@@ -642,24 +589,24 @@
     gap: 12px;
     place-items: center;
     text-align: center;
-    padding: 28px;
+    padding: 24px;
   }
 
   .compact-empty .empty-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 54px;
-    height: 54px;
-    border-radius: 18px;
-    background: rgba(18, 168, 216, 0.14);
-    color: var(--accent);
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: rgba(115, 175, 212, 0.12);
+    color: var(--accent-blue);
   }
 
   .modal-copy {
+    margin-bottom: 12px;
     font-size: 13px;
     color: var(--text-secondary);
-    margin-bottom: 12px;
   }
 
   .select-list {
@@ -678,11 +625,12 @@
     padding: 14px;
     text-align: left;
     cursor: pointer;
+    border-radius: 12px;
   }
 
   .selected-card {
-    border-color: rgba(102, 195, 225, 0.34);
-    box-shadow: inset 0 0 0 1px rgba(102, 195, 225, 0.18);
+    border-color: rgba(115, 175, 212, 0.22);
+    background: rgba(71, 180, 229, 0.08);
   }
 
   .selectable-title {
@@ -691,7 +639,7 @@
   }
 
   .selectable-title.emphasis {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .selectable-meta {
@@ -710,9 +658,9 @@
   .review-panel {
     margin-top: 16px;
     padding: 16px;
-    border-radius: 18px;
-    border: 1px solid rgba(118, 167, 203, 0.16);
-    background: rgba(10, 17, 29, 0.78);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(12, 26, 46, 0.8);
   }
 
   .review-panel h3 {
@@ -720,32 +668,58 @@
     font-size: 15px;
   }
 
-  .check-list {
-    display: grid;
+  .rule-pill-row {
+    display: flex;
+    flex-wrap: wrap;
     gap: 10px;
   }
 
-  .check-card {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 12px;
-    align-items: start;
-    padding: 12px 14px;
-    border-radius: 16px;
-    border: 1px solid rgba(149, 202, 234, 0.12);
-    background: rgba(255, 255, 255, 0.03);
-    cursor: pointer;
-  }
-
-  .check-card strong {
-    display: block;
-    margin-bottom: 4px;
-    font-family: 'Figtree', sans-serif;
-  }
-
-  .check-card small {
+  .rule-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(25, 40, 62, 0.74);
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
+  }
+
+  .rule-pill input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .rule-pill-anime.active {
+    background: rgba(115, 175, 212, 0.1);
+    border-color: rgba(115, 175, 212, 0.22);
+    color: var(--text-primary);
+  }
+
+  .rule-pill-mixed.active {
+    background: rgba(115, 175, 212, 0.08);
+    border-color: rgba(115, 175, 212, 0.18);
+    color: var(--text-primary);
+  }
+
+  .rule-pill-filler.active {
+    background: var(--filler-bg);
+    border-color: rgba(240, 111, 99, 0.32);
+    color: #fff6f4;
+  }
+
+  .rule-pill-filler:not(.active) {
+    border-color: rgba(240, 111, 99, 0.24);
+    color: #f3c0bb;
   }
 
   .match-search-row {
@@ -756,41 +730,75 @@
   }
 
   @media (max-width: 1100px) {
+    .library-shell {
+      gap: 18px;
+    }
+
+    .shows-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .show-card-media {
+      min-height: 320px;
+    }
+  }
+
+  @media (max-width: 960px) {
     .shows-grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
   @media (max-width: 840px) {
-    .library-toolbar {
-      grid-template-columns: 1fr;
+    .anime-heading {
+      align-items: flex-start;
     }
 
     .shows-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .show-card-media {
+      min-height: 300px;
+    }
   }
 
   @media (max-width: 560px) {
+    .library-shell {
+      gap: 16px;
+    }
+
+    .anime-heading {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .anime-heading-action {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .search-shell {
+      min-height: 42px;
+      padding: 0 12px;
+    }
+
     .shows-grid {
       grid-template-columns: 1fr;
     }
 
-    .show-card,
     .show-card-media {
-      min-height: 320px;
+      min-height: 280px;
     }
 
     .match-search-row {
       grid-template-columns: 1fr;
     }
+
+    .rule-pill-row {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
   }
 </style>
-
-
-
-
-
-
-
 

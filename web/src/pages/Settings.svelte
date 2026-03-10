@@ -1,20 +1,31 @@
 <script>
   import { onMount } from 'svelte';
   import { settings, addNotification } from '../lib/stores.js';
-  import { getSettings, updateSettings, testSonarrConnection, refreshAflCache } from '../lib/api.js';
+  import { getSettings, getStoredSonarrApiKey, updateSettings, testSonarrConnection, refreshAflCache } from '../lib/api.js';
   import Spinner from '../components/Spinner.svelte';
   import IconFloppyDiskRegular from 'phosphor-icons-svelte/IconFloppyDiskRegular.svelte';
   import IconPlugRegular from 'phosphor-icons-svelte/IconPlugRegular.svelte';
   import IconArrowsClockwiseRegular from 'phosphor-icons-svelte/IconArrowsClockwiseRegular.svelte';
+  import IconCheckRegular from 'phosphor-icons-svelte/IconCheckRegular.svelte';
+  import IconXRegular from 'phosphor-icons-svelte/IconXRegular.svelte';
+  import IconEyeRegular from 'phosphor-icons-svelte/IconEyeRegular.svelte';
+  import IconEyeSlashRegular from 'phosphor-icons-svelte/IconEyeSlashRegular.svelte';
+  import IconCaretDownRegular from 'phosphor-icons-svelte/IconCaretDownRegular.svelte';
 
   let loading = true;
   let saving = false;
   let testing = false;
   let refreshingCache = false;
+  let revealingKey = false;
   let testResult = null;
+  let showAdvancedTagging = false;
 
   let sonarrUrl = '';
   let sonarrApiKey = '';
+  let savedApiKeyMasked = '';
+  let hasSavedApiKey = false;
+  let apiKeyVisible = false;
+  let apiKeyDirty = false;
   let syncInterval = '6h';
   let enableTagging = false;
   let fillerTagName = 'filler';
@@ -45,7 +56,11 @@
       const data = await getSettings();
       if (data && !data.error) {
         sonarrUrl = data.sonarr_url || '';
-        sonarrApiKey = data.sonarr_api_key || '';
+        savedApiKeyMasked = data.sonarr_api_key_masked || '';
+        hasSavedApiKey = !!data.sonarr_api_key_set;
+        sonarrApiKey = savedApiKeyMasked;
+        apiKeyVisible = false;
+        apiKeyDirty = false;
         syncInterval = data.sync_interval || '6h';
         enableTagging = data.enable_tagging || false;
         fillerTagName = data.filler_tag_name || 'filler';
@@ -62,19 +77,62 @@
     loading = false;
   }
 
+  function handleApiKeyInput(event) {
+    apiKeyDirty = true;
+    sonarrApiKey = event.currentTarget.value;
+  }
+
+  async function toggleApiKeyVisibility() {
+    if (apiKeyVisible) {
+      apiKeyVisible = false;
+      if (!apiKeyDirty && hasSavedApiKey) {
+        sonarrApiKey = savedApiKeyMasked;
+      }
+      return;
+    }
+
+    if (!apiKeyDirty && hasSavedApiKey) {
+      revealingKey = true;
+      try {
+        const data = await getStoredSonarrApiKey();
+        sonarrApiKey = data.sonarr_api_key || '';
+      } catch (err) {
+        addNotification('Failed to reveal saved API key: ' + err.message, 'error');
+        revealingKey = false;
+        return;
+      }
+      revealingKey = false;
+    }
+
+    apiKeyVisible = true;
+  }
+
+  async function resolveApiKeyForTest() {
+    if (apiKeyDirty || apiKeyVisible || !hasSavedApiKey) {
+      return sonarrApiKey;
+    }
+    const data = await getStoredSonarrApiKey();
+    return data.sonarr_api_key || '';
+  }
+
   async function handleSave() {
     saving = true;
     try {
-      await updateSettings({
+      const payload = {
         sonarr_url: sonarrUrl,
-        sonarr_api_key: sonarrApiKey,
         default_filler_action: trackedToAction(trackFillerDefault),
         default_mixed_canon_action: trackedToAction(trackMixedDefault),
         default_anime_canon_action: trackedToAction(trackAnimeCanonDefault),
         sync_interval: syncInterval,
         enable_tagging: enableTagging,
         filler_tag_name: fillerTagName,
-      });
+      };
+
+      if (apiKeyDirty || !hasSavedApiKey) {
+        payload.sonarr_api_key = sonarrApiKey;
+      }
+
+      await updateSettings(payload);
       addNotification('Settings saved successfully', 'success');
       await loadSettings();
     } catch (err) {
@@ -91,7 +149,11 @@
     testing = true;
     testResult = null;
     try {
-      await testSonarrConnection(sonarrUrl, sonarrApiKey);
+      const apiKey = await resolveApiKeyForTest();
+      const result = await testSonarrConnection(sonarrUrl, apiKey);
+      if (!result?.success) {
+        throw new Error(result?.error || 'Connection failed');
+      }
       testResult = { success: true, message: 'Connection successful' };
       addNotification('Sonarr connection test passed', 'success');
     } catch (err) {
@@ -141,19 +203,45 @@
     <section class="settings-grid">
       <div class="card settings-panel">
         <div class="panel-head">
-          <h3>Sonarr connection</h3>
+          <div>
+            <h3>Sonarr</h3>
+            <p>Connection settings for your Sonarr instance.</p>
+          </div>
           {#if testResult}<span class="test-result" class:error={!testResult.success}>{testResult.message}</span>{/if}
         </div>
+
         <div class="form-group">
           <label class="form-label" for="sonarr-url">Sonarr URL</label>
-          <input id="sonarr-url" class="form-input" type="text" placeholder="http://localhost:8989" bind:value={sonarrUrl} />
+          <input id="sonarr-url" class="form-input settings-field" type="text" placeholder="http://localhost:8989" bind:value={sonarrUrl} />
           <div class="form-hint">Full URL to your Sonarr instance.</div>
         </div>
+
         <div class="form-group">
-          <label class="form-label" for="sonarr-key">API key</label>
-          <input id="sonarr-key" class="form-input" type="password" placeholder="Your Sonarr API key" bind:value={sonarrApiKey} />
-          <div class="form-hint">Found in Sonarr under Settings → General → Security.</div>
+          <div class="field-head">
+            <label class="form-label" for="sonarr-key">API key</label>
+            {#if hasSavedApiKey || apiKeyDirty}
+              <button type="button" class="inline-toggle" on:click={toggleApiKeyVisibility} disabled={revealingKey}>
+                {#if apiKeyVisible}
+                  <IconEyeSlashRegular size={14} weight="regular" />
+                  <span>Hide</span>
+                {:else}
+                  <IconEyeRegular size={14} weight="regular" />
+                  <span>{revealingKey ? 'Loading...' : 'View'}</span>
+                {/if}
+              </button>
+            {/if}
+          </div>
+          <input
+            id="sonarr-key"
+            class="form-input settings-field"
+            type={apiKeyVisible ? 'text' : 'password'}
+            value={sonarrApiKey}
+            placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
+            on:input={handleApiKeyInput}
+          />
+          <div class="form-hint">{hasSavedApiKey && !apiKeyDirty ? 'Saved key is masked by default.' : 'Found in Sonarr under Settings → General → Security.'}</div>
         </div>
+
         <button class="btn btn-secondary" on:click={handleTestConnection} disabled={testing}>
           <IconPlugRegular size={18} weight="regular" />
           <span>{testing ? 'Testing...' : 'Test connection'}</span>
@@ -161,21 +249,29 @@
       </div>
 
       <div class="card settings-panel">
-        <div class="panel-head"><h3>Sync behavior</h3></div>
+        <div class="panel-head">
+          <div>
+            <h3>Sync</h3>
+            <p>Control cadence and AFL show-list refresh.</p>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label" for="sync-interval">Sync interval</label>
-          <select id="sync-interval" class="form-select" bind:value={syncInterval}>
+          <select id="sync-interval" class="form-select settings-field" bind:value={syncInterval}>
             {#each syncIntervalOptions as opt}
               <option value={opt.value}>{opt.label}</option>
             {/each}
           </select>
-          <div class="form-hint">How often Mizu syncs filler data from AnimeFillerList.</div>
+          <div class="form-hint">How often Mizu checks Sonarr and AFL for sync changes.</div>
         </div>
+
         <div class="cache-status-card">
           <div><span>Show list refresh</span><strong>Monthly automatic refresh</strong></div>
           <div><span>Last refreshed</span><strong>{formatCacheTime(cacheRefreshedAt)}</strong></div>
           <div><span>Cached shows</span><strong>{cacheCount}</strong></div>
         </div>
+
         <button class="btn btn-secondary" on:click={handleRefreshCache} disabled={refreshingCache}>
           <IconArrowsClockwiseRegular size={18} weight="regular" />
           <span>{refreshingCache ? 'Refreshing...' : 'Refresh AFL show list'}</span>
@@ -185,34 +281,54 @@
 
     <section class="settings-grid secondary">
       <div class="card settings-panel">
-        <div class="panel-head"><h3>Default tracking rules</h3></div>
-        <div class="check-list">
-          <label class="check-card">
-            <input type="checkbox" bind:checked={trackFillerDefault} />
-            <div><strong>Track filler</strong><small>New mappings will monitor filler episodes when enabled.</small></div>
-          </label>
-          <label class="check-card">
-            <input type="checkbox" bind:checked={trackMixedDefault} />
-            <div><strong>Track mixed canon</strong><small>New mappings will monitor mixed canon episodes when enabled.</small></div>
-          </label>
-          <label class="check-card">
+        <div class="panel-head">
+          <div>
+            <h3>Defaults</h3>
+            <p>Default tracking behavior for newly synced anime.</p>
+          </div>
+        </div>
+
+        <div class="rule-pill-row" role="group" aria-label="Default tracking rules">
+          <label class="rule-pill rule-pill-anime" class:active={trackAnimeCanonDefault}>
             <input type="checkbox" bind:checked={trackAnimeCanonDefault} />
-            <div><strong>Track anime canon</strong><small>New mappings will monitor anime canon episodes when enabled.</small></div>
+            {#if trackAnimeCanonDefault}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+            <span>Anime canon</span>
+          </label>
+          <label class="rule-pill rule-pill-mixed" class:active={trackMixedDefault}>
+            <input type="checkbox" bind:checked={trackMixedDefault} />
+            {#if trackMixedDefault}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+            <span>Mixed canon</span>
+          </label>
+          <label class="rule-pill rule-pill-filler" class:active={trackFillerDefault}>
+            <input type="checkbox" bind:checked={trackFillerDefault} />
+            {#if trackFillerDefault}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+            <span>Filler</span>
           </label>
         </div>
       </div>
 
-      <div class="card settings-panel">
-        <div class="panel-head"><h3>Tagging</h3></div>
-        <label class="check-card">
-          <input type="checkbox" bind:checked={enableTagging} />
-          <div><strong>Enable filler tagging</strong><small>Add a tag to Sonarr series that contain filler-related episodes.</small></div>
-        </label>
-        {#if enableTagging}
-          <div class="form-group" style="margin-top:16px">
-            <label class="form-label" for="tag-name">Tag name</label>
-            <input id="tag-name" class="form-input" type="text" placeholder="filler" bind:value={fillerTagName} />
-            <div class="form-hint">The tag label to apply in Sonarr.</div>
+      <div class="card settings-panel advanced-panel">
+        <button class="advanced-toggle" type="button" on:click={() => (showAdvancedTagging = !showAdvancedTagging)}>
+          <div>
+            <h3>Advanced tagging</h3>
+            <p>Add a Sonarr tag to anime that include filler-related episodes.</p>
+          </div>
+          <span class:open={showAdvancedTagging}><IconCaretDownRegular size={16} weight="bold" /></span>
+        </button>
+
+        {#if showAdvancedTagging}
+          <div class="advanced-content">
+            <label class="check-card subdued-check-card">
+              <input type="checkbox" bind:checked={enableTagging} />
+              <div><strong>Enable Sonarr tagging</strong><small>Useful if you want to filter or spot filler-heavy anime inside Sonarr.</small></div>
+            </label>
+            {#if enableTagging}
+              <div class="form-group advanced-form-group">
+                <label class="form-label" for="tag-name">Tag name</label>
+                <input id="tag-name" class="form-input settings-field" type="text" placeholder="filler" bind:value={fillerTagName} />
+                <div class="form-hint">The tag label to apply in Sonarr.</div>
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
@@ -224,7 +340,7 @@
   .settings-shell {
     display: grid;
     gap: 18px;
-    max-width: 1160px;
+    max-width: 960px;
     margin: 0 auto;
   }
 
@@ -237,14 +353,16 @@
 
   .row-heading h1 {
     margin-bottom: 4px;
-    font-size: clamp(1.75rem, 2vw, 2.05rem);
+    font-size: 2rem;
+    line-height: 1.1;
   }
 
   .row-heading p {
     color: var(--text-secondary);
   }
 
-  .row-heading .btn {
+  .row-heading .btn,
+  .settings-panel .btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -258,18 +376,29 @@
 
   .settings-panel {
     padding: 18px;
+    display: grid;
+    gap: 16px;
   }
 
   .panel-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
-    margin-bottom: 14px;
+  }
+
+  .panel-head h3 {
+    font-size: 1rem;
+  }
+
+  .panel-head p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 13px;
   }
 
   .test-result {
-    color: var(--accent);
+    color: var(--text-primary);
     font-size: 12px;
   }
 
@@ -277,20 +406,39 @@
     color: var(--danger);
   }
 
-  .settings-panel .btn {
+  .field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 7px;
+  }
+
+  .field-head .form-label {
+    margin-bottom: 0;
+  }
+
+  .inline-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .settings-field {
+    background: rgba(14, 33, 60, 0.92);
+    border-color: rgba(71, 180, 229, 0.2);
   }
 
   .cache-status-card {
     display: grid;
     gap: 10px;
-    margin-bottom: 16px;
     padding: 14px;
-    border-radius: 18px;
-    border: 1px solid rgba(118, 167, 203, 0.14);
-    background: rgba(10, 17, 29, 0.7);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(11, 27, 50, 0.76);
   }
 
   .cache-status-card span {
@@ -306,46 +454,155 @@
     font-size: 13px;
   }
 
-  .check-list {
-    display: grid;
+  .rule-pill-row {
+    display: flex;
+    flex-wrap: wrap;
     gap: 10px;
   }
 
-  .check-card {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 12px;
-    align-items: start;
-    padding: 12px 14px;
-    border-radius: 16px;
-    border: 1px solid rgba(149, 202, 234, 0.12);
-    background: rgba(255, 255, 255, 0.03);
+  .rule-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(29, 44, 67, 0.72);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
+  }
+
+  .rule-pill input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .rule-pill-anime.active {
+    background: rgba(115, 175, 212, 0.1);
+    border-color: rgba(115, 175, 212, 0.22);
+    color: var(--text-primary);
+  }
+
+  .rule-pill-mixed.active {
+    background: rgba(115, 175, 212, 0.08);
+    border-color: rgba(115, 175, 212, 0.18);
+    color: var(--text-primary);
+  }
+
+  .rule-pill-filler.active {
+    background: var(--filler-bg);
+    border-color: rgba(240, 111, 99, 0.32);
+    color: #fff6f4;
+  }
+
+  .rule-pill-filler:not(.active) {
+    border-color: rgba(240, 111, 99, 0.24);
+    color: #f3c0bb;
+  }
+
+  .advanced-panel {
+    gap: 0;
+  }
+
+  .advanced-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+  }
+
+  .advanced-toggle p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .advanced-toggle span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: transform var(--transition);
+  }
+
+  .advanced-toggle span.open {
+    transform: rotate(180deg);
+  }
+
+  .advanced-content {
+    display: grid;
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .check-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(11, 27, 50, 0.76);
+  }
+
+  .check-card input {
+    margin-top: 4px;
   }
 
   .check-card strong {
     display: block;
     margin-bottom: 4px;
-    font-family: 'Figtree', sans-serif;
   }
 
   .check-card small {
+    display: block;
     color: var(--text-secondary);
     font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .subdued-check-card {
+    background: rgba(11, 27, 50, 0.6);
+  }
+
+  .advanced-form-group {
+    margin-bottom: 0;
   }
 
   @media (max-width: 900px) {
-    .row-heading {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
     .settings-grid {
       grid-template-columns: 1fr;
     }
   }
+
+  @media (max-width: 720px) {
+    .row-heading {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .row-heading .btn {
+      width: 100%;
+    }
+
+    .settings-panel {
+      padding: 16px;
+    }
+
+    .rule-pill-row {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
-
-
-
 

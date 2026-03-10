@@ -2,13 +2,14 @@
   import { onMount } from 'svelte';
   import { location } from 'svelte-spa-router';
   import { getStatus } from '../lib/api.js';
-  import IconHouseRegular from 'phosphor-icons-svelte/IconHouseRegular.svelte';
+  import IconTelevisionSimpleRegular from 'phosphor-icons-svelte/IconTelevisionSimpleRegular.svelte';
   import IconClockCounterClockwiseRegular from 'phosphor-icons-svelte/IconClockCounterClockwiseRegular.svelte';
   import IconGearSixRegular from 'phosphor-icons-svelte/IconGearSixRegular.svelte';
   import IconWaveSineRegular from 'phosphor-icons-svelte/IconWaveSineRegular.svelte';
+  import IconBroadcastRegular from 'phosphor-icons-svelte/IconBroadcastRegular.svelte';
 
   const navItems = [
-    { path: '/shows', label: 'Shows', icon: IconHouseRegular },
+    { path: '/shows', label: 'Anime', icon: IconTelevisionSimpleRegular },
     { path: '/activity', label: 'Activity', icon: IconClockCounterClockwiseRegular },
     { path: '/settings', label: 'Settings', icon: IconGearSixRegular },
   ];
@@ -52,9 +53,13 @@
     </nav>
 
     <div class="topbar-utility">
-      <span class="status-pill" class:offline={!sonarrConnected}>
-        <span class="status-dot" class:online={sonarrConnected} class:offline={!sonarrConnected}></span>
-        {sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
+      <span
+        class="status-pill sonarr-pill"
+        class:offline={!sonarrConnected}
+        title={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
+        aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
+      >
+        <IconBroadcastRegular size={16} weight="regular" />
       </span>
     </div>
   </div>
@@ -64,7 +69,7 @@
   <div class="mobile-bottom-pill mizu-bottom-pill">
     {#each navItems as item}
       <a href={`#${item.path}`} class="mobile-nav-link" class:active={isActive(item.path, $location)}>
-        <svelte:component this={item.icon} size={20} weight="regular" />
+        <svelte:component this={item.icon} size={28} weight="regular" />
         <span>{item.label}</span>
       </a>
     {/each}
@@ -78,39 +83,39 @@
     left: 0;
     right: 0;
     z-index: 140;
-    padding: 18px 24px 0;
+    padding: 14px 22px 0;
     pointer-events: none;
   }
 
   .topbar {
-    max-width: 1220px;
+    max-width: 1180px;
     margin: 0 auto;
-    padding: 12px 18px;
+    padding: 12px 16px;
     display: grid;
     align-items: center;
     grid-template-columns: auto 1fr auto;
-    gap: 22px;
-    border-radius: 999px;
+    gap: 18px;
+    border-radius: 16px;
     pointer-events: auto;
   }
 
   .mizu-topbar {
-    background: rgba(7, 16, 27, 0.9);
-    border: 1px solid rgba(118, 167, 203, 0.16);
-    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(18px);
+    background: rgba(8, 25, 45, 0.84);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+    backdrop-filter: blur(12px);
   }
 
   .brand-lockup {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     color: var(--text-primary);
   }
 
   .brand-lockup strong {
     font-family: 'Figtree', sans-serif;
-    font-size: 1rem;
+    font-size: 0.98rem;
     color: var(--text-primary);
   }
 
@@ -118,18 +123,19 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 999px;
-    background: linear-gradient(135deg, rgba(23, 118, 191, 0.36), rgba(35, 173, 221, 0.18));
-    color: #ecf8ff;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: rgba(108, 167, 195, 0.12);
+    color: var(--accent-cream);
+    border: 1px solid rgba(108, 167, 195, 0.16);
   }
 
   .topnav {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .topnav-link {
@@ -137,25 +143,26 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-width: 108px;
-    padding: 10px 18px;
-    border-radius: 999px;
+    min-width: 92px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
     color: var(--text-secondary);
     font-family: 'Figtree', sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
-    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
   }
 
   .topnav-link:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(252, 250, 242, 0.03);
   }
 
   .topnav-link.active {
-    color: #f3fbff;
-    background: rgba(18, 168, 216, 0.14);
-    box-shadow: inset 0 0 0 1px rgba(118, 167, 203, 0.2);
+    color: var(--text-primary);
+    background: rgba(108, 167, 195, 0.1);
+    border-color: rgba(108, 167, 195, 0.14);
   }
 
   .topbar-utility {
@@ -167,22 +174,20 @@
   .status-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    min-height: 38px;
-    padding: 0 13px;
-    border-radius: 999px;
-    background: rgba(18, 168, 216, 0.12);
-    border: 1px solid rgba(118, 167, 203, 0.16);
-    color: #d8edf8;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid rgba(131, 201, 147, 0.26);
+    background: var(--success-bg);
+    color: var(--success);
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
 
   .status-pill.offline {
-    background: rgba(239, 68, 68, 0.14);
-    border-color: rgba(248, 113, 113, 0.18);
-    color: #fecaca;
+    background: var(--danger-bg);
+    border-color: rgba(217, 119, 110, 0.24);
+    color: var(--danger);
   }
 
   .mobile-bottom-nav {
@@ -190,16 +195,16 @@
   }
 
   .mizu-bottom-pill {
-    width: min(100%, 390px);
+    width: min(100%, 410px);
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    padding: 8px;
-    border-radius: 999px;
-    background: rgba(6, 14, 24, 0.94);
-    border: 1px solid rgba(118, 167, 203, 0.16);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
-    backdrop-filter: blur(18px);
+    gap: 8px;
+    padding: 10px;
+    border-radius: 18px;
+    background: rgba(8, 25, 45, 0.92);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(12px);
     pointer-events: auto;
   }
 
@@ -208,19 +213,31 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    min-height: 52px;
-    padding: 6px 4px;
-    border-radius: 999px;
+    gap: 7px;
+    min-height: 68px;
+    padding: 9px 6px;
+    border-radius: 14px;
     color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     text-align: center;
   }
 
   .mobile-nav-link.active {
-    color: #f2fbff;
-    background: rgba(18, 168, 216, 0.14);
+    color: var(--text-primary);
+    background: rgba(108, 167, 195, 0.1);
+  }
+
+  @media (max-width: 1040px) {
+    .topbar {
+      padding: 10px 14px;
+      gap: 14px;
+    }
+
+    .topnav-link {
+      min-width: 82px;
+      padding: 8px 10px;
+    }
   }
 
   @media (max-width: 900px) {
@@ -235,6 +252,12 @@
     .topnav {
       justify-content: flex-end;
       flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .topnav-link {
+      min-width: 76px;
+      font-size: 12px;
     }
   }
 
@@ -251,11 +274,8 @@
       z-index: 160;
       display: flex;
       justify-content: center;
-      padding: 0 14px calc(16px + env(safe-area-inset-bottom));
+      padding: 0 14px calc(12px + env(safe-area-inset-bottom));
       pointer-events: none;
     }
   }
 </style>
-
-
-

@@ -8,4 +8,5 @@ config.yml
 *.db
 .DS_Store
 Thumbs.db
+.tmp/
 

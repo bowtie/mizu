@@ -184,14 +184,18 @@ func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []m
 }
 
 func parseEpisodeType(typeStr string) models.EpisodeType {
-	switch strings.ToLower(strings.TrimSpace(typeStr)) {
-	case "manga canon":
+	normalized := strings.ToLower(strings.TrimSpace(typeStr))
+	normalized = strings.ReplaceAll(normalized, "\u00a0", " ")
+	normalized = strings.Join(strings.Fields(normalized), " ")
+
+	switch {
+	case strings.Contains(normalized, "manga canon") || normalized == "canon":
 		return models.EpisodeCanon
-	case "anime canon":
+	case strings.Contains(normalized, "anime canon"):
 		return models.EpisodeAnimeCanon
-	case "mixed canon/filler":
+	case strings.Contains(normalized, "mixed"):
 		return models.EpisodeMixedCanon
-	case "filler":
+	case strings.Contains(normalized, "filler"):
 		return models.EpisodeFiller
 	default:
 		log.Warn().Str("type", typeStr).Msg("unknown episode type")

@@ -1,20 +1,18 @@
 <script>
   import { onMount } from 'svelte';
   import { addNotification } from '../lib/stores.js';
-  import { getStatus, getSyncLogs, getShows, triggerSync } from '../lib/api.js';
+  import { getSyncLogs, triggerSync } from '../lib/api.js';
   import Spinner from '../components/Spinner.svelte';
   import Badge from '../components/Badge.svelte';
   import IconArrowsClockwiseRegular from 'phosphor-icons-svelte/IconArrowsClockwiseRegular.svelte';
   import IconClockCounterClockwiseRegular from 'phosphor-icons-svelte/IconClockCounterClockwiseRegular.svelte';
-  import IconCaretRightRegular from 'phosphor-icons-svelte/IconCaretRightRegular.svelte';
+  import IconCaretDownRegular from 'phosphor-icons-svelte/IconCaretDownRegular.svelte';
   import IconWarningCircleRegular from 'phosphor-icons-svelte/IconWarningCircleRegular.svelte';
 
   const PAGE_SIZE = 12;
 
   let loading = true;
   let logs = [];
-  let syncedAnimeCount = 0;
-  let sonarrConnected = false;
   let syncing = false;
   let loadingMore = false;
   let hasMore = false;
@@ -33,21 +31,10 @@
     }
 
     try {
-      const [statusRes, logsRes, showsRes] = await Promise.allSettled([
-        getStatus(),
-        getSyncLogs(PAGE_SIZE, reset ? 0 : nextOffset),
-        getShows(),
-      ]);
-
-      sonarrConnected = statusRes.status === 'fulfilled' && statusRes.value?.status === 'ok';
-      syncedAnimeCount = showsRes.status === 'fulfilled' ? (showsRes.value || []).length : syncedAnimeCount;
-
-      if (logsRes.status === 'fulfilled') {
-        const page = logsRes.value || { items: [], has_more: false, next_offset: 0 };
-        logs = reset ? (page.items || []) : [...logs, ...(page.items || [])];
-        hasMore = !!page.has_more;
-        nextOffset = page.next_offset || logs.length;
-      }
+      const page = (await getSyncLogs(PAGE_SIZE, reset ? 0 : nextOffset)) || { items: [], has_more: false, next_offset: 0 };
+      logs = reset ? (page.items || []) : [...logs, ...(page.items || [])];
+      hasMore = !!page.has_more;
+      nextOffset = page.next_offset || logs.length;
     } catch (err) {
       addNotification('Failed to load activity: ' + err.message, 'error');
     }
@@ -108,10 +95,21 @@
     }
   }
 
-  function latestRunSummary() {
-    if (!logs.length) return 'No runs recorded yet';
-    const latest = logs[0];
-    return `${formatTrigger(latest.trigger)} · ${formatDuration(latest.started_at, latest.completed_at)}`;
+  function humanSummary(log) {
+    const anime = log.shows_processed || 0;
+    const episodes = log.episodes_updated || 0;
+    return `Checked ${anime} anime, changed ${episodes} ${episodes === 1 ? 'episode' : 'episodes'}.`;
+  }
+
+  function detailLine(item) {
+    if (item.summary) return item.summary;
+    return item.episodes_changed > 0
+      ? `${item.episodes_changed} ${item.episodes_changed === 1 ? 'episode change' : 'episode changes'}.`
+      : 'No episode changes.';
+  }
+
+  function hasDetails(log) {
+    return !!(log.items?.length || log.errors);
   }
 </script>
 
@@ -120,10 +118,10 @@
 </svelte:head>
 
 <div class="activity-shell">
-  <section class="page-heading row-heading compact-heading">
+  <section class="page-heading activity-heading">
     <div>
       <h1>Activity</h1>
-      <p>{logs.length} recent runs • {syncedAnimeCount} synced anime</p>
+      <p>Recent sync history.</p>
     </div>
     <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
       <IconArrowsClockwiseRegular size={18} weight="regular" />
@@ -133,127 +131,86 @@
 
   {#if loading}
     <Spinner center size="lg" message="Loading Mizu activity..." />
+  {:else if logs.length === 0}
+    <div class="card activity-empty">
+      <div class="empty-state compact-empty">
+        <div class="empty-icon"><IconClockCounterClockwiseRegular size={28} weight="regular" /></div>
+        <h3>No sync activity yet</h3>
+        <p>Run a sync to start building a readable history.</p>
+        <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
+          <IconArrowsClockwiseRegular size={18} weight="regular" />
+          <span>Sync now</span>
+        </button>
+      </div>
+    </div>
   {:else}
-    <section class="activity-strip compact-strip">
-      <div class="mini-stat card">
-        <span class="mini-label">Latest run</span>
-        <strong>{latestRunSummary()}</strong>
-        <small>{logs[0] ? formatTime(logs[0].started_at) : 'Trigger a sync to populate activity.'}</small>
-      </div>
-      <div class="mini-stat card">
-        <span class="mini-label">Sonarr</span>
-        <strong class:state-online={sonarrConnected} class:state-offline={!sonarrConnected}>{sonarrConnected ? 'Online' : 'Offline'}</strong>
-        <small>Current connection status</small>
-      </div>
-      <div class="mini-stat card">
-        <span class="mini-label">Synced anime</span>
-        <strong>{syncedAnimeCount}</strong>
-        <small>Currently managed by Mizu</small>
-      </div>
-    </section>
-
-    {#if logs.length === 0}
-      <div class="card activity-empty">
-        <div class="empty-state compact-empty">
-          <div class="empty-icon"><IconClockCounterClockwiseRegular size={28} weight="regular" /></div>
-          <h3>No sync activity yet</h3>
-          <p>Run a sync to start building a readable history of what Mizu changed.</p>
-          <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
-            <IconArrowsClockwiseRegular size={18} weight="regular" />
-            <span>Sync now</span>
-          </button>
-        </div>
-      </div>
-    {:else}
-      <section class="card activity-panel concise-panel">
-        <div class="panel-head aligned-panel-head">
-          <div>
-            <h3>Recent runs</h3>
-            <p>Per-run summaries with anime-level outcomes.</p>
-          </div>
-        </div>
-
-        <div class="run-list">
-          {#each logs as log}
-            <article class="run-item" class:expanded={expandedId === log.id}>
-              <button class="run-summary" on:click={() => toggleExpand(log.id)}>
-                <span class="run-expand" aria-hidden="true">
-                  <IconCaretRightRegular size={16} weight="bold" />
-                </span>
-                <span class="run-col run-started">
-                  <span class="run-label">Started</span>
-                  <strong>{formatTime(log.started_at)}</strong>
-                </span>
-                <span class="run-col">
-                  <span class="run-label">Duration</span>
-                  <strong>{formatDuration(log.started_at, log.completed_at)}</strong>
-                </span>
-                <span class="run-col">
-                  <span class="run-label">Anime</span>
-                  <strong>{log.shows_processed}</strong>
-                </span>
-                <span class="run-col">
-                  <span class="run-label">Episodes</span>
-                  <strong>{log.episodes_updated}</strong>
-                </span>
-                <span class="run-col">
-                  <span class="run-label">Trigger</span>
-                  <strong>{formatTrigger(log.trigger)}</strong>
-                </span>
-                <span class="run-status-col">
-                  <Badge type={runStatusType(log.status)} label={log.status} />
-                </span>
+    <section class="activity-list">
+      {#each logs as log}
+        <article class="card run-card" class:expanded={expandedId === log.id}>
+          <div class="run-card-head">
+            <div class="run-card-meta">
+              <Badge type={runStatusType(log.status)} label={log.status} />
+              <span>{formatTime(log.started_at)}</span>
+              <span>{formatTrigger(log.trigger)}</span>
+              <span>{formatDuration(log.started_at, log.completed_at)}</span>
+            </div>
+            {#if hasDetails(log)}
+              <button class="run-expand-btn" on:click={() => toggleExpand(log.id)} aria-label={expandedId === log.id ? 'Hide run details' : 'Show run details'}>
+                <span>Details</span>
+                <IconCaretDownRegular size={16} weight="bold" />
               </button>
+            {/if}
+          </div>
 
-              {#if expandedId === log.id}
-                <div class="run-detail">
-                  {#if log.items?.length}
-                    <div class="run-detail-list">
-                      {#each log.items as item}
-                        <div class="run-detail-item">
-                          <div class="run-detail-main">
-                            <div class="run-detail-head">
-                              <strong>{item.sonarr_title}</strong>
-                              <Badge type={itemStatusType(item.status)} label={item.status} />
-                            </div>
-                            <p>{item.summary}</p>
-                          </div>
-                          <div class="run-detail-meta">
-                            <span>{item.episodes_changed} changed</span>
-                          </div>
-                          {#if item.error}
-                            <div class="run-detail-error">
-                              <IconWarningCircleRegular size={15} weight="regular" />
-                              <span>{item.error}</span>
-                            </div>
-                          {/if}
+          <div class="run-card-body">
+            <h3>{humanSummary(log)}</h3>
+            {#if log.errors}
+              <p>This run completed with errors that need attention.</p>
+            {:else if log.items?.length}
+              <p>{log.items.length} anime-level outcome{log.items.length === 1 ? '' : 's'} available.</p>
+            {/if}
+          </div>
+
+          {#if expandedId === log.id && hasDetails(log)}
+            <div class="run-card-detail">
+              {#if log.items?.length}
+                <ul class="run-detail-list">
+                  {#each log.items as item}
+                    <li class="run-detail-item">
+                      <div class="run-detail-head">
+                        <strong>{item.sonarr_title}</strong>
+                        <Badge type={itemStatusType(item.status)} label={item.status} />
+                      </div>
+                      <p>{detailLine(item)}</p>
+                      {#if item.error}
+                        <div class="run-detail-error">
+                          <IconWarningCircleRegular size={15} weight="regular" />
+                          <span>{item.error}</span>
                         </div>
-                      {/each}
-                    </div>
-                  {:else}
-                    <div class="run-detail-empty">No anime-level summary was recorded for this run.</div>
-                  {/if}
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
 
-                  {#if log.errors}
-                    <div class="activity-errors">
-                      <div class="error-head"><IconWarningCircleRegular size={16} weight="regular" /> Run errors</div>
-                      {log.errors}
-                    </div>
-                  {/if}
+              {#if log.errors}
+                <div class="activity-errors">
+                  <div class="error-head"><IconWarningCircleRegular size={16} weight="regular" /> Run errors</div>
+                  {log.errors}
                 </div>
               {/if}
-            </article>
-          {/each}
-        </div>
+            </div>
+          {/if}
+        </article>
+      {/each}
+    </section>
 
-        {#if hasMore}
-          <div class="load-more-row">
-            <button class="btn btn-secondary" on:click={() => loadActivity(false)} disabled={loadingMore}>
-              <span>{loadingMore ? 'Loading...' : 'Load more'}</span>
-            </button>
-          </div>
-        {/if}
-      </section>
+    {#if hasMore}
+      <div class="load-more-row">
+        <button class="btn btn-secondary" on:click={() => loadActivity(false)} disabled={loadingMore}>
+          <span>{loadingMore ? 'Loading...' : 'Load more'}</span>
+        </button>
+      </div>
     {/if}
   {/if}
 </div>
@@ -262,241 +219,157 @@
   .activity-shell {
     display: grid;
     gap: 18px;
-    max-width: 1160px;
+    max-width: 960px;
     margin: 0 auto;
   }
 
-  .compact-heading {
+  .activity-heading {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 16px;
   }
 
-  .compact-heading h1 {
+  .activity-heading h1 {
     margin-bottom: 4px;
-    font-size: clamp(1.75rem, 2vw, 2.05rem);
+    font-size: 2rem;
+    line-height: 1.1;
   }
 
-  .compact-heading p {
+  .activity-heading p {
     color: var(--text-secondary);
   }
 
-  .compact-heading .btn {
+  .activity-heading .btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
   }
 
-  .compact-strip {
+  .activity-list {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
   }
 
-  .mini-stat {
+  .run-card {
+    padding: 16px 18px;
     display: grid;
-    gap: 5px;
-    padding: 15px 17px;
-    background: rgba(11, 18, 31, 0.78);
+    gap: 14px;
   }
 
-  .mini-label {
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .mini-stat strong {
-    font-family: 'Figtree', sans-serif;
-    font-size: 1.02rem;
-  }
-
-  .mini-stat small {
-    color: var(--text-secondary);
-  }
-
-  .state-online {
-    color: var(--success);
-  }
-
-  .state-offline {
-    color: var(--danger);
-  }
-
-  .concise-panel {
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .aligned-panel-head {
+  .run-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 16px 18px 14px;
-    border-bottom: 1px solid rgba(118, 167, 203, 0.12);
-    background: linear-gradient(180deg, rgba(9, 18, 30, 0.72), rgba(9, 18, 30, 0.28));
   }
 
-  .aligned-panel-head h3 {
-    margin-bottom: 4px;
+  .run-card-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  .run-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(252, 250, 242, 0.03);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .run-card.expanded .run-expand-btn :global(svg) {
+    transform: rotate(180deg);
+  }
+
+  .run-card-body {
+    display: grid;
+    gap: 6px;
+  }
+
+  .run-card-body h3 {
     font-size: 1rem;
   }
 
-  .aligned-panel-head p {
+  .run-card-body p {
     color: var(--text-secondary);
     font-size: 13px;
   }
 
-  .run-list {
+  .run-card-detail {
     display: grid;
-  }
-
-  .run-item {
-    border-bottom: 1px solid rgba(118, 167, 203, 0.1);
-  }
-
-  .run-summary {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 42px minmax(220px, 1.6fr) repeat(4, minmax(110px, 0.8fr)) auto;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 18px;
-    text-align: left;
-    background: transparent;
-    color: inherit;
-  }
-
-  .run-item:hover .run-summary {
-    background: rgba(18, 168, 216, 0.04);
-  }
-
-  .run-item.expanded .run-summary {
-    background: rgba(14, 27, 45, 0.44);
-  }
-
-  .run-expand {
-    width: 30px;
-    height: 30px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    border: 1px solid rgba(118, 167, 203, 0.14);
-    background: rgba(10, 18, 30, 0.82);
-    color: var(--text-secondary);
-    transition: transform var(--transition), color var(--transition), border-color var(--transition);
-  }
-
-  .run-item.expanded .run-expand {
-    transform: rotate(90deg);
-    color: var(--text-primary);
-    border-color: rgba(118, 167, 203, 0.22);
-  }
-
-  .run-col,
-  .run-status-col {
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-  }
-
-  .run-label {
-    color: #88a8c3;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  .run-col strong {
-    font-size: 13px;
-    color: var(--text-primary);
-  }
-
-  .run-status-col {
-    justify-items: end;
-  }
-
-  .run-detail {
-    display: grid;
-    gap: 14px;
-    padding: 0 18px 18px 60px;
-    background: rgba(8, 16, 27, 0.56);
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(159, 187, 227, 0.1);
   }
 
   .run-detail-list {
     display: grid;
     gap: 10px;
+    list-style: none;
   }
 
   .run-detail-item {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     padding: 12px 14px;
-    border-radius: 16px;
-    border: 1px solid rgba(118, 167, 203, 0.12);
-    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    background: rgba(11, 27, 50, 0.7);
+    border: 1px solid var(--border);
   }
 
   .run-detail-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
   }
 
-  .run-detail-main p {
-    margin-top: 6px;
+  .run-detail-item p {
     color: var(--text-secondary);
     font-size: 13px;
   }
 
-  .run-detail-meta {
-    color: #88a8c3;
-    font-size: 12px;
+  .run-detail-error,
+  .error-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .run-detail-error {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 8px;
-    color: #fecaca;
+    color: #ffd0ca;
     font-size: 12px;
-  }
-
-  .run-detail-empty {
-    color: var(--text-secondary);
-    font-size: 13px;
   }
 
   .activity-errors {
+    display: grid;
+    gap: 8px;
     padding: 12px 14px;
-    border-radius: 14px;
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    background: rgba(95, 24, 32, 0.32);
-    color: #fecaca;
-    font-family: Consolas, 'SFMono-Regular', monospace;
-    font-size: 12px;
-    white-space: pre-wrap;
+    border-radius: 10px;
+    background: var(--danger-bg);
+    border: 1px solid rgba(243, 93, 78, 0.24);
+    color: #ffe2dc;
+    font-size: 13px;
   }
 
   .error-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
-    font-family: 'Figtree', sans-serif;
-    color: #fecaca;
+    font-weight: 700;
+    color: #fff0eb;
   }
 
   .load-more-row {
     display: flex;
     justify-content: center;
-    padding: 16px 18px 18px;
   }
 
   .activity-empty {
@@ -508,63 +381,53 @@
     gap: 12px;
     place-items: center;
     text-align: center;
-    padding: 28px;
+    padding: 24px;
   }
 
   .compact-empty .empty-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 54px;
-    height: 54px;
-    border-radius: 18px;
-    background: rgba(18, 168, 216, 0.14);
-    color: var(--accent);
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: rgba(71, 180, 229, 0.14);
+    color: var(--accent-blue);
   }
 
-  .compact-empty .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  @media (max-width: 1100px) {
-    .run-summary {
-      grid-template-columns: 42px minmax(180px, 1.4fr) repeat(2, minmax(100px, 0.7fr)) auto auto;
+  @media (max-width: 720px) {
+    .activity-heading {
+      flex-direction: column;
+      align-items: stretch;
     }
 
-    .run-summary .run-col:nth-child(5),
-    .run-summary .run-col:nth-child(6) {
-      display: none;
+    .activity-heading .btn {
+      width: 100%;
     }
-  }
 
-  @media (max-width: 900px) {
-    .compact-heading {
+    .run-card {
+      padding: 14px;
+    }
+
+    .run-card-head {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .run-card-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .run-expand-btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .run-detail-head {
       flex-direction: column;
       align-items: flex-start;
-    }
-
-    .compact-strip {
-      grid-template-columns: 1fr;
-    }
-
-    .run-summary {
-      grid-template-columns: 42px 1fr auto;
-      gap: 12px;
-    }
-
-    .run-started {
-      min-width: 0;
-    }
-
-    .run-summary .run-col:not(.run-started),
-    .run-status-col {
-      display: none;
-    }
-
-    .run-detail {
-      padding-left: 18px;
     }
   }
 </style>

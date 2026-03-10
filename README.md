@@ -193,16 +193,24 @@ All endpoints are under `/api`.
 
 ## Development
 
-```bash
+`ash
+# One command from the repo root
+bun run dev
+
 # Frontend (hot reload)
 cd web && npm run dev
 
 # Backend
 go run ./cmd/server --config config.yml
-```
+` 
 
-The Vite dev server proxies `/api` requests to the Go backend on port 8978.
+un run dev opens two PowerShell windows:
+- frontend Vite dev server on http://localhost:5173`r
+- backend watcher that restarts go run ./cmd/server --config config.yml whenever Go or config files change
+
+The Vite dev server proxies /api requests to the Go backend on port 8978.
 
 ## License
 
 MIT
+

@@ -9,6 +9,7 @@ import (
 
 	"github.com/animefillerguard/animefillerguard/internal/config"
 	"github.com/animefillerguard/animefillerguard/internal/database"
+
 	"github.com/animefillerguard/animefillerguard/internal/models"
 	"github.com/animefillerguard/animefillerguard/internal/sonarr"
 	"github.com/animefillerguard/animefillerguard/internal/sync"
@@ -19,7 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.Handler {
+func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, scheduler *schedulerController) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -56,7 +57,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) h
 				r.Get("/", handleGetMapping(db))
 				r.Put("/", handleUpdateMapping(syncEngine, db))
 				r.Delete("/", handleDeleteMapping(db))
-				r.Get("/episodes", handleGetEpisodes(db))
+				r.Get("/episodes", handleGetEpisodes(cfg, db, syncEngine))
 				r.Get("/episodes/sonarr", handleGetSonarrEpisodes(cfg, db))
 				r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(cfg, db))
 				r.Post("/resync", handleResyncMapping(syncEngine))
@@ -66,7 +67,8 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) h
 		r.Post("/sync", handleTriggerSync(syncEngine))
 		r.Get("/logs", handleGetLogs(db))
 		r.Get("/settings", handleGetSettings(cfg, db))
-		r.Put("/settings", handleUpdateSettings(cfg, db))
+		r.Get("/settings/sonarr-api-key", handleGetStoredSonarrAPIKey(cfg))
+		r.Put("/settings", handleUpdateSettings(cfg, db, scheduler))
 		r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db))
 		r.Get("/sonarr/series", handleGetSonarrSeries(cfg))
 		r.Post("/sonarr/test", handleTestSonarr())
@@ -399,22 +401,78 @@ func handleDeleteMapping(db *database.DB) http.HandlerFunc {
 	}
 }
 
-func handleGetEpisodes(db *database.DB) http.HandlerFunc {
+func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid mapping ID")
 			return
 		}
-		episodes, err := db.GetEpisodes(r.Context(), id)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+
+		mapping, err := db.GetMappingByID(r.Context(), id)
+		if err != nil || mapping == nil {
+			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, episodes)
+		if syncEngine == nil {
+			writeError(w, http.StatusInternalServerError, "sync engine unavailable")
+			return
+		}
+
+		c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
+		sonarrEpisodes, err := c.GetEpisodes(r.Context(), mapping.SonarrSeriesID)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to fetch episodes from Sonarr: "+err.Error())
+			return
+		}
+
+		_, aflEpisodes, err := syncEngine.ScraperClient().GetShowEpisodes(r.Context(), mapping.AFLSlug)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to fetch AFL episodes: "+err.Error())
+			return
+		}
+
+		aflByNumber, aflPreferred := sync.BuildAFLEpisodeLookup(aflEpisodes)
+		enriched := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
+		for _, ep := range sonarrEpisodes {
+			aflNum, aflEpisode, found := sync.SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
+
+			typeValue := models.EpisodeUnknown
+			if found {
+				typeValue = aflEpisode.Type
+			} else if ep.SeasonNumber == 0 || ep.SeasonNumber == -1 {
+				typeValue = models.EpisodeSpecial
+			}
+
+			episodeNum := aflNum
+			aflEpisodeNum := aflNum
+			if ep.SeasonNumber == 0 || ep.SeasonNumber == -1 {
+				episodeNum = ep.EpisodeNumber
+			} else if episodeNum <= 0 {
+				if ep.AbsoluteEpisodeNumber != nil && *ep.AbsoluteEpisodeNumber > 0 {
+					episodeNum = *ep.AbsoluteEpisodeNumber
+				} else {
+					episodeNum = ep.EpisodeNumber
+				}
+			}
+
+			enriched = append(enriched, models.EpisodeInfo{
+				MappingID:             id,
+				EpisodeNum:            episodeNum,
+				AFLEpisodeNumber:      aflEpisodeNum,
+				Title:                 ep.Title,
+				Type:                  typeValue,
+				SonarrEpisodeID:       ep.ID,
+				SeasonNumber:          ep.SeasonNumber,
+				SonarrEpisodeNumber:   ep.EpisodeNumber,
+				AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
+				Monitored:             ep.Monitored,
+			})
+		}
+
+		writeJSON(w, http.StatusOK, enriched)
 	}
 }
-
 func handleGetSonarrEpisodes(cfg *config.Config, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -533,7 +591,7 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"default_filler_action":       string(cfg.DefaultFillerAction),
 			"default_mixed_canon_action":  string(cfg.DefaultMixedCanonAction),
 			"default_anime_canon_action":  string(cfg.DefaultAnimeCanonAction),
-			"sync_interval":               cfg.ScanInterval.String(),
+			"sync_interval":               scanIntervalToValue(cfg.ScanInterval),
 			"enable_tagging":              cfg.EnableTagging,
 			"filler_tag_name":             cfg.FillerTagName,
 			"afl_show_cache_refreshed_at": cacheRefreshedAt,
@@ -542,7 +600,16 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 	}
 }
 
-func handleUpdateSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
+func handleGetStoredSonarrAPIKey(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"sonarr_api_key":     cfg.SonarrAPIKey,
+			"sonarr_api_key_set": cfg.SonarrAPIKey != "",
+		})
+	}
+}
+
+func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedulerController) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var update struct {
 			SonarrURL               *string `json:"sonarr_url"`
@@ -562,7 +629,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB) http.HandlerFunc 
 		if update.SonarrURL != nil {
 			cfg.SonarrURL = *update.SonarrURL
 		}
-		if update.SonarrAPIKey != nil && *update.SonarrAPIKey != "" {
+		if update.SonarrAPIKey != nil {
 			cfg.SonarrAPIKey = *update.SonarrAPIKey
 		}
 		if update.DefaultFillerAction != nil {
@@ -575,9 +642,14 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB) http.HandlerFunc 
 			cfg.DefaultAnimeCanonAction = config.FillerAction(*update.DefaultAnimeCanonAction)
 		}
 		if update.SyncInterval != nil {
-			if d, err := time.ParseDuration(*update.SyncInterval); err == nil {
-				cfg.ScanInterval = d
+			normalized, d, err := normalizeScanInterval(*update.SyncInterval)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid sync interval")
+				return
 			}
+			cfg.ScanInterval = d
+			scheduler.UpdateInterval(d)
+			update.SyncInterval = &normalized
 		}
 		if update.EnableTagging != nil {
 			cfg.EnableTagging = *update.EnableTagging
@@ -588,10 +660,11 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB) http.HandlerFunc 
 
 		for k, v := range map[string]string{
 			"sonarr_url":                 cfg.SonarrURL,
+			"sonarr_api_key":             cfg.SonarrAPIKey,
 			"default_filler_action":      string(cfg.DefaultFillerAction),
 			"default_mixed_canon_action": string(cfg.DefaultMixedCanonAction),
 			"default_anime_canon_action": string(cfg.DefaultAnimeCanonAction),
-			"sync_interval":              cfg.ScanInterval.String(),
+			"sync_interval":              scanIntervalToValue(cfg.ScanInterval),
 			"enable_tagging":             strconv.FormatBool(cfg.EnableTagging),
 			"filler_tag_name":            cfg.FillerTagName,
 		} {
@@ -602,7 +675,6 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB) http.HandlerFunc 
 		writeJSON(w, http.StatusOK, map[string]string{"status": "settings updated"})
 	}
 }
-
 func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		shows, err := engine.ScraperClient().RefreshAllShows(r.Context())
@@ -722,4 +794,3 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
-

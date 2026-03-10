@@ -69,3 +69,218 @@ func TestIsBelowOrAtWatermark(t *testing.T) {
 		t.Fatal("expected episode above watermark to remain eligible for rules")
 	}
 }
+
+func TestPreferredAFLEpisodePrefersMixedOverFiller(t *testing.T) {
+	current := models.AFLEpisode{Number: 1076, Title: "The Charismatic CEO's Secret Plan", Type: models.EpisodeFiller}
+	candidate := models.AFLEpisode{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeMixedCanon}
+
+	got := preferredAFLEpisode(current, candidate)
+	if got.Type != models.EpisodeMixedCanon {
+		t.Fatalf("expected mixed canon to win, got %q", got.Type)
+	}
+	if got.Title != candidate.Title {
+		t.Fatalf("expected mixed canon title to win, got %q", got.Title)
+	}
+}
+
+func TestMatchSpecialAFLEpisodeByTitlePrefersExactTitle(t *testing.T) {
+	candidates := []models.AFLEpisode{
+		{Number: 1076, Title: "The Charismatic CEO's Secret Plan", Type: models.EpisodeMixedCanon},
+		{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeFiller},
+	}
+
+	got, ok := matchSpecialAFLEpisodeByTitle("Police Academy Arc Wild Police Story CASE. Rei Furuya", candidates)
+	if !ok {
+		t.Fatal("expected a special title match")
+	}
+	if got.Title != candidates[1].Title {
+		t.Fatalf("expected exact special title to win, got %q", got.Title)
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrIncludesMatchedSpecial(t *testing.T) {
+	absolute := 1076
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          0,
+		EpisodeNumber:         73,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "Police Academy Arc Wild Police Story CASE. Rei Furuya",
+	}
+	candidates := []models.AFLEpisode{
+		{Number: 1076, Title: "The Charismatic CEO's Secret Plan", Type: models.EpisodeFiller},
+		{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeMixedCanon},
+	}
+	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
+	byNumber := map[int][]models.AFLEpisode{1076: candidates}
+
+	aflNum, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if !ok {
+		t.Fatal("expected special episode to be matched")
+	}
+	if aflNum != 1076 {
+		t.Fatalf("expected AFL episode 1076, got %d", aflNum)
+	}
+	if got.Type != models.EpisodeMixedCanon {
+		t.Fatalf("expected mixed canon for matched special, got %q", got.Type)
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrPrefersTitleMatchedMainlineDuplicate(t *testing.T) {
+	absolute := 1076
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          34,
+		EpisodeNumber:         1076,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "The Charismatic CEO's Secret Plan",
+	}
+	candidates := []models.AFLEpisode{
+		{Number: 1076, Title: "The Charismatic CEO's Secret Plan", Type: models.EpisodeFiller},
+		{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeMixedCanon},
+	}
+	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
+	byNumber := map[int][]models.AFLEpisode{1076: candidates}
+
+	aflNum, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if !ok {
+		t.Fatal("expected mainline episode to be matched")
+	}
+	if aflNum != 1076 {
+		t.Fatalf("expected AFL episode 1076, got %d", aflNum)
+	}
+	if got.Title != candidates[0].Title {
+		t.Fatalf("expected title-matched filler row to win, got %q", got.Title)
+	}
+	if got.Type != models.EpisodeFiller {
+		t.Fatalf("expected filler for mainline 1076, got %q", got.Type)
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrSupportsNegativeOneSpecialSeason(t *testing.T) {
+	absolute := 1076
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          -1,
+		EpisodeNumber:         73,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "Police Academy Arc Wild Police Story CASE. Rei Furuya",
+	}
+	candidates := []models.AFLEpisode{
+		{Number: 1076, Title: "The Charismatic CEO's Secret Plan", Type: models.EpisodeFiller},
+		{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeMixedCanon},
+	}
+	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
+	byNumber := map[int][]models.AFLEpisode{1076: candidates}
+
+	_, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if !ok {
+		t.Fatal("expected -1 special season to be matched")
+	}
+	if got.Type != models.EpisodeMixedCanon {
+		t.Fatalf("expected mixed canon for -1 special, got %q", got.Type)
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrDoesNotStealMainlineForUnmatchedSpecial(t *testing.T) {
+	absolute := 1076
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          -1,
+		EpisodeNumber:         73,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "Completely Different Special Title",
+	}
+	candidates := []models.AFLEpisode{
+		{Number: 1076, Title: "The Charismatic CEO's Secret Plan", Type: models.EpisodeFiller},
+		{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeMixedCanon},
+	}
+	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
+	byNumber := map[int][]models.AFLEpisode{1076: candidates}
+
+	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if ok {
+		t.Fatal("expected unmatched special to remain unmatched")
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrDoesNotAutoMatchSingleCandidateSpecial(t *testing.T) {
+	absolute := 9001
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          -1,
+		EpisodeNumber:         1,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "A Completely Different Special",
+	}
+	candidates := []models.AFLEpisode{
+		{Number: 9001, Title: "Canonical Mainline Episode", Type: models.EpisodeCanon},
+	}
+	preferred := map[int]models.AFLEpisode{9001: candidates[0]}
+	byNumber := map[int][]models.AFLEpisode{9001: candidates}
+
+	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if ok {
+		t.Fatal("expected special with only a number match to remain unmatched")
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrRejectsWeakSingleTokenSpecialMatch(t *testing.T) {
+	absolute := 1077
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          -1,
+		EpisodeNumber:         74,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "Black History",
+	}
+	candidates := []models.AFLEpisode{
+		{Number: 1077, Title: "Detective Conan: Black Iron Submarine", Type: models.EpisodeFiller},
+	}
+	preferred := map[int]models.AFLEpisode{1077: candidates[0]}
+	byNumber := map[int][]models.AFLEpisode{1077: candidates}
+
+	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if ok {
+		t.Fatal("expected weak single-token overlap to remain unmatched for a special")
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrFallsBackToGlobalStrictTitleForSpecial(t *testing.T) {
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:  -1,
+		EpisodeNumber: 73,
+		Title:         "Police Academy Arc Wild Police Story CASE. Rei Furuya",
+	}
+	byNumber := map[int][]models.AFLEpisode{
+		1076: {
+			{Number: 1076, Title: "The Charismatic CEO's Secret Plan", Type: models.EpisodeFiller},
+			{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeMixedCanon},
+		},
+	}
+	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(byNumber[1076][0], byNumber[1076][1])}
+
+	aflNum, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if !ok {
+		t.Fatal("expected special to match by exact title across AFL lookup")
+	}
+	if aflNum != 1076 {
+		t.Fatalf("expected matched AFL episode 1076, got %d", aflNum)
+	}
+	if got.Type != models.EpisodeMixedCanon {
+		t.Fatalf("expected mixed canon for globally matched special, got %q", got.Type)
+	}
+}
+
+func TestSelectAFLEpisodeForSonarrRejectsWeakGlobalSpecialMatch(t *testing.T) {
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:  -1,
+		EpisodeNumber: 74,
+		Title:         "Black History",
+	}
+	byNumber := map[int][]models.AFLEpisode{
+		1077: {
+			{Number: 1077, Title: "Detective Conan: Black Iron Submarine", Type: models.EpisodeFiller},
+		},
+	}
+	preferred := map[int]models.AFLEpisode{1077: byNumber[1077][0]}
+
+	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	if ok {
+		t.Fatal("expected weak global title overlap to remain unmatched for a special")
+	}
+}

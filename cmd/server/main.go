@@ -12,7 +12,7 @@ import (
 
 	"github.com/animefillerguard/animefillerguard/internal/config"
 	"github.com/animefillerguard/animefillerguard/internal/database"
-	"github.com/animefillerguard/animefillerguard/internal/sync"
+	syncengine "github.com/animefillerguard/animefillerguard/internal/sync"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -29,7 +29,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("AnimeFillerGuard %s (commit: %s, built: %s)\n", version, commit, buildDate)
+		fmt.Printf("Mizu %s (commit: %s, built: %s)\n", version, commit, buildDate)
 		os.Exit(0)
 	}
 
@@ -47,7 +47,7 @@ func main() {
 	}
 	zerolog.SetGlobalLevel(level)
 
-	log.Info().Str("version", version).Str("listen", cfg.ListenAddr).Str("sonarr", cfg.SonarrURL).Dur("scan_interval", cfg.ScanInterval).Msg("starting AnimeFillerGuard")
+	log.Info().Str("version", version).Str("listen", cfg.ListenAddr).Str("sonarr", cfg.SonarrURL).Dur("scan_interval", cfg.ScanInterval).Msg("starting Mizu")
 
 	db, err := database.New(cfg.DBPath)
 	if err != nil {
@@ -57,12 +57,13 @@ func main() {
 	log.Info().Str("path", cfg.DBPath).Msg("database initialized")
 
 	applyRuntimeSettings(context.Background(), db, cfg)
+	scheduler := newSchedulerController(cfg.ScanInterval)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	syncEngine := sync.New(cfg, db)
-	router := setupRouter(cfg, db, syncEngine)
+	syncEngine := syncengine.New(cfg, db)
+	router := setupRouter(cfg, db, syncEngine, scheduler)
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
 		Handler:      router,
@@ -71,7 +72,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	go startScheduler(ctx, cfg, syncEngine)
+	go startScheduler(ctx, scheduler, syncEngine)
 	go func() {
 		log.Info().Str("addr", cfg.ListenAddr).Msg("HTTP server listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -90,12 +91,15 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("server shutdown error")
 	}
-	log.Info().Msg("AnimeFillerGuard stopped")
+	log.Info().Msg("Mizu stopped")
 }
 
 func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Config) {
 	if value, err := db.GetSetting(ctx, "sonarr_url"); err == nil && value != "" {
 		cfg.SonarrURL = value
+	}
+	if value, err := db.GetSetting(ctx, "sonarr_api_key"); err == nil {
+		cfg.SonarrAPIKey = value
 	}
 	if value, err := db.GetSetting(ctx, "default_filler_action"); err == nil && value != "" {
 		cfg.DefaultFillerAction = config.FillerAction(value)
@@ -107,7 +111,7 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		cfg.DefaultAnimeCanonAction = config.FillerAction(value)
 	}
 	if value, err := db.GetSetting(ctx, "sync_interval"); err == nil && value != "" {
-		if d, parseErr := time.ParseDuration(value); parseErr == nil {
+		if _, d, parseErr := normalizeScanInterval(value); parseErr == nil {
 			cfg.ScanInterval = d
 		}
 	}
@@ -119,8 +123,8 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	}
 }
 
-func startScheduler(ctx context.Context, cfg *config.Config, syncEngine *sync.Engine) {
-	ticker := time.NewTicker(cfg.ScanInterval)
+func startScheduler(ctx context.Context, scheduler *schedulerController, syncEngine *syncengine.Engine) {
+	ticker := time.NewTicker(scheduler.Interval())
 	defer ticker.Stop()
 
 	for {
@@ -128,6 +132,9 @@ func startScheduler(ctx context.Context, cfg *config.Config, syncEngine *sync.En
 		case <-ctx.Done():
 			log.Info().Msg("scheduler stopped")
 			return
+		case interval := <-scheduler.updates:
+			ticker.Reset(interval)
+			log.Info().Dur("scan_interval", interval).Msg("scheduler interval updated")
 		case <-ticker.C:
 			if err := syncEngine.RunSync(ctx, "scheduled"); err != nil {
 				log.Error().Err(err).Msg("scheduled sync failed")
