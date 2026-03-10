@@ -1,20 +1,16 @@
 <script>
   import Router from 'svelte-spa-router';
   import { location, push } from 'svelte-spa-router';
+  import wrap from 'svelte-spa-router/wrap';
   import Navbar from './components/Navbar.svelte';
   import Toast from './components/Toast.svelte';
 
-  import Shows from './pages/Shows.svelte';
-  import ShowDetail from './pages/ShowDetail.svelte';
-  import Activity from './pages/Activity.svelte';
-  import Settings from './pages/Settings.svelte';
-
   const routes = {
-    '/shows': Shows,
-    '/shows/:id': ShowDetail,
-    '/activity': Activity,
-    '/settings': Settings,
-    '/logs': Activity,
+    '/shows': wrap({ asyncComponent: () => import('./pages/Shows.svelte') }),
+    '/shows/:id': wrap({ asyncComponent: () => import('./pages/ShowDetail.svelte') }),
+    '/activity': wrap({ asyncComponent: () => import('./pages/Activity.svelte') }),
+    '/settings': wrap({ asyncComponent: () => import('./pages/Settings.svelte') }),
+    '/logs': wrap({ asyncComponent: () => import('./pages/Activity.svelte') }),
   };
 
   $: if ($location === '/') {
@@ -29,4 +25,3 @@
   </main>
   <Toast />
 </div>
-

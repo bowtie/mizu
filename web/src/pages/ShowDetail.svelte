@@ -94,7 +94,7 @@
   };
   $: markerSummary = markerValue > 0 ? `Episode #${markerValue}` : 'Episode #0';
   $: confidenceLabel = `${Math.round((show?.match_confidence || 0) * 100)}%`;
-  $: subtitle = show ? `Matched to ${show.afl_title || show.afl_slug} with ${confidenceLabel} confidence` : '';
+  $: subtitle = show ? `Matched with ${confidenceLabel} confidence to ${show.afl_title || show.afl_slug}` : '';
 
   onMount(async () => {
     await loadShow();
@@ -337,7 +337,7 @@
     <section class="card detail-top-card">
       <div class="detail-summary-media" class:no-art={!posterUrl()}>
         {#if posterUrl()}
-          <img src={posterUrl()} alt={show.sonarr_title} />
+          <img src={posterUrl()} alt={show.sonarr_title} width="264" height="396" decoding="async" fetchpriority="high" />
         {:else}
           <div class="detail-fallback">Mizu</div>
         {/if}
@@ -375,7 +375,7 @@
       </div>
 
       <aside class="detail-marker-panel">
-        <span class="marker-label">Progress cutoff</span>
+        <span class="marker-label">Start tracking after</span>
         <div class="marker-segmented">
           <button type="button" class:active={watermarkMode === WATERMARK_AUTO} on:click={() => (watermarkMode = WATERMARK_AUTO)}>Auto</button>
           <button type="button" class:active={watermarkMode === WATERMARK_MANUAL} on:click={() => (watermarkMode = WATERMARK_MANUAL)}>Manual</button>
@@ -384,11 +384,11 @@
         {#if watermarkMode === WATERMARK_AUTO}
           <div class="marker-display-card">
             <strong>{markerSummary}</strong>
-            <span>Follows current Sonarr progress.</span>
+            <span>Uses Sonarr's current progress.</span>
           </div>
         {:else}
           <div class="form-group marker-form-group">
-            <label class="form-label" for="marker-value">Episode cutoff</label>
+            <label class="form-label" for="marker-value">Episode number</label>
             <input id="marker-value" class="form-input detail-number-input" type="number" min="0" bind:value={markerValue} />
             <div class="form-hint">Episodes at or below this number stay unmonitored.</div>
           </div>
@@ -423,12 +423,24 @@
       </button>
     </section>
 
+    <section class="mobile-season-summary-list" aria-label="Season summary">
+      {#each groupedBySeason as group}
+        <article class="mobile-season-summary-card">
+          <div>
+            <h3>{seasonLabel(group.season)}</h3>
+            <p>{group.episodes.length} episode{group.episodes.length === 1 ? '' : 's'}</p>
+          </div>
+          <span class="mobile-season-summary-pill">{group.season === -1 ? 'Specials' : `S${group.season}`}</span>
+        </article>
+      {/each}
+    </section>
+
     {#if episodes.length === 0}
       <div class="card detail-empty">
         <div class="empty-state compact-empty">
           <div class="empty-icon"><IconWaveSineRegular size={28} weight="regular" /></div>
-          <h3>No episode data yet</h3>
-          <p>Episode data has not been hydrated for this anime.</p>
+          <h3>No episodes yet</h3>
+          <p>We have not synced episode details for this anime yet.</p>
         </div>
       </div>
     {:else}
@@ -583,17 +595,17 @@
 {/if}
 
 <Modal title="Remove Anime" show={showDeleteModal} on:close={() => !deleting && (showDeleteModal = false)}>
-  <p>This removes <strong>{show?.sonarr_title}</strong> from Mizu and deletes its stored episode sync data. Sonarr itself is not deleted.</p>
+  <p>This removes <strong>{show?.sonarr_title}</strong> from Mizu and clears its saved episode data. The anime stays in Sonarr.</p>
   <svelte:fragment slot="footer">
     <button class="btn btn-secondary" on:click={() => (showDeleteModal = false)} disabled={deleting}>Cancel</button>
-    <button class="btn btn-danger" on:click={handleDelete} disabled={deleting}>{deleting ? 'Removing...' : 'Remove Anime'}</button>
+    <button class="btn btn-danger" on:click={handleDelete} disabled={deleting}>{deleting ? 'Removing...' : 'Remove'}</button>
   </svelte:fragment>
 </Modal>
 
 <style>
   .detail-page-shell {
     display: grid;
-    gap: 18px;
+    gap: 14px;
     max-width: 960px;
     margin: 0 auto;
   }
@@ -602,13 +614,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 6px;
   }
 
   .detail-backlink {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     color: var(--text-secondary);
     font-size: 13px;
   }
@@ -616,8 +628,8 @@
   .detail-top-card {
     display: grid;
     grid-template-columns: 132px minmax(0, 1fr) 250px;
-    gap: 18px;
-    padding: 18px;
+    gap: 14px;
+    padding: 14px;
     align-items: center;
   }
 
@@ -625,39 +637,39 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 6px;
   }
 
   .detail-actions-cluster {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 5px;
   }
 
   .btn-inline-icon {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
   }
 
   .action-compact {
-    min-height: 38px;
-    padding-inline: 12px;
+    min-height: 32px;
+    padding-inline: 11px;
   }
 
   .action-remove {
-    min-height: 38px;
-    padding-inline: 12px;
+    min-height: 32px;
+    padding-inline: 11px;
   }
 
   .detail-summary-media {
-    border-radius: 14px;
+    aspect-ratio: 2 / 3;
+    border-radius: 10px;
     overflow: hidden;
-    min-height: 204px;
+    min-height: 196px;
     background: linear-gradient(180deg, #1d3558 0%, #10203a 100%);
     border: 1px solid var(--border-light);
-    box-shadow: inset 0 1px 0 rgba(198, 224, 255, 0.08);
   }
 
   .detail-summary-media img {
@@ -688,7 +700,7 @@
 
   .detail-main-copy h1 {
     margin-bottom: 6px;
-    font-size: 2.25rem;
+    font-size: 2.15rem;
     line-height: 1.04;
   }
 
@@ -699,19 +711,19 @@
   .detail-hero-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 14px;
+    gap: 5px;
+    margin-top: 10px;
   }
 
   .detail-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    min-height: 30px;
-    padding: 0 11px;
+    gap: 5px;
+    min-height: 26px;
+    padding: 0 9px;
     border-radius: 999px;
-    background: rgba(10, 23, 41, 0.92);
-    border: 1px solid rgba(138, 182, 244, 0.16);
+    background: var(--interactive-bg);
+    border: 1px solid var(--interactive-border);
     color: var(--text-primary);
     font-size: 12px;
     font-weight: 600;
@@ -719,26 +731,26 @@
 
   .detail-chip.state-on {
     background: var(--success-bg);
-    border-color: rgba(111, 219, 141, 0.3);
-    color: #eefbe9;
+    border-color: var(--success-border-strong);
+    color: var(--success-foreground);
   }
 
   .detail-chip.state-off {
     background: var(--danger-bg);
-    border-color: rgba(243, 93, 78, 0.28);
-    color: #ffe3dd;
+    border-color: var(--danger-border);
+    color: var(--danger-foreground);
   }
 
   .detail-divider {
     height: 1px;
-    margin: 14px 0 12px;
-    background: rgba(159, 187, 227, 0.1);
+    margin: 10px 0 8px;
+    background: var(--divider-border-soft);
   }
 
   .rule-pill-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 6px;
   }
 
   .rule-pill {
@@ -746,12 +758,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 0 14px;
+    gap: 5px;
+    min-height: 32px;
+    padding: 0 11px;
     border-radius: 999px;
     border: 1px solid var(--border);
-    background: rgba(18, 33, 57, 0.88);
+    background: transparent;
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 600;
@@ -767,35 +779,35 @@
   }
 
   .rule-pill-anime.active {
-    background: rgba(106, 182, 242, 0.16);
-    border-color: rgba(138, 182, 244, 0.26);
+    background: var(--surface-soft);
+    border-color: var(--selected-border);
     color: var(--text-primary);
   }
 
   .rule-pill-mixed.active {
-    background: rgba(106, 182, 242, 0.1);
-    border-color: rgba(138, 182, 244, 0.18);
+    background: var(--surface-soft);
+    border-color: var(--interactive-active-border);
     color: var(--text-primary);
   }
 
   .rule-pill-filler.active {
     background: var(--filler-bg);
-    border-color: rgba(240, 111, 99, 0.32);
-    color: #fff6f4;
+    border-color: var(--filler-border-strong);
+    color: var(--danger-foreground);
   }
 
   .rule-pill-filler:not(.active) {
-    border-color: rgba(240, 111, 99, 0.24);
-    color: #f3c0bb;
+    border-color: var(--filler-border);
+    color: var(--danger-foreground);
   }
 
   .detail-marker-panel {
     display: grid;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 14px;
-    border: 1px solid var(--border-light);
-    background: linear-gradient(180deg, rgba(15, 30, 53, 0.96) 0%, rgba(11, 24, 44, 0.94) 100%);
+    gap: 6px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
   }
 
   .marker-label {
@@ -809,31 +821,31 @@
   .marker-segmented {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    gap: 5px;
   }
 
   .marker-segmented button {
-    min-height: 36px;
+    min-height: 32px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: rgba(9, 19, 35, 0.86);
+    background: var(--surface-elevated);
     color: var(--text-secondary);
     font-weight: 600;
   }
 
   .marker-segmented button.active {
     color: var(--text-primary);
-    background: rgba(106, 182, 242, 0.18);
-    border-color: rgba(138, 182, 244, 0.28);
+    background: var(--surface-soft);
+    border-color: var(--accent-border);
   }
 
   .marker-display-card {
     display: grid;
-    gap: 6px;
-    padding: 12px 14px;
+    gap: 5px;
+    padding: 10px 12px;
     border-radius: 10px;
-    background: rgba(106, 182, 242, 0.1);
-    border: 1px solid rgba(138, 182, 244, 0.2);
+    background: var(--surface-soft);
+    border: 1px solid var(--interactive-border);
   }
 
   .marker-display-card strong {
@@ -855,12 +867,27 @@
   }
 
   .detail-marker-panel .form-input {
-    background: rgba(15, 32, 54, 0.92);
-    border-color: rgba(71, 180, 229, 0.2);
+    background: var(--surface-elevated);
+    border-color: var(--interactive-active-border);
   }
 
   .detail-stats {
     margin-bottom: 0;
+    gap: 10px;
+  }
+
+  .detail-stats :global(.stat-card) {
+    padding: 10px 12px;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .detail-stats :global(.stat-label) {
+    font-size: 10px;
+  }
+
+  .detail-stats :global(.stat-value) {
+    font-size: 1.45rem;
   }
 
   @media (max-width: 1040px) and (min-width: 721px) {
@@ -882,12 +909,12 @@
     border: 1px solid var(--border);
     text-align: left;
     cursor: pointer;
-    border-radius: 12px;
+    border-radius: 10px;
   }
 
   .stat-button.active-filter {
-    border-color: rgba(115, 175, 212, 0.2);
-    background: rgba(115, 175, 212, 0.08);
+    border-color: var(--selected-border);
+    background: var(--surface-soft);
   }
 
   .stat-canon {
@@ -916,7 +943,7 @@
 
   .compact-empty {
     display: grid;
-    gap: 12px;
+    gap: 6px;
     place-items: center;
     text-align: center;
     padding: 24px;
@@ -929,27 +956,27 @@
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: rgba(115, 175, 212, 0.12);
+    background: var(--selected-bg);
     color: var(--accent-blue);
   }
 
   .season-group {
-    margin-bottom: 14px;
+    margin-bottom: 10px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 10px;
     overflow: hidden;
-    background: rgba(8, 25, 45, 0.7);
+    background: transparent;
   }
 
   .season-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
     width: 100%;
-    padding: 12px 14px;
-    background: rgba(12, 26, 46, 0.92);
+    padding: 10px 12px;
+    background: transparent;
     border: none;
-    border-bottom: 1px solid rgba(159, 187, 227, 0.1);
+    border-bottom: 1px solid var(--divider-border);
     color: var(--text-primary);
     text-align: left;
   }
@@ -1010,12 +1037,53 @@
     display: none;
   }
 
+  .mobile-season-summary-list {
+    display: none;
+  }
+
+  .mobile-season-summary-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: transparent;
+  }
+
+  .mobile-season-summary-card h3 {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+  }
+
+  .mobile-season-summary-card p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  .mobile-season-summary-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
   .mobile-episode-card {
     display: grid;
-    gap: 10px;
-    padding: 14px;
-    border-top: 1px solid rgba(159, 187, 227, 0.08);
-    background: rgba(10, 17, 29, 0.28);
+    gap: 6px;
+    padding: 12px;
+    border-top: 1px solid var(--divider-border-soft);
+    background: var(--panel-bg-soft);
   }
 
   .mobile-episode-head,
@@ -1023,7 +1091,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 6px;
   }
 
   .mobile-episode-card h4 {
@@ -1039,21 +1107,21 @@
     justify-content: center;
     border-radius: 8px;
     border: 1px solid var(--border);
-    background: rgba(10, 22, 40, 0.84);
+    background: var(--surface-elevated);
     color: var(--text-secondary);
     transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
 
   .episode-monitor-btn:hover:not(:disabled) {
-    border-color: rgba(115, 175, 212, 0.2);
+    border-color: var(--selected-border);
     color: var(--text-primary);
-    background: rgba(115, 175, 212, 0.08);
+    background: var(--surface-soft);
   }
 
   .episode-monitor-btn.is-monitored {
-    color: #eefbe9;
+    color: var(--success-foreground);
     background: var(--success-bg);
-    border-color: rgba(111, 219, 141, 0.24);
+    border-color: var(--success-border);
   }
 
   @media (max-width: 1100px) {
@@ -1066,6 +1134,7 @@
     }
 
     .detail-summary-media {
+      aspect-ratio: 2 / 3;
       grid-area: media;
     }
 
@@ -1103,6 +1172,7 @@
     }
 
     .detail-summary-media {
+      aspect-ratio: 2 / 3;
       max-width: 240px;
       min-height: 240px;
     }
@@ -1117,18 +1187,16 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      gap: 10px;
+      gap: 6px;
     }
 
     .detail-top-card {
-      padding: 14px;
+      padding: 12px;
       gap: 14px;
     }
 
-    .detail-stats,
     .season-group,
-    .mobile-flat-episode-list,
-    .detail-empty {
+    .mobile-flat-episode-list {
       display: none;
     }
 
@@ -1136,7 +1204,7 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 8px;
+      gap: 5px;
       margin-bottom: 0;
     }
 
@@ -1153,7 +1221,7 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 8px;
+      gap: 5px;
     }
 
     .detail-action-bar .btn-inline-icon {
@@ -1181,11 +1249,13 @@
     }
 
     .detail-summary-media {
+      aspect-ratio: 2 / 3;
       width: 100%;
       max-width: none;
       min-height: 120px;
       max-height: 148px;
     }
+
 
 
 
@@ -1199,24 +1269,24 @@
     }
 
     .detail-hero-chips {
-      gap: 8px;
-      margin-top: 12px;
+      gap: 5px;
+      margin-top: 10px;
     }
 
     .detail-chip {
-      min-height: 28px;
+      min-height: 26px;
       padding: 0 8px;
       font-size: 11px;
     }
 
     .detail-divider {
-      margin: 12px 0 10px;
+      margin: 10px 0 8px;
     }
 
     .rule-pill-row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 5px;
     }
 
     .rule-pill-row .rule-pill:last-child {
@@ -1226,23 +1296,23 @@
     .rule-pill {
       min-width: 0;
       min-height: 38px;
-      padding: 0 10px;
+      padding: 0 9px;
       font-size: 12px;
       justify-content: flex-start;
     }
 
     .detail-marker-panel {
-      gap: 10px;
+      gap: 6px;
       padding: 12px;
     }
 
     .detail-stats {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      gap: 6px;
     }
 
     .detail-stats :global(.stat-card) {
-      padding: 14px;
+      padding: 12px;
       min-width: 0;
     }
 
@@ -1259,8 +1329,12 @@
     }
 
     .mobile-flat-episode-list {
+      display: none;
+    }
+
+    .mobile-season-summary-list {
       display: grid;
-      gap: 10px;
+      gap: 6px;
     }
 
     .mobile-episode-meta {
@@ -1270,15 +1344,16 @@
 
   @media (max-width: 560px) {
     .detail-page-shell {
-      gap: 12px;
+      gap: 6px;
     }
 
     .detail-top-card {
       padding: 12px;
-      gap: 12px;
+      gap: 6px;
     }
 
     .detail-summary-media {
+      aspect-ratio: 2 / 3;
       min-height: 112px;
       max-height: 132px;
     }
@@ -1292,7 +1367,7 @@
     }
 
     .detail-hero-chips {
-      gap: 6px;
+      gap: 5px;
     }
 
     .rule-pill-row {
@@ -1311,6 +1386,29 @@
     }
   }
 </style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

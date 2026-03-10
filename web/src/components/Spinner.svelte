@@ -5,7 +5,7 @@
 </script>
 
 {#if center}
-  <div class="spinner-center">
+  <div class="spinner-center" role="status" aria-live="polite" aria-busy="true">
     <div class="spinner-stack">
       <div class="spinner" class:spinner-lg={size === 'lg'}></div>
       {#if message}
@@ -33,3 +33,4 @@
     text-align: center;
   }
 </style>
+

@@ -88,22 +88,22 @@
   }
 
   .topbar {
-    max-width: 1180px;
+    max-width: var(--nav-max);
     margin: 0 auto;
-    padding: 12px 16px;
+    padding: 10px 14px;
     display: grid;
     align-items: center;
     grid-template-columns: auto 1fr auto;
     gap: 18px;
-    border-radius: 16px;
+    border-radius: 14px;
     pointer-events: auto;
   }
 
   .mizu-topbar {
-    background: rgba(8, 25, 45, 0.84);
+    background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
-    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(10px);
   }
 
   .brand-lockup {
@@ -123,12 +123,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    background: rgba(108, 167, 195, 0.12);
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: var(--surface-soft);
     color: var(--accent-cream);
-    border: 1px solid rgba(108, 167, 195, 0.16);
+    border: 1px solid var(--border-light);
   }
 
   .topnav {
@@ -145,7 +145,7 @@
     gap: 8px;
     min-width: 92px;
     padding: 8px 12px;
-    border-radius: 10px;
+    border-radius: 9px;
     border: 1px solid transparent;
     color: var(--text-secondary);
     font-family: 'Figtree', sans-serif;
@@ -156,13 +156,13 @@
 
   .topnav-link:hover {
     color: var(--text-primary);
-    background: rgba(252, 250, 242, 0.03);
+    background: var(--surface-hover);
   }
 
   .topnav-link.active {
     color: var(--text-primary);
-    background: rgba(108, 167, 195, 0.1);
-    border-color: rgba(108, 167, 195, 0.14);
+    background: var(--interactive-active-bg);
+    border-color: var(--interactive-active-border);
   }
 
   .topbar-utility {
@@ -177,8 +177,8 @@
     justify-content: center;
     width: 34px;
     height: 34px;
-    border-radius: 10px;
-    border: 1px solid rgba(131, 201, 147, 0.26);
+    border-radius: 9px;
+    border: 1px solid var(--success-border);
     background: var(--success-bg);
     color: var(--success);
     transition: background var(--transition), border-color var(--transition), color var(--transition);
@@ -186,7 +186,7 @@
 
   .status-pill.offline {
     background: var(--danger-bg);
-    border-color: rgba(217, 119, 110, 0.24);
+    border-color: var(--danger-border);
     color: var(--danger);
   }
 
@@ -199,12 +199,12 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    padding: 10px;
-    border-radius: 18px;
-    background: rgba(8, 25, 45, 0.92);
+    padding: 9px;
+    border-radius: 16px;
+    background: var(--surface-elevated);
     border: 1px solid var(--border);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
-    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(10px);
     pointer-events: auto;
   }
 
@@ -225,7 +225,7 @@
 
   .mobile-nav-link.active {
     color: var(--text-primary);
-    background: rgba(108, 167, 195, 0.1);
+    background: var(--interactive-active-bg);
   }
 
   @media (max-width: 1040px) {
@@ -261,21 +261,38 @@
     }
   }
 
-  @media (max-width: 720px) {
-    .topbar-shell {
-      display: none;
-    }
-
-    .mobile-bottom-nav {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 160;
-      display: flex;
-      justify-content: center;
-      padding: 0 14px calc(12px + env(safe-area-inset-bottom));
-      pointer-events: none;
-    }
+  
+  @media (max-width: 900px) {
+  .mizu-topbar,
+  .mizu-bottom-pill {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
+}
+
+@media (max-width: 720px) {
+  .topbar-shell {
+    display: none;
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 160;
+    display: flex;
+    justify-content: center;
+    padding: 0 14px calc(12px + env(safe-area-inset-bottom));
+    pointer-events: none;
+  }
+}
 </style>
+
+
+
+
+
+
+
+

@@ -230,7 +230,7 @@
   <section class="page-heading anime-heading">
     <div>
       <h1>Anime</h1>
-      <p>{($shows || []).length} synced in Mizu</p>
+      <p>{($shows || []).length} anime synced</p>
     </div>
     <button class="btn btn-primary anime-heading-action" on:click={openAddModal} aria-label="Add anime" title="Add anime">
       <IconPlusRegular size={18} weight="regular" />
@@ -271,7 +271,7 @@
         <button type="button" class="show-card" on:click={() => openShow(show.id)}>
           <div class="show-card-media" class:no-art={!show.poster}>
             {#if show.poster}
-              <img src={show.poster} alt={show.sonarr_title} />
+              <img src={show.poster} alt={show.sonarr_title} width="320" height="480" loading="lazy" decoding="async" />
             {:else}
               <div class="show-card-fallback">{initials(show.sonarr_title)}</div>
             {/if}
@@ -293,13 +293,13 @@
 
 <Modal title="Add Anime" show={showAddModal} on:close={() => (showAddModal = false)} size="large">
   {#if addStep === 'series'}
-    <p class="modal-copy">Choose the Sonarr anime you want to sync with Mizu.</p>
+    <p class="modal-copy">Choose the Sonarr anime you want to add to Mizu.</p>
     {#if sonarrLoading}
       <Spinner center message="Loading Sonarr library..." />
     {:else if availableSeries.length === 0}
       <div class="empty-state compact-empty" style="padding:20px">
-        <h3>No unmapped series</h3>
-        <p>Everything in Sonarr is already synced, or Sonarr returned no anime series.</p>
+        <h3>No anime left to add</h3>
+        <p>Everything in Sonarr is already added, or Sonarr did not return any anime series.</p>
       </div>
     {:else}
       <div class="select-list">
@@ -312,14 +312,14 @@
       </div>
     {/if}
   {:else}
-    <p class="modal-copy">Match <strong>{selectedSonarr?.title}</strong> to AnimeFillerList.</p>
+    <p class="modal-copy">Choose the AnimeFillerList entry for <strong>{selectedSonarr?.title}</strong>.</p>
 
     {#if matchLoading}
       <Spinner center message="Finding strict matches..." />
     {:else}
       {#if manualSearchVisible}
         <div class="form-group" style="margin-bottom:16px">
-          <label class="form-label" for="afl-search">Refine manually</label>
+          <label class="form-label" for="afl-search">Search manually</label>
           <div class="match-search-row">
             <input id="afl-search" class="form-input" type="text" placeholder="Search AnimeFillerList" bind:value={manualQuery} on:keydown={(event) => event.key === 'Enter' && handleManualSearch()} />
             <button class="btn btn-secondary" on:click={handleManualSearch} disabled={manualSearching}>
@@ -327,15 +327,15 @@
               <span>{manualSearching ? 'Searching...' : 'Search'}</span>
             </button>
           </div>
-          <div class="form-hint" style="margin-top:8px">No strong automatic suggestions were found for this anime.</div>
+          <div class="form-hint" style="margin-top:8px">We could not find a strong automatic match for this anime.</div>
         </div>
       {/if}
 
       {#if displayedMatches.length === 0}
         <div class="empty-state compact-empty" style="padding:20px">
           <h3>No matches</h3>
-          <p>No strict AFL matches were found automatically or from the current manual search.</p>
-          <p class="form-hint" style="margin-top:12px">If the anime is new, refresh the AFL show list in Settings and try again.</p>
+          <p>We could not find a strong AnimeFillerList match automatically or from the current search.</p>
+          <p class="form-hint" style="margin-top:12px">If this anime is new, refresh the AnimeFillerList show list in Settings and try again.</p>
         </div>
       {:else}
         <div class="select-list compact">
@@ -356,7 +356,7 @@
 
       {#if selectedAfl}
         <div class="review-panel">
-          <h3>Initial rules</h3>
+          <h3>Tracking rules</h3>
           <div class="rule-pill-row" role="group" aria-label="Initial tracking rules">
             <label class="rule-pill rule-pill-anime" class:active={addTrackAnimeCanon}>
               <input type="checkbox" bind:checked={addTrackAnimeCanon} />
@@ -375,12 +375,12 @@
             </label>
           </div>
           <div class="form-group" style="margin-top:14px;margin-bottom:0">
-            <label class="form-label" for="start-mode">Start point</label>
+            <label class="form-label" for="start-mode">Start tracking from</label>
             <select id="start-mode" class="form-select" bind:value={addStartMode}>
               <option value={START_FROM_CURRENT}>Current progress</option>
               <option value={START_FROM_BEGINNING}>Episode 1</option>
             </select>
-            <div class="form-hint">Current progress seeds the marker from Sonarr. Episode 1 starts with no cutoff.</div>
+            <div class="form-hint">Current progress uses Sonarr's latest tracked episode. Episode 1 starts from the beginning.</div>
           </div>
         </div>
       {/if}
@@ -397,7 +397,7 @@
     {/if}
     {#if addStep === 'match' && selectedAfl}
       <button class="btn btn-primary" on:click={handleConfirmMatch} disabled={confirming}>
-        {#if confirming}<span class="spinner"></span> Syncing...{:else}Confirm match{/if}
+        {#if confirming}<span class="spinner"></span> Adding...{:else}Add anime{/if}
       </button>
     {/if}
   </svelte:fragment>
@@ -406,7 +406,7 @@
 <style>
   .library-shell {
     display: grid;
-    gap: 20px;
+    gap: 16px;
     max-width: 960px;
     margin: 0 auto;
   }
@@ -442,7 +442,7 @@
     padding: 0 14px;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(12, 26, 46, 0.92);
+    background: transparent;
     color: var(--text-muted);
   }
 
@@ -468,31 +468,32 @@
   .shows-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
+    gap: 14px;
   }
 
   .show-card {
     overflow: hidden;
     min-width: 0;
     border: 1px solid var(--border);
-    border-radius: 12px;
-    background: rgba(7, 14, 24, 0.94);
+    border-radius: 10px;
+    background: var(--surface-elevated);
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
     transition: border-color var(--transition), background var(--transition);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-lg);
   }
 
   .show-card:hover {
     border-color: var(--border-light);
-    transform: translateY(-2px);
-    box-shadow: 0 20px 42px rgba(3, 10, 20, 0.34);
+    background: var(--surface);
+    box-shadow: none;
   }
 
   .show-card-media {
     position: relative;
-    min-height: 340px;
+    aspect-ratio: 2 / 3;
+    min-height: 316px;
     overflow: hidden;
     background: linear-gradient(180deg, #1d3558 0%, #10203a 100%);
   }
@@ -517,14 +518,14 @@
   }
 
   .show-card-fallback {
-    width: 72px;
-    height: 72px;
-    border-radius: 12px;
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(252, 250, 242, 0.08);
-    border: 1px solid rgba(252, 250, 242, 0.14);
+    background: var(--surface-hover);
+    border: 1px solid var(--border-light);
     font-family: 'Figtree', sans-serif;
     font-size: 1.35rem;
     font-weight: 700;
@@ -538,12 +539,12 @@
     inset: auto 0 0;
     z-index: 1;
     display: grid;
-    gap: 8px;
-    padding: 14px;
+    gap: 2px;
+    padding: 8px;
   }
 
   .show-card-copy h3 {
-    font-size: 1.1rem;
+    font-size: 1rem;
     line-height: 1.18;
     color: var(--accent-cream);
   }
@@ -558,26 +559,26 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    min-height: 26px;
-    padding: 0 9px;
+    min-height: 22px;
+    padding: 0 7px;
     border-radius: 999px;
-    background: rgba(9, 20, 34, 0.9);
-    border: 1px solid rgba(138, 182, 244, 0.14);
+    background: var(--interactive-bg);
+    border: 1px solid var(--interactive-border);
     color: var(--accent-cream);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
   }
 
   .info-chip-on {
     background: var(--success-bg);
-    border-color: rgba(111, 219, 141, 0.3);
-    color: #eefbe9;
+    border-color: var(--success-border-strong);
+    color: var(--success-foreground);
   }
 
   .info-chip-off {
     background: var(--danger-bg);
-    border-color: rgba(243, 93, 78, 0.3);
-    color: #ffe3dd;
+    border-color: var(--danger-border-strong);
+    color: var(--danger-foreground);
   }
 
   .landing-empty {
@@ -599,7 +600,7 @@
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: rgba(115, 175, 212, 0.12);
+    background: var(--selected-bg);
     color: var(--accent-blue);
   }
 
@@ -625,12 +626,12 @@
     padding: 14px;
     text-align: left;
     cursor: pointer;
-    border-radius: 12px;
+    border-radius: 10px;
   }
 
   .selected-card {
-    border-color: rgba(115, 175, 212, 0.22);
-    background: rgba(71, 180, 229, 0.08);
+    border-color: var(--selected-border);
+    background: var(--selected-bg);
   }
 
   .selectable-title {
@@ -656,11 +657,11 @@
   }
 
   .review-panel {
-    margin-top: 16px;
-    padding: 16px;
-    border-radius: 12px;
+    margin-top: 10px;
+    padding: 14px;
+    border-radius: 10px;
     border: 1px solid var(--border);
-    background: rgba(12, 26, 46, 0.8);
+    background: transparent;
   }
 
   .review-panel h3 {
@@ -684,7 +685,7 @@
     padding: 0 12px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: rgba(25, 40, 62, 0.74);
+    background: transparent;
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 600;
@@ -700,26 +701,26 @@
   }
 
   .rule-pill-anime.active {
-    background: rgba(115, 175, 212, 0.1);
-    border-color: rgba(115, 175, 212, 0.22);
+    background: var(--interactive-active-bg);
+    border-color: var(--selected-border);
     color: var(--text-primary);
   }
 
   .rule-pill-mixed.active {
-    background: rgba(115, 175, 212, 0.08);
-    border-color: rgba(115, 175, 212, 0.18);
+    background: var(--selected-bg);
+    border-color: var(--interactive-active-border);
     color: var(--text-primary);
   }
 
   .rule-pill-filler.active {
     background: var(--filler-bg);
-    border-color: rgba(240, 111, 99, 0.32);
-    color: #fff6f4;
+    border-color: var(--filler-border-strong);
+    color: var(--danger-foreground);
   }
 
   .rule-pill-filler:not(.active) {
-    border-color: rgba(240, 111, 99, 0.24);
-    color: #f3c0bb;
+    border-color: var(--filler-border);
+    color: var(--danger-foreground);
   }
 
   .match-search-row {
@@ -801,4 +802,21 @@
     }
   }
 </style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

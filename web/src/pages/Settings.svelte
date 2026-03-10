@@ -189,7 +189,7 @@
   <section class="page-heading row-heading">
     <div>
       <h1>Settings</h1>
-      <p>Sonarr connection, sync cadence, AFL refresh, and default tracking rules.</p>
+      <p>Connect Sonarr, choose sync timing, and set default rules.</p>
     </div>
     <button class="btn btn-primary" on:click={handleSave} disabled={saving}>
       <IconFloppyDiskRegular size={18} weight="regular" />
@@ -252,7 +252,7 @@
         <div class="panel-head">
           <div>
             <h3>Sync</h3>
-            <p>Control cadence and AFL show-list refresh.</p>
+            <p>Choose how often Mizu syncs and refreshes the AnimeFillerList show list.</p>
           </div>
         </div>
 
@@ -263,7 +263,7 @@
               <option value={opt.value}>{opt.label}</option>
             {/each}
           </select>
-          <div class="form-hint">How often Mizu checks Sonarr and AFL for sync changes.</div>
+          <div class="form-hint">How often Mizu checks Sonarr and AnimeFillerList for changes.</div>
         </div>
 
         <div class="cache-status-card">
@@ -274,7 +274,7 @@
 
         <button class="btn btn-secondary" on:click={handleRefreshCache} disabled={refreshingCache}>
           <IconArrowsClockwiseRegular size={18} weight="regular" />
-          <span>{refreshingCache ? 'Refreshing...' : 'Refresh AFL show list'}</span>
+          <span>{refreshingCache ? 'Refreshing...' : 'Refresh show list'}</span>
         </button>
       </div>
     </section>
@@ -284,7 +284,7 @@
         <div class="panel-head">
           <div>
             <h3>Defaults</h3>
-            <p>Default tracking behavior for newly synced anime.</p>
+            <p>Default tracking rules for newly added anime.</p>
           </div>
         </div>
 
@@ -311,7 +311,7 @@
         <button class="advanced-toggle" type="button" on:click={() => (showAdvancedTagging = !showAdvancedTagging)}>
           <div>
             <h3>Advanced tagging</h3>
-            <p>Add a Sonarr tag to anime that include filler-related episodes.</p>
+            <p>Add a Sonarr tag to anime with filler-related episodes.</p>
           </div>
           <span class:open={showAdvancedTagging}><IconCaretDownRegular size={16} weight="bold" /></span>
         </button>
@@ -339,7 +339,7 @@
 <style>
   .settings-shell {
     display: grid;
-    gap: 18px;
+    gap: 12px;
     max-width: 960px;
     margin: 0 auto;
   }
@@ -348,7 +348,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
   }
 
   .row-heading h1 {
@@ -371,13 +371,13 @@
   .settings-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: 12px;
   }
 
   .settings-panel {
-    padding: 18px;
+    padding: 14px;
     display: grid;
-    gap: 16px;
+    gap: 12px;
   }
 
   .panel-head {
@@ -428,17 +428,17 @@
   }
 
   .settings-field {
-    background: rgba(14, 33, 60, 0.92);
-    border-color: rgba(71, 180, 229, 0.2);
+    background: var(--surface-elevated);
+    border-color: var(--interactive-active-border);
   }
 
   .cache-status-card {
     display: grid;
     gap: 10px;
-    padding: 14px;
+    padding: 12px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: rgba(11, 27, 50, 0.76);
+    background: transparent;
   }
 
   .cache-status-card span {
@@ -466,11 +466,11 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 38px;
-    padding: 0 12px;
+    min-height: 36px;
+    padding: 0 11px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: rgba(29, 44, 67, 0.72);
+    background: transparent;
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 600;
@@ -486,26 +486,26 @@
   }
 
   .rule-pill-anime.active {
-    background: rgba(115, 175, 212, 0.1);
-    border-color: rgba(115, 175, 212, 0.22);
+    background: var(--interactive-active-bg);
+    border-color: var(--selected-border);
     color: var(--text-primary);
   }
 
   .rule-pill-mixed.active {
-    background: rgba(115, 175, 212, 0.08);
-    border-color: rgba(115, 175, 212, 0.18);
+    background: var(--interactive-active-bg);
+    border-color: var(--interactive-active-border);
     color: var(--text-primary);
   }
 
   .rule-pill-filler.active {
     background: var(--filler-bg);
-    border-color: rgba(240, 111, 99, 0.32);
-    color: #fff6f4;
+    border-color: var(--filler-border-strong);
+    color: var(--danger-foreground);
   }
 
   .rule-pill-filler:not(.active) {
-    border-color: rgba(240, 111, 99, 0.24);
-    color: #f3c0bb;
+    border-color: var(--filler-border);
+    color: var(--danger-foreground);
   }
 
   .advanced-panel {
@@ -541,18 +541,18 @@
 
   .advanced-content {
     display: grid;
-    gap: 14px;
-    margin-top: 16px;
+    gap: 12px;
+    margin-top: 12px;
   }
 
   .check-card {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 14px;
+    padding: 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: rgba(11, 27, 50, 0.76);
+    background: transparent;
   }
 
   .check-card input {
@@ -572,7 +572,7 @@
   }
 
   .subdued-check-card {
-    background: rgba(11, 27, 50, 0.6);
+    background: transparent;
   }
 
   .advanced-form-group {
@@ -596,7 +596,7 @@
     }
 
     .settings-panel {
-      padding: 16px;
+      padding: 14px;
     }
 
     .rule-pill-row {
@@ -605,4 +605,10 @@
     }
   }
 </style>
+
+
+
+
+
+
 

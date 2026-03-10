@@ -136,7 +136,7 @@
       <div class="empty-state compact-empty">
         <div class="empty-icon"><IconClockCounterClockwiseRegular size={28} weight="regular" /></div>
         <h3>No sync activity yet</h3>
-        <p>Run a sync to start building a readable history.</p>
+        <p>Run a sync to start building your history.</p>
         <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
           <IconArrowsClockwiseRegular size={18} weight="regular" />
           <span>Sync now</span>
@@ -167,7 +167,7 @@
             {#if log.errors}
               <p>This run completed with errors that need attention.</p>
             {:else if log.items?.length}
-              <p>{log.items.length} anime-level outcome{log.items.length === 1 ? '' : 's'} available.</p>
+              <p>Open details to see what changed for this run.</p>
             {/if}
           </div>
 
@@ -218,7 +218,7 @@
 <style>
   .activity-shell {
     display: grid;
-    gap: 18px;
+    gap: 16px;
     max-width: 960px;
     margin: 0 auto;
   }
@@ -248,20 +248,20 @@
 
   .activity-list {
     display: grid;
-    gap: 12px;
+    gap: 10px;
   }
 
   .run-card {
-    padding: 16px 18px;
+    padding: 12px 14px;
     display: grid;
-    gap: 14px;
+    gap: 12px;
   }
 
   .run-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
   }
 
   .run-card-meta {
@@ -281,7 +281,7 @@
     padding: 0 10px;
     border-radius: 8px;
     border: 1px solid var(--border);
-    background: rgba(252, 250, 242, 0.03);
+    background: transparent;
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 600;
@@ -307,9 +307,9 @@
 
   .run-card-detail {
     display: grid;
-    gap: 12px;
+    gap: 10px;
     padding-top: 12px;
-    border-top: 1px solid rgba(159, 187, 227, 0.1);
+    border-top: 1px solid var(--divider-border);
   }
 
   .run-detail-list {
@@ -321,9 +321,9 @@
   .run-detail-item {
     display: grid;
     gap: 8px;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border-radius: 10px;
-    background: rgba(11, 27, 50, 0.7);
+    background: transparent;
     border: 1px solid var(--border);
   }
 
@@ -347,24 +347,24 @@
   }
 
   .run-detail-error {
-    color: #ffd0ca;
+    color: var(--danger-foreground);
     font-size: 12px;
   }
 
   .activity-errors {
     display: grid;
     gap: 8px;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border-radius: 10px;
     background: var(--danger-bg);
-    border: 1px solid rgba(243, 93, 78, 0.24);
-    color: #ffe2dc;
+    border: 1px solid var(--danger-border);
+    color: var(--danger-foreground);
     font-size: 13px;
   }
 
   .error-head {
     font-weight: 700;
-    color: #fff0eb;
+    color: var(--danger-foreground);
   }
 
   .load-more-row {
@@ -378,7 +378,7 @@
 
   .compact-empty {
     display: grid;
-    gap: 12px;
+    gap: 10px;
     place-items: center;
     text-align: center;
     padding: 24px;
@@ -391,7 +391,7 @@
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: rgba(71, 180, 229, 0.14);
+    background: var(--selected-bg);
     color: var(--accent-blue);
   }
 
@@ -431,3 +431,9 @@
     }
   }
 </style>
+
+
+
+
+
+

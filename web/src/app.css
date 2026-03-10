@@ -4,12 +4,12 @@
     /* Shell */
     --bg: #08111f;
     --bg-elevated: #102341;
-    --surface: rgba(15, 29, 52, 0.95);
-    --surface-elevated: rgba(18, 36, 64, 0.98);
-    --surface-soft: rgba(84, 141, 210, 0.14);
-    --surface-hover: rgba(244, 248, 255, 0.065);
-    --border: rgba(94, 134, 194, 0.28);
-    --border-light: rgba(138, 182, 244, 0.22);
+    --surface: rgba(13, 25, 45, 0.94);
+    --surface-elevated: rgba(15, 30, 54, 0.97);
+    --surface-soft: rgba(84, 141, 210, 0.06);
+    --surface-hover: rgba(244, 248, 255, 0.045);
+    --border: rgba(94, 134, 194, 0.22);
+    --border-light: rgba(138, 182, 244, 0.16);
 
     /* Text */
     --text-primary: #f7fbff;
@@ -49,13 +49,51 @@
     --special-bg: rgba(142, 167, 201, 0.14);
 
     /* Layout */
-    --shadow-lg: 0 18px 44px rgba(2, 8, 18, 0.34);
+    --shadow-lg: 0 1px 3px rgba(2, 8, 18, 0.08);
     --radius: 10px;
     --radius-lg: 16px;
     --transition: 160ms ease;
     --topbar-height: 98px;
     --mobile-nav-height: 112px;
-    --content-max: 1240px;
+    --content-max: 960px;
+    --nav-max: 960px;
+
+    /* Shared UI surfaces */
+    --panel-bg: rgba(11, 27, 50, 0.48);
+    --panel-bg-strong: rgba(12, 26, 46, 0.76);
+    --panel-bg-soft: rgba(8, 18, 33, 0.44);
+    --interactive-bg: rgba(10, 23, 41, 0.76);
+    --interactive-border: rgba(138, 182, 244, 0.12);
+    --interactive-active-bg: rgba(106, 182, 242, 0.08);
+    --interactive-active-border: rgba(138, 182, 244, 0.18);
+    --selected-bg: rgba(71, 180, 229, 0.08);
+    --selected-border: rgba(115, 175, 212, 0.22);
+    --success-border: rgba(111, 219, 141, 0.28);
+    --success-border-strong: rgba(111, 219, 141, 0.3);
+    --danger-border: rgba(243, 93, 78, 0.28);
+    --danger-border-strong: rgba(243, 93, 78, 0.34);
+    --filler-border: rgba(240, 111, 99, 0.24);
+    --filler-border-strong: rgba(240, 111, 99, 0.32);
+    --canon-border: rgba(99, 194, 242, 0.28);
+    --mixed-border: rgba(240, 203, 115, 0.28);
+    --anime-canon-border: rgba(228, 143, 192, 0.28);
+    --special-border: rgba(142, 167, 201, 0.28);
+    --info-border: rgba(71, 180, 229, 0.28);
+    --warning-border: rgba(239, 193, 91, 0.28);
+    --accent-border: rgba(162, 212, 248, 0.28);
+    --accent-border-strong: rgba(162, 212, 248, 0.34);
+    --focus-border: rgba(106, 182, 242, 0.42);
+    --focus-ring: rgba(106, 182, 242, 0.18);
+    --focus-ring-soft: rgba(106, 182, 242, 0.16);
+    --divider-border: rgba(159, 187, 227, 0.1);
+    --divider-border-soft: rgba(159, 187, 227, 0.08);
+    --table-head-bg: rgba(106, 182, 242, 0.025);
+    --table-row-hover: rgba(106, 182, 242, 0.024);
+    --overlay-dark: rgba(4, 9, 16, 0.72);
+    --surface-control: rgba(13, 24, 41, 0.72);
+    --surface-control-hover: rgba(22, 40, 66, 0.84);
+    --success-foreground: #eefbe9;
+    --danger-foreground: #ffe3dd;
 }
 
 *,
@@ -73,12 +111,12 @@ body {
 
 body {
     background:
-        radial-gradient(circle at 18% 0%, rgba(106, 182, 242, 0.16), transparent 28%),
-        radial-gradient(circle at 82% 8%, rgba(84, 141, 210, 0.1), transparent 24%),
-        linear-gradient(180deg, #050c16 0%, #0b1830 44%, #08111f 100%);
+        radial-gradient(circle at 20% 0%, rgba(106, 182, 242, 0.025), transparent 22%),
+        linear-gradient(180deg, #050c16 0%, #08111f 100%);
     background-repeat: no-repeat;
     background-size: 100% 100%, 100% 100%;
     background-attachment: fixed;
+    will-change: auto;
     color: var(--text-primary);
     font-family: "Overpass", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 14px;
@@ -157,6 +195,13 @@ h6,
     }
 }
 
+
+@media (max-width: 900px) {
+    body {
+        background-attachment: scroll;
+    }
+}
+
 @media (max-width: 720px) {
     .main-content,
     .shell-main {
@@ -184,25 +229,36 @@ img {
     margin-bottom: 0;
 }
 
-.page-heading h1 {
-    font-size: clamp(1.7rem, 2vw, 2.2rem);
-}
+
 
 .page-heading p {
     color: var(--text-secondary);
+}
+
+.show-card,
+.run-card,
+.season-group,
+.settings-panel,
+.mobile-season-summary-card {
+    content-visibility: auto;
+    contain-intrinsic-size: 280px;
+}
+
+.show-card {
+    contain-intrinsic-size: 360px;
 }
 
 .card,
 .stat-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: 12px;
     box-shadow: var(--shadow-lg);
     color: var(--text-primary);
 }
 
 .card {
-    padding: 20px;
+    padding: 16px;
 }
 
 button.card {
@@ -214,8 +270,8 @@ button.card {
 .table-container {
     overflow-x: auto;
     border: 1px solid var(--border);
-    border-radius: 14px;
-    background: rgba(8, 19, 35, 0.66);
+    border-radius: 12px;
+    background: var(--panel-bg-soft);
 }
 
 table {
@@ -225,7 +281,7 @@ table {
 }
 
 thead {
-    background: rgba(106, 182, 242, 0.06);
+    background: var(--table-head-bg);
 }
 
 th {
@@ -241,7 +297,7 @@ th {
 
 td {
     padding: 12px 14px;
-    border-bottom: 1px solid rgba(159, 187, 227, 0.1);
+    border-bottom: 1px solid var(--divider-border);
     color: var(--text-primary);
     vertical-align: middle;
 }
@@ -255,7 +311,7 @@ tbody tr {
 }
 
 tbody tr:hover {
-    background: rgba(106, 182, 242, 0.05);
+    background: var(--table-row-hover);
 }
 
 tr.ep-canon,
@@ -297,39 +353,64 @@ tr.ep-filler:hover {
 
 .btn-primary {
     background: var(--accent);
-    border-color: rgba(162, 212, 248, 0.28);
+    border-color: var(--accent-border);
     color: var(--text-on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
     background: var(--accent-hover);
-    border-color: rgba(162, 212, 248, 0.34);
+    border-color: var(--accent-border-strong);
 }
 
 .btn-secondary {
-    background: rgba(13, 24, 41, 0.72);
+    background: var(--surface-control);
     border-color: var(--border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: rgba(22, 40, 66, 0.84);
+    background: var(--surface-control-hover);
     border-color: var(--border-light);
 }
 
 .btn-danger {
     background: var(--danger-bg);
-    border-color: rgba(243, 93, 78, 0.34);
+    border-color: var(--danger-border-strong);
     color: #ffe4e1;
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: rgba(243, 93, 78, 0.26);
+    background: color-mix(in srgb, var(--danger-bg) 78%, transparent);
 }
 
 .btn-sm {
     min-height: 36px;
     padding-inline: 14px;
     font-size: 12px;
+}
+
+.btn:focus-visible,
+button.card:focus-visible,
+.show-card:focus-visible,
+.topnav-link:focus-visible,
+.mobile-nav-link:focus-visible,
+.run-expand-btn:focus-visible,
+.episode-monitor-btn:focus-visible,
+.season-header:focus-visible,
+.advanced-toggle:focus-visible,
+.inline-toggle:focus-visible,
+.modal-close:focus-visible,
+.toast-close:focus-visible,
+.stat-button:focus-visible {
+    outline: none;
+    border-color: var(--focus-border);
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.rule-pill:focus-within,
+.search-shell:focus-within,
+.check-card:focus-within {
+    border-color: var(--focus-border);
+    box-shadow: 0 0 0 2px var(--focus-ring-soft);
 }
 
 .form-group {
@@ -352,8 +433,8 @@ tr.ep-filler:hover {
     min-height: 44px;
     padding: 0 14px;
     border: 1px solid var(--border);
-    border-radius: 14px;
-    background: rgba(11, 24, 44, 0.94);
+    border-radius: 12px;
+    background: var(--surface-elevated);
     color: var(--text-primary);
     font-size: 13.5px;
     outline: none;
@@ -375,8 +456,8 @@ tr.ep-filler:hover {
 
 .form-input:focus,
 .form-select:focus {
-    border-color: rgba(106, 182, 242, 0.42);
-    box-shadow: 0 0 0 2px rgba(106, 182, 242, 0.16);
+    border-color: var(--focus-border);
+    box-shadow: 0 0 0 2px var(--focus-ring-soft);
 }
 
 .form-select {
@@ -411,35 +492,35 @@ tr.ep-filler:hover {
 .badge-canon {
     background: var(--canon-bg);
     color: var(--canon);
-    border-color: rgba(99, 194, 242, 0.28);
+    border-color: var(--canon-border);
 }
 
 .badge-mixed {
     background: var(--mixed-bg);
     color: var(--mixed);
-    border-color: rgba(240, 203, 115, 0.28);
+    border-color: var(--mixed-border);
 }
 
 .badge-anime-canon {
     background: var(--anime-canon-bg);
     color: var(--anime-canon);
-    border-color: rgba(228, 143, 192, 0.28);
+    border-color: var(--anime-canon-border);
 }
 
 .badge-filler {
     background: var(--filler-bg);
     color: var(--filler);
-    border-color: rgba(240, 111, 99, 0.28);
+    border-color: var(--danger-border);
 }
 
 .badge-special {
     background: var(--special-bg);
     color: var(--special);
-    border-color: rgba(142, 167, 201, 0.28);
+    border-color: var(--special-border);
 }
 
 .badge-unknown {
-    background: rgba(13, 24, 41, 0.72);
+    background: var(--surface-control);
     color: var(--text-muted);
     border-color: var(--border);
 }
@@ -447,14 +528,14 @@ tr.ep-filler:hover {
 .badge-success {
     background: var(--success-bg);
     color: var(--success);
-    border-color: rgba(111, 219, 141, 0.28);
+    border-color: var(--success-border);
 }
 
 .badge-warning,
 .badge-partial {
     background: var(--warning-bg);
     color: var(--warning);
-    border-color: rgba(239, 193, 91, 0.28);
+    border-color: var(--warning-border);
 }
 
 .badge-danger,
@@ -469,7 +550,7 @@ tr.ep-filler:hover {
 .badge-running {
     background: var(--info-bg);
     color: var(--info);
-    border-color: rgba(71, 180, 229, 0.28);
+    border-color: var(--info-border);
 }
 
 .modal-backdrop {
@@ -479,8 +560,8 @@ tr.ep-filler:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
-    background: rgba(4, 9, 16, 0.72);
+    padding: 16px;
+    background: var(--overlay-dark);
 }
 
 .modal {
@@ -522,7 +603,7 @@ tr.ep-filler:hover {
 }
 
 .modal-body {
-    padding: 20px;
+    padding: 16px;
 }
 
 .toast-container {
@@ -591,7 +672,7 @@ tr.ep-filler:hover {
     display: inline-block;
     width: 18px;
     height: 18px;
-    border: 2px solid rgba(71, 180, 229, 0.18);
+    border: 2px solid color-mix(in srgb, var(--accent-blue) 32%, transparent);
     border-top-color: var(--accent);
     border-radius: 999px;
     animation: spin 600ms linear infinite;
@@ -617,6 +698,29 @@ tr.ep-filler:hover {
 
 .empty-state h3 {
     color: var(--text-primary);
+}
+
+.show-card-copy h3,
+.detail-main-copy h1,
+.detail-subtitle,
+.run-card-body h3,
+.run-detail-item p,
+.season-title,
+.mobile-episode-card h4,
+.toast-message {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 .stats-grid {
@@ -659,18 +763,29 @@ tr.ep-filler:hover {
     }
 }
 
-@media (max-width: 720px) {
-    .toast-container {
-        top: 12px;
-        right: 12px;
-        left: 12px;
-    }
 
-    .toast {
-        min-width: 0;
-        max-width: none;
+@media (max-width: 900px) {
+    body {
+        background-attachment: scroll;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
