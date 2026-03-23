@@ -7,17 +7,16 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/animefillerguard/animefillerguard/internal/config"
-	"github.com/animefillerguard/animefillerguard/internal/database"
-
-	"github.com/animefillerguard/animefillerguard/internal/models"
-	"github.com/animefillerguard/animefillerguard/internal/sonarr"
-	"github.com/animefillerguard/animefillerguard/internal/sync"
-	"github.com/animefillerguard/animefillerguard/internal/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
+	"mizu/internal/config"
+	"mizu/internal/database"
+	"mizu/internal/models"
+	"mizu/internal/sonarr"
+	"mizu/internal/sync"
+	"mizu/internal/web"
 )
 
 func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, scheduler *schedulerController) http.Handler {

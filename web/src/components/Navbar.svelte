@@ -37,16 +37,16 @@
 </script>
 
 <header class="topbar-shell">
-  <div class="topbar mizu-topbar">
+  <div class="topbar">
     <a class="brand-lockup" href="#/shows" aria-label="Mizu home">
-      <span class="brand-mark"><IconWaveSineRegular size={18} weight="regular" /></span>
+      <span class="brand-mark"><IconWaveSineRegular size={20} weight="regular" /></span>
       <strong>Mizu</strong>
     </a>
 
     <nav class="topnav" aria-label="Primary">
       {#each navItems as item}
         <a href={`#${item.path}`} class="topnav-link" class:active={isActive(item.path, $location)}>
-          <svelte:component this={item.icon} size={18} weight="regular" />
+          <svelte:component this={item.icon} size={20} weight="regular" />
           <span>{item.label}</span>
         </a>
       {/each}
@@ -59,7 +59,7 @@
         title={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
         aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
       >
-        <IconBroadcastRegular size={16} weight="regular" />
+        <IconBroadcastRegular size={20} weight="regular" />
       </span>
     </div>
   </div>
@@ -83,40 +83,33 @@
     left: 0;
     right: 0;
     z-index: 140;
-    padding: 14px 22px 0;
+    padding: 12px 20px 0;
     pointer-events: none;
   }
 
   .topbar {
     max-width: var(--nav-max);
     margin: 0 auto;
-    padding: 10px 14px;
+    padding: 8px 12px;
     display: grid;
     align-items: center;
     grid-template-columns: auto 1fr auto;
-    gap: 18px;
+    gap: 16px;
     border-radius: 14px;
     pointer-events: auto;
-  }
-
-  .mizu-topbar {
-    background: var(--surface);
+    background: rgba(5, 13, 26, 0.82);
     border: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
   .brand-lockup {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     color: var(--text-primary);
-  }
-
-  .brand-lockup strong {
-    font-family: 'Figtree', sans-serif;
-    font-size: 0.98rem;
-    color: var(--text-primary);
+    text-decoration: none;
   }
 
   .brand-mark {
@@ -125,29 +118,35 @@
     justify-content: center;
     width: 30px;
     height: 30px;
-    border-radius: 9px;
-    background: var(--surface-soft);
-    color: var(--accent-cream);
-    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--blue-base);
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .brand-lockup strong {
+    font-family: 'Figtree', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
   }
 
   .topnav {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 8px;
+    gap: 2px;
   }
 
   .topnav-link {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-width: 92px;
-    padding: 8px 12px;
+    gap: 7px;
+    padding: 7px 14px;
     border-radius: 9px;
     border: 1px solid transparent;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-family: 'Figtree', sans-serif;
     font-size: 13px;
     font-weight: 600;
@@ -160,9 +159,9 @@
   }
 
   .topnav-link.active {
-    color: var(--text-primary);
-    background: var(--interactive-active-bg);
-    border-color: var(--interactive-active-border);
+    color: #fff;
+    background: var(--blue-base);
+    border-color: var(--accent-border);
   }
 
   .topbar-utility {
@@ -175,9 +174,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     border: 1px solid var(--success-border);
     background: var(--success-bg);
     color: var(--success);
@@ -190,21 +189,19 @@
     color: var(--danger);
   }
 
-  .mobile-bottom-nav {
-    display: none;
-  }
+  .mobile-bottom-nav { display: none; }
 
   .mizu-bottom-pill {
-    width: min(100%, 410px);
+    width: min(100%, 380px);
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    padding: 9px;
+    gap: 6px;
+    padding: 7px;
     border-radius: 16px;
-    background: var(--surface-elevated);
+    background: rgba(5, 13, 26, 0.92);
     border: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(16px);
     pointer-events: auto;
   }
 
@@ -213,80 +210,57 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    min-height: 68px;
-    padding: 9px 6px;
-    border-radius: 14px;
-    color: var(--text-secondary);
-    font-size: 12px;
+    gap: 5px;
+    min-height: 58px;
+    padding: 8px 6px;
+    border-radius: 11px;
+    color: var(--text-muted);
+    font-size: 11px;
     font-weight: 700;
     text-align: center;
+    transition: background var(--transition), color var(--transition);
   }
 
   .mobile-nav-link.active {
-    color: var(--text-primary);
-    background: var(--interactive-active-bg);
+    color: #fff;
+    background: var(--blue-base);
   }
 
-  @media (max-width: 1040px) {
-    .topbar {
-      padding: 10px 14px;
-      gap: 14px;
-    }
+  .brand-mark :global(svg),
+  .topnav-link :global(svg),
+  .status-pill :global(svg) {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
 
-    .topnav-link {
-      min-width: 82px;
-      padding: 8px 10px;
-    }
+  .mobile-nav-link :global(svg) {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
   }
 
   @media (max-width: 900px) {
-    .topbar {
-      grid-template-columns: auto 1fr;
-    }
-
-    .topbar-utility {
-      display: none;
-    }
-
-    .topnav {
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .topnav-link {
-      min-width: 76px;
-      font-size: 12px;
-    }
+    .topbar { gap: 12px; }
+    .topbar-utility { display: none; }
+    .topnav { justify-content: flex-end; }
   }
 
-  
-  @media (max-width: 900px) {
-  .mizu-topbar,
-  .mizu-bottom-pill {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-}
+  @media (max-width: 720px) {
+    .topbar-shell { display: none; }
 
-@media (max-width: 720px) {
-  .topbar-shell {
-    display: none;
+    .mobile-bottom-nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 160;
+      display: flex;
+      justify-content: center;
+      padding: 0 14px calc(10px + env(safe-area-inset-bottom));
+      pointer-events: none;
+    }
   }
-
-  .mobile-bottom-nav {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 160;
-    display: flex;
-    justify-content: center;
-    padding: 0 14px calc(12px + env(safe-area-inset-bottom));
-    pointer-events: none;
-  }
-}
 </style>
 
 

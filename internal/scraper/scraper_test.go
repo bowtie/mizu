@@ -3,7 +3,7 @@ package scraper
 import (
 	"testing"
 
-	"github.com/animefillerguard/animefillerguard/internal/models"
+	"mizu/internal/models"
 )
 
 func TestParseEpisodeType(t *testing.T) {

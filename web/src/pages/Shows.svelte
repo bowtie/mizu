@@ -233,18 +233,18 @@
       <p>{($shows || []).length} anime synced</p>
     </div>
     <button class="btn btn-primary anime-heading-action" on:click={openAddModal} aria-label="Add anime" title="Add anime">
-      <IconPlusRegular size={18} weight="regular" />
+      <IconPlusRegular size={20} weight="regular" />
       <span>Add Anime</span>
     </button>
   </section>
 
   <label class="search-shell anime-search-row" aria-label="Search synced anime">
-    <IconMagnifyingGlassRegular size={18} weight="regular" />
+    <IconMagnifyingGlassRegular size={20} weight="regular" />
     <input class="landing-search" type="text" placeholder="Search anime..." bind:value={filter} />
   </label>
 
   {#if loading}
-    <Spinner center size="lg" message="Loading Mizu anime..." />
+    <Spinner center size="lg" message="Pulling anime from the current..." />
   {:else if filteredShows.length === 0 && ($shows || []).length === 0}
     <div class="card landing-empty">
       <div class="empty-state compact-empty">
@@ -252,7 +252,7 @@
         <h3>No anime synced yet</h3>
         <p>Add your first Sonarr anime mapping to start using Mizu.</p>
         <button class="btn btn-primary" on:click={openAddModal}>
-          <IconPlusRegular size={18} weight="regular" />
+          <IconPlusRegular size={20} weight="regular" />
           <span>Add Anime</span>
         </button>
       </div>
@@ -280,8 +280,8 @@
                 <h3>{show.sonarr_title}</h3>
               </div>
               <div class="show-card-chips">
-                <span class="info-chip"><IconWaveSineRegular size={13} weight="regular" /> {markerChip(show)}</span>
-                <span class="info-chip" class:info-chip-on={show.enabled} class:info-chip-off={!show.enabled}><IconCheckCircleRegular size={13} weight="regular" /> {syncChip(show)}</span>
+                <span class="info-chip"><IconWaveSineRegular size={20} weight="regular" /> {markerChip(show)}</span>
+                <span class="info-chip" class:info-chip-on={show.enabled} class:info-chip-off={!show.enabled}><IconCheckCircleRegular size={20} weight="regular" /> {syncChip(show)}</span>
               </div>
             </div>
           </div>
@@ -295,7 +295,7 @@
   {#if addStep === 'series'}
     <p class="modal-copy">Choose the Sonarr anime you want to add to Mizu.</p>
     {#if sonarrLoading}
-      <Spinner center message="Loading Sonarr library..." />
+      <Spinner center message="Pulling the Sonarr library into view..." />
     {:else if availableSeries.length === 0}
       <div class="empty-state compact-empty" style="padding:20px">
         <h3>No anime left to add</h3>
@@ -315,7 +315,7 @@
     <p class="modal-copy">Choose the AnimeFillerList entry for <strong>{selectedSonarr?.title}</strong>.</p>
 
     {#if matchLoading}
-      <Spinner center message="Finding strict matches..." />
+      <Spinner center message="Surfacing strict matches..." />
     {:else}
       {#if manualSearchVisible}
         <div class="form-group" style="margin-bottom:16px">
@@ -323,7 +323,7 @@
           <div class="match-search-row">
             <input id="afl-search" class="form-input" type="text" placeholder="Search AnimeFillerList" bind:value={manualQuery} on:keydown={(event) => event.key === 'Enter' && handleManualSearch()} />
             <button class="btn btn-secondary" on:click={handleManualSearch} disabled={manualSearching}>
-              <IconMagnifyingGlassRegular size={16} weight="regular" />
+              <IconMagnifyingGlassRegular size={20} weight="regular" />
               <span>{manualSearching ? 'Searching...' : 'Search'}</span>
             </button>
           </div>
@@ -360,17 +360,17 @@
           <div class="rule-pill-row" role="group" aria-label="Initial tracking rules">
             <label class="rule-pill rule-pill-anime" class:active={addTrackAnimeCanon}>
               <input type="checkbox" bind:checked={addTrackAnimeCanon} />
-              {#if addTrackAnimeCanon}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+              {#if addTrackAnimeCanon}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
               <span>Anime canon</span>
             </label>
             <label class="rule-pill rule-pill-mixed" class:active={addTrackMixed}>
               <input type="checkbox" bind:checked={addTrackMixed} />
-              {#if addTrackMixed}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+              {#if addTrackMixed}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
               <span>Mixed canon</span>
             </label>
             <label class="rule-pill rule-pill-filler" class:active={addTrackFiller}>
               <input type="checkbox" bind:checked={addTrackFiller} />
-              {#if addTrackFiller}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+              {#if addTrackFiller}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
               <span>Filler</span>
             </label>
           </div>
@@ -405,45 +405,74 @@
 
 <style>
   .library-shell {
+    position: relative;
+    isolation: isolate;
     display: grid;
-    gap: 16px;
-    max-width: 960px;
+    gap: 18px;
+    max-width: var(--content-max);
     margin: 0 auto;
+  }
+
+  .library-shell::before,
+  .library-shell::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .library-shell::before {
+    z-index: -2;
+    background:
+      radial-gradient(circle at 18% 12%, var(--page-aurora-a) 0%, transparent 26%),
+      radial-gradient(circle at 78% 20%, var(--page-aurora-b) 0%, transparent 30%),
+      linear-gradient(180deg, var(--page-top-wash) 0%, rgba(7, 17, 30, 0) 100%);
+  }
+
+  .library-shell::after {
+    z-index: -1;
+    background:
+      linear-gradient(180deg, var(--page-depth-top) 0%, var(--page-depth-mid) 26%, var(--page-depth-strong) 62%, var(--page-depth-bottom) 100%);
   }
 
   .anime-heading {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
   }
 
   .anime-heading h1 {
-    margin-bottom: 4px;
-    font-size: 2rem;
+    font-size: 1.6rem;
+    font-weight: 800;
     line-height: 1.1;
+    letter-spacing: -0.02em;
   }
 
   .anime-heading p {
-    color: var(--text-secondary);
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 2px;
   }
 
   .anime-heading-action {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
+    flex-shrink: 0;
   }
 
   .search-shell {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 44px;
-    padding: 0 14px;
+    min-height: 42px;
+    padding: 0 16px;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: transparent;
+    background: var(--surface-elevated);
     color: var(--text-muted);
+    transition: border-color var(--transition);
   }
 
   .anime-search-row {
@@ -467,42 +496,42 @@
 
   .shows-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 16px;
   }
 
   .show-card {
     overflow: hidden;
     min-width: 0;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--surface-elevated);
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
-    transition: border-color var(--transition), background var(--transition);
-    box-shadow: var(--shadow-lg);
+    transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+    box-shadow: var(--shadow-card);
   }
 
   .show-card:hover {
     border-color: var(--border-light);
-    background: var(--surface);
-    box-shadow: none;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
   }
 
   .show-card-media {
     position: relative;
     aspect-ratio: 2 / 3;
-    min-height: 316px;
+    min-height: 240px;
     overflow: hidden;
-    background: linear-gradient(180deg, #1d3558 0%, #10203a 100%);
+    background: linear-gradient(180deg, var(--hero-card-start) 0%, var(--hero-card-end) 100%);
   }
 
   .show-card-media::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(3, 8, 16, 0.02) 16%, rgba(3, 8, 16, 0.2) 44%, rgba(3, 8, 16, 0.9) 100%);
+    background: linear-gradient(180deg, var(--hero-card-scrim-top) 20%, var(--hero-card-scrim-mid) 50%, var(--hero-card-scrim-bottom) 100%);
   }
 
   .show-card-media img {
@@ -524,7 +553,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--surface-hover);
+    background: var(--brand-mark-gradient);
     border: 1px solid var(--border-light);
     font-family: 'Figtree', sans-serif;
     font-size: 1.35rem;
@@ -539,34 +568,36 @@
     inset: auto 0 0;
     z-index: 1;
     display: grid;
-    gap: 2px;
-    padding: 8px;
+    gap: 6px;
+    padding: 10px 8px 8px;
   }
 
   .show-card-copy h3 {
-    font-size: 1rem;
-    line-height: 1.18;
+    font-size: 0.88rem;
+    line-height: 1.2;
     color: var(--accent-cream);
+    font-weight: 700;
   }
 
   .show-card-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 5px;
   }
 
   .info-chip {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     min-height: 22px;
     padding: 0 7px;
-    border-radius: 999px;
-    background: var(--interactive-bg);
-    border: 1px solid var(--interactive-border);
-    color: var(--accent-cream);
-    font-size: 10px;
+    border-radius: 5px;
+    background: rgba(5, 13, 26, 0.70);
+    border: 1px solid var(--border);
+    color: var(--text-b);
+    font-size: 11px;
     font-weight: 700;
+    backdrop-filter: blur(4px);
   }
 
   .info-chip-on {
@@ -600,13 +631,14 @@
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: var(--selected-bg);
+    background: var(--empty-icon-gradient);
     color: var(--accent-blue);
+    box-shadow: 0 12px 26px rgba(125, 200, 240, 0.18);
   }
 
   .modal-copy {
     margin-bottom: 12px;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-secondary);
   }
 
@@ -631,22 +663,22 @@
 
   .selected-card {
     border-color: var(--selected-border);
-    background: var(--selected-bg);
+    background: var(--card-accent-wash);
   }
 
   .selectable-title {
     font-family: 'Figtree', sans-serif;
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .selectable-title.emphasis {
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .selectable-meta {
     margin-top: 4px;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .match-score-row {
@@ -661,12 +693,12 @@
     padding: 14px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: transparent;
+    background: var(--panel-bg-soft);
   }
 
   .review-panel h3 {
     margin-bottom: 12px;
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .rule-pill-row {
@@ -687,7 +719,7 @@
     border: 1px solid var(--border);
     background: transparent;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: background var(--transition), border-color var(--transition), color var(--transition);
@@ -701,19 +733,19 @@
   }
 
   .rule-pill-anime.active {
-    background: var(--interactive-active-bg);
-    border-color: var(--selected-border);
+    background: var(--anime-canon-wash);
+    border-color: var(--anime-canon-border);
     color: var(--text-primary);
   }
 
   .rule-pill-mixed.active {
-    background: var(--selected-bg);
-    border-color: var(--interactive-active-border);
+    background: var(--mixed-wash);
+    border-color: var(--mixed-border);
     color: var(--text-primary);
   }
 
   .rule-pill-filler.active {
-    background: var(--filler-bg);
+    background: var(--filler-wash);
     border-color: var(--filler-border-strong);
     color: var(--danger-foreground);
   }
@@ -731,75 +763,36 @@
   }
 
   @media (max-width: 1100px) {
-    .library-shell {
-      gap: 18px;
-    }
-
-    .shows-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .show-card-media {
-      min-height: 320px;
-    }
-  }
-
-  @media (max-width: 960px) {
-    .shows-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
+    .shows-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .show-card-media { min-height: 220px; }
   }
 
   @media (max-width: 840px) {
-    .anime-heading {
-      align-items: flex-start;
-    }
-
-    .shows-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .show-card-media {
-      min-height: 300px;
-    }
+    .anime-heading { align-items: flex-start; }
+    .shows-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .show-card-media { min-height: 200px; }
   }
 
   @media (max-width: 560px) {
-    .library-shell {
-      gap: 16px;
-    }
+    .library-shell { gap: 14px; }
 
     .anime-heading {
       flex-direction: column;
       align-items: stretch;
+      gap: 10px;
     }
 
-    .anime-heading-action {
-      width: 100%;
-      justify-content: center;
-    }
-
-    .search-shell {
-      min-height: 42px;
-      padding: 0 12px;
-    }
+    .anime-heading-action { width: 100%; justify-content: center; }
 
     .shows-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
     }
 
-    .show-card-media {
-      min-height: 280px;
-    }
+    .show-card-media { min-height: 180px; }
 
-    .match-search-row {
-      grid-template-columns: 1fr;
-    }
-
-    .rule-pill-row {
-      display: grid;
-      grid-template-columns: 1fr;
-    }
+    .match-search-row { grid-template-columns: 1fr; }
+    .rule-pill-row { display: grid; grid-template-columns: 1fr; }
   }
 </style>
 

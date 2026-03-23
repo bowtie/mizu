@@ -1,16 +1,16 @@
 # =============================================================================
-# AnimeFillerGuard - Docker Compose Example
+# Mizu - Docker Compose Example
 # Add this to your existing *arr stack docker-compose.yml
 # =============================================================================
 
 version: "3.8"
 
 services:
-  animefillerguard:
+  mizu:
     build: .
     # Or use the published image:
-    # image: ghcr.io/animefillerguard/animefillerguard:latest
-    container_name: animefillerguard
+    # image: ghcr.io/example/mizu:latest
+    container_name: mizu
     restart: unless-stopped
     ports:
       - "8978:8978"
@@ -21,7 +21,7 @@ services:
       - LOG_LEVEL=info
       - TZ=America/New_York              # Your timezone
     volumes:
-      - ./config/animefillerguard:/config
+      - ./config/mizu:/config
     networks:
       - arr-network
     depends_on:

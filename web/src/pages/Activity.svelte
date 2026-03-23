@@ -124,13 +124,13 @@
       <p>Recent sync history.</p>
     </div>
     <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
-      <IconArrowsClockwiseRegular size={18} weight="regular" />
+      <IconArrowsClockwiseRegular size={20} weight="regular" />
       <span>{syncing ? 'Syncing...' : 'Sync now'}</span>
     </button>
   </section>
 
   {#if loading}
-    <Spinner center size="lg" message="Loading Mizu activity..." />
+    <Spinner center size="lg" message="Surfacing recent activity..." />
   {:else if logs.length === 0}
     <div class="card activity-empty">
       <div class="empty-state compact-empty">
@@ -138,7 +138,7 @@
         <h3>No sync activity yet</h3>
         <p>Run a sync to start building your history.</p>
         <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
-          <IconArrowsClockwiseRegular size={18} weight="regular" />
+          <IconArrowsClockwiseRegular size={20} weight="regular" />
           <span>Sync now</span>
         </button>
       </div>
@@ -157,7 +157,7 @@
             {#if hasDetails(log)}
               <button class="run-expand-btn" on:click={() => toggleExpand(log.id)} aria-label={expandedId === log.id ? 'Hide run details' : 'Show run details'}>
                 <span>Details</span>
-                <IconCaretDownRegular size={16} weight="bold" />
+                <IconCaretDownRegular size={20} weight="bold" />
               </button>
             {/if}
           </div>
@@ -184,7 +184,7 @@
                       <p>{detailLine(item)}</p>
                       {#if item.error}
                         <div class="run-detail-error">
-                          <IconWarningCircleRegular size={15} weight="regular" />
+                          <IconWarningCircleRegular size={20} weight="regular" />
                           <span>{item.error}</span>
                         </div>
                       {/if}
@@ -195,7 +195,7 @@
 
               {#if log.errors}
                 <div class="activity-errors">
-                  <div class="error-head"><IconWarningCircleRegular size={16} weight="regular" /> Run errors</div>
+                  <div class="error-head"><IconWarningCircleRegular size={20} weight="regular" /> Run errors</div>
                   {log.errors}
                 </div>
               {/if}
@@ -217,10 +217,34 @@
 
 <style>
   .activity-shell {
+    position: relative;
+    isolation: isolate;
     display: grid;
     gap: 16px;
     max-width: 960px;
     margin: 0 auto;
+  }
+
+  .activity-shell::before,
+  .activity-shell::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .activity-shell::before {
+    z-index: -2;
+    background:
+      radial-gradient(circle at 18% 12%, var(--page-aurora-a) 0%, transparent 26%),
+      radial-gradient(circle at 78% 20%, var(--page-aurora-b) 0%, transparent 30%),
+      linear-gradient(180deg, var(--page-top-wash) 0%, rgba(7, 17, 30, 0) 100%);
+  }
+
+  .activity-shell::after {
+    z-index: -1;
+    background:
+      linear-gradient(180deg, var(--page-depth-top) 0%, var(--page-depth-mid) 26%, var(--page-depth-strong) 62%, var(--page-depth-bottom) 100%);
   }
 
   .activity-heading {
@@ -255,6 +279,8 @@
     padding: 12px 14px;
     display: grid;
     gap: 12px;
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(10px);
   }
 
   .run-card-head {
@@ -270,7 +296,7 @@
     flex-wrap: wrap;
     gap: 10px;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .run-expand-btn {
@@ -283,7 +309,7 @@
     border: 1px solid var(--border);
     background: transparent;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
   }
 
@@ -297,12 +323,12 @@
   }
 
   .run-card-body h3 {
-    font-size: 1rem;
+    font-size: 1.1rem;
   }
 
   .run-card-body p {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .run-card-detail {
@@ -323,7 +349,7 @@
     gap: 8px;
     padding: 10px 12px;
     border-radius: 10px;
-    background: transparent;
+    background: var(--panel-bg-soft);
     border: 1px solid var(--border);
   }
 
@@ -336,7 +362,7 @@
 
   .run-detail-item p {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .run-detail-error,
@@ -348,7 +374,7 @@
 
   .run-detail-error {
     color: var(--danger-foreground);
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .activity-errors {
@@ -359,7 +385,7 @@
     background: var(--danger-bg);
     border: 1px solid var(--danger-border);
     color: var(--danger-foreground);
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .error-head {
@@ -391,8 +417,9 @@
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: var(--selected-bg);
+    background: var(--empty-icon-gradient);
     color: var(--accent-blue);
+    box-shadow: 0 12px 26px rgba(125, 200, 240, 0.18);
   }
 
   @media (max-width: 720px) {

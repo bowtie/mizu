@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/animefillerguard/animefillerguard/internal/models"
 	"github.com/rs/zerolog/log"
+	"mizu/internal/models"
 )
 
 // MatchResult represents a potential match between a Sonarr series and an AFL show.

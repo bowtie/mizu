@@ -28,7 +28,7 @@
 
   .spinner-message {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.4;
     text-align: center;
   }

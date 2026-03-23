@@ -1,5 +1,5 @@
 # =============================================================================
-# AnimeFillerGuard - Multi-stage Docker Build
+# Mizu - Multi-stage Docker Build
 # =============================================================================
 
 # Stage 1: Build the Go binary
@@ -24,7 +24,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
         -X main.version=${VERSION} \
         -X main.commit=${COMMIT} \
         -X main.buildDate=${BUILD_DATE}" \
-    -o /animefillerguard \
+    -o /mizu \
     ./cmd/server
 
 # Stage 2: Minimal runtime image
@@ -41,14 +41,14 @@ RUN addgroup -g 1000 afg && \
 RUN mkdir -p /config && chown afg:afg /config
 
 # Copy binary from builder
-COPY --from=builder /animefillerguard /usr/local/bin/animefillerguard
+COPY --from=builder /mizu /usr/local/bin/mizu
 
 # Environment defaults
 ENV SONARR_URL=http://localhost:8989 \
     SONARR_API_KEY= \
     SCAN_INTERVAL=6h \
     LISTEN_ADDR=:8978 \
-    DB_PATH=/config/animefillerguard.db \
+    DB_PATH=/config/mizu.db \
     LOG_LEVEL=info \
     TZ=UTC
 
@@ -65,4 +65,4 @@ VOLUME /config
 # Run as non-root
 USER afg
 
-ENTRYPOINT ["animefillerguard"]
+ENTRYPOINT ["mizu"]

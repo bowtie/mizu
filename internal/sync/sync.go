@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/animefillerguard/animefillerguard/internal/config"
-	"github.com/animefillerguard/animefillerguard/internal/database"
-	matcherpkg "github.com/animefillerguard/animefillerguard/internal/matcher"
-	"github.com/animefillerguard/animefillerguard/internal/models"
-	"github.com/animefillerguard/animefillerguard/internal/notifier"
-	"github.com/animefillerguard/animefillerguard/internal/scraper"
-	"github.com/animefillerguard/animefillerguard/internal/sonarr"
 	"github.com/rs/zerolog/log"
+	"mizu/internal/config"
+	"mizu/internal/database"
+	matcherpkg "mizu/internal/matcher"
+	"mizu/internal/models"
+	"mizu/internal/notifier"
+	"mizu/internal/scraper"
+	"mizu/internal/sonarr"
 )
 
 type Engine struct {

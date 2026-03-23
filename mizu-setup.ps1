@@ -1,15 +1,15 @@
 # =============================================================================
-# AnimeFillerGuard - Windows PowerShell Project Setup Script
-# Run with: .\animefillerguard-setup.ps1
+# Mizu - Windows PowerShell Project Setup Script
+# Run with: .\mizu-setup.ps1
 # Requires PowerShell 5.1+ (Windows 10/11 built-in)
 # =============================================================================
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "==> Creating AnimeFillerGuard project structure..." -ForegroundColor Cyan
+Write-Host "==> Creating Mizu project structure..." -ForegroundColor Cyan
 
-New-Item -ItemType Directory -Force -Path "animefillerguard" | Out-Null
-Set-Location "animefillerguard"
+New-Item -ItemType Directory -Force -Path "mizu" | Out-Null
+Set-Location "mizu"
 
 # Create directories
 New-Item -ItemType Directory -Force -Path "cmd" | Out-Null
@@ -34,8 +34,8 @@ Write-Host "==> Writing project files..." -ForegroundColor Cyan
 
 # --- .gitignore ---
 @'
-animefillerguard
-animefillerguard.exe
+mizu
+mizu.exe
 *.exe
 vendor/
 web/node_modules/
@@ -50,7 +50,7 @@ Thumbs.db
 # --- Dockerfile ---
 @'
 # =============================================================================
-# AnimeFillerGuard - Multi-stage Docker Build
+# Mizu - Multi-stage Docker Build
 # =============================================================================
 
 # Stage 1: Build the Go binary
@@ -75,7 +75,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
         -X main.version=${VERSION} \
         -X main.commit=${COMMIT} \
         -X main.buildDate=${BUILD_DATE}" \
-    -o /animefillerguard \
+    -o /mizu \
     ./cmd/server
 
 # Stage 2: Minimal runtime image
@@ -92,14 +92,14 @@ RUN addgroup -g 1000 afg && \
 RUN mkdir -p /config && chown afg:afg /config
 
 # Copy binary from builder
-COPY --from=builder /animefillerguard /usr/local/bin/animefillerguard
+COPY --from=builder /mizu /usr/local/bin/mizu
 
 # Environment defaults
 ENV SONARR_URL=http://localhost:8989 \
     SONARR_API_KEY= \
     SCAN_INTERVAL=6h \
     LISTEN_ADDR=:8978 \
-    DB_PATH=/config/animefillerguard.db \
+    DB_PATH=/config/mizu.db \
     LOG_LEVEL=info \
     TZ=UTC
 
@@ -116,12 +116,12 @@ VOLUME /config
 # Run as non-root
 USER afg
 
-ENTRYPOINT ["animefillerguard"]
+ENTRYPOINT ["mizu"]
 '@ | Set-Content -Path "Dockerfile" -Encoding UTF8
 
 # --- README.md ---
 @'
-# AnimeFillerGuard
+# Mizu
 
 Automatically manage filler episodes in Sonarr using data from [AnimeFillerList](https://www.animefillerlist.com/). Unmonitor, skip, or tag filler and mixed-canon episodes so you only download the episodes that matter.
 
@@ -271,7 +271,7 @@ web/                   # Svelte SPA frontend
 
 ## Notifications (ntfy)
 
-AnimeFillerGuard can send push notifications after each sync via [ntfy.sh](https://ntfy.sh).
+Mizu can send push notifications after each sync via [ntfy.sh](https://ntfy.sh).
 
 ### Setup
 
@@ -365,7 +365,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("AnimeFillerGuard %s (commit: %s, built: %s)\n", version, commit, buildDate)
+		fmt.Printf("Mizu %s (commit: %s, built: %s)\n", version, commit, buildDate)
 		os.Exit(0)
 	}
 
@@ -391,7 +391,7 @@ func main() {
 		Str("listen", cfg.ListenAddr).
 		Str("sonarr", cfg.SonarrURL).
 		Dur("scan_interval", cfg.ScanInterval).
-		Msg("starting AnimeFillerGuard")
+		Msg("starting Mizu")
 
 	// Initialize database
 	db, err := database.New(cfg.DBPath)
@@ -447,7 +447,7 @@ func main() {
 		log.Error().Err(err).Msg("server shutdown error")
 	}
 
-	log.Info().Msg("AnimeFillerGuard stopped")
+	log.Info().Msg("Mizu stopped")
 }
 
 // startScheduler runs the periodic sync on the configured interval.
@@ -993,7 +993,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 # --- docker-compose.yml ---
 @'
 # =============================================================================
-# AnimeFillerGuard - Docker Compose Example
+# Mizu - Docker Compose Example
 # Add this to your existing *arr stack docker-compose.yml
 # =============================================================================
 
@@ -2151,7 +2151,7 @@ func (n *Notifier) SendTestNotification(ctx context.Context) error {
 	}
 
 	return n.send(ctx,
-		"AnimeFillerGuard - Test",
+		"Mizu - Test",
 		"If you see this, notifications are working correctly!",
 		3, // default priority
 		[]string{"white_check_mark", "test_tube"},
@@ -2409,7 +2409,7 @@ import (
 
 const (
 	baseURL   = "https://www.animefillerlist.com"
-	userAgent = "AnimeFillerGuard/1.0 (+https://github.com/animefillerguard/animefillerguard)"
+	userAgent = "Mizu/1.0"
 )
 
 // Scraper handles fetching and parsing data from AnimeFillerList.com.
@@ -3344,7 +3344,7 @@ func SPAHandler() http.Handler {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AnimeFillerGuard</title>
+    <title>Mizu</title>
     <style>
       html, body {
         margin: 0;
@@ -3419,7 +3419,7 @@ func SPAHandler() http.Handler {
 # --- web/src/app.css ---
 @'
 /* ============================================================
-   AnimeFillerGuard - Global Styles
+   Mizu - Global Styles
    Dark theme matching the *arr ecosystem (Sonarr/Radarr)
    ============================================================ */
 
@@ -4535,7 +4535,7 @@ tr.ep-filler:hover { background: rgba(239, 68, 68, 0.18); }
 <aside class="sidebar">
   <div class="sidebar-brand">
     <h1><span class="brand-icon">&#9878;</span>AFG</h1>
-    <div class="brand-sub">AnimeFillerGuard</div>
+    <div class="brand-sub">Mizu</div>
   </div>
 
   <nav class="sidebar-nav">
@@ -4850,7 +4850,7 @@ export default app;
   <div class="page-header">
     <div>
       <h2>Dashboard</h2>
-      <p>AnimeFillerGuard overview {version ? `v${version}` : ''}</p>
+      <p>Mizu overview {version ? `v${version}` : ''}</p>
     </div>
     <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
       {#if syncing}
@@ -5262,7 +5262,7 @@ export default app;
 <div class="page-header">
   <div>
     <h2>Settings</h2>
-    <p>Configure AnimeFillerGuard connection and behavior</p>
+    <p>Configure Mizu connection and behavior</p>
   </div>
   <button class="btn btn-primary" on:click={handleSave} disabled={saving}>
     {#if saving}
@@ -6072,12 +6072,12 @@ export default defineConfig({
 '@ | Set-Content -Path "web\vite.config.js" -Encoding UTF8
 
 Write-Host ""
-Write-Host "==> AnimeFillerGuard project created successfully!" -ForegroundColor Green
+Write-Host "==> Mizu project created successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "    To get started:" -ForegroundColor Yellow
-Write-Host "      1. cd animefillerguard"
+Write-Host "      1. cd mizu"
 Write-Host "      2. Build frontend:  cd web; npm install; npm run build; cd .."
 Write-Host "      3. Run go mod tidy"
-Write-Host "      4. go build -o animefillerguard.exe .\cmd\server"
+Write-Host "      4. go build -o mizu.exe .\cmd\server"
 Write-Host "      5. Or: docker compose up -d"
 Write-Host ""

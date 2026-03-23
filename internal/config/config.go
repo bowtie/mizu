@@ -65,7 +65,7 @@ func DefaultConfig() *Config {
 		ScanInterval:            6 * time.Hour,
 		ListenAddr:              ":8978",
 		BaseURL:                 "/",
-		DBPath:                  "/config/animefillerguard.db",
+		DBPath:                  "/config/mizu.db",
 		CacheTTL:                24 * time.Hour,
 		RequestTimeout:          30 * time.Second,
 		RateLimitDelay:          2 * time.Second,

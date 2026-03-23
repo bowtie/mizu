@@ -11,15 +11,15 @@ import (
 
 // SyncResult holds the data needed to format a notification.
 type SyncResult struct {
-	Status             string // "success", "partial", "failed"
-	ShowsProcessed     int
-	EpisodesUpdated    int
-	FillerFound        int
-	MixedCanonFound    int
-	AnimeCanonFound    int
-	Errors             []string
-	Duration           time.Duration
-	Trigger            string // "scheduled", "manual"
+	Status          string // "success", "partial", "failed"
+	ShowsProcessed  int
+	EpisodesUpdated int
+	FillerFound     int
+	MixedCanonFound int
+	AnimeCanonFound int
+	Errors          []string
+	Duration        time.Duration
+	Trigger         string // "scheduled", "manual"
 }
 
 // Notifier sends notifications via ntfy.sh.
@@ -72,7 +72,7 @@ func (n *Notifier) SendTestNotification(ctx context.Context) error {
 	}
 
 	return n.send(ctx,
-		"AnimeFillerGuard - Test",
+		"Mizu - Test",
 		"If you see this, notifications are working correctly!",
 		3, // default priority
 		[]string{"white_check_mark", "test_tube"},

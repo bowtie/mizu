@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/animefillerguard/animefillerguard/internal/models"
+	"mizu/internal/models"
 )
 
 func TestInitialWatermarkForEpisodes(t *testing.T) {

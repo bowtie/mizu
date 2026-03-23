@@ -1,4 +1,4 @@
-# AnimeFillerGuard
+# Mizu
 
 Automatically manage filler episodes in Sonarr using data from [AnimeFillerList](https://www.animefillerlist.com/). Unmonitor, skip, or tag filler and mixed-canon episodes so you only download the episodes that matter.
 
@@ -20,9 +20,9 @@ Automatically manage filler episodes in Sonarr using data from [AnimeFillerList]
 
 ```yaml
 services:
-  animefillerguard:
-    image: animefillerguard:latest
-    container_name: animefillerguard
+  mizu:
+    image: mizu:latest
+    container_name: mizu
     ports:
       - "8978:8978"
     environment:
@@ -43,12 +43,12 @@ Open `http://localhost:8978` to access the dashboard.
 
 ```bash
 docker run -d \
-  --name animefillerguard \
+  --name mizu \
   -p 8978:8978 \
   -e SONARR_URL=http://sonarr:8989 \
   -e SONARR_API_KEY=your-sonarr-api-key \
   -v ./config:/config \
-  animefillerguard:latest
+  mizu:latest
 ```
 
 ### Build from Source
@@ -58,7 +58,7 @@ docker run -d \
 cd web && npm install && npm run build && cd ..
 
 # Build Go binary
-go build -o animefillerguard ./cmd/server
+go build -o mizu ./cmd/server
 ```
 
 ## Configuration
@@ -74,7 +74,7 @@ All settings can be configured via environment variables, a YAML config file, or
 | `SCAN_INTERVAL` | `6h` | How often to sync (Go duration or minutes) |
 | `LISTEN_ADDR` | `:8978` | HTTP server listen address |
 | `BASE_URL` | `/` | Base URL path (for reverse proxies) |
-| `DB_PATH` | `/config/animefillerguard.db` | SQLite database path |
+| `DB_PATH` | `/config/mizu.db` | SQLite database path |
 | `CACHE_TTL` | `24h` | How long to cache scraped AFL data |
 | `DEFAULT_FILLER_ACTION` | `unmonitor` | Default action for filler episodes |
 | `DEFAULT_MIXED_CANON_ACTION` | `monitor` | Default action for mixed canon episodes |
@@ -94,7 +94,7 @@ sonarr_api_key: your-api-key
 
 scan_interval: 6h
 listen_addr: ":8978"
-db_path: /config/animefillerguard.db
+db_path: /config/mizu.db
 cache_ttl: 24h
 
 default_filler_action: unmonitor    # unmonitor | monitor | skip
@@ -105,7 +105,7 @@ filler_tag_name: filler
 
 ntfy_enabled: false
 ntfy_server_url: https://ntfy.sh
-ntfy_topic: animefillerguard
+ntfy_topic: mizu
 ntfy_token: ""
 
 log_level: info
@@ -148,12 +148,12 @@ web/                   # Svelte SPA frontend
 
 ## Notifications (ntfy)
 
-AnimeFillerGuard can send push notifications after each sync via [ntfy.sh](https://ntfy.sh).
+Mizu can send push notifications after each sync via [ntfy.sh](https://ntfy.sh).
 
 ### Setup
 
 1. Install the ntfy app on your phone ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy), [iOS](https://apps.apple.com/app/ntfy/id1625396347))
-2. Subscribe to your chosen topic (e.g., `animefillerguard`)
+2. Subscribe to your chosen topic (e.g., `mizu`)
 3. In Settings > Notifications, enable ntfy and enter the same topic
 4. Click "Send Test Notification" to verify
 
@@ -194,8 +194,11 @@ All endpoints are under `/api`.
 ## Development
 
 `ash
-# One command from the repo root
+# One command from the repo root (single terminal)
 bun run dev
+
+# Optional: keep the old two-window workflow
+bun run dev:windows
 
 # Frontend (hot reload)
 cd web && npm run dev

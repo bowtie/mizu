@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/animefillerguard/animefillerguard/internal/models"
 	"github.com/rs/zerolog/log"
+	"mizu/internal/models"
 )
 
 // Client communicates with the Sonarr API v3.

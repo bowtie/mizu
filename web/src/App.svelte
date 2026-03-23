@@ -10,6 +10,7 @@
     '/shows/:id': wrap({ asyncComponent: () => import('./pages/ShowDetail.svelte') }),
     '/activity': wrap({ asyncComponent: () => import('./pages/Activity.svelte') }),
     '/settings': wrap({ asyncComponent: () => import('./pages/Settings.svelte') }),
+    // Keep /logs as a compatibility alias for older links.
     '/logs': wrap({ asyncComponent: () => import('./pages/Activity.svelte') }),
   };
 

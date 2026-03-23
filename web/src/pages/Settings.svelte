@@ -192,13 +192,13 @@
       <p>Connect Sonarr, choose sync timing, and set default rules.</p>
     </div>
     <button class="btn btn-primary" on:click={handleSave} disabled={saving}>
-      <IconFloppyDiskRegular size={18} weight="regular" />
+      <IconFloppyDiskRegular size={20} weight="regular" />
       <span>{saving ? 'Saving...' : 'Save settings'}</span>
     </button>
   </section>
 
   {#if loading}
-    <Spinner center size="lg" message="Loading Mizu settings..." />
+    <Spinner center size="lg" message="Loading settings from the current..." />
   {:else}
     <section class="settings-grid">
       <div class="card settings-panel">
@@ -210,6 +210,7 @@
           {#if testResult}<span class="test-result" class:error={!testResult.success}>{testResult.message}</span>{/if}
         </div>
 
+        <div class="panel-body">
         <div class="form-group">
           <label class="form-label" for="sonarr-url">Sonarr URL</label>
           <input id="sonarr-url" class="form-input settings-field" type="text" placeholder="http://localhost:8989" bind:value={sonarrUrl} />
@@ -222,10 +223,10 @@
             {#if hasSavedApiKey || apiKeyDirty}
               <button type="button" class="inline-toggle" on:click={toggleApiKeyVisibility} disabled={revealingKey}>
                 {#if apiKeyVisible}
-                  <IconEyeSlashRegular size={14} weight="regular" />
+                  <IconEyeSlashRegular size={20} weight="regular" />
                   <span>Hide</span>
                 {:else}
-                  <IconEyeRegular size={14} weight="regular" />
+                  <IconEyeRegular size={20} weight="regular" />
                   <span>{revealingKey ? 'Loading...' : 'View'}</span>
                 {/if}
               </button>
@@ -243,9 +244,10 @@
         </div>
 
         <button class="btn btn-secondary" on:click={handleTestConnection} disabled={testing}>
-          <IconPlugRegular size={18} weight="regular" />
+          <IconPlugRegular size={20} weight="regular" />
           <span>{testing ? 'Testing...' : 'Test connection'}</span>
         </button>
+        </div>
       </div>
 
       <div class="card settings-panel">
@@ -256,6 +258,7 @@
           </div>
         </div>
 
+        <div class="panel-body">
         <div class="form-group">
           <label class="form-label" for="sync-interval">Sync interval</label>
           <select id="sync-interval" class="form-select settings-field" bind:value={syncInterval}>
@@ -273,9 +276,10 @@
         </div>
 
         <button class="btn btn-secondary" on:click={handleRefreshCache} disabled={refreshingCache}>
-          <IconArrowsClockwiseRegular size={18} weight="regular" />
+          <IconArrowsClockwiseRegular size={20} weight="regular" />
           <span>{refreshingCache ? 'Refreshing...' : 'Refresh show list'}</span>
         </button>
+        </div>
       </div>
     </section>
 
@@ -288,22 +292,24 @@
           </div>
         </div>
 
+        <div class="panel-body">
         <div class="rule-pill-row" role="group" aria-label="Default tracking rules">
           <label class="rule-pill rule-pill-anime" class:active={trackAnimeCanonDefault}>
             <input type="checkbox" bind:checked={trackAnimeCanonDefault} />
-            {#if trackAnimeCanonDefault}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+            {#if trackAnimeCanonDefault}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
             <span>Anime canon</span>
           </label>
           <label class="rule-pill rule-pill-mixed" class:active={trackMixedDefault}>
             <input type="checkbox" bind:checked={trackMixedDefault} />
-            {#if trackMixedDefault}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+            {#if trackMixedDefault}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
             <span>Mixed canon</span>
           </label>
           <label class="rule-pill rule-pill-filler" class:active={trackFillerDefault}>
             <input type="checkbox" bind:checked={trackFillerDefault} />
-            {#if trackFillerDefault}<IconCheckRegular size={14} weight="bold" />{:else}<IconXRegular size={14} weight="bold" />{/if}
+            {#if trackFillerDefault}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
             <span>Filler</span>
           </label>
+        </div>
         </div>
       </div>
 
@@ -313,7 +319,7 @@
             <h3>Advanced tagging</h3>
             <p>Add a Sonarr tag to anime with filler-related episodes.</p>
           </div>
-          <span class:open={showAdvancedTagging}><IconCaretDownRegular size={16} weight="bold" /></span>
+          <span class:open={showAdvancedTagging}><IconCaretDownRegular size={20} weight="bold" /></span>
         </button>
 
         {#if showAdvancedTagging}
@@ -338,46 +344,59 @@
 
 <style>
   .settings-shell {
+    position: relative;
+    isolation: isolate;
     display: grid;
-    gap: 12px;
-    max-width: 960px;
+    gap: 20px;
+    max-width: var(--content-max);
     margin: 0 auto;
   }
 
   .row-heading {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
   }
 
   .row-heading h1 {
-    margin-bottom: 4px;
-    font-size: 2rem;
+    font-size: 1.6rem;
+    font-weight: 800;
     line-height: 1.1;
+    letter-spacing: -0.02em;
   }
 
   .row-heading p {
-    color: var(--text-secondary);
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 3px;
   }
 
   .row-heading .btn,
   .settings-panel .btn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
+    flex-shrink: 0;
   }
 
   .settings-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 16px;
+    align-items: start;
   }
 
   .settings-panel {
-    padding: 14px;
+    padding: 0;
     display: grid;
-    gap: 12px;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
   }
 
   .panel-head {
@@ -385,21 +404,33 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
+    padding: 16px 18px 14px;
+    background: var(--surface-elevated);
+    border-bottom: 1px solid var(--border);
   }
 
   .panel-head h3 {
-    font-size: 1rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
   }
 
   .panel-head p {
-    margin-top: 4px;
-    color: var(--text-secondary);
+    margin-top: 3px;
+    color: var(--text-muted);
     font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .panel-body {
+    padding: 16px 18px;
+    display: grid;
+    gap: 14px;
   }
 
   .test-result {
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .test-result.error {
@@ -423,41 +454,48 @@
     align-items: center;
     gap: 6px;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
   }
 
   .settings-field {
     background: var(--surface-elevated);
-    border-color: var(--interactive-active-border);
+    border-color: var(--border);
+  }
+
+  .settings-field:focus {
+    border-color: var(--focus-border);
   }
 
   .cache-status-card {
-    display: grid;
-    gap: 10px;
-    padding: 12px;
-    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius);
     border: 1px solid var(--border);
-    background: transparent;
+    background: var(--surface-elevated);
   }
 
   .cache-status-card span {
     display: block;
-    margin-bottom: 4px;
     color: var(--text-muted);
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    margin-bottom: 2px;
   }
 
   .cache-status-card strong {
-    font-size: 13px;
+    font-size: 14px;
+    color: var(--text-primary);
   }
 
   .rule-pill-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
   }
 
   .rule-pill {
@@ -465,13 +503,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    min-height: 36px;
-    padding: 0 11px;
-    border-radius: 10px;
+    gap: 7px;
+    min-height: 34px;
+    padding: 0 13px;
+    border-radius: 999px;
     border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
+    background: var(--surface-elevated);
+    color: var(--text-muted);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -485,27 +523,20 @@
     pointer-events: none;
   }
 
-  .rule-pill-anime.active {
-    background: var(--interactive-active-bg);
-    border-color: var(--selected-border);
-    color: var(--text-primary);
-  }
-
-  .rule-pill-mixed.active {
-    background: var(--interactive-active-bg);
-    border-color: var(--interactive-active-border);
-    color: var(--text-primary);
-  }
-
+  .rule-pill-anime.active,
+  .rule-pill-mixed.active,
   .rule-pill-filler.active {
-    background: var(--filler-bg);
-    border-color: var(--filler-border-strong);
-    color: var(--danger-foreground);
+    background: var(--success-bg);
+    border-color: var(--success-border);
+    color: var(--success);
   }
 
+  .rule-pill-anime:not(.active),
+  .rule-pill-mixed:not(.active),
   .rule-pill-filler:not(.active) {
-    border-color: var(--filler-border);
-    color: var(--danger-foreground);
+    background: var(--danger-bg);
+    border-color: var(--danger-border);
+    color: var(--danger);
   }
 
   .advanced-panel {
@@ -519,11 +550,12 @@
     gap: 12px;
     width: 100%;
     text-align: left;
+    padding: 14px 18px;
   }
 
   .advanced-toggle p {
-    margin-top: 4px;
-    color: var(--text-secondary);
+    margin-top: 3px;
+    color: var(--text-muted);
     font-size: 13px;
   }
 
@@ -531,8 +563,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     transition: transform var(--transition);
+    flex-shrink: 0;
   }
 
   .advanced-toggle span.open {
@@ -542,37 +575,50 @@
   .advanced-content {
     display: grid;
     gap: 12px;
-    margin-top: 12px;
+    padding: 0 18px 16px;
+    border-top: 1px solid var(--border);
+    margin-top: 0;
+    padding-top: 14px;
   }
 
   .check-card {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 12px;
+    padding: 12px 14px;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    background: transparent;
+    border-radius: var(--radius);
+    background: var(--surface-elevated);
+    cursor: pointer;
+    transition: border-color var(--transition), background var(--transition);
+  }
+
+  .check-card:has(input:checked) {
+    border-color: var(--accent-border);
+    background: rgba(26, 143, 255, 0.06);
   }
 
   .check-card input {
-    margin-top: 4px;
+    margin-top: 3px;
+    accent-color: var(--blue-base);
   }
 
   .check-card strong {
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
+    font-size: 14px;
+    color: var(--text-primary);
   }
 
   .check-card small {
     display: block;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 12px;
     line-height: 1.4;
   }
 
   .subdued-check-card {
-    background: transparent;
+    background: var(--surface);
   }
 
   .advanced-form-group {
@@ -593,10 +639,7 @@
 
     .row-heading .btn {
       width: 100%;
-    }
-
-    .settings-panel {
-      padding: 14px;
+      justify-content: center;
     }
 
     .rule-pill-row {

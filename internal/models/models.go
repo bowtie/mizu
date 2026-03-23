@@ -117,6 +117,7 @@ type SonarrSeries struct {
 	ID              int              `json:"id"`
 	Title           string           `json:"title"`
 	SortTitle       string           `json:"sortTitle"`
+	Overview        string           `json:"overview"`
 	SeriesType      string           `json:"seriesType"` // "anime", "standard", etc.
 	TVDBID          int              `json:"tvdbId"`
 	IMDBID          string           `json:"imdbId"`

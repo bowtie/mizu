@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/animefillerguard/animefillerguard/internal/config"
-	"github.com/animefillerguard/animefillerguard/internal/database"
-	syncengine "github.com/animefillerguard/animefillerguard/internal/sync"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"mizu/internal/config"
+	"mizu/internal/database"
+	syncengine "mizu/internal/sync"
 )
 
 var (

@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/animefillerguard/animefillerguard/internal/database"
-	"github.com/animefillerguard/animefillerguard/internal/models"
 	"github.com/rs/zerolog/log"
+	"mizu/internal/database"
+	"mizu/internal/models"
 )
 
 const (
 	baseURL                 = "https://www.animefillerlist.com"
-	userAgent               = "AnimeFillerGuard/1.0 (+https://github.com/animefillerguard/animefillerguard)"
+	userAgent               = "Mizu/1.0"
 	showListRefreshInterval = 30 * 24 * time.Hour
 )
 

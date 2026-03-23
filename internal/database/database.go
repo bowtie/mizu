@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/animefillerguard/animefillerguard/internal/models"
+	"mizu/internal/models"
 
 	_ "modernc.org/sqlite"
 )
@@ -589,5 +589,3 @@ func normalizeMapping(m models.ShowMapping) models.ShowMapping {
 	}
 	return m
 }
-
-
