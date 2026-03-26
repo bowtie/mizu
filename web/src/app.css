@@ -15,13 +15,13 @@
     --blue-deeper:   #002454;
 
     /* Background depths — near-black with cold blue undertone */
-    --bg-void:       #02050c;
-    --bg-abyss:      #03070f;
-    --bg-deep:       #050d1a;
-    --bg-dark:       #081426;
-    --bg-mid:        #0c1d38;
-    --bg-lift:       #11274e;
-    --bg-raised:     #162f60;
+    --bg-void:       #040810;
+    --bg-abyss:      #050c16;
+    --bg-deep:       #07101e;
+    --bg-dark:       #0a1624;
+    --bg-mid:        #0e1e30;
+    --bg-lift:       #132644;
+    --bg-raised:     #172c58;
 
     /* Text — blue-white spectrum */
     --text-a:        #eef5ff;
@@ -40,10 +40,10 @@
 
     --bg:                var(--bg-deep);
     --bg-elevated:       var(--bg-dark);
-    --surface:           rgba(5, 13, 26, 0.97);
-    --surface-elevated:  rgba(8, 18, 36, 0.99);
-    --surface-soft:      rgba(0, 116, 217, 0.08);
-    --surface-hover:     rgba(26, 143, 255, 0.07);
+    --surface:           #111e30;
+    --surface-elevated:  #162540;
+    --surface-soft:      rgba(0, 116, 217, 0.10);
+    --surface-hover:     rgba(26, 143, 255, 0.09);
     --border:            rgba(0, 116, 217, 0.24);
     --border-light:      rgba(26, 143, 255, 0.40);
 
@@ -80,8 +80,8 @@
     --special-bg:        rgba(100, 144, 192, 0.11);
 
     /* Layout */
-    --shadow-lg:   0 20px 60px rgba(2, 5, 12, 0.70);
-    --shadow-card: 0 4px 20px rgba(2, 5, 12, 0.50);
+    --shadow-lg:   0 8px 32px rgba(2, 5, 12, 0.60), 0 2px 8px rgba(2, 5, 12, 0.40);
+    --shadow-card: 0 2px 8px rgba(2, 5, 12, 0.50), 0 1px 3px rgba(2, 5, 12, 0.40);
     --radius:      8px;
     --radius-lg:   14px;
     --transition:  150ms ease;
@@ -91,10 +91,10 @@
     --nav-max:           1040px;
 
     /* UI surfaces */
-    --panel-bg:               rgba(5, 13, 26, 0.72);
-    --panel-bg-strong:        rgba(5, 13, 26, 0.92);
-    --panel-bg-soft:          rgba(3, 9, 18, 0.60);
-    --interactive-bg:         rgba(8, 18, 36, 0.88);
+    --panel-bg:               #0f1c2e;
+    --panel-bg-strong:        #111e30;
+    --panel-bg-soft:          #0d1a2a;
+    --interactive-bg:         #131f32;
     --interactive-border:     rgba(0, 116, 217, 0.26);
     --interactive-active-bg:  rgba(0, 116, 217, 0.16);
     --interactive-active-border: rgba(26, 143, 255, 0.46);
@@ -125,9 +125,9 @@
     --divider-border-soft: rgba(0, 116, 217, 0.08);
     --table-head-bg:   rgba(0, 116, 217, 0.07);
     --table-row-hover: rgba(0, 116, 217, 0.06);
-    --overlay-dark:    rgba(2, 5, 12, 0.90);
+    --overlay-dark:    rgba(1, 3, 8, 0.92);
     --surface-control: rgba(8, 18, 36, 0.88);
-    --surface-control-hover: rgba(12, 26, 52, 0.98);
+    --surface-control-hover:  #1a2a42;
 
     --success-foreground:       #d0fff0;
     --danger-foreground:        #ffe0e5;
@@ -241,7 +241,6 @@ button.card { width: 100%; color: var(--text-primary); cursor: pointer; }
 
 .table-container {
     overflow-x: auto;
-    border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--panel-bg-soft);
 }
@@ -257,12 +256,10 @@ th {
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
 }
 
 td {
     padding: 11px 14px;
-    border-bottom: 1px solid var(--divider-border);
     color: var(--text-primary);
     vertical-align: middle;
 }
@@ -297,7 +294,7 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 
 .btn-primary {
     background: var(--blue-base);
-    border-color: var(--accent-border);
+    border-color: transparent;
     color: #fff;
 }
 .btn-primary:hover:not(:disabled) {
@@ -308,7 +305,7 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 
 .btn-secondary {
     background: var(--surface-control);
-    border-color: var(--border);
+    border-color: transparent;
     color: var(--text-primary);
 }
 .btn-secondary:hover:not(:disabled) {
@@ -359,7 +356,7 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     width: 100%;
     min-height: 40px;
     padding: 0 13px;
-    border: 1px solid var(--border);
+    border: none;
     border-radius: var(--radius);
     background: var(--surface-elevated);
     color: var(--text-primary);
@@ -395,7 +392,6 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     min-height: 22px;
     padding: 0 9px;
     border-radius: 999px;
-    border: 1px solid transparent;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.05em;
@@ -436,7 +432,7 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     max-height: 88vh;
     overflow-y: auto;
     background: var(--surface-elevated);
-    border: 1px solid var(--border);
+    border: none;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
 }
@@ -447,7 +443,6 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     justify-content: space-between;
     gap: 10px;
     padding: 14px 20px;
-    border-bottom: 1px solid var(--border);
 }
 .modal-footer { justify-content: flex-end; border-top: 1px solid var(--border); border-bottom: 0; }
 .modal-header h3 { font-size: 1.05rem; font-weight: 700; }
@@ -472,7 +467,7 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     align-items: center;
     gap: 10px;
     padding: 11px 15px;
-    border: 1px solid var(--border);
+    border: none;
     border-radius: var(--radius);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-lg);

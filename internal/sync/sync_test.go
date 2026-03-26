@@ -25,6 +25,36 @@ func TestInitialWatermarkForEpisodes(t *testing.T) {
 	}
 }
 
+func TestInitialWatermarkForEpisodesIgnoresMonitoredOnlyEpisodes(t *testing.T) {
+	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
+
+	episodes := []models.SonarrEpisode{
+		{SeasonNumber: 1, EpisodeNumber: 3, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
+		{SeasonNumber: 1, EpisodeNumber: 7, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
+		{SeasonNumber: 2, EpisodeNumber: 1, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
+	}
+
+	got := initialWatermarkForEpisodes(episodes, now)
+	if got != 0 {
+		t.Fatalf("expected monitored-only episodes to keep watermark at 0, got %d", got)
+	}
+}
+
+func TestInitialWatermarkForEpisodesIgnoresFutureAndSpecialDownloads(t *testing.T) {
+	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
+
+	episodes := []models.SonarrEpisode{
+		{SeasonNumber: 0, EpisodeNumber: 1, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
+		{SeasonNumber: 1, EpisodeNumber: 8, HasFile: true, AirDateUTC: now.Add(time.Hour)},
+		{SeasonNumber: 1, EpisodeNumber: 5, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
+	}
+
+	got := initialWatermarkForEpisodes(episodes, now)
+	if got != 5 {
+		t.Fatalf("expected watermark 5 from the latest eligible download, got %d", got)
+	}
+}
+
 func TestNormalizeWatermarkModeDefaults(t *testing.T) {
 	if got := normalizeWatermarkMode("", models.StartModeCurrentProgress); got != models.WatermarkModeAuto {
 		t.Fatalf("expected current progress mappings to default to auto watermark mode, got %q", got)
@@ -37,7 +67,6 @@ func TestNormalizeWatermarkModeDefaults(t *testing.T) {
 func TestNextAutoWatermarkNeverShrinks(t *testing.T) {
 	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
 	episodes := []models.SonarrEpisode{
-		{SeasonNumber: 1, EpisodeNumber: 3, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
 		{SeasonNumber: 1, EpisodeNumber: 7, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
@@ -49,12 +78,23 @@ func TestNextAutoWatermarkNeverShrinks(t *testing.T) {
 func TestNextAutoWatermarkAdvances(t *testing.T) {
 	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
 	episodes := []models.SonarrEpisode{
-		{SeasonNumber: 1, EpisodeNumber: 10, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
 		{SeasonNumber: 1, EpisodeNumber: 12, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
 	if got := nextAutoWatermark(5, episodes, now); got != 12 {
 		t.Fatalf("expected auto watermark to advance to 12, got %d", got)
+	}
+}
+
+func TestNextAutoWatermarkDoesNotAdvanceFromMonitoredOnlyEpisodes(t *testing.T) {
+	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
+	episodes := []models.SonarrEpisode{
+		{SeasonNumber: 1, EpisodeNumber: 10, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
+		{SeasonNumber: 1, EpisodeNumber: 12, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
+	}
+
+	if got := nextAutoWatermark(0, episodes, now); got != 0 {
+		t.Fatalf("expected monitored-only episodes not to advance auto watermark, got %d", got)
 	}
 }
 

@@ -711,7 +711,7 @@ func initialWatermarkForEpisodes(episodes []models.SonarrEpisode, now time.Time)
 		if ep.AirDateUTC.After(now) {
 			continue
 		}
-		if !ep.HasFile && !ep.Monitored {
+		if !ep.HasFile {
 			continue
 		}
 		aflNum := matcherpkg.MapEpisodeNumber(ep, 0)

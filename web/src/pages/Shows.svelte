@@ -503,18 +503,16 @@
   .show-card {
     overflow: hidden;
     min-width: 0;
-    border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface-elevated);
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
-    transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+    transition: transform var(--transition), box-shadow var(--transition);
     box-shadow: var(--shadow-card);
   }
 
   .show-card:hover {
-    border-color: var(--border-light);
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
   }
@@ -633,7 +631,6 @@
     border-radius: 10px;
     background: var(--empty-icon-gradient);
     color: var(--accent-blue);
-    box-shadow: 0 12px 26px rgba(125, 200, 240, 0.18);
   }
 
   .modal-copy {

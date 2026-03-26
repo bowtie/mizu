@@ -97,8 +97,7 @@
     gap: 16px;
     border-radius: 14px;
     pointer-events: auto;
-    background: rgba(5, 13, 26, 0.82);
-    border: 1px solid var(--border);
+    background: #111e30;
     box-shadow: var(--shadow-lg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -161,7 +160,6 @@
   .topnav-link.active {
     color: #fff;
     background: var(--blue-base);
-    border-color: var(--accent-border);
   }
 
   .topbar-utility {
@@ -177,7 +175,6 @@
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    border: 1px solid var(--success-border);
     background: var(--success-bg);
     color: var(--success);
     transition: background var(--transition), border-color var(--transition), color var(--transition);
@@ -198,8 +195,7 @@
     gap: 6px;
     padding: 7px;
     border-radius: 16px;
-    background: rgba(5, 13, 26, 0.92);
-    border: 1px solid var(--border);
+    background: #111e30;
     box-shadow: var(--shadow-lg);
     backdrop-filter: blur(16px);
     pointer-events: auto;

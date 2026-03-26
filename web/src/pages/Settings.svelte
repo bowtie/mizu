@@ -358,7 +358,6 @@
     justify-content: space-between;
     gap: 12px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--border);
   }
 
   .row-heading h1 {
@@ -394,7 +393,6 @@
     display: grid;
     gap: 0;
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     overflow: hidden;
   }
@@ -406,7 +404,6 @@
     gap: 10px;
     padding: 16px 18px 14px;
     background: var(--surface-elevated);
-    border-bottom: 1px solid var(--border);
   }
 
   .panel-head h3 {
@@ -474,7 +471,6 @@
     gap: 12px;
     padding: 12px 14px;
     border-radius: var(--radius);
-    border: 1px solid var(--border);
     background: var(--surface-elevated);
   }
 
@@ -507,7 +503,6 @@
     min-height: 34px;
     padding: 0 13px;
     border-radius: 999px;
-    border: 1px solid var(--border);
     background: var(--surface-elevated);
     color: var(--text-muted);
     font-size: 13px;
@@ -527,7 +522,6 @@
   .rule-pill-mixed.active,
   .rule-pill-filler.active {
     background: var(--success-bg);
-    border-color: var(--success-border);
     color: var(--success);
   }
 
@@ -535,7 +529,6 @@
   .rule-pill-mixed:not(.active),
   .rule-pill-filler:not(.active) {
     background: var(--danger-bg);
-    border-color: var(--danger-border);
     color: var(--danger);
   }
 
@@ -586,7 +579,6 @@
     align-items: flex-start;
     gap: 12px;
     padding: 12px 14px;
-    border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface-elevated);
     cursor: pointer;
@@ -594,7 +586,6 @@
   }
 
   .check-card:has(input:checked) {
-    border-color: var(--accent-border);
     background: rgba(26, 143, 255, 0.06);
   }
 

@@ -584,9 +584,7 @@
   }
 
   .detail-page-backdrop-fallback {
-    background:
-      radial-gradient(circle at 18% 22%, color-mix(in srgb, var(--accent-blue) 18%, transparent) 0%, transparent 34%),
-      linear-gradient(135deg, color-mix(in srgb, var(--surface-elevated) 84%, var(--selected-bg) 16%) 0%, var(--panel-bg-strong) 72%);
+    background: var(--surface-elevated);
     opacity: 0.8;
   }
 
@@ -659,7 +657,6 @@
   .detail-utility-panel {
     gap: 12px;
     padding: 14px;
-    border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--panel-bg-strong);
   }
@@ -725,12 +722,9 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0;
-    border: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
     border-radius: 10px;
     overflow: hidden;
-    background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
-    backdrop-filter: blur(14px) saturate(120%);
-    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    background: var(--surface-elevated);
   }
 
   .rule-segment {
@@ -739,7 +733,7 @@
     justify-items: start;
     padding: 10px 12px;
     border: 0;
-    border-right: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
+    border-top: 2px solid transparent;
     background: transparent;
     color: var(--text-muted);
     text-align: left;
@@ -756,16 +750,18 @@
     box-shadow: inset 0 0 0 2px var(--focus-ring);
   }
 
-  /* Enabled = green bg */
+  /* Enabled = green top accent + green bg */
   .rule-segment.is-active {
     background: var(--success-bg);
     color: var(--success);
+    border-top-color: var(--success);
   }
 
-  /* Disabled = red bg */
+  /* Disabled = red top accent + red bg */
   .rule-segment.is-inactive {
     background: var(--danger-bg);
     color: var(--danger);
+    border-top-color: var(--danger);
   }
 
   .rule-segment-label {
@@ -861,12 +857,8 @@
     gap: 4px;
     justify-items: start;
     padding: 12px;
-    border: 1px solid var(--border);
     border-radius: 10px;
-    background: color-mix(in srgb, var(--surface) 72%, transparent);
-    backdrop-filter: blur(18px) saturate(145%);
-    -webkit-backdrop-filter: blur(18px) saturate(145%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    background: var(--surface);
     text-align: left;
     cursor: pointer;
     transition: background var(--transition), border-color var(--transition), opacity var(--transition), filter var(--transition);
@@ -895,26 +887,25 @@
   }
 
   /* ── Default: all type cards vivid (everything is showing) ── */
-  .filter-card-canon      { background: color-mix(in srgb, var(--canon) 13%, rgba(5, 13, 26, 0.78)); border-color: color-mix(in srgb, var(--canon-border) 82%, rgba(255, 255, 255, 0.08)); }
+  .filter-card-canon { background: color-mix(in srgb, var(--canon) 16%, var(--bg-dark)); }
   .filter-card-canon      .stat-label { color: var(--canon); }
   .filter-card-canon      .stat-value { color: var(--canon); }
 
-  .filter-card-anime-canon { background: color-mix(in srgb, var(--anime-canon) 13%, rgba(5, 13, 26, 0.78)); border-color: color-mix(in srgb, var(--anime-canon-border) 82%, rgba(255, 255, 255, 0.08)); }
+  .filter-card-anime-canon { background: color-mix(in srgb, var(--anime-canon) 16%, var(--bg-dark)); }
   .filter-card-anime-canon .stat-label { color: var(--anime-canon); }
   .filter-card-anime-canon .stat-value { color: var(--anime-canon); }
 
-  .filter-card-mixed      { background: color-mix(in srgb, var(--mixed) 13%, rgba(5, 13, 26, 0.78)); border-color: color-mix(in srgb, var(--mixed-border) 82%, rgba(255, 255, 255, 0.08)); }
+  .filter-card-mixed { background: color-mix(in srgb, var(--mixed) 16%, var(--bg-dark)); }
   .filter-card-mixed      .stat-label { color: var(--mixed); }
   .filter-card-mixed      .stat-value { color: var(--mixed); }
 
-  .filter-card-filler     { background: color-mix(in srgb, var(--filler) 14%, rgba(5, 13, 26, 0.78)); border-color: color-mix(in srgb, var(--filler-border-strong) 82%, rgba(255, 255, 255, 0.08)); }
+  .filter-card-filler     { background: color-mix(in srgb, var(--filler) 18%, var(--bg-dark)); }
   .filter-card-filler     .stat-label { color: var(--filler); }
   .filter-card-filler     .stat-value { color: var(--filler); }
 
   /* ── "All episodes" — neutral reset button, always opaque ── */
   .filter-card-all {
-    background: color-mix(in srgb, var(--text-primary) 7%, rgba(5, 13, 26, 0.76));
-    border-color: color-mix(in srgb, var(--text-primary) 10%, transparent);
+    background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-dark));
   }
   .filter-card-all .stat-value { color: var(--text-primary); }
   .filter-card-all .stat-label { color: var(--text-muted); }
@@ -922,7 +913,6 @@
   /* When a filter IS active: All gets a blue hint as reset cue */
   .filter-card-all.has-active {
     background: color-mix(in srgb, var(--blue-base) 14%, var(--bg-dark));
-    border-color: var(--accent-border);
   }
   .filter-card-all.has-active .stat-label { color: var(--blue-vivid); }
 
@@ -943,10 +933,10 @@
   .filter-card-all.has-active {
     box-shadow: 0 0 0 2px var(--accent-border-strong);
   }
-  .filter-card-canon.active-filter      { box-shadow: 0 0 0 2px var(--canon-border); border-color: var(--canon-border); }
-  .filter-card-anime-canon.active-filter { box-shadow: 0 0 0 2px var(--anime-canon-border); border-color: var(--anime-canon-border); }
-  .filter-card-mixed.active-filter      { box-shadow: 0 0 0 2px var(--mixed-border); border-color: var(--mixed-border); }
-  .filter-card-filler.active-filter     { box-shadow: 0 0 0 2px var(--filler-border-strong); border-color: var(--filler-border-strong); }
+  .filter-card-canon.active-filter      { box-shadow: 0 0 0 2px var(--canon-border); }
+  .filter-card-anime-canon.active-filter { box-shadow: 0 0 0 2px var(--anime-canon-border); }
+  .filter-card-mixed.active-filter      { box-shadow: 0 0 0 2px var(--mixed-border); }
+  .filter-card-filler.active-filter     { box-shadow: 0 0 0 2px var(--filler-border-strong); }
 
   .filter-card:hover:not(.dimmed) {
     filter: brightness(1.1);
@@ -969,7 +959,7 @@
     right: 0;
     bottom: 12px;
     width: 1px;
-    background: var(--divider-border-soft);
+    background: transparent;
   }
 
   .filter-card-summary .stat-label { font-size: 10px; letter-spacing: 0.08em; }
@@ -996,12 +986,10 @@
     border-radius: 10px;
     background: var(--empty-icon-gradient);
     color: var(--accent-blue);
-    box-shadow: 0 12px 26px rgba(125, 200, 240, 0.18);
   }
 
   .season-group {
     margin-bottom: 10px;
-    border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
     background: var(--surface);
@@ -1015,7 +1003,6 @@
     padding: 13px 14px;
     background: var(--surface-elevated);
     border: none;
-    border-bottom: 1px solid var(--divider-border);
     color: var(--text-primary);
     text-align: left;
   }
@@ -1109,7 +1096,6 @@
     align-items: center;
     justify-content: center;
     border-radius: 8px;
-    border: 1px solid var(--border);
     background: var(--surface-elevated);
     color: var(--text-secondary);
     transition: background var(--transition), border-color var(--transition), color var(--transition);
@@ -1328,6 +1314,7 @@
     }
   }
 </style>
+
 
 
 
