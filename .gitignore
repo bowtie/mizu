@@ -9,4 +9,5 @@ config.yml
 .DS_Store
 Thumbs.db
 .tmp/
+.worktrees/
 
