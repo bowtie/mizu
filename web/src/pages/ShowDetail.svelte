@@ -6,11 +6,7 @@
   import Spinner from '../components/Spinner.svelte';
   import Badge from '../components/Badge.svelte';
   import Modal from '../components/Modal.svelte';
-  import IconFloppyDiskRegular from 'phosphor-icons-svelte/IconFloppyDiskRegular.svelte';
-  import IconEyeRegular from 'phosphor-icons-svelte/IconEyeRegular.svelte';
-  import IconTrashRegular from 'phosphor-icons-svelte/IconTrashRegular.svelte';
-  import IconRobotRegular from 'phosphor-icons-svelte/IconRobotRegular.svelte';
-  import IconWaveSineRegular from 'phosphor-icons-svelte/IconWaveSineRegular.svelte';
+  import { Bot, Eye, Save, Trash2, Waves } from 'lucide-svelte';
 
   export let params = {};
 
@@ -319,7 +315,7 @@
 {:else if !show}
   <div class="card detail-empty">
     <div class="empty-state compact-empty">
-      <div class="empty-icon"><IconWaveSineRegular size={28} weight="regular" /></div>
+      <div class="empty-icon"><Waves size={28} /></div>
       <h3>Anime not found</h3>
       <p>The requested sync entry could not be found.</p>
       <a href="#/shows" class="btn btn-primary">Back to Mizu</a>
@@ -385,9 +381,9 @@
 	              title={watermarkMode === WATERMARK_AUTO ? 'Automatic tracking start enabled' : 'Use Sonarr progress automatically'}
 	              on:click={() => (watermarkMode = watermarkMode === WATERMARK_AUTO ? WATERMARK_MANUAL : WATERMARK_AUTO)}
 	            >
-		              <IconRobotRegular size={20} weight="regular" />
-		              <span>Auto</span>
-		            </button>
+	              <Bot size={18} />
+	              <span>Auto</span>
+	            </button>
 		          </div>
 		          <div class="form-hint marker-hint">
 		            {#if watermarkMode === WATERMARK_AUTO}
@@ -402,11 +398,11 @@
 
 	        <div class="detail-header-actions detail-header-actions-inline">
 	          <button class="btn btn-inline-icon action-compact action-remove" on:click={() => (showDeleteModal = true)}>
-	            <IconTrashRegular size={20} weight="regular" />
+	            <Trash2 size={18} />
 	            <span>Remove</span>
 	          </button>
 	          <button class="btn btn-primary btn-inline-icon action-compact action-save" on:click={handleSave} disabled={saving}>
-	            <IconFloppyDiskRegular size={20} weight="regular" />
+	            <Save size={18} />
 	            <span>{saving ? 'Saving...' : 'Save'}</span>
 	          </button>
 	        </div>
@@ -439,7 +435,7 @@
     {#if episodes.length === 0}
       <div class="card detail-empty">
         <div class="empty-state compact-empty">
-          <div class="empty-icon"><IconWaveSineRegular size={28} weight="regular" /></div>
+          <div class="empty-icon"><Waves size={28} /></div>
           <h3>No episodes yet</h3>
           <p>We have not synced episode details for this anime yet.</p>
         </div>
@@ -490,7 +486,7 @@
                             {#if syncingEps[episodeActionId(ep)]}
                               <span class="spinner"></span>
                             {:else}
-                              <IconEyeRegular size={20} weight="regular" />
+                              <Eye size={18} />
                             {/if}
                           </button>
                         {/if}
@@ -533,7 +529,7 @@
                         {#if syncingEps[episodeActionId(ep)]}
                           <span class="spinner"></span>
                         {:else}
-                          <IconEyeRegular size={20} weight="regular" />
+                          <Eye size={18} />
                         {/if}
                       </button>
                     {/if}
@@ -562,7 +558,7 @@
     isolation: isolate;
     overflow: visible;
     display: grid;
-    gap: 14px;
+    gap: var(--space-8);
     max-width: 960px;
     margin: 0 auto;
   }
@@ -600,8 +596,8 @@
     z-index: 1;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 332px;
-    align-items: center;
-    gap: 22px;
+    align-items: start;
+    gap: clamp(18px, 3vw, 28px);
   }
 
   .detail-hero-block {
@@ -610,14 +606,14 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    gap: 16px;
+    gap: var(--space-5);
     min-width: 0;
     height: 100%;
   }
 
   .detail-page-title-block {
     display: grid;
-    gap: 10px;
+    gap: var(--space-4);
     min-width: 0;
     align-content: start;
     padding-left: 14px;
@@ -633,16 +629,17 @@
 
   .detail-page-title-block h1 {
     flex: 1 1 auto;
-    font-size: 2.15rem;
-    line-height: 1.04;
+    font-size: var(--text-page-title);
+    line-height: var(--leading-tight);
     margin: 0;
   }
 
   .detail-overview {
     margin: 0;
     color: var(--text-secondary);
-    max-width: 62ch;
-    line-height: 1.46;
+    max-width: 64ch;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
     text-wrap: pretty;
   }
 
@@ -650,20 +647,22 @@
     position: relative;
     z-index: 1;
     display: grid;
-    gap: 12px;
+    gap: var(--space-4);
     align-content: start;
   }
 
   .detail-utility-panel {
-    gap: 12px;
-    padding: 14px;
+    position: sticky;
+    top: calc(var(--topbar-height) + 28px);
+    gap: var(--space-4);
+    padding: 16px;
     border-radius: 10px;
     background: var(--panel-bg-strong);
   }
 
   .detail-utility-body {
     display: grid;
-    gap: 8px;
+    gap: 10px;
   }
 
   .detail-header-actions {
@@ -674,7 +673,7 @@
   }
 
   .detail-header-actions-inline {
-    padding-top: 12px;
+    padding-top: 14px;
     border-top: 1px solid var(--divider-border-soft);
     justify-content: stretch;
   }
@@ -715,7 +714,6 @@
     display: grid;
     margin-top: 0;
     padding-top: 14px;
-    border-top: 1px solid var(--divider-border-soft);
   }
 
   .rule-segmented {
@@ -733,7 +731,6 @@
     justify-items: start;
     padding: 10px 12px;
     border: 0;
-    border-top: 2px solid transparent;
     background: transparent;
     color: var(--text-muted);
     text-align: left;
@@ -741,7 +738,9 @@
     transition: background var(--transition), color var(--transition), border-color var(--transition);
   }
 
-  .rule-segment:last-child { border-right: 0; }
+  .rule-segment + .rule-segment {
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
 
   .rule-segment:focus-visible {
     outline: none;
@@ -750,37 +749,34 @@
     box-shadow: inset 0 0 0 2px var(--focus-ring);
   }
 
-  /* Enabled = green top accent + green bg */
   .rule-segment.is-active {
     background: var(--success-bg);
     color: var(--success);
-    border-top-color: var(--success);
   }
 
-  /* Disabled = red top accent + red bg */
   .rule-segment.is-inactive {
     background: var(--danger-bg);
     color: var(--danger);
-    border-top-color: var(--danger);
   }
 
   .rule-segment-label {
-    font-size: 13px;
-    font-weight: 700;
+    font-size: var(--text-secondary-size);
+    font-weight: var(--weight-semibold);
     color: inherit;
   }
 
   .rule-segment-state {
-    font-size: 11px;
+    font-size: var(--text-caption);
+    letter-spacing: 0.03em;
     color: inherit;
     opacity: 0.8;
   }
 
   .marker-label {
     color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
   }
 
@@ -799,15 +795,17 @@
     min-width: 72px;
     height: 40px;
     border-radius: 10px;
-    border: 1px solid var(--border);
+    border: 0;
     background: color-mix(in srgb, var(--surface-elevated) 82%, rgba(7, 16, 29, 0.96) 18%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     color: var(--text-secondary);
-    transition: background var(--transition), border-color var(--transition), color var(--transition);
+    font-size: var(--text-meta);
+    font-weight: var(--weight-semibold);
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
   }
 
   .marker-auto-toggle.active {
     background: color-mix(in srgb, var(--selected-bg) 72%, rgba(9, 21, 39, 0.94) 28%);
-    border-color: var(--selected-border);
     color: var(--text-primary);
   }
 
@@ -835,11 +833,11 @@
   }
 
   .marker-auto-toggle:hover {
-    border-color: var(--interactive-active-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 18px rgba(2, 5, 12, 0.16);
   }
 
   .marker-auto-toggle.active:hover {
-    border-color: var(--selected-border-strong, var(--selected-border));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 20px rgba(2, 5, 12, 0.2);
   }
 
   .marker-form-group {
@@ -847,8 +845,8 @@
   }
 
   .detail-stats {
-    grid-template-columns: minmax(196px, 1.34fr) repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: minmax(216px, 1.3fr) repeat(4, minmax(0, 1fr));
+    gap: 10px;
     margin-bottom: 0;
   }
 
@@ -865,10 +863,10 @@
   }
 
   .filter-card .stat-label {
-    font-family: 'Overpass', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
+    font-family: var(--font-body);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
     margin: 0;
     white-space: nowrap;
@@ -877,12 +875,12 @@
   }
 
   .filter-card .stat-value {
-    font-family: 'Figtree', sans-serif;
-    font-size: 1.72rem;
+    font-family: var(--font-heading);
+    font-size: var(--text-stat);
     line-height: 1;
     margin: 0;
     font-variant-numeric: tabular-nums;
-    font-weight: 800;
+    font-weight: var(--weight-bold);
     transition: color var(--transition);
   }
 
@@ -962,8 +960,8 @@
     background: transparent;
   }
 
-  .filter-card-summary .stat-label { font-size: 10px; letter-spacing: 0.08em; }
-  .filter-card-summary .stat-value { font-size: 1.92rem; }
+  .filter-card-summary .stat-label { font-size: var(--text-caption); letter-spacing: var(--tracking-label); }
+  .filter-card-summary .stat-value { font-size: clamp(1.7rem, 1.4rem + 0.8vw, 2.1rem); }
 
   .detail-empty {
     min-height: 240px;
@@ -989,10 +987,14 @@
   }
 
   .season-group {
-    margin-bottom: 10px;
+    margin-bottom: 14px;
     border-radius: 10px;
     overflow: hidden;
     background: var(--surface);
+  }
+
+  .season-group:last-child {
+    margin-bottom: 0;
   }
 
   .season-header {
@@ -1028,18 +1030,19 @@
 
   .season-title {
     margin: 0;
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 0.9375rem;
+    font-weight: var(--weight-semibold);
+    line-height: 1.3;
   }
 
   .season-count {
     margin-left: auto;
-    font-size: 13px;
+    font-size: var(--text-meta);
     color: var(--text-secondary);
   }
 
   .episode-num {
-    font-weight: 700;
+    font-weight: var(--weight-semibold);
     font-variant-numeric: tabular-nums;
   }
 
@@ -1085,8 +1088,8 @@
   }
 
   .mobile-episode-card h4 {
-    font-size: 15px;
-    line-height: 1.35;
+    font-size: 0.9375rem;
+    line-height: 1.4;
   }
 
   .episode-monitor-btn {
@@ -1125,6 +1128,10 @@
       gap: 14px;
     }
 
+    .detail-utility-panel {
+      top: calc(var(--topbar-height) + 20px);
+    }
+
     .detail-header-actions {
       gap: 6px;
     }
@@ -1132,7 +1139,7 @@
     .action-compact {
       min-height: 34px;
       padding-inline: 9px;
-      font-size: 13px;
+      font-size: var(--text-meta);
     }
 
     .btn-inline-icon {
@@ -1156,6 +1163,7 @@
     }
 
     .detail-utility-panel {
+      position: static;
       width: min(100%, 420px);
       justify-self: start;
     }
@@ -1209,7 +1217,7 @@
 
     .detail-header-actions .btn-inline-icon span {
       display: inline;
-      font-size: 12px;
+      font-size: var(--text-meta);
       line-height: 1;
     }
 
@@ -1223,11 +1231,11 @@
     }
 
     .rule-segment-label {
-      font-size: 13px;
+      font-size: var(--text-secondary-size);
     }
 
     .rule-segment-state {
-      font-size: 11px;
+      font-size: var(--text-caption);
     }
 
     .detail-stats {
@@ -1266,7 +1274,7 @@
     }
 
     .detail-page-title-block h1 {
-      font-size: 1.7rem;
+      font-size: clamp(1.55rem, 1.2rem + 1vw, 1.9rem);
     }
 
     .detail-page-title-block {
@@ -1286,20 +1294,18 @@
       white-space: normal;
     }
 
-    .filter-card-summary .stat-value {
-      font-size: 1.58rem;
-    }
+    .filter-card-summary .stat-value { font-size: 1.58rem; }
 
     .rule-segment {
       padding: 8px 6px;
     }
 
     .rule-segment-label {
-      font-size: 12px;
+      font-size: var(--text-meta);
     }
 
     .rule-segment-state {
-      font-size: 10px;
+      font-size: var(--text-caption);
     }
 
     .mobile-episode-head,
@@ -1314,15 +1320,6 @@
     }
   }
 </style>
-
-
-
-
-
-
-
-
-
 
 
 

@@ -28,8 +28,8 @@
 
   .spinner-message {
     color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 1.4;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
     text-align: center;
   }
 </style>

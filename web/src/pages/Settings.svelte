@@ -3,14 +3,7 @@
   import { settings, addNotification } from '../lib/stores.js';
   import { getSettings, getStoredSonarrApiKey, updateSettings, testSonarrConnection, refreshAflCache } from '../lib/api.js';
   import Spinner from '../components/Spinner.svelte';
-  import IconFloppyDiskRegular from 'phosphor-icons-svelte/IconFloppyDiskRegular.svelte';
-  import IconPlugRegular from 'phosphor-icons-svelte/IconPlugRegular.svelte';
-  import IconArrowsClockwiseRegular from 'phosphor-icons-svelte/IconArrowsClockwiseRegular.svelte';
-  import IconCheckRegular from 'phosphor-icons-svelte/IconCheckRegular.svelte';
-  import IconXRegular from 'phosphor-icons-svelte/IconXRegular.svelte';
-  import IconEyeRegular from 'phosphor-icons-svelte/IconEyeRegular.svelte';
-  import IconEyeSlashRegular from 'phosphor-icons-svelte/IconEyeSlashRegular.svelte';
-  import IconCaretDownRegular from 'phosphor-icons-svelte/IconCaretDownRegular.svelte';
+  import { Check, ChevronDown, Eye, EyeOff, Plug, RefreshCw, Save, X } from 'lucide-svelte';
 
   let loading = true;
   let saving = false;
@@ -187,12 +180,9 @@
 
 <div class="settings-shell">
   <section class="page-heading row-heading">
-    <div>
-      <h1>Settings</h1>
-      <p>Connect Sonarr, choose sync timing, and set default rules.</p>
-    </div>
+    <h1>Settings</h1>
     <button class="btn btn-primary" on:click={handleSave} disabled={saving}>
-      <IconFloppyDiskRegular size={20} weight="regular" />
+      <Save size={18} />
       <span>{saving ? 'Saving...' : 'Save settings'}</span>
     </button>
   </section>
@@ -223,10 +213,10 @@
             {#if hasSavedApiKey || apiKeyDirty}
               <button type="button" class="inline-toggle" on:click={toggleApiKeyVisibility} disabled={revealingKey}>
                 {#if apiKeyVisible}
-                  <IconEyeSlashRegular size={20} weight="regular" />
+                  <EyeOff size={18} />
                   <span>Hide</span>
                 {:else}
-                  <IconEyeRegular size={20} weight="regular" />
+                  <Eye size={18} />
                   <span>{revealingKey ? 'Loading...' : 'View'}</span>
                 {/if}
               </button>
@@ -244,7 +234,7 @@
         </div>
 
         <button class="btn btn-secondary" on:click={handleTestConnection} disabled={testing}>
-          <IconPlugRegular size={20} weight="regular" />
+          <Plug size={18} />
           <span>{testing ? 'Testing...' : 'Test connection'}</span>
         </button>
         </div>
@@ -276,7 +266,7 @@
         </div>
 
         <button class="btn btn-secondary" on:click={handleRefreshCache} disabled={refreshingCache}>
-          <IconArrowsClockwiseRegular size={20} weight="regular" />
+          <RefreshCw size={18} />
           <span>{refreshingCache ? 'Refreshing...' : 'Refresh show list'}</span>
         </button>
         </div>
@@ -296,17 +286,17 @@
         <div class="rule-pill-row" role="group" aria-label="Default tracking rules">
           <label class="rule-pill rule-pill-anime" class:active={trackAnimeCanonDefault}>
             <input type="checkbox" bind:checked={trackAnimeCanonDefault} />
-            {#if trackAnimeCanonDefault}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
+            {#if trackAnimeCanonDefault}<Check size={18} />{:else}<X size={18} />{/if}
             <span>Anime canon</span>
           </label>
           <label class="rule-pill rule-pill-mixed" class:active={trackMixedDefault}>
             <input type="checkbox" bind:checked={trackMixedDefault} />
-            {#if trackMixedDefault}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
+            {#if trackMixedDefault}<Check size={18} />{:else}<X size={18} />{/if}
             <span>Mixed canon</span>
           </label>
           <label class="rule-pill rule-pill-filler" class:active={trackFillerDefault}>
             <input type="checkbox" bind:checked={trackFillerDefault} />
-            {#if trackFillerDefault}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
+            {#if trackFillerDefault}<Check size={18} />{:else}<X size={18} />{/if}
             <span>Filler</span>
           </label>
         </div>
@@ -319,7 +309,7 @@
             <h3>Advanced tagging</h3>
             <p>Add a Sonarr tag to anime with filler-related episodes.</p>
           </div>
-          <span class:open={showAdvancedTagging}><IconCaretDownRegular size={20} weight="bold" /></span>
+          <span class:open={showAdvancedTagging}><ChevronDown size={18} /></span>
         </button>
 
         {#if showAdvancedTagging}
@@ -347,7 +337,7 @@
     position: relative;
     isolation: isolate;
     display: grid;
-    gap: 20px;
+    gap: var(--space-8);
     max-width: var(--content-max);
     margin: 0 auto;
   }
@@ -356,21 +346,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding-bottom: 16px;
+    gap: var(--space-5);
+    padding-bottom: 8px;
   }
 
   .row-heading h1 {
-    font-size: 1.6rem;
-    font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-  }
-
-  .row-heading p {
-    color: var(--text-muted);
-    font-size: 13px;
-    margin-top: 3px;
+    font-size: var(--text-page-title);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
   }
 
   .row-heading .btn,
@@ -383,9 +366,13 @@
 
   .settings-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    grid-template-columns: 1fr;
+    gap: 20px;
     align-items: start;
+  }
+
+  .settings-grid.secondary {
+    grid-template-columns: 1fr;
   }
 
   .settings-panel {
@@ -393,8 +380,10 @@
     display: grid;
     gap: 0;
     background: var(--surface);
+    border: none;
     border-radius: var(--radius-lg);
     overflow: hidden;
+    box-shadow: var(--shadow-card);
   }
 
   .panel-head {
@@ -407,27 +396,28 @@
   }
 
   .panel-head h3 {
-    font-size: 0.95rem;
-    font-weight: 700;
+    font-size: var(--text-title-sm);
+    font-weight: var(--weight-bold);
     color: var(--text-primary);
   }
 
   .panel-head p {
     margin-top: 3px;
     color: var(--text-muted);
-    font-size: 13px;
-    line-height: 1.4;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
   }
 
   .panel-body {
     padding: 16px 18px;
     display: grid;
-    gap: 14px;
+    gap: 18px;
   }
 
   .test-result {
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: var(--text-meta);
+    line-height: 1.45;
   }
 
   .test-result.error {
@@ -451,8 +441,8 @@
     align-items: center;
     gap: 6px;
     color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--text-meta);
+    font-weight: var(--weight-semibold);
   }
 
   .settings-field {
@@ -465,33 +455,33 @@
   }
 
   .cache-status-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
     padding: 12px 14px;
     border-radius: var(--radius);
     background: var(--surface-elevated);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .cache-status-card span {
     display: block;
     color: var(--text-muted);
-    font-size: 11px;
-    letter-spacing: 0.08em;
+    font-size: var(--text-caption);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
     margin-bottom: 2px;
   }
 
   .cache-status-card strong {
-    font-size: 14px;
+    font-size: 0.9375rem;
     color: var(--text-primary);
   }
 
   .rule-pill-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .rule-pill {
@@ -505,8 +495,9 @@
     border-radius: 999px;
     background: var(--surface-elevated);
     color: var(--text-muted);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--text-secondary-size);
+    font-weight: var(--weight-semibold);
+    line-height: 1.35;
     cursor: pointer;
     transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
@@ -549,7 +540,8 @@
   .advanced-toggle p {
     margin-top: 3px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
   }
 
   .advanced-toggle span {
@@ -567,9 +559,9 @@
 
   .advanced-content {
     display: grid;
-    gap: 12px;
+    gap: 14px;
     padding: 0 18px 16px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--divider-border-soft);
     margin-top: 0;
     padding-top: 14px;
   }
@@ -581,6 +573,7 @@
     padding: 12px 14px;
     border-radius: var(--radius);
     background: var(--surface-elevated);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     cursor: pointer;
     transition: border-color var(--transition), background var(--transition);
   }
@@ -597,15 +590,16 @@
   .check-card strong {
     display: block;
     margin-bottom: 3px;
-    font-size: 14px;
+    font-size: 0.9375rem;
+    font-weight: var(--weight-semibold);
     color: var(--text-primary);
   }
 
   .check-card small {
     display: block;
     color: var(--text-muted);
-    font-size: 12px;
-    line-height: 1.4;
+    font-size: var(--text-meta);
+    line-height: 1.5;
   }
 
   .subdued-check-card {
@@ -617,7 +611,7 @@
   }
 
   @media (max-width: 900px) {
-    .settings-grid {
+    .cache-status-card {
       grid-template-columns: 1fr;
     }
   }
@@ -634,15 +628,9 @@
     }
 
     .rule-pill-row {
-      display: grid;
       grid-template-columns: 1fr;
     }
   }
 </style>
-
-
-
-
-
 
 

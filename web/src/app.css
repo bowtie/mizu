@@ -53,6 +53,37 @@
     --text-on-accent:    #fff;
     --accent-cream:      var(--text-a);
 
+    /* Typography */
+    --font-body:    "Overpass", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-heading: "M PLUS 1p", "Avenir Next", "Segoe UI", sans-serif;
+    --font-mono:    "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
+    --text-caption: 0.75rem;
+    --text-meta: 0.8125rem;
+    --text-secondary-size: 0.875rem;
+    --text-body: 1rem;
+    --text-title-sm: 1rem;
+    --text-title-md: 1.125rem;
+    --text-title-lg: 1.375rem;
+    --text-page-title: clamp(1.875rem, 1.5rem + 1vw, 2.35rem);
+    --text-stat: clamp(1.5rem, 1.2rem + 0.9vw, 1.95rem);
+    --leading-tight: 1.12;
+    --leading-snug: 1.3;
+    --leading-copy: 1.6;
+    --tracking-label: 0.05em;
+    --tracking-tight: -0.015em;
+
     --accent:             var(--blue-base);
     --accent-hover:       var(--blue-vivid);
     --accent-blue:        var(--blue-base);
@@ -175,18 +206,26 @@ html, body { min-height: 100%; }
 body {
     background: var(--bg-deep);
     color: var(--text-primary);
-    font-family: "Overpass", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 15px;
-    line-height: 1.55;
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: var(--leading-copy);
+    font-kerning: normal;
+    text-rendering: optimizeLegibility;
 }
 
 body, input, textarea, select, button, table, td, th {
-    font-family: "Overpass", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--font-body);
 }
 
-h1, h2, h3, h4, h5, h6,
-.btn, .page-heading, .section-title, .form-label, .badge {
-    font-family: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+h1, h2, h3, h4, h5, h6, .section-title {
+    font-family: var(--font-heading);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-tight);
+    line-height: var(--leading-tight);
+}
+
+.btn, .form-label, .badge {
+    font-family: var(--font-body);
 }
 
 #app, .app-shell { min-height: 100vh; }
@@ -196,16 +235,16 @@ h1, h2, h3, h4, h5, h6,
     width: 100%;
     max-width: var(--content-max);
     min-height: 100vh;
-    padding: calc(var(--topbar-height) + 24px) 28px 48px;
+    padding: calc(var(--topbar-height) + clamp(20px, 2.5vw, 30px)) clamp(20px, 2.8vw, 32px) clamp(48px, 5vw, 72px);
     overflow-x: clip;
 }
 
 @media (max-width: 1040px) {
-    .main-content, .shell-main { padding: calc(var(--topbar-height) + 20px) 22px 40px; }
+    .main-content, .shell-main { padding: calc(var(--topbar-height) + 20px) 22px 44px; }
 }
 
 @media (max-width: 720px) {
-    .main-content, .shell-main { padding: 16px 16px calc(var(--mobile-nav-height) + 28px); }
+    .main-content, .shell-main { padding: 18px 16px calc(var(--mobile-nav-height) + 30px); }
 }
 
 @media (max-width: 560px) {
@@ -218,9 +257,19 @@ h1, h2, h3, h4, h5, h6,
 a { color: inherit; text-decoration: none; }
 button { border: 0; background: transparent; color: inherit; }
 img { display: block; max-width: 100%; }
+svg.lucide {
+    vector-effect: non-scaling-stroke;
+    stroke-width: 2.15;
+}
 
 .page-heading { margin-bottom: 0; }
-.page-heading p { color: var(--text-secondary); }
+.page-heading p {
+    color: var(--text-secondary);
+    max-width: 64ch;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
+    text-wrap: pretty;
+}
 
 .show-card, .run-card, .season-group,
 .settings-panel, .mobile-season-summary-card {
@@ -245,15 +294,20 @@ button.card { width: 100%; color: var(--text-primary); cursor: pointer; }
     background: var(--panel-bg-soft);
 }
 
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-secondary-size);
+    line-height: 1.5;
+}
 thead { background: var(--table-head-bg); }
 
 th {
     padding: 10px 14px;
     text-align: left;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.09em;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
     color: var(--text-muted);
 }
@@ -262,6 +316,8 @@ td {
     padding: 11px 14px;
     color: var(--text-primary);
     vertical-align: middle;
+    font-size: var(--text-secondary-size);
+    line-height: 1.5;
 }
 
 tr:last-child td { border-bottom: none; }
@@ -280,49 +336,50 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     gap: 7px;
     min-height: 40px;
     padding: 0 18px;
-    border: 1px solid transparent;
+    border: 0;
     border-radius: 999px;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--text-secondary-size);
+    font-weight: var(--weight-semibold);
     line-height: 1;
+    letter-spacing: 0.01em;
     cursor: pointer;
-    transition: background var(--transition), border-color var(--transition),
-                color var(--transition), transform var(--transition);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 18px rgba(2, 5, 12, 0.18);
+    transition: background var(--transition), color var(--transition), transform var(--transition), box-shadow var(--transition);
 }
 
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-primary {
-    background: var(--blue-base);
+    background: color-mix(in srgb, var(--blue-base) 82%, rgba(8, 18, 33, 0.18) 18%);
     border-color: transparent;
     color: #fff;
 }
 .btn-primary:hover:not(:disabled) {
     background: var(--blue-vivid);
-    border-color: var(--accent-border-strong);
     transform: translateY(-1px);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 24px rgba(2, 5, 12, 0.28);
 }
 
 .btn-secondary {
-    background: var(--surface-control);
+    background: color-mix(in srgb, var(--surface-elevated) 82%, rgba(7, 16, 29, 0.96) 18%);
     border-color: transparent;
     color: var(--text-primary);
 }
 .btn-secondary:hover:not(:disabled) {
     background: var(--surface-control-hover);
-    border-color: var(--border-light);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 22px rgba(2, 5, 12, 0.22);
 }
 
 .btn-danger {
-    background: var(--danger-bg);
-    border-color: var(--danger-border-strong);
+    background: color-mix(in srgb, var(--danger) 18%, rgba(7, 16, 29, 0.94) 82%);
     color: var(--danger-foreground);
 }
 .btn-danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger-bg) 75%, transparent);
+    background: color-mix(in srgb, var(--danger) 24%, rgba(7, 16, 29, 0.9) 76%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 24px rgba(2, 5, 12, 0.24);
 }
 
-.btn-sm { min-height: 32px; padding-inline: 13px; font-size: 12px; }
+.btn-sm { min-height: 32px; padding-inline: 13px; font-size: var(--text-meta); }
 
 .btn:focus-visible, button.card:focus-visible, .show-card:focus-visible,
 .topnav-link:focus-visible, .mobile-nav-link:focus-visible,
@@ -331,12 +388,10 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 .inline-toggle:focus-visible, .modal-close:focus-visible,
 .toast-close:focus-visible, .stat-button:focus-visible {
     outline: none;
-    border-color: var(--focus-border);
     box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .rule-pill:focus-within, .search-shell:focus-within, .check-card:focus-within {
-    border-color: var(--focus-border);
     box-shadow: 0 0 0 2px var(--focus-ring-soft);
 }
 
@@ -345,10 +400,10 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 .form-label {
     display: block;
     margin-bottom: 6px;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
     color: var(--text-muted);
-    letter-spacing: 0.09em;
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
 }
 
@@ -360,7 +415,8 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     border-radius: var(--radius);
     background: var(--surface-elevated);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: var(--text-body);
+    line-height: 1.4;
     outline: none;
     transition: border-color var(--transition), box-shadow var(--transition),
                 background var(--transition);
@@ -383,7 +439,12 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     padding-right: 34px;
 }
 
-.form-hint { margin-top: 6px; color: var(--text-muted); font-size: 12px; }
+.form-hint {
+    margin-top: 6px;
+    color: var(--text-muted);
+    font-size: var(--text-meta);
+    line-height: 1.45;
+}
 
 .badge {
     display: inline-flex;
@@ -392,9 +453,9 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     min-height: 22px;
     padding: 0 9px;
     border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     white-space: nowrap;
 }
@@ -445,7 +506,10 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     padding: 14px 20px;
 }
 .modal-footer { justify-content: flex-end; border-top: 1px solid var(--border); border-bottom: 0; }
-.modal-header h3 { font-size: 1.05rem; font-weight: 700; }
+.modal-header h3 {
+    font-size: var(--text-title-md);
+    font-weight: var(--weight-bold);
+}
 .modal-close { color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; }
 .modal-body { padding: 16px 20px; }
 
@@ -475,7 +539,12 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 }
 
 .toast-icon  { display: inline-flex; align-items: center; color: var(--text-secondary); font-size: 18px; }
-.toast-message { flex: 1; color: var(--text-primary); font-size: 13px; }
+.toast-message {
+    flex: 1;
+    color: var(--text-primary);
+    font-size: var(--text-secondary-size);
+    line-height: 1.45;
+}
 .toast-close { color: var(--text-muted); font-size: 18px; cursor: pointer; }
 
 .toast.toast-success { border-left: 3px solid var(--success); }
@@ -498,6 +567,11 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 
 .empty-state { text-align: center; color: var(--text-muted); }
 .empty-state h3 { color: var(--text-primary); }
+.empty-state p {
+    max-width: 48ch;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
+}
 
 .show-card-copy h3, .detail-main-copy h1, .detail-subtitle,
 .run-card-body h3, .run-detail-item p, .season-title,
@@ -518,29 +592,44 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 14px;
+    margin-bottom: 24px;
 }
 
 .stat-card { padding: 14px 18px; display: flex; flex-direction: column; gap: 5px; }
 
 .stat-card .stat-label {
     color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.09em;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
 }
 
 .stat-card .stat-value {
-    font-family: "Figtree", sans-serif;
-    font-size: 2rem;
-    font-weight: 800;
+    font-family: var(--font-heading);
+    font-size: var(--text-stat);
+    font-weight: var(--weight-bold);
     line-height: 1;
     color: var(--blue-vivid);
+    font-variant-numeric: tabular-nums;
 }
 
-.stat-card .stat-sub { color: var(--text-secondary); font-size: 12px; }
+.stat-card .stat-sub {
+    color: var(--text-secondary);
+    font-size: var(--text-meta);
+    line-height: 1.45;
+}
+
+.info-chip:first-child,
+.marker-auto-toggle,
+.detail-number-input,
+.episode-num,
+.run-card-meta span,
+.cache-status-card strong {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
 
 .btn svg, .search-shell svg, .topnav-link svg, .status-pill svg,
 .inline-toggle svg, .run-expand-btn svg, .episode-monitor-btn svg,

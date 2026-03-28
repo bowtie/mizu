@@ -4,10 +4,7 @@
   import { getSyncLogs, triggerSync } from '../lib/api.js';
   import Spinner from '../components/Spinner.svelte';
   import Badge from '../components/Badge.svelte';
-  import IconArrowsClockwiseRegular from 'phosphor-icons-svelte/IconArrowsClockwiseRegular.svelte';
-  import IconClockCounterClockwiseRegular from 'phosphor-icons-svelte/IconClockCounterClockwiseRegular.svelte';
-  import IconCaretDownRegular from 'phosphor-icons-svelte/IconCaretDownRegular.svelte';
-  import IconWarningCircleRegular from 'phosphor-icons-svelte/IconWarningCircleRegular.svelte';
+  import { ChevronDown, History, RefreshCw, TriangleAlert } from 'lucide-svelte';
 
   const PAGE_SIZE = 12;
 
@@ -119,12 +116,9 @@
 
 <div class="activity-shell">
   <section class="page-heading activity-heading">
-    <div>
-      <h1>Activity</h1>
-      <p>Recent sync history.</p>
-    </div>
+    <h1>Activity</h1>
     <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
-      <IconArrowsClockwiseRegular size={20} weight="regular" />
+      <RefreshCw size={18} />
       <span>{syncing ? 'Syncing...' : 'Sync now'}</span>
     </button>
   </section>
@@ -134,11 +128,11 @@
   {:else if logs.length === 0}
     <div class="card activity-empty">
       <div class="empty-state compact-empty">
-        <div class="empty-icon"><IconClockCounterClockwiseRegular size={28} weight="regular" /></div>
+        <div class="empty-icon"><History size={28} /></div>
         <h3>No sync activity yet</h3>
         <p>Run a sync to start building your history.</p>
         <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
-          <IconArrowsClockwiseRegular size={20} weight="regular" />
+          <RefreshCw size={18} />
           <span>Sync now</span>
         </button>
       </div>
@@ -157,7 +151,7 @@
             {#if hasDetails(log)}
               <button class="run-expand-btn" on:click={() => toggleExpand(log.id)} aria-label={expandedId === log.id ? 'Hide run details' : 'Show run details'}>
                 <span>Details</span>
-                <IconCaretDownRegular size={20} weight="bold" />
+                <ChevronDown size={18} />
               </button>
             {/if}
           </div>
@@ -184,7 +178,7 @@
                       <p>{detailLine(item)}</p>
                       {#if item.error}
                         <div class="run-detail-error">
-                          <IconWarningCircleRegular size={20} weight="regular" />
+                          <TriangleAlert size={18} />
                           <span>{item.error}</span>
                         </div>
                       {/if}
@@ -195,7 +189,7 @@
 
               {#if log.errors}
                 <div class="activity-errors">
-                  <div class="error-head"><IconWarningCircleRegular size={20} weight="regular" /> Run errors</div>
+                  <div class="error-head"><TriangleAlert size={18} /> Run errors</div>
                   {log.errors}
                 </div>
               {/if}
@@ -220,8 +214,8 @@
     position: relative;
     isolation: isolate;
     display: grid;
-    gap: 16px;
-    max-width: 960px;
+    gap: var(--space-8);
+    max-width: var(--content-max);
     margin: 0 auto;
   }
 
@@ -249,19 +243,15 @@
 
   .activity-heading {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
   }
 
   .activity-heading h1 {
     margin-bottom: 4px;
-    font-size: 2rem;
-    line-height: 1.1;
-  }
-
-  .activity-heading p {
-    color: var(--text-secondary);
+    font-size: var(--text-page-title);
+    line-height: var(--leading-tight);
   }
 
   .activity-heading .btn {
@@ -272,20 +262,22 @@
 
   .activity-list {
     display: grid;
-    gap: 10px;
+    gap: 14px;
   }
 
   .run-card {
-    padding: 12px 14px;
+    padding: 16px 18px;
     display: grid;
-    gap: 12px;
+    gap: 14px;
     background: var(--panel-bg-strong);
+    border: none;
+    box-shadow: var(--shadow-card);
     backdrop-filter: blur(10px);
   }
 
   .run-card-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
   }
@@ -296,7 +288,8 @@
     flex-wrap: wrap;
     gap: 10px;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--text-meta);
+    line-height: 1.4;
   }
 
   .run-expand-btn {
@@ -306,11 +299,12 @@
     min-height: 34px;
     padding: 0 10px;
     border-radius: 8px;
-    border: 1px solid var(--border);
-    background: transparent;
+    border: 0;
+    background: color-mix(in srgb, var(--surface-elevated) 82%, rgba(7, 16, 29, 0.96) 18%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--text-meta);
+    font-weight: var(--weight-semibold);
   }
 
   .run-card.expanded .run-expand-btn :global(svg) {
@@ -323,12 +317,14 @@
   }
 
   .run-card-body h3 {
-    font-size: 1.1rem;
+    font-size: var(--text-title-md);
+    line-height: 1.25;
   }
 
   .run-card-body p {
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
   }
 
   .run-card-detail {
@@ -350,7 +346,8 @@
     padding: 10px 12px;
     border-radius: 10px;
     background: var(--panel-bg-soft);
-    border: 1px solid var(--border);
+    border: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .run-detail-head {
@@ -362,7 +359,8 @@
 
   .run-detail-item p {
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
   }
 
   .run-detail-error,
@@ -374,7 +372,8 @@
 
   .run-detail-error {
     color: var(--danger-foreground);
-    font-size: 13px;
+    font-size: var(--text-meta);
+    line-height: 1.45;
   }
 
   .activity-errors {
@@ -385,7 +384,8 @@
     background: var(--danger-bg);
     border: 1px solid var(--danger-border);
     color: var(--danger-foreground);
-    font-size: 14px;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
   }
 
   .error-head {

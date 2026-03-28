@@ -2,16 +2,12 @@
   import { onMount } from 'svelte';
   import { location } from 'svelte-spa-router';
   import { getStatus } from '../lib/api.js';
-  import IconTelevisionSimpleRegular from 'phosphor-icons-svelte/IconTelevisionSimpleRegular.svelte';
-  import IconClockCounterClockwiseRegular from 'phosphor-icons-svelte/IconClockCounterClockwiseRegular.svelte';
-  import IconGearSixRegular from 'phosphor-icons-svelte/IconGearSixRegular.svelte';
-  import IconWaveSineRegular from 'phosphor-icons-svelte/IconWaveSineRegular.svelte';
-  import IconBroadcastRegular from 'phosphor-icons-svelte/IconBroadcastRegular.svelte';
+  import { History, RadioTower, Settings as SettingsIcon, Tv, Waves } from 'lucide-svelte';
 
   const navItems = [
-    { path: '/shows', label: 'Anime', icon: IconTelevisionSimpleRegular },
-    { path: '/activity', label: 'Activity', icon: IconClockCounterClockwiseRegular },
-    { path: '/settings', label: 'Settings', icon: IconGearSixRegular },
+    { path: '/shows', label: 'Anime', icon: Tv },
+    { path: '/activity', label: 'Activity', icon: History },
+    { path: '/settings', label: 'Settings', icon: SettingsIcon },
   ];
 
   let sonarrConnected = false;
@@ -39,14 +35,19 @@
 <header class="topbar-shell">
   <div class="topbar">
     <a class="brand-lockup" href="#/shows" aria-label="Mizu home">
-      <span class="brand-mark"><IconWaveSineRegular size={20} weight="regular" /></span>
+      <span class="brand-mark"><Waves size={20} /></span>
       <strong>Mizu</strong>
     </a>
 
     <nav class="topnav" aria-label="Primary">
       {#each navItems as item}
-        <a href={`#${item.path}`} class="topnav-link" class:active={isActive(item.path, $location)}>
-          <svelte:component this={item.icon} size={20} weight="regular" />
+        <a
+          href={`#${item.path}`}
+          class="topnav-link"
+          class:active={isActive(item.path, $location)}
+          class:tv-link={item.path === '/shows'}
+        >
+          <svelte:component this={item.icon} size={18} />
           <span>{item.label}</span>
         </a>
       {/each}
@@ -59,7 +60,7 @@
         title={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
         aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
       >
-        <IconBroadcastRegular size={20} weight="regular" />
+        <RadioTower size={20} />
       </span>
     </div>
   </div>
@@ -69,7 +70,7 @@
   <div class="mobile-bottom-pill mizu-bottom-pill">
     {#each navItems as item}
       <a href={`#${item.path}`} class="mobile-nav-link" class:active={isActive(item.path, $location)}>
-        <svelte:component this={item.icon} size={28} weight="regular" />
+        <svelte:component this={item.icon} size={22} />
         <span>{item.label}</span>
       </a>
     {/each}
@@ -90,11 +91,11 @@
   .topbar {
     max-width: var(--nav-max);
     margin: 0 auto;
-    padding: 8px 12px;
+    padding: 10px 14px;
     display: grid;
     align-items: center;
     grid-template-columns: auto 1fr auto;
-    gap: 16px;
+    gap: 18px;
     border-radius: 14px;
     pointer-events: auto;
     background: #111e30;
@@ -124,10 +125,10 @@
   }
 
   .brand-lockup strong {
-    font-family: 'Figtree', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1rem;
-    font-weight: 800;
-    letter-spacing: -0.01em;
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-tight);
     color: var(--text-primary);
   }
 
@@ -135,26 +136,32 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
   }
 
   .topnav-link {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 7px 14px;
+    padding: 8px 14px;
     border-radius: 9px;
-    border: 1px solid transparent;
+    border: 0;
     color: var(--text-muted);
-    font-family: 'Figtree', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    transition: background var(--transition), color var(--transition), border-color var(--transition);
+    font-size: var(--text-secondary-size);
+    font-weight: var(--weight-semibold);
+    line-height: 1;
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+  }
+
+  .topnav-link.tv-link :global(svg) {
+    display: block;
+    transform: translateY(-1px);
   }
 
   .topnav-link:hover {
     color: var(--text-primary);
     background: var(--surface-hover);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .topnav-link.active {
@@ -172,8 +179,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
     background: var(--success-bg);
     color: var(--success);
@@ -192,8 +199,8 @@
     width: min(100%, 380px);
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    padding: 7px;
+    gap: 8px;
+    padding: 8px;
     border-radius: 16px;
     background: #111e30;
     box-shadow: var(--shadow-lg);
@@ -207,12 +214,13 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-    min-height: 58px;
+    min-height: 60px;
     padding: 8px 6px;
     border-radius: 11px;
     color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 700;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.03em;
     text-align: center;
     transition: background var(--transition), color var(--transition);
   }
@@ -258,11 +266,3 @@
     }
   }
 </style>
-
-
-
-
-
-
-
-

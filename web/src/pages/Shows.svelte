@@ -6,13 +6,7 @@
   import Spinner from '../components/Spinner.svelte';
   import Badge from '../components/Badge.svelte';
   import Modal from '../components/Modal.svelte';
-  import IconMagnifyingGlassRegular from 'phosphor-icons-svelte/IconMagnifyingGlassRegular.svelte';
-  import IconPlusRegular from 'phosphor-icons-svelte/IconPlusRegular.svelte';
-  import IconCheckCircleRegular from 'phosphor-icons-svelte/IconCheckCircleRegular.svelte';
-  import IconWarningCircleRegular from 'phosphor-icons-svelte/IconWarningCircleRegular.svelte';
-  import IconWaveSineRegular from 'phosphor-icons-svelte/IconWaveSineRegular.svelte';
-  import IconCheckRegular from 'phosphor-icons-svelte/IconCheckRegular.svelte';
-  import IconXRegular from 'phosphor-icons-svelte/IconXRegular.svelte';
+  import { Check, CircleCheckBig, Plus, Search, TriangleAlert, Waves, X } from 'lucide-svelte';
 
   const START_FROM_BEGINNING = 'from_beginning';
   const START_FROM_CURRENT = 'from_current_progress';
@@ -228,18 +222,15 @@
 
 <div class="library-shell">
   <section class="page-heading anime-heading">
-    <div>
-      <h1>Anime</h1>
-      <p>{($shows || []).length} anime synced</p>
-    </div>
+    <h1>Anime</h1>
     <button class="btn btn-primary anime-heading-action" on:click={openAddModal} aria-label="Add anime" title="Add anime">
-      <IconPlusRegular size={20} weight="regular" />
+      <Plus size={18} />
       <span>Add Anime</span>
     </button>
   </section>
 
   <label class="search-shell anime-search-row" aria-label="Search synced anime">
-    <IconMagnifyingGlassRegular size={20} weight="regular" />
+    <Search size={18} />
     <input class="landing-search" type="text" placeholder="Search anime..." bind:value={filter} />
   </label>
 
@@ -248,11 +239,11 @@
   {:else if filteredShows.length === 0 && ($shows || []).length === 0}
     <div class="card landing-empty">
       <div class="empty-state compact-empty">
-        <div class="empty-icon"><IconWaveSineRegular size={28} weight="regular" /></div>
+        <div class="empty-icon"><Waves size={28} /></div>
         <h3>No anime synced yet</h3>
         <p>Add your first Sonarr anime mapping to start using Mizu.</p>
         <button class="btn btn-primary" on:click={openAddModal}>
-          <IconPlusRegular size={20} weight="regular" />
+          <Plus size={18} />
           <span>Add Anime</span>
         </button>
       </div>
@@ -260,7 +251,7 @@
   {:else if filteredShows.length === 0}
     <div class="card landing-empty">
       <div class="empty-state compact-empty">
-        <div class="empty-icon"><IconWarningCircleRegular size={28} weight="regular" /></div>
+        <div class="empty-icon"><TriangleAlert size={28} /></div>
         <h3>No matching anime</h3>
         <p>Try another search term.</p>
       </div>
@@ -280,8 +271,8 @@
                 <h3>{show.sonarr_title}</h3>
               </div>
               <div class="show-card-chips">
-                <span class="info-chip"><IconWaveSineRegular size={20} weight="regular" /> {markerChip(show)}</span>
-                <span class="info-chip" class:info-chip-on={show.enabled} class:info-chip-off={!show.enabled}><IconCheckCircleRegular size={20} weight="regular" /> {syncChip(show)}</span>
+                <span class="info-chip"><Waves size={16} /> {markerChip(show)}</span>
+                <span class="info-chip" class:info-chip-on={show.enabled} class:info-chip-off={!show.enabled}><CircleCheckBig size={16} /> {syncChip(show)}</span>
               </div>
             </div>
           </div>
@@ -323,7 +314,7 @@
           <div class="match-search-row">
             <input id="afl-search" class="form-input" type="text" placeholder="Search AnimeFillerList" bind:value={manualQuery} on:keydown={(event) => event.key === 'Enter' && handleManualSearch()} />
             <button class="btn btn-secondary" on:click={handleManualSearch} disabled={manualSearching}>
-              <IconMagnifyingGlassRegular size={20} weight="regular" />
+              <Search size={18} />
               <span>{manualSearching ? 'Searching...' : 'Search'}</span>
             </button>
           </div>
@@ -360,17 +351,17 @@
           <div class="rule-pill-row" role="group" aria-label="Initial tracking rules">
             <label class="rule-pill rule-pill-anime" class:active={addTrackAnimeCanon}>
               <input type="checkbox" bind:checked={addTrackAnimeCanon} />
-              {#if addTrackAnimeCanon}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
+              {#if addTrackAnimeCanon}<Check size={18} />{:else}<X size={18} />{/if}
               <span>Anime canon</span>
             </label>
             <label class="rule-pill rule-pill-mixed" class:active={addTrackMixed}>
               <input type="checkbox" bind:checked={addTrackMixed} />
-              {#if addTrackMixed}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
+              {#if addTrackMixed}<Check size={18} />{:else}<X size={18} />{/if}
               <span>Mixed canon</span>
             </label>
             <label class="rule-pill rule-pill-filler" class:active={addTrackFiller}>
               <input type="checkbox" bind:checked={addTrackFiller} />
-              {#if addTrackFiller}<IconCheckRegular size={20} weight="bold" />{:else}<IconXRegular size={20} weight="bold" />{/if}
+              {#if addTrackFiller}<Check size={18} />{:else}<X size={18} />{/if}
               <span>Filler</span>
             </label>
           </div>
@@ -408,7 +399,7 @@
     position: relative;
     isolation: isolate;
     display: grid;
-    gap: 18px;
+    gap: var(--space-8);
     max-width: var(--content-max);
     margin: 0 auto;
   }
@@ -439,20 +430,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--space-5);
   }
 
   .anime-heading h1 {
-    font-size: 1.6rem;
-    font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-  }
-
-  .anime-heading p {
-    color: var(--text-muted);
-    font-size: 13px;
-    margin-top: 2px;
+    font-size: var(--text-page-title);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
   }
 
   .anime-heading-action {
@@ -466,13 +450,14 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 42px;
+    min-height: 46px;
     padding: 0 16px;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: 999px;
-    background: var(--surface-elevated);
+    background: color-mix(in srgb, var(--surface-elevated) 78%, rgba(7, 16, 29, 0.96) 22%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     color: var(--text-muted);
-    transition: border-color var(--transition);
+    transition: background var(--transition), box-shadow var(--transition);
   }
 
   .anime-search-row {
@@ -496,8 +481,9 @@
 
   .shows-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 18px;
+    align-items: start;
   }
 
   .show-card {
@@ -508,6 +494,7 @@
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
+    display: grid;
     transition: transform var(--transition), box-shadow var(--transition);
     box-shadow: var(--shadow-card);
   }
@@ -553,9 +540,9 @@
     justify-content: center;
     background: var(--brand-mark-gradient);
     border: 1px solid var(--border-light);
-    font-family: 'Figtree', sans-serif;
-    font-size: 1.35rem;
-    font-weight: 700;
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: var(--weight-bold);
     color: var(--accent-cream);
     position: relative;
     z-index: 1;
@@ -566,21 +553,21 @@
     inset: auto 0 0;
     z-index: 1;
     display: grid;
-    gap: 6px;
-    padding: 10px 8px 8px;
+    gap: var(--space-2);
+    padding: 12px 10px 10px;
   }
 
   .show-card-copy h3 {
-    font-size: 0.88rem;
-    line-height: 1.2;
+    font-size: 0.9375rem;
+    line-height: 1.28;
     color: var(--accent-cream);
-    font-weight: 700;
+    font-weight: var(--weight-bold);
   }
 
   .show-card-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 6px;
   }
 
   .info-chip {
@@ -593,8 +580,9 @@
     background: rgba(5, 13, 26, 0.70);
     border: 1px solid var(--border);
     color: var(--text-b);
-    font-size: 11px;
-    font-weight: 700;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    line-height: 1;
     backdrop-filter: blur(4px);
   }
 
@@ -635,14 +623,15 @@
 
   .modal-copy {
     margin-bottom: 12px;
-    font-size: 14px;
+    font-size: var(--text-secondary-size);
+    line-height: var(--leading-copy);
     color: var(--text-secondary);
   }
 
   .select-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     max-height: 320px;
     overflow-y: auto;
   }
@@ -664,18 +653,21 @@
   }
 
   .selectable-title {
-    font-family: 'Figtree', sans-serif;
-    font-size: 16px;
+    font-family: var(--font-heading);
+    font-size: var(--text-title-sm);
+    line-height: 1.25;
+    font-weight: var(--weight-bold);
   }
 
   .selectable-title.emphasis {
-    font-size: 16px;
+    font-size: var(--text-title-md);
   }
 
   .selectable-meta {
     margin-top: 4px;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--text-secondary-size);
+    line-height: 1.5;
   }
 
   .match-score-row {
@@ -686,8 +678,8 @@
   }
 
   .review-panel {
-    margin-top: 10px;
-    padding: 14px;
+    margin-top: 12px;
+    padding: 16px;
     border-radius: 10px;
     border: 1px solid var(--border);
     background: var(--panel-bg-soft);
@@ -695,7 +687,7 @@
 
   .review-panel h3 {
     margin-bottom: 12px;
-    font-size: 16px;
+    font-size: var(--text-title-md);
   }
 
   .rule-pill-row {
@@ -713,13 +705,15 @@
     min-height: 38px;
     padding: 0 12px;
     border-radius: 10px;
-    border: 1px solid var(--border);
+    border: 0;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--text-secondary-size);
+    font-weight: var(--weight-semibold);
+    line-height: 1.35;
     cursor: pointer;
-    transition: background var(--transition), border-color var(--transition), color var(--transition);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
   }
 
   .rule-pill input {
@@ -731,24 +725,20 @@
 
   .rule-pill-anime.active {
     background: var(--anime-canon-wash);
-    border-color: var(--anime-canon-border);
     color: var(--text-primary);
   }
 
   .rule-pill-mixed.active {
     background: var(--mixed-wash);
-    border-color: var(--mixed-border);
     color: var(--text-primary);
   }
 
   .rule-pill-filler.active {
     background: var(--filler-wash);
-    border-color: var(--filler-border-strong);
     color: var(--danger-foreground);
   }
 
   .rule-pill-filler:not(.active) {
-    border-color: var(--filler-border);
     color: var(--danger-foreground);
   }
 
@@ -760,30 +750,29 @@
   }
 
   @media (max-width: 1100px) {
-    .shows-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .shows-grid { gap: 16px; }
     .show-card-media { min-height: 220px; }
   }
 
   @media (max-width: 840px) {
-    .anime-heading { align-items: flex-start; }
-    .shows-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .shows-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
     .show-card-media { min-height: 200px; }
   }
 
   @media (max-width: 560px) {
-    .library-shell { gap: 14px; }
+    .library-shell { gap: var(--space-6); }
 
     .anime-heading {
       flex-direction: column;
       align-items: stretch;
-      gap: 10px;
+      gap: var(--space-3);
     }
 
     .anime-heading-action { width: 100%; justify-content: center; }
 
     .shows-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      gap: 12px;
     }
 
     .show-card-media { min-height: 180px; }
@@ -792,14 +781,6 @@
     .rule-pill-row { display: grid; grid-template-columns: 1fr; }
   }
 </style>
-
-
-
-
-
-
-
-
 
 
 
