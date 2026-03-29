@@ -43,14 +43,15 @@
 
       <nav class="topnav" aria-label="Primary">
         {#each navItems as item}
-          <a
-            href={`#${item.path}`}
-            class="topnav-link"
-            class:active={isActive(item.path, $location)}
-            class:tv-link={item.path === '/shows'}
-          >
-            <svelte:component this={item.icon} size={16} />
-            <span>{item.label}</span>
+        <a
+          href={`#${item.path}`}
+          class="topnav-link"
+          class:active={isActive(item.path, $location)}
+          class:tv-link={item.path === '/shows'}
+          aria-current={isActive(item.path, $location) ? 'page' : undefined}
+        >
+          <svelte:component this={item.icon} size={16} />
+          <span>{item.label}</span>
           </a>
         {/each}
       </nav>
@@ -73,7 +74,12 @@
   <div class="mobile-bottom-bar">
     <Surface class="mobile-bottom-bar-surface" variant="muted" padding="sm" blur>
       {#each navItems as item}
-        <a href={`#${item.path}`} class="mobile-nav-link" class:active={isActive(item.path, $location)}>
+        <a
+          href={`#${item.path}`}
+          class="mobile-nav-link"
+          class:active={isActive(item.path, $location)}
+          aria-current={isActive(item.path, $location) ? 'page' : undefined}
+        >
           <svelte:component this={item.icon} size={18} />
           <span>{item.label}</span>
         </a>

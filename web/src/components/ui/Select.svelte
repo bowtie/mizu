@@ -15,29 +15,21 @@
     return values.filter(Boolean).join(' ');
   }
 
-  const triggerPropNames = new Set([
-    'id',
-    'tabindex',
-    'autofocus',
-    'title',
-    'aria-label',
-    'aria-labelledby',
-    'aria-describedby',
-    'aria-controls',
-    'aria-expanded',
-    'aria-required',
-    'aria-invalid',
-    'aria-errormessage',
+  const rootPropNames = new Set([
+    'name',
+    'required',
+    'form',
+    'autocomplete',
   ]);
 
   $: selectedItem = items.find((item) => item.value === value);
   $: contentClass = classes('ui-select-content', contentProps?.class);
   $: ({ rootProps, triggerProps } = Object.entries($$restProps).reduce(
     (acc, [key, propValue]) => {
-      if (triggerPropNames.has(key) || key.startsWith('aria-') || key.startsWith('data-')) {
-        acc.triggerProps[key] = propValue;
-      } else {
+      if (rootPropNames.has(key)) {
         acc.rootProps[key] = propValue;
+      } else {
+        acc.triggerProps[key] = propValue;
       }
       return acc;
     },
