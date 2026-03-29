@@ -7,18 +7,4 @@ export default defineConfig({
     svelte(),
     tailwindcss(),
   ],
-  build: {
-    outDir: '../internal/web/dist',
-    emptyOutDir: true,
-    sourcemap: false,
-  },
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8978',
-        changeOrigin: true,
-      },
-    },
-  },
 });
