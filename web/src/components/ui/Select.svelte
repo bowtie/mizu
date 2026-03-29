@@ -1,5 +1,6 @@
 <script>
-  import { Select as FoxSelect, cn } from '@foxui/core';
+  import { Select as SelectPrimitive } from 'bits-ui';
+  import { Check, ChevronDown } from 'lucide-svelte';
 
   let className = '';
   export { className as class };
@@ -10,19 +11,47 @@
   export let disabled = false;
   export let contentProps = {};
 
-  $: mergedContentProps = {
-    ...contentProps,
-    class: cn('ui-select-content', contentProps?.class),
-  };
+  function classes(...values) {
+    return values.filter(Boolean).join(' ');
+  }
+
+  $: selectedItem = items.find((item) => item.value === value);
+  $: contentClass = classes('ui-select-content', contentProps?.class);
 </script>
 
-<div class={cn('ui-select-wrapper', disabled && 'is-disabled', className)}>
-  <FoxSelect
-    bind:value
-    {items}
-    {placeholder}
-    {disabled}
-    contentProps={mergedContentProps}
-    {...$$restProps}
-  />
+<div class={classes('ui-select-wrapper', disabled && 'is-disabled', className)}>
+  <SelectPrimitive.Root bind:value {disabled} {...$$restProps}>
+    <SelectPrimitive.Trigger
+      class={classes('ui-field-shell ui-select-trigger', disabled && 'is-disabled')}
+      aria-label={selectedItem?.label ?? placeholder}
+    >
+      <span class:ui-select-placeholder={!selectedItem}>
+        {selectedItem?.label ?? placeholder}
+      </span>
+      <ChevronDown size={16} />
+    </SelectPrimitive.Trigger>
+
+    <SelectPrimitive.Portal>
+      <SelectPrimitive.Content
+        sideOffset={6}
+        {...contentProps}
+        class={contentClass}
+      >
+        <SelectPrimitive.Viewport class="ui-select-viewport">
+          {#each items as item (item.value)}
+            <SelectPrimitive.Item value={item.value} label={item.label} disabled={item.disabled}>
+              {#snippet children({ selected })}
+                <div class={classes('ui-select-item', selected && 'is-selected', item.disabled && 'is-disabled')}>
+                  <span>{item.label}</span>
+                  {#if selected}
+                    <Check size={16} />
+                  {/if}
+                </div>
+              {/snippet}
+            </SelectPrimitive.Item>
+          {/each}
+        </SelectPrimitive.Viewport>
+      </SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
+  </SelectPrimitive.Root>
 </div>

@@ -34,48 +34,52 @@
 </script>
 
 <header class="topbar-shell">
-  <Surface class="topbar" variant="muted" padding="sm" blur>
-    <a class="brand-lockup" href="#/shows" aria-label="Mizu home">
-      <span class="brand-mark"><Waves size={18} /></span>
-      <strong>Mizu</strong>
-    </a>
+  <div class="topbar">
+    <Surface class="topbar-surface" variant="muted" padding="sm" blur>
+      <a class="brand-lockup" href="#/shows" aria-label="Mizu home">
+        <span class="brand-mark"><Waves size={18} /></span>
+        <strong>Mizu</strong>
+      </a>
 
-    <nav class="topnav" aria-label="Primary">
-      {#each navItems as item}
-        <a
-          href={`#${item.path}`}
-          class="topnav-link"
-          class:active={isActive(item.path, $location)}
-          class:tv-link={item.path === '/shows'}
+      <nav class="topnav" aria-label="Primary">
+        {#each navItems as item}
+          <a
+            href={`#${item.path}`}
+            class="topnav-link"
+            class:active={isActive(item.path, $location)}
+            class:tv-link={item.path === '/shows'}
+          >
+            <svelte:component this={item.icon} size={16} />
+            <span>{item.label}</span>
+          </a>
+        {/each}
+      </nav>
+
+      <div class="topbar-utility">
+        <span
+          class="status-indicator"
+          class:offline={!sonarrConnected}
+          title={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
+          aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
         >
-          <svelte:component this={item.icon} size={16} />
-          <span>{item.label}</span>
-        </a>
-      {/each}
-    </nav>
-
-    <div class="topbar-utility">
-      <span
-        class="status-indicator"
-        class:offline={!sonarrConnected}
-        title={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
-        aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
-      >
-        <RadioTower size={16} />
-      </span>
-    </div>
-  </Surface>
+          <RadioTower size={16} />
+        </span>
+      </div>
+    </Surface>
+  </div>
 </header>
 
 <nav class="mobile-bottom-nav" aria-label="Primary mobile navigation">
-  <Surface class="mobile-bottom-bar" variant="muted" padding="sm" blur>
-    {#each navItems as item}
-      <a href={`#${item.path}`} class="mobile-nav-link" class:active={isActive(item.path, $location)}>
-        <svelte:component this={item.icon} size={18} />
-        <span>{item.label}</span>
-      </a>
-    {/each}
-  </Surface>
+  <div class="mobile-bottom-bar">
+    <Surface class="mobile-bottom-bar-surface" variant="muted" padding="sm" blur>
+      {#each navItems as item}
+        <a href={`#${item.path}`} class="mobile-nav-link" class:active={isActive(item.path, $location)}>
+          <svelte:component this={item.icon} size={18} />
+          <span>{item.label}</span>
+        </a>
+      {/each}
+    </Surface>
+  </div>
 </nav>
 
 <style>
@@ -92,11 +96,14 @@
   .topbar {
     max-width: var(--nav-max);
     margin: 0 auto;
+    pointer-events: auto;
+  }
+
+  .topbar :global(.topbar-surface) {
     display: grid;
     align-items: center;
     grid-template-columns: auto 1fr auto;
     gap: 16px;
-    pointer-events: auto;
   }
 
   .brand-lockup {
@@ -196,10 +203,13 @@
 
   .mobile-bottom-bar {
     width: min(100%, 380px);
+    pointer-events: auto;
+  }
+
+  .mobile-bottom-bar :global(.mobile-bottom-bar-surface) {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 6px;
-    pointer-events: auto;
   }
 
   .mobile-nav-link {

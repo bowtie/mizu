@@ -1,6 +1,4 @@
 <script>
-  import { Input as FoxInput, cn } from '@foxui/core';
-
   let className = '';
   export { className as class };
 
@@ -8,14 +6,18 @@
   export let type = 'text';
   export let disabled = false;
   export let invalid = false;
+
+  function classes(...values) {
+    return values.filter(Boolean).join(' ');
+  }
 </script>
 
-<div class={cn('ui-field-shell', disabled && 'is-disabled', invalid && 'is-invalid')}>
-  <FoxInput
+<div class={classes('ui-field-shell', disabled && 'is-disabled', invalid && 'is-invalid')}>
+  <input
     bind:value
     {type}
     {disabled}
-    class={cn('ui-field-control ui-input-control', className)}
+    class={classes('ui-field-control ui-input-control', className)}
     {...$$restProps}
   />
 </div>

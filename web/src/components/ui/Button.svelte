@@ -1,37 +1,32 @@
 <script>
-  import { Button as FoxButton, cn } from '@foxui/core';
-
   let className = '';
   export { className as class };
 
   export let variant = 'primary';
   export let size = 'md';
   export let block = false;
+  export let href = undefined;
+  export let type = 'button';
 
-  const foxVariantMap = {
-    primary: 'primary',
-    secondary: 'secondary',
-    danger: 'red',
-    ghost: 'ghost',
-    link: 'link',
-  };
+  function classes(...values) {
+    return values.filter(Boolean).join(' ');
+  }
 
-  const foxSizeMap = {
-    sm: 'sm',
-    md: 'default',
-    lg: 'lg',
-    icon: 'icon',
-  };
-
-  $: foxVariant = foxVariantMap[variant] ?? 'primary';
-  $: foxSize = foxSizeMap[size] ?? 'default';
+  $: buttonClass = classes(
+    'ui-button',
+    `ui-button-${variant}`,
+    `ui-button-${size}`,
+    block && 'ui-button-block',
+    className,
+  );
 </script>
 
-<FoxButton
-  variant={foxVariant}
-  size={foxSize}
-  class={cn('ui-button', `ui-button-${variant}`, `ui-button-${size}`, block && 'ui-button-block', className)}
-  {...$$restProps}
->
-  <slot />
-</FoxButton>
+{#if href}
+  <a class={buttonClass} {href} {...$$restProps}>
+    <slot />
+  </a>
+{:else}
+  <button class={buttonClass} {type} {...$$restProps}>
+    <slot />
+  </button>
+{/if}
