@@ -25,8 +25,49 @@
   }
 
   function handleKeydown(e) {
-    if (show && e.key === 'Escape') {
+    if (!show) return;
+
+    if (e.key === 'Escape') {
       close();
+      return;
+    }
+
+    if (e.key !== 'Tab' || !modalElement) return;
+
+    const focusableSelectors = [
+      'a[href]',
+      'button:not([disabled])',
+      'textarea:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ];
+
+    const focusableElements = Array.from(
+      modalElement.querySelectorAll(focusableSelectors.join(','))
+    ).filter((element) => {
+      return element instanceof HTMLElement && !element.hasAttribute('disabled') && element.tabIndex !== -1;
+    });
+
+    if (focusableElements.length === 0) {
+      e.preventDefault();
+      modalElement.focus();
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement;
+
+    if (e.shiftKey && (activeElement === firstElement || activeElement === modalElement)) {
+      e.preventDefault();
+      lastElement.focus();
+      return;
+    }
+
+    if (!e.shiftKey && activeElement === lastElement) {
+      e.preventDefault();
+      firstElement.focus();
     }
   }
 
@@ -41,8 +82,9 @@
   }
 </script>
 
+<svelte:window on:keydown={handleKeydown} />
+
 {#if show}
-  <svelte:window on:keydown={handleKeydown} />
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="modal-backdrop" on:click={handleBackdropClick}>
