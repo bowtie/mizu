@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher, tick } from 'svelte';
+  import { createEventDispatcher, onDestroy, tick } from 'svelte';
   import { X } from 'lucide-svelte';
   import Surface from './ui/Surface.svelte';
   import Button from './ui/Button.svelte';
@@ -13,6 +13,8 @@
 
   let modalElement;
   let previousActiveElement = null;
+  let previousBodyOverflow = null;
+  let scrollLockActive = false;
 
   function close() {
     dispatch('close');
@@ -80,6 +82,21 @@
     previousActiveElement.focus();
     previousActiveElement = null;
   }
+
+  $: if (show && !scrollLockActive) {
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    scrollLockActive = true;
+  } else if (!show && scrollLockActive) {
+    document.body.style.overflow = previousBodyOverflow ?? '';
+    previousBodyOverflow = null;
+    scrollLockActive = false;
+  }
+
+  onDestroy(() => {
+    if (!scrollLockActive) return;
+    document.body.style.overflow = previousBodyOverflow ?? '';
+  });
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
