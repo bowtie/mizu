@@ -304,8 +304,6 @@ h1, h2, h3, h4, h5, h6, .section-title {
 @media (max-width: 560px) {
     .modal-backdrop { padding: 12px; }
     .modal-header, .modal-footer, .modal-body { padding-left: 16px; padding-right: 16px; }
-    .toast-container { left: 12px; right: 12px; top: 12px; }
-    .toast { min-width: 0; max-width: none; width: 100%; }
 }
 
 a { color: inherit; text-decoration: none; }
@@ -661,7 +659,7 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 .run-expand-btn:focus-visible, .episode-monitor-btn:focus-visible,
 .season-header:focus-visible, .advanced-toggle:focus-visible,
 .inline-toggle:focus-visible, .modal-close:focus-visible,
-.toast-close:focus-visible, .stat-button:focus-visible {
+.stat-button:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--focus-ring);
 }
@@ -792,7 +790,6 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     min-width: 260px;
     max-width: 380px;
     border: 1px solid color-mix(in srgb, var(--divider-border) 70%, rgba(255, 255, 255, 0.1) 30%);
-    border-left-width: 3px;
     border-radius: 10px;
     background: color-mix(in srgb, var(--panel-bg-strong) 92%, rgba(255, 255, 255, 0.03) 8%);
     box-shadow: var(--shadow-card);
@@ -822,11 +819,6 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     color: var(--text-primary);
 }
 
-.mizu-toast.is-success { border-left-color: var(--success); }
-.mizu-toast.is-error { border-left-color: var(--danger); }
-.mizu-toast.is-warning { border-left-color: var(--warning); }
-.mizu-toast.is-info { border-left-color: var(--info); }
-
 .spinner {
     display: inline-block;
     width: 17px;
@@ -850,7 +842,7 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
 
 .show-card-copy h3, .detail-main-copy h1, .detail-subtitle,
 .run-card-body h3, .run-detail-item p, .season-title,
-.mobile-episode-card h4, .toast-message {
+.mobile-episode-card h4 {
     overflow-wrap: anywhere;
     word-break: break-word;
 }
