@@ -552,6 +552,13 @@ button.card { width: 100%; color: var(--text-primary); cursor: pointer; }
     color: var(--text-primary);
 }
 
+.ui-select-item.is-highlighted {
+    background: color-mix(in srgb, var(--surface-hover) 82%, rgba(255, 255, 255, 0.03) 18%);
+    color: var(--text-primary);
+    outline: 1px solid color-mix(in srgb, var(--accent-border) 72%, rgba(255, 255, 255, 0.08) 28%);
+    outline-offset: -1px;
+}
+
 .ui-select-item.is-selected {
     background: color-mix(in srgb, var(--surface-soft) 82%, rgba(255, 255, 255, 0.03) 18%);
     color: var(--text-primary);

@@ -20,7 +20,7 @@
 </script>
 
 <div class={classes('ui-select-wrapper', disabled && 'is-disabled', className)}>
-  <SelectPrimitive.Root bind:value {disabled} {...$$restProps}>
+  <SelectPrimitive.Root bind:value type="single" {disabled} {...$$restProps}>
     <SelectPrimitive.Trigger
       class={classes('ui-field-shell ui-select-trigger', disabled && 'is-disabled')}
       aria-label={selectedItem?.label ?? placeholder}
@@ -40,8 +40,8 @@
         <SelectPrimitive.Viewport class="ui-select-viewport">
           {#each items as item (item.value)}
             <SelectPrimitive.Item value={item.value} label={item.label} disabled={item.disabled}>
-              {#snippet children({ selected })}
-                <div class={classes('ui-select-item', selected && 'is-selected', item.disabled && 'is-disabled')}>
+              {#snippet children({ selected, highlighted })}
+                <div class={classes('ui-select-item', selected && 'is-selected', highlighted && 'is-highlighted', item.disabled && 'is-disabled')}>
                   <span>{item.label}</span>
                   {#if selected}
                     <Check size={16} />
