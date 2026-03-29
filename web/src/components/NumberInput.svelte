@@ -90,20 +90,39 @@
     type="text"
     inputmode="numeric"
     pattern="[0-9]*"
+    role="spinbutton"
     class="ui-field-control number-input-field"
     bind:value={draftValue}
     aria-label={ariaLabel}
+    aria-valuenow={value}
+    aria-valuemin={min}
+    aria-valuemax={Number.isFinite(max) ? max : undefined}
+    aria-disabled={disabled ? 'true' : undefined}
     {disabled}
     on:input={handleInput}
     on:focus={handleFocus}
     on:blur={handleBlur}
     on:keydown={handleKeydown}
   />
-  <div class="number-input-stepper" aria-hidden="true">
-    <button type="button" class="ui-field-button number-step-button" on:click={() => adjust(1)} disabled={disabled || value >= max} tabindex="-1">
+  <div class="number-input-stepper">
+    <button
+      type="button"
+      class="ui-field-button number-step-button"
+      aria-label="Increase value"
+      aria-controls={id}
+      on:click={() => adjust(1)}
+      disabled={disabled || value >= max}
+    >
       <ChevronUp size={14} />
     </button>
-    <button type="button" class="ui-field-button number-step-button" on:click={() => adjust(-1)} disabled={disabled || value <= min} tabindex="-1">
+    <button
+      type="button"
+      class="ui-field-button number-step-button"
+      aria-label="Decrease value"
+      aria-controls={id}
+      on:click={() => adjust(-1)}
+      disabled={disabled || value <= min}
+    >
       <ChevronDown size={14} />
     </button>
   </div>

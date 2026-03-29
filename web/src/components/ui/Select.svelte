@@ -15,13 +15,38 @@
     return values.filter(Boolean).join(' ');
   }
 
+  const triggerPropNames = new Set([
+    'id',
+    'tabindex',
+    'autofocus',
+    'title',
+    'aria-label',
+    'aria-labelledby',
+    'aria-describedby',
+    'aria-controls',
+    'aria-expanded',
+    'aria-required',
+    'aria-invalid',
+    'aria-errormessage',
+  ]);
+
   $: selectedItem = items.find((item) => item.value === value);
   $: contentClass = classes('ui-select-content', contentProps?.class);
-  $: triggerProps = $$restProps;
+  $: ({ rootProps, triggerProps } = Object.entries($$restProps).reduce(
+    (acc, [key, propValue]) => {
+      if (triggerPropNames.has(key) || key.startsWith('aria-') || key.startsWith('data-')) {
+        acc.triggerProps[key] = propValue;
+      } else {
+        acc.rootProps[key] = propValue;
+      }
+      return acc;
+    },
+    { rootProps: {}, triggerProps: {} },
+  ));
 </script>
 
 <div class={classes('ui-select-wrapper', disabled && 'is-disabled', className)}>
-  <SelectPrimitive.Root bind:value type="single" {disabled}>
+  <SelectPrimitive.Root bind:value type="single" {disabled} {...rootProps}>
     <SelectPrimitive.Trigger
       class={classes('ui-field-shell ui-select-trigger', disabled && 'is-disabled')}
       aria-label={selectedItem?.label ?? placeholder}
