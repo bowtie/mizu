@@ -269,42 +269,9 @@ h1, h2, h3, h4, h5, h6, .section-title {
 .app-shell-backdrop {
     position: fixed;
     inset: 0;
-    pointer-events: none;
-}
-
-.app-shell-backdrop {
     z-index: 0;
-    background: #060c17;
-}
-
-.app-shell-specular {
-    position: fixed;
-    inset: 0;
-    z-index: 1;
     pointer-events: none;
-    overflow: hidden;
-}
-
-.app-shell-specular::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-        linear-gradient(180deg, rgba(6, 12, 23, 0.08) 0%, rgba(6, 12, 23, 0.16) 24%, rgba(6, 12, 23, 0.48) 56%, #060c17 100%);
-}
-
-.app-shell-specular-effect {
-    width: 100%;
-    height: 100%;
-    opacity: 0.94;
-}
-
-.app-shell-specular canvas {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-    opacity: 1;
-    filter: saturate(0.92) brightness(0.88);
+    background: #060c17;
 }
 
 .main-content,
