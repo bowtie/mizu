@@ -46,7 +46,7 @@
 </script>
 
 <div class={classes('ui-select-wrapper', disabled && 'is-disabled', className)}>
-  <SelectPrimitive.Root bind:value type="single" {disabled} {...rootProps}>
+  <SelectPrimitive.Root bind:value type="single" {disabled} {items} {...rootProps}>
     <SelectPrimitive.Trigger
       class={classes('ui-field-shell ui-select-trigger', disabled && 'is-disabled')}
       aria-label={selectedItem?.label ?? placeholder}

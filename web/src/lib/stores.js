@@ -27,9 +27,6 @@ let notifId = 0;
 export function addNotification(message, type = 'info', duration = 4000) {
   const id = ++notifId;
   notifications.update((n) => [...n, { id, message, type, duration }]);
-  if (duration > 0) {
-    setTimeout(() => removeNotification(id), duration);
-  }
 }
 
 export function removeNotification(id) {
