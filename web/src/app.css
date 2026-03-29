@@ -819,6 +819,26 @@ tr.ep-canon:hover, tr.ep-mixed:hover, tr.ep-anime-canon:hover, tr.ep-filler:hove
     color: var(--text-primary);
 }
 
+.mizu-toast.is-success {
+    border-color: color-mix(in srgb, var(--success-border) 72%, rgba(255, 255, 255, 0.08) 28%);
+    background: color-mix(in srgb, var(--success-bg) 24%, var(--panel-bg-strong) 76%);
+}
+
+.mizu-toast.is-error {
+    border-color: color-mix(in srgb, var(--danger-border) 72%, rgba(255, 255, 255, 0.08) 28%);
+    background: color-mix(in srgb, var(--danger-bg) 24%, var(--panel-bg-strong) 76%);
+}
+
+.mizu-toast.is-warning {
+    border-color: color-mix(in srgb, var(--warning-border) 72%, rgba(255, 255, 255, 0.08) 28%);
+    background: color-mix(in srgb, var(--warning-bg) 24%, var(--panel-bg-strong) 76%);
+}
+
+.mizu-toast.is-info {
+    border-color: color-mix(in srgb, var(--info-border) 72%, rgba(255, 255, 255, 0.08) 28%);
+    background: color-mix(in srgb, var(--info-bg) 24%, var(--panel-bg-strong) 76%);
+}
+
 .spinner {
     display: inline-block;
     width: 17px;
