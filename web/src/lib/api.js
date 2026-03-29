@@ -78,6 +78,10 @@ export function getEpisodes(showId) {
   return request('GET', '/mappings/' + showId + '/episodes');
 }
 
+export function getAniListArtwork(showId) {
+  return request('GET', '/mappings/' + showId + '/artwork');
+}
+
 export function getSonarrEpisodes(showId) {
   return request('GET', '/mappings/' + showId + '/episodes/sonarr');
 }

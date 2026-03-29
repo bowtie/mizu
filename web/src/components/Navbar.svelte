@@ -98,10 +98,11 @@
     gap: 18px;
     border-radius: 14px;
     pointer-events: auto;
-    background: #111e30;
+    background: rgba(17, 30, 48, 0.68);
+    border: 1px solid rgba(73, 111, 164, 0.18);
     box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(24px) saturate(1.08);
+    -webkit-backdrop-filter: blur(24px) saturate(1.08);
   }
 
   .brand-lockup {
@@ -202,9 +203,11 @@
     gap: 8px;
     padding: 8px;
     border-radius: 16px;
-    background: #111e30;
+    background: rgba(17, 30, 48, 0.76);
+    border: 1px solid rgba(73, 111, 164, 0.16);
     box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(22px) saturate(1.06);
+    -webkit-backdrop-filter: blur(22px) saturate(1.06);
     pointer-events: auto;
   }
 

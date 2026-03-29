@@ -237,7 +237,7 @@
   {#if loading}
     <Spinner center size="lg" message="Pulling anime from the current..." />
   {:else if filteredShows.length === 0 && ($shows || []).length === 0}
-    <div class="card landing-empty">
+    <div class="landing-empty">
       <div class="empty-state compact-empty">
         <div class="empty-icon"><Waves size={28} /></div>
         <h3>No anime synced yet</h3>
@@ -249,7 +249,7 @@
       </div>
     </div>
   {:else if filteredShows.length === 0}
-    <div class="card landing-empty">
+    <div class="landing-empty">
       <div class="empty-state compact-empty">
         <div class="empty-icon"><TriangleAlert size={28} /></div>
         <h3>No matching anime</h3>
@@ -402,28 +402,6 @@
     gap: var(--space-8);
     max-width: var(--content-max);
     margin: 0 auto;
-  }
-
-  .library-shell::before,
-  .library-shell::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .library-shell::before {
-    z-index: -2;
-    background:
-      radial-gradient(circle at 18% 12%, var(--page-aurora-a) 0%, transparent 26%),
-      radial-gradient(circle at 78% 20%, var(--page-aurora-b) 0%, transparent 30%),
-      linear-gradient(180deg, var(--page-top-wash) 0%, rgba(7, 17, 30, 0) 100%);
-  }
-
-  .library-shell::after {
-    z-index: -1;
-    background:
-      linear-gradient(180deg, var(--page-depth-top) 0%, var(--page-depth-mid) 26%, var(--page-depth-strong) 62%, var(--page-depth-bottom) 100%);
   }
 
   .anime-heading {
@@ -600,6 +578,9 @@
 
   .landing-empty {
     min-height: 240px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
   }
 
   .compact-empty {
@@ -781,7 +762,6 @@
     .rule-pill-row { display: grid; grid-template-columns: 1fr; }
   }
 </style>
-
 
 
 

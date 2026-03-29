@@ -5,6 +5,8 @@
   import Navbar from './components/Navbar.svelte';
   import Toast from './components/Toast.svelte';
 
+  let ShellEffect = null;
+
   const routes = {
     '/shows': wrap({ asyncComponent: () => import('./pages/Shows.svelte') }),
     '/shows/:id': wrap({ asyncComponent: () => import('./pages/ShowDetail.svelte') }),
@@ -17,11 +19,23 @@
   $: if ($location === '/') {
     push('/shows');
   }
+
+  $: isDetailRoute = /^\/shows\/[^/]+$/.test($location || '');
+  $: hasShellEffect = ['/shows', '/activity', '/settings', '/logs'].includes($location || '');
+  $: if (hasShellEffect && !isDetailRoute && !ShellEffect) {
+    import('./components/ShellSpecularBand.svelte').then((module) => {
+      ShellEffect = module.default;
+    });
+  }
 </script>
 
 <div class="app-shell">
+  <div class="app-shell-backdrop" aria-hidden="true"></div>
+  {#if hasShellEffect && !isDetailRoute && ShellEffect}
+    <svelte:component this={ShellEffect} />
+  {/if}
   <Navbar />
-  <main class="main-content shell-main">
+  <main class="main-content shell-main" class:detail-route-shell={isDetailRoute}>
     <Router {routes} />
   </main>
   <Toast />

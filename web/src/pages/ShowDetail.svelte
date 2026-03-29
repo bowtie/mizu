@@ -2,10 +2,11 @@
   import { onMount } from 'svelte';
   import { push } from 'svelte-spa-router';
   import { addNotification } from '../lib/stores.js';
-  import { getShows, getSonarrSeries, updateShow, deleteShow, getEpisodes, setEpisodeMonitor } from '../lib/api.js';
+  import { getShows, getSonarrSeries, updateShow, deleteShow, getEpisodes, setEpisodeMonitor, getAniListArtwork } from '../lib/api.js';
   import Spinner from '../components/Spinner.svelte';
   import Badge from '../components/Badge.svelte';
   import Modal from '../components/Modal.svelte';
+  import NumberInput from '../components/NumberInput.svelte';
   import { Bot, Eye, Save, Trash2, Waves } from 'lucide-svelte';
 
   export let params = {};
@@ -19,6 +20,7 @@
   let showDeleteModal = false;
   let show = null;
   let series = null;
+  let artwork = null;
   let episodes = [];
   let sonarrSeasons = {};
   let trackFiller = false;
@@ -32,6 +34,21 @@
 
   const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
   const trackedToAction = (tracked) => (tracked ? 'monitor' : 'unmonitor');
+
+  function briefOverview(copy) {
+    const normalized = (copy || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    if (normalized.length <= 170) return normalized;
+
+    const sentenceBreak = normalized.match(/^(.{0,170}[.!?])(?:\s|$)/);
+    if (sentenceBreak?.[1]) {
+      return sentenceBreak[1].trim();
+    }
+
+    const truncated = normalized.slice(0, 167);
+    const safeBoundary = truncated.lastIndexOf(' ');
+    return `${(safeBoundary > 96 ? truncated.slice(0, safeBoundary) : truncated).trim()}...`;
+  }
 
   $: showId = params.id;
   $: pageTitle = show ? `Mizu - ${show.sonarr_title}` : 'Mizu - Anime';
@@ -81,7 +98,10 @@
     filler: episodes.filter((ep) => ep.type === 'filler').length,
     special: episodes.filter((ep) => ep.type === 'special').length,
   };
-  $: subtitle = series?.overview || '';
+  $: activeBackdropUrl = artwork?.banner_image || artwork?.poster_image || backdropUrl(series);
+  $: activeBackdropIsBanner = Boolean(artwork?.banner_image);
+  $: fullSubtitle = series?.overview || '';
+  $: subtitle = briefOverview(fullSubtitle);
 
   onMount(async () => {
     await loadShow();
@@ -90,10 +110,11 @@
   async function loadShow() {
     loading = true;
     try {
-      const [allShows, allSeries, episodesResult] = await Promise.all([
+      const [allShows, allSeries, episodesResult, artworkResult] = await Promise.all([
         getShows(),
         getSonarrSeries(),
         getEpisodes(showId),
+        getAniListArtwork(showId).catch(() => null),
       ]);
 
       show = (allShows || []).find((item) => String(item.id) === String(showId));
@@ -104,6 +125,7 @@
       }
 
       series = (allSeries || []).find((item) => item.id === show.sonarr_series_id) || null;
+      artwork = artworkResult?.banner_image || artworkResult?.poster_image ? artworkResult : null;
       episodes = episodesResult || [];
       trackFiller = actionToTracked(show.filler_action, false);
       trackMixed = actionToTracked(show.mixed_action, true);
@@ -322,22 +344,22 @@
     </div>
   </div>
 {:else}
-  <div class="detail-page-shell">
-    {#if backdropUrl(series)}
-      <div class="detail-page-backdrop" aria-hidden="true" style={`background-image: url("${backdropUrl(series)}");`}></div>
-    {:else}
-      <div class="detail-page-backdrop detail-page-backdrop-fallback" aria-hidden="true"></div>
-    {/if}
-    <div class="detail-page-overlay" aria-hidden="true"></div>
+		  <div class="detail-page-shell">
+		    {#if activeBackdropUrl}
+		      <div class="detail-page-backdrop" class:is-banner-backdrop={activeBackdropIsBanner} aria-hidden="true" style={`background-image: url("${activeBackdropUrl}");`}></div>
+          <div class="detail-page-backdrop-scrim" class:is-banner-backdrop={activeBackdropIsBanner} aria-hidden="true"></div>
+		    {:else}
+		      <div class="detail-page-backdrop detail-page-backdrop-fallback" aria-hidden="true"></div>
+		    {/if}
 
-	    <section class="page-heading detail-page-heading">
+		    <section class="page-heading detail-page-heading">
 	      <div class="detail-hero-block">
 	        <div class="detail-page-title-block">
 	          <div class="detail-title-row">
 	            <h1>{show.sonarr_title}</h1>
 	          </div>
 	          {#if subtitle}
-	            <p class="detail-overview">{subtitle}</p>
+	            <p class="detail-overview" title={fullSubtitle}>{subtitle}</p>
 	          {/if}
 
           <div class="rule-pill-row">
@@ -363,15 +385,14 @@
 		        <div class="detail-utility-body">
 		          <label class="marker-label" for="marker-value">Start tracking after</label>
 		          <div class="marker-input-row">
-		            <input
-		              id="marker-value"
-              class="form-input detail-number-input"
-              class:is-automated={watermarkMode === WATERMARK_AUTO}
-              type="number"
-              min="0"
-              bind:value={markerValue}
-              disabled={watermarkMode === WATERMARK_AUTO}
-            />
+                <NumberInput
+                  id="marker-value"
+                  ariaLabel="Start tracking after episode"
+                  bind:value={markerValue}
+                  min={0}
+                  step={1}
+                  disabled={watermarkMode === WATERMARK_AUTO}
+                />
 	            <button
 	              type="button"
 	              class="marker-auto-toggle"
@@ -563,32 +584,84 @@
     margin: 0 auto;
   }
 
-  .detail-page-backdrop,
-  .detail-page-overlay {
-    position: fixed;
-    inset: 0;
+  .detail-page-backdrop {
+    position: absolute;
+    top: calc(-1 * (var(--topbar-height) + clamp(20px, 2.5vw, 30px)));
+    left: 50%;
+    width: 100vw;
+    height: min(78vh, 720px);
+    transform: translateX(-50%);
     pointer-events: none;
   }
 
-  .detail-page-backdrop {
+  .detail-page-backdrop-scrim {
+    position: absolute;
+    top: calc(-1 * (var(--topbar-height) + clamp(20px, 2.5vw, 30px)));
+    left: 50%;
+    width: 100vw;
+    height: min(78vh, 720px);
+    transform: translateX(-50%);
+    pointer-events: none;
     z-index: -2;
-    opacity: 0.62;
-    background-position: center 22%;
+    background:
+      linear-gradient(180deg, rgba(6, 12, 23, 0.04) 0%, rgba(6, 12, 23, 0.08) 16%, rgba(6, 12, 23, 0.14) 30%, rgba(6, 12, 23, 0.26) 46%, rgba(6, 12, 23, 0.44) 62%, rgba(6, 12, 23, 0.68) 78%, rgba(6, 12, 23, 0.9) 90%, #060c17 100%);
+  }
+
+  .detail-page-backdrop {
+    z-index: -3;
+    opacity: 0.58;
+    background-position: center 14%;
     background-repeat: no-repeat;
     background-size: cover;
-    filter: saturate(1);
+    filter: saturate(0.92) brightness(0.7);
+    -webkit-mask-image: radial-gradient(142% 112% at 50% -10%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.995) 34%, rgba(0, 0, 0, 0.93) 50%, rgba(0, 0, 0, 0.74) 63%, rgba(0, 0, 0, 0.42) 74%, rgba(0, 0, 0, 0.14) 83%, transparent 92%);
+    mask-image: radial-gradient(142% 112% at 50% -10%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.995) 34%, rgba(0, 0, 0, 0.93) 50%, rgba(0, 0, 0, 0.74) 63%, rgba(0, 0, 0, 0.42) 74%, rgba(0, 0, 0, 0.14) 83%, transparent 92%);
+  }
+
+  .detail-page-backdrop.is-banner-backdrop {
+    height: clamp(260px, 31vw, 420px);
+    background-position: center top;
+    background-size: cover;
+    filter: saturate(0.9) brightness(0.66);
+    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.985) 42%, rgba(0, 0, 0, 0.88) 60%, rgba(0, 0, 0, 0.5) 74%, rgba(0, 0, 0, 0.16) 86%, transparent 100%);
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.985) 42%, rgba(0, 0, 0, 0.88) 60%, rgba(0, 0, 0, 0.5) 74%, rgba(0, 0, 0, 0.16) 86%, transparent 100%);
+  }
+
+  .detail-page-backdrop-scrim.is-banner-backdrop {
+    height: clamp(260px, 31vw, 420px);
+    background:
+      linear-gradient(180deg, rgba(6, 12, 23, 0.02) 0%, rgba(6, 12, 23, 0.05) 18%, rgba(6, 12, 23, 0.1) 34%, rgba(6, 12, 23, 0.2) 50%, rgba(6, 12, 23, 0.36) 66%, rgba(6, 12, 23, 0.58) 80%, rgba(6, 12, 23, 0.82) 92%, #060c17 100%);
+  }
+
+  @media (max-width: 1040px) {
+    .detail-page-backdrop,
+    .detail-page-backdrop-scrim {
+      top: calc(-1 * (var(--topbar-height) + 20px));
+      height: min(68vh, 620px);
+    }
+
+    .detail-page-backdrop.is-banner-backdrop,
+    .detail-page-backdrop-scrim.is-banner-backdrop {
+      height: clamp(220px, 34vw, 340px);
+    }
+  }
+
+  @media (max-width: 720px) {
+    .detail-page-backdrop,
+    .detail-page-backdrop-scrim {
+      top: -18px;
+      height: min(52vh, 360px);
+    }
+
+    .detail-page-backdrop.is-banner-backdrop,
+    .detail-page-backdrop-scrim.is-banner-backdrop {
+      height: clamp(176px, 44vw, 240px);
+    }
   }
 
   .detail-page-backdrop-fallback {
     background: var(--surface-elevated);
     opacity: 0.8;
-  }
-
-  .detail-page-overlay {
-    z-index: -1;
-    background:
-      radial-gradient(circle at 28% 14%, var(--page-aurora-a) 0%, transparent 26%),
-      linear-gradient(180deg, rgba(4, 10, 18, 0.58) 0%, var(--page-depth-mid) 18%, rgba(4, 10, 18, 0.84) 42%, rgba(4, 10, 18, 0.94) 72%, rgba(4, 10, 18, 0.985) 100%);
   }
 
   .detail-page-heading {
@@ -637,10 +710,14 @@
   .detail-overview {
     margin: 0;
     color: var(--text-secondary);
-    max-width: 64ch;
+    max-width: 58ch;
     font-size: var(--text-secondary-size);
     line-height: var(--leading-copy);
     text-wrap: pretty;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
   }
 
   .detail-header-side {
@@ -807,23 +884,6 @@
   .marker-auto-toggle.active {
     background: color-mix(in srgb, var(--selected-bg) 72%, rgba(9, 21, 39, 0.94) 28%);
     color: var(--text-primary);
-  }
-
-  .detail-number-input {
-    max-width: none;
-    background: color-mix(in srgb, var(--surface-elevated) 72%, rgba(7, 16, 29, 0.97) 28%);
-    border-color: color-mix(in srgb, var(--border) 82%, rgba(255, 255, 255, 0.05) 18%);
-    color: var(--text-primary);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-  }
-
-  .detail-number-input.is-automated {
-    color: color-mix(in srgb, var(--text-muted) 82%, rgba(255, 255, 255, 0.1) 18%);
-    background: color-mix(in srgb, var(--surface-elevated) 54%, rgba(4, 10, 18, 0.99) 46%);
-    border-color: color-mix(in srgb, var(--border) 66%, rgba(255, 255, 255, 0.04) 34%);
-    box-shadow: none;
-    opacity: 0.72;
-    cursor: not-allowed;
   }
 
   .marker-hint {
@@ -1288,6 +1348,7 @@
 
     .detail-overview {
       max-width: none;
+      -webkit-line-clamp: 2;
     }
 
     .filter-card .stat-label {
@@ -1320,33 +1381,6 @@
     }
   }
 </style>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

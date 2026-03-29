@@ -126,7 +126,7 @@
   {#if loading}
     <Spinner center size="lg" message="Surfacing recent activity..." />
   {:else if logs.length === 0}
-    <div class="card activity-empty">
+    <div class="activity-empty">
       <div class="empty-state compact-empty">
         <div class="empty-icon"><History size={28} /></div>
         <h3>No sync activity yet</h3>
@@ -219,28 +219,6 @@
     margin: 0 auto;
   }
 
-  .activity-shell::before,
-  .activity-shell::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .activity-shell::before {
-    z-index: -2;
-    background:
-      radial-gradient(circle at 18% 12%, var(--page-aurora-a) 0%, transparent 26%),
-      radial-gradient(circle at 78% 20%, var(--page-aurora-b) 0%, transparent 30%),
-      linear-gradient(180deg, var(--page-top-wash) 0%, rgba(7, 17, 30, 0) 100%);
-  }
-
-  .activity-shell::after {
-    z-index: -1;
-    background:
-      linear-gradient(180deg, var(--page-depth-top) 0%, var(--page-depth-mid) 26%, var(--page-depth-strong) 62%, var(--page-depth-bottom) 100%);
-  }
-
   .activity-heading {
     display: flex;
     align-items: center;
@@ -272,7 +250,6 @@
     background: var(--panel-bg-strong);
     border: none;
     box-shadow: var(--shadow-card);
-    backdrop-filter: blur(10px);
   }
 
   .run-card-head {
@@ -301,7 +278,6 @@
     border-radius: 8px;
     border: 0;
     background: color-mix(in srgb, var(--surface-elevated) 82%, rgba(7, 16, 29, 0.96) 18%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     color: var(--text-secondary);
     font-size: var(--text-meta);
     font-weight: var(--weight-semibold);
@@ -331,7 +307,7 @@
     display: grid;
     gap: 10px;
     padding-top: 12px;
-    border-top: 1px solid var(--divider-border);
+    box-shadow: inset 0 1px 0 var(--divider-border-soft);
   }
 
   .run-detail-list {
@@ -347,7 +323,6 @@
     border-radius: 10px;
     background: var(--panel-bg-soft);
     border: none;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .run-detail-head {
@@ -381,8 +356,8 @@
     gap: 8px;
     padding: 10px 12px;
     border-radius: 10px;
-    background: var(--danger-bg);
-    border: 1px solid var(--danger-border);
+    background: color-mix(in srgb, var(--danger) 10%, rgba(7, 16, 29, 0.92) 90%);
+    box-shadow: inset 3px 0 0 rgba(255, 77, 106, 0.42);
     color: var(--danger-foreground);
     font-size: var(--text-secondary-size);
     line-height: var(--leading-copy);
@@ -400,6 +375,9 @@
 
   .activity-empty {
     min-height: 240px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
   }
 
   .compact-empty {

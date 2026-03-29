@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
+	"mizu/internal/anilist"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	"mizu/internal/models"
@@ -56,6 +57,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 				r.Get("/", handleGetMapping(db))
 				r.Put("/", handleUpdateMapping(syncEngine, db))
 				r.Delete("/", handleDeleteMapping(db))
+				r.Get("/artwork", handleGetMappingArtwork(cfg, db))
 				r.Get("/episodes", handleGetEpisodes(cfg, db, syncEngine))
 				r.Get("/episodes/sonarr", handleGetSonarrEpisodes(cfg, db))
 				r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(cfg, db))
@@ -781,6 +783,50 @@ func handleGetSonarrSeries(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, series)
+	}
+}
+
+func handleGetMappingArtwork(cfg *config.Config, db *database.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid mapping ID")
+			return
+		}
+
+		mapping, err := db.GetMappingByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
+			writeError(w, http.StatusNotFound, "mapping not found")
+			return
+		}
+
+		series := models.SonarrSeries{
+			ID:    mapping.SonarrSeriesID,
+			Title: mapping.SonarrTitle,
+		}
+
+		if cfg.SonarrURL != "" {
+			sonarrClient := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
+			if fetched, fetchErr := sonarrClient.GetSeries(r.Context(), mapping.SonarrSeriesID); fetchErr == nil && fetched != nil {
+				series = *fetched
+			}
+		}
+
+		artwork, err := anilist.New(cfg.RequestTimeout).SearchArtwork(r.Context(), series)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to fetch AniList artwork: "+err.Error())
+			return
+		}
+		if artwork == nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, artwork)
 	}
 }
 
