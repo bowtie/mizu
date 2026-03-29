@@ -17,13 +17,15 @@
 
   $: selectedItem = items.find((item) => item.value === value);
   $: contentClass = classes('ui-select-content', contentProps?.class);
+  $: triggerProps = $$restProps;
 </script>
 
 <div class={classes('ui-select-wrapper', disabled && 'is-disabled', className)}>
-  <SelectPrimitive.Root bind:value type="single" {disabled} {...$$restProps}>
+  <SelectPrimitive.Root bind:value type="single" {disabled}>
     <SelectPrimitive.Trigger
       class={classes('ui-field-shell ui-select-trigger', disabled && 'is-disabled')}
       aria-label={selectedItem?.label ?? placeholder}
+      {...triggerProps}
     >
       <span class:ui-select-placeholder={!selectedItem}>
         {selectedItem?.label ?? placeholder}

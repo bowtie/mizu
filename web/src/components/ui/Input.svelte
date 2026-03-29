@@ -17,6 +17,7 @@
     bind:value
     {type}
     {disabled}
+    aria-invalid={invalid ? 'true' : undefined}
     class={classes('ui-field-control ui-input-control', className)}
     {...$$restProps}
   />
