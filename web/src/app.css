@@ -1,3 +1,34 @@
+@import "tailwindcss";
+@source "../node_modules/@foxui";
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-base-50: oklch(0.985 0.002 255);
+  --color-base-100: oklch(0.968 0.004 255);
+  --color-base-200: oklch(0.925 0.008 255);
+  --color-base-300: oklch(0.84 0.016 255);
+  --color-base-400: oklch(0.68 0.03 255);
+  --color-base-500: oklch(0.54 0.038 255);
+  --color-base-600: oklch(0.44 0.036 255);
+  --color-base-700: oklch(0.31 0.03 255);
+  --color-base-800: oklch(0.24 0.025 255);
+  --color-base-900: oklch(0.16 0.02 255);
+  --color-base-950: #060c17;
+  --color-accent-50: #eef6ff;
+  --color-accent-100: #d8ebff;
+  --color-accent-200: #b9dcff;
+  --color-accent-300: #89c4ff;
+  --color-accent-400: #55a7ff;
+  --color-accent-500: #1a8fff;
+  --color-accent-600: #0074d9;
+  --color-accent-700: #005ab5;
+  --color-accent-800: #003d80;
+  --color-accent-900: #002454;
+  --color-accent-950: #00152f;
+}
+
 :root {
     color-scheme: dark;
 
