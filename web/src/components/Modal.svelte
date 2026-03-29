@@ -1,5 +1,8 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { X } from 'lucide-svelte';
+  import Surface from './ui/Surface.svelte';
+  import Button from './ui/Button.svelte';
 
   export let title = '';
   export let show = false;
@@ -30,10 +33,12 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="modal-backdrop" on:click={handleBackdropClick}>
-    <div class="modal" style={size === 'large' ? 'max-width:720px' : ''}>
+    <Surface class="modal" variant="default" padding="none" style={size === 'large' ? 'max-width:720px' : ''}>
       <div class="modal-header">
         <h3>{title}</h3>
-        <button class="modal-close" on:click={close}>&times;</button>
+        <Button class="modal-close" variant="ghost" size="icon" aria-label="Close dialog" onclick={close}>
+          <X size={16} />
+        </Button>
       </div>
       <div class="modal-body">
         <slot />
@@ -43,7 +48,7 @@
           <slot name="footer" />
         </div>
       {/if}
-    </div>
+    </Surface>
   </div>
 {/if}
 

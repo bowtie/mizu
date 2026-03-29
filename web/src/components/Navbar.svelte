@@ -3,6 +3,7 @@
   import { location } from 'svelte-spa-router';
   import { getStatus } from '../lib/api.js';
   import { History, RadioTower, Settings as SettingsIcon, Tv, Waves } from 'lucide-svelte';
+  import Surface from './ui/Surface.svelte';
 
   const navItems = [
     { path: '/shows', label: 'Anime', icon: Tv },
@@ -33,9 +34,9 @@
 </script>
 
 <header class="topbar-shell">
-  <div class="topbar">
+  <Surface class="topbar" variant="muted" padding="sm" blur>
     <a class="brand-lockup" href="#/shows" aria-label="Mizu home">
-      <span class="brand-mark"><Waves size={20} /></span>
+      <span class="brand-mark"><Waves size={18} /></span>
       <strong>Mizu</strong>
     </a>
 
@@ -47,7 +48,7 @@
           class:active={isActive(item.path, $location)}
           class:tv-link={item.path === '/shows'}
         >
-          <svelte:component this={item.icon} size={18} />
+          <svelte:component this={item.icon} size={16} />
           <span>{item.label}</span>
         </a>
       {/each}
@@ -55,26 +56,26 @@
 
     <div class="topbar-utility">
       <span
-        class="status-pill sonarr-pill"
+        class="status-indicator"
         class:offline={!sonarrConnected}
         title={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
         aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
       >
-        <RadioTower size={20} />
+        <RadioTower size={16} />
       </span>
     </div>
-  </div>
+  </Surface>
 </header>
 
 <nav class="mobile-bottom-nav" aria-label="Primary mobile navigation">
-  <div class="mobile-bottom-pill mizu-bottom-pill">
+  <Surface class="mobile-bottom-bar" variant="muted" padding="sm" blur>
     {#each navItems as item}
       <a href={`#${item.path}`} class="mobile-nav-link" class:active={isActive(item.path, $location)}>
-        <svelte:component this={item.icon} size={22} />
+        <svelte:component this={item.icon} size={18} />
         <span>{item.label}</span>
       </a>
     {/each}
-  </div>
+  </Surface>
 </nav>
 
 <style>
@@ -91,24 +92,17 @@
   .topbar {
     max-width: var(--nav-max);
     margin: 0 auto;
-    padding: 10px 14px;
     display: grid;
     align-items: center;
     grid-template-columns: auto 1fr auto;
-    gap: 18px;
-    border-radius: 14px;
+    gap: 16px;
     pointer-events: auto;
-    background: rgba(17, 30, 48, 0.68);
-    border: 1px solid rgba(73, 111, 164, 0.18);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(24px) saturate(1.08);
-    -webkit-backdrop-filter: blur(24px) saturate(1.08);
   }
 
   .brand-lockup {
     display: inline-flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     color: var(--text-primary);
     text-decoration: none;
   }
@@ -117,11 +111,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
-    background: var(--blue-base);
-    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--surface-soft) 65%, rgba(255, 255, 255, 0.04) 35%);
+    border: 1px solid color-mix(in srgb, var(--border) 74%, rgba(255, 255, 255, 0.08) 26%);
+    color: var(--accent);
     flex-shrink: 0;
   }
 
@@ -137,21 +132,22 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
 
   .topnav-link {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 14px;
-    border-radius: 9px;
-    border: 0;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid transparent;
     color: var(--text-muted);
     font-size: var(--text-secondary-size);
     font-weight: var(--weight-semibold);
     line-height: 1;
-    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
   }
 
   .topnav-link.tv-link :global(svg) {
@@ -161,13 +157,14 @@
 
   .topnav-link:hover {
     color: var(--text-primary);
-    background: var(--surface-hover);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    background: color-mix(in srgb, var(--surface-hover) 72%, rgba(255, 255, 255, 0.02) 28%);
+    border-color: var(--divider-border);
   }
 
   .topnav-link.active {
-    color: #fff;
-    background: var(--blue-base);
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--surface-soft) 82%, rgba(255, 255, 255, 0.03) 18%);
+    border-color: var(--accent-border);
   }
 
   .topbar-utility {
@@ -176,19 +173,20 @@
     align-items: center;
   }
 
-  .status-pill {
+  .status-indicator {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 34px;
     height: 34px;
     border-radius: 8px;
+    border: 1px solid var(--success-border);
     background: var(--success-bg);
     color: var(--success);
     transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
 
-  .status-pill.offline {
+  .status-indicator.offline {
     background: var(--danger-bg);
     border-color: var(--danger-border);
     color: var(--danger);
@@ -196,18 +194,11 @@
 
   .mobile-bottom-nav { display: none; }
 
-  .mizu-bottom-pill {
+  .mobile-bottom-bar {
     width: min(100%, 380px);
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    padding: 8px;
-    border-radius: 16px;
-    background: rgba(17, 30, 48, 0.76);
-    border: 1px solid rgba(73, 111, 164, 0.16);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(22px) saturate(1.06);
-    -webkit-backdrop-filter: blur(22px) saturate(1.06);
+    gap: 6px;
     pointer-events: auto;
   }
 
@@ -216,34 +207,41 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    min-height: 60px;
-    padding: 8px 6px;
-    border-radius: 11px;
+    gap: 4px;
+    min-height: 54px;
+    padding: 7px 6px;
+    border-radius: 8px;
+    border: 1px solid transparent;
     color: var(--text-muted);
     font-size: var(--text-caption);
     font-weight: var(--weight-semibold);
-    letter-spacing: 0.03em;
     text-align: center;
-    transition: background var(--transition), color var(--transition);
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+  }
+
+  .mobile-nav-link:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--surface-hover) 72%, rgba(255, 255, 255, 0.02) 28%);
+    border-color: var(--divider-border);
   }
 
   .mobile-nav-link.active {
-    color: #fff;
-    background: var(--blue-base);
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--surface-soft) 82%, rgba(255, 255, 255, 0.03) 18%);
+    border-color: var(--accent-border);
   }
 
   .brand-mark :global(svg),
   .topnav-link :global(svg),
-  .status-pill :global(svg) {
+  .status-indicator :global(svg) {
     width: 16px;
     height: 16px;
     flex-shrink: 0;
   }
 
   .mobile-nav-link :global(svg) {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     flex-shrink: 0;
   }
 
