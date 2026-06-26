@@ -1,13 +1,13 @@
 <script>
   import { onMount } from 'svelte';
   import { push } from 'svelte-spa-router';
-  import { addNotification } from '../lib/stores.js';
-  import { getShows, getSonarrSeries, updateShow, deleteShow, getEpisodes, setEpisodeMonitor, getAniListArtwork } from '../lib/api.js';
-  import Spinner from '../components/Spinner.svelte';
-  import Badge from '../components/Badge.svelte';
-  import Modal from '../components/Modal.svelte';
+  import { Badge, Box, Button, Popover, Switch, Toggle, Tooltip } from '@foxui/core';
   import NumberInput from '../components/NumberInput.svelte';
-  import { Bot, Eye, Save, Trash2, Waves } from 'lucide-svelte';
+  import { addNotification } from '../lib/stores.js';
+  import { deleteShow, getAniListArtwork, getEpisodes, getSettings, getShows, getSonarrSeries, setEpisodeMonitor, updateShow } from '../lib/api.js';
+  import { episodeTypeBadge, monitorStateBadge } from '../lib/fox.js';
+  import { resolveSonarrImageUrl } from '../lib/sonarr-images.js';
+  import { Bot, Check, Eye, LoaderCircle, Save, Trash2, Waves, X } from 'lucide-svelte';
 
   export let params = {};
 
@@ -21,15 +21,15 @@
   let show = null;
   let series = null;
   let artwork = null;
+  let sonarrBaseUrl = '';
   let episodes = [];
-  let sonarrSeasons = {};
   let trackFiller = false;
   let trackMixed = true;
   let trackAnimeCanon = true;
   let watermarkMode = WATERMARK_AUTO;
+  let watermarkAutoPressed = true;
   let markerValue = 0;
   let activeTypeFilters = [];
-  let collapsedSeasons = {};
   let syncingEps = {};
 
   const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
@@ -41,9 +41,7 @@
     if (normalized.length <= 170) return normalized;
 
     const sentenceBreak = normalized.match(/^(.{0,170}[.!?])(?:\s|$)/);
-    if (sentenceBreak?.[1]) {
-      return sentenceBreak[1].trim();
-    }
+    if (sentenceBreak?.[1]) return sentenceBreak[1].trim();
 
     const truncated = normalized.slice(0, 167);
     const safeBoundary = truncated.lastIndexOf(' ');
@@ -53,43 +51,25 @@
   $: showId = params.id;
   $: pageTitle = show ? `Mizu - ${show.sonarr_title}` : 'Mizu - Anime';
   $: filteredEpisodes = episodes.filter((ep) => (activeTypeFilters.length === 0 ? true : activeTypeFilters.includes(ep.type)));
-  $: sonarrByAbsNum = (() => {
-    const map = {};
-    for (const seasonNum of Object.keys(sonarrSeasons)) {
-      for (const ep of sonarrSeasons[seasonNum] || []) {
-        if (ep.absoluteEpisodeNumber != null) {
-          map[ep.absoluteEpisodeNumber] = ep;
-        }
-      }
-    }
-    return map;
-  })();
   $: groupedBySeason = (() => {
     const groups = {};
     for (const ep of filteredEpisodes) {
-      const derivedSeason = episodeSeason(ep);
-      const season = Number.isInteger(derivedSeason) ? derivedSeason : -1;
+      const season = episodeSeason(ep);
       if (!groups[season]) groups[season] = [];
       groups[season].push(ep);
     }
+
     return Object.entries(groups)
-      .map(([seasonKey, groupedEpisodes]) => {
-        const parsedSeason = Number.parseInt(seasonKey, 10);
-        const season = Number.isInteger(parsedSeason) ? parsedSeason : -1;
-        return {
-          season,
-          episodes: (groupedEpisodes || [])
-            .slice()
-            .sort((a, b) => displayEpisodeNumber(b) - displayEpisodeNumber(a)),
-        };
-      })
+      .map(([seasonKey, groupedEpisodes]) => ({
+        season: Number.parseInt(seasonKey, 10),
+        episodes: (groupedEpisodes || []).slice().sort((a, b) => displayEpisodeNumber(b) - displayEpisodeNumber(a)),
+      }))
       .sort((a, b) => {
         if (a.season === -1) return 1;
         if (b.season === -1) return -1;
         return b.season - a.season;
       });
   })();
-  $: syncCollapsedSeasons(groupedBySeason);
   $: epStats = {
     total: episodes.length,
     canon: episodes.filter((ep) => ep.type === 'canon').length,
@@ -98,10 +78,16 @@
     filler: episodes.filter((ep) => ep.type === 'filler').length,
     special: episodes.filter((ep) => ep.type === 'special').length,
   };
+  $: markerUpperBound = episodes.length > 0
+    ? episodes.reduce((highest, ep) => Math.max(highest, displayEpisodeNumber(ep)), 0)
+    : undefined;
   $: activeBackdropUrl = artwork?.banner_image || artwork?.poster_image || backdropUrl(series);
-  $: activeBackdropIsBanner = Boolean(artwork?.banner_image);
   $: fullSubtitle = series?.overview || '';
   $: subtitle = briefOverview(fullSubtitle);
+  $: watermarkMode = watermarkAutoPressed ? WATERMARK_AUTO : WATERMARK_MANUAL;
+  $: watermarkTooltip = watermarkAutoPressed
+    ? 'Using Sonarr progress as the start point.'
+    : 'Using the episode input as the start point.';
 
   onMount(async () => {
     await loadShow();
@@ -110,12 +96,13 @@
   async function loadShow() {
     loading = true;
     try {
-      const [allShows, allSeries, episodesResult, artworkResult] = await Promise.all([
+      const [appSettings, allShows, allSeries, episodesResult] = await Promise.all([
+        getSettings(),
         getShows(),
         getSonarrSeries(),
         getEpisodes(showId),
-        getAniListArtwork(showId).catch(() => null),
       ]);
+      const artworkResult = appSettings?.enable_anilist_artwork ? await getAniListArtwork(showId).catch(() => null) : null;
 
       show = (allShows || []).find((item) => String(item.id) === String(showId));
       if (!show) {
@@ -124,20 +111,20 @@
         return;
       }
 
+      sonarrBaseUrl = appSettings?.sonarr_url || '';
       series = (allSeries || []).find((item) => item.id === show.sonarr_series_id) || null;
       artwork = artworkResult?.banner_image || artworkResult?.poster_image ? artworkResult : null;
       episodes = episodesResult || [];
       trackFiller = actionToTracked(show.filler_action, false);
       trackMixed = actionToTracked(show.mixed_action, true);
       trackAnimeCanon = actionToTracked(show.anime_canon_action, true);
-      watermarkMode = show.watermark_mode || WATERMARK_AUTO;
-      markerValue = Math.max(0, show.sync_watermark || 0);
+      watermarkAutoPressed = (show.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO;
+      markerValue = clampMarkerValue(show.sync_watermark || 0, episodesResult || []);
     } catch (err) {
       addNotification('Failed to load anime: ' + err.message, 'error');
     }
     loading = false;
   }
-
 
   async function handleSave() {
     saving = true;
@@ -149,7 +136,7 @@
         watermark_mode: watermarkMode,
       };
       if (watermarkMode === WATERMARK_MANUAL) {
-        payload.sync_watermark = Math.max(0, Number(markerValue) || 0);
+        payload.sync_watermark = clampMarkerValue(markerValue, episodes);
       }
       await updateShow(showId, payload);
       addNotification('Anime rules updated', 'success');
@@ -188,8 +175,6 @@
         ep.monitored = nextState;
         episodes = episodes;
       }
-      sonarrEp.monitored = nextState;
-      sonarrSeasons = sonarrSeasons;
       addNotification(`${episodeLabel(ep)} ${nextState ? 'monitored' : 'unmonitored'}`, 'success');
     } catch (err) {
       addNotification('Failed to update episode: ' + err.message, 'error');
@@ -198,60 +183,11 @@
     syncingEps = syncingEps;
   }
 
-  function toggleSeason(seasonNum) {
-    collapsedSeasons[seasonNum] = !collapsedSeasons[seasonNum];
-    collapsedSeasons = collapsedSeasons;
-  }
-
-  function syncCollapsedSeasons(groups) {
-    if (!groups?.length) {
-      collapsedSeasons = {};
-      return;
-    }
-
-    const latestOpenSeason = groups.find((group) => group.season !== -1)?.season ?? groups[0].season;
-    const nextCollapsed = {};
-
-    for (const group of groups) {
-      if (Object.prototype.hasOwnProperty.call(collapsedSeasons, group.season)) {
-        nextCollapsed[group.season] = collapsedSeasons[group.season];
-      } else {
-        nextCollapsed[group.season] = group.season !== latestOpenSeason;
-      }
-    }
-
-    const changed =
-      Object.keys(nextCollapsed).length !== Object.keys(collapsedSeasons).length ||
-      Object.entries(nextCollapsed).some(([season, isCollapsed]) => collapsedSeasons[season] !== isCollapsed);
-
-    if (changed) {
-      collapsedSeasons = nextCollapsed;
-    }
-  }
-
-  function posterUrl(series) {
-    if (!series?.images?.length) return '';
-    const preferred = series.images.find((image) => image.coverType === 'poster') || series.images.find((image) => image.coverType === 'fanart') || series.images[0];
-    if (!preferred) return '';
-    if (preferred.remoteUrl) return preferred.remoteUrl;
-    if (preferred.url && /^https?:/i.test(preferred.url)) return preferred.url;
-    return '';
-  }
-
   function backdropUrl(series) {
     if (!series?.images?.length) return '';
     const preferred = series.images.find((image) => image.coverType === 'fanart') || series.images.find((image) => image.coverType === 'banner') || series.images.find((image) => image.coverType === 'poster') || series.images[0];
     if (!preferred) return '';
-    if (preferred.remoteUrl) return preferred.remoteUrl;
-    if (preferred.url && /^https?:/i.test(preferred.url)) return preferred.url;
-    return '';
-  }
-
-  function isTypeFilterActive(type) {
-    if (type === 'all') {
-      return activeTypeFilters.length === 0;
-    }
-    return activeTypeFilters.includes(type);
+    return resolveSonarrImageUrl(preferred, sonarrBaseUrl);
   }
 
   function toggleTypeFilter(type) {
@@ -268,42 +204,39 @@
     activeTypeFilters = [...activeTypeFilters, type];
   }
 
+  function isTypeFilterActive(type) {
+    if (type === 'all') return activeTypeFilters.length === 0;
+    return activeTypeFilters.includes(type);
+  }
+
   function isSpecialSeasonNumber(num) {
     return num === -1 || num === 0;
   }
 
   function seasonLabel(num) {
-    if (isSpecialSeasonNumber(num)) return 'Specials';
-    return `Season ${num}`;
+    return isSpecialSeasonNumber(num) ? 'Specials' : `Season ${num}`;
   }
 
   function resolveSonarrEpisode(ep) {
-    if (ep?.sonarr_episode_id) {
-      return {
-        id: ep.sonarr_episode_id,
-        monitored: !!ep.monitored,
-        seasonNumber: ep.season_number,
-        episodeNumber: ep.sonarr_episode_number,
-        absoluteEpisodeNumber: ep.absolute_episode_number,
-      };
-    }
-    return sonarrByAbsNum[ep?.episode_num] || null;
+    if (!ep?.sonarr_episode_id) return null;
+    return {
+      id: ep.sonarr_episode_id,
+      monitored: !!ep.monitored,
+    };
   }
 
   function episodeSeason(ep) {
-    const rawSeason = Number.isInteger(ep?.season_number) ? ep.season_number : resolveSonarrEpisode(ep)?.seasonNumber;
+    const rawSeason = Number.isInteger(ep?.season_number) ? ep.season_number : -1;
     if (isSpecialSeasonNumber(rawSeason)) return -1;
     return Number.isInteger(rawSeason) ? rawSeason : -1;
   }
 
   function episodeMonitored(ep) {
-    const sonarrEp = resolveSonarrEpisode(ep);
-    return sonarrEp ? !!sonarrEp.monitored : null;
+    return !!resolveSonarrEpisode(ep)?.monitored;
   }
 
   function episodeActionId(ep) {
-    const sonarrEp = resolveSonarrEpisode(ep);
-    return sonarrEp ? sonarrEp.id : null;
+    return resolveSonarrEpisode(ep)?.id || null;
   }
 
   function displayEpisodeNumber(ep) {
@@ -312,19 +245,37 @@
   }
 
   function episodeLabel(ep) {
-    if (isSpecialSeasonNumber(ep?.season_number)) return `Special ${displayEpisodeNumber(ep)}`;
-    return `Episode #${displayEpisodeNumber(ep)}`;
+    return isSpecialSeasonNumber(ep?.season_number)
+      ? `Special ${displayEpisodeNumber(ep)}`
+      : `Episode #${displayEpisodeNumber(ep)}`;
   }
 
-  function epRowClass(type) {
-    switch (type) {
-      case 'canon': return 'ep-canon';
-      case 'mixed_canon': return 'ep-mixed';
-      case 'anime_canon': return 'ep-anime-canon';
-      case 'filler': return 'ep-filler';
-      case 'special': return 'ep-special';
-      default: return '';
-    }
+  function filterButtonClasses(type, tone) {
+    const active = isTypeFilterActive(type);
+    const hasScopedFilter = activeTypeFilters.length > 0;
+    const isDimmed = type !== 'all' && hasScopedFilter && !active;
+    const toneClasses = {
+      base: 'border-base-800/80 bg-base-950/60 text-base-100',
+      blue: 'border-blue-500/20 bg-blue-950/20 text-blue-200',
+      violet: 'border-violet-500/20 bg-violet-950/20 text-violet-200',
+      amber: 'border-amber-500/20 bg-amber-950/20 text-amber-200',
+      rose: 'border-rose-500/20 bg-rose-950/20 text-rose-200',
+    };
+
+    return [
+      'rounded-2xl border p-4 text-left transition-colors',
+      toneClasses[tone] || toneClasses.base,
+      active ? 'ring-1 ring-accent-500/50' : '',
+      isDimmed ? 'border-base-800/60 bg-base-950/40 text-base-500' : 'hover:border-base-700 hover:bg-base-900/70',
+      type === 'all' && hasScopedFilter && !active ? 'border-accent-500/30 bg-accent-950/10 text-accent-200' : '',
+    ].filter(Boolean).join(' ');
+  }
+
+  function clampMarkerValue(nextValue, sourceEpisodes = episodes) {
+    const normalized = Math.max(0, Number(nextValue) || 0);
+    if (!sourceEpisodes?.length) return normalized;
+    const upperBound = sourceEpisodes.reduce((highest, ep) => Math.max(highest, displayEpisodeNumber(ep)), 0);
+    return Math.min(normalized, upperBound);
   }
 </script>
 
@@ -333,183 +284,258 @@
 </svelte:head>
 
 {#if loading}
-  <Spinner center size="lg" message="Pulling anime details from the current..." />
-{:else if !show}
-  <div class="card detail-empty">
-    <div class="empty-state compact-empty">
-      <div class="empty-icon"><Waves size={28} /></div>
-      <h3>Anime not found</h3>
-      <p>The requested sync entry could not be found.</p>
-      <a href="#/shows" class="btn btn-primary">Back to Mizu</a>
+  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
+    <LoaderCircle size={30} class="animate-spin text-accent-400" />
+    <div class="space-y-1">
+      <h2 class="text-base font-semibold text-base-100">Loading anime details</h2>
+      <p class="text-sm text-base-400">Pulling mapping rules, episode data, and artwork.</p>
     </div>
-  </div>
+  </Box>
+{:else if !show}
+  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 px-6 text-center">
+    <span class="flex size-12 items-center justify-center rounded-xl border border-accent-500/20 bg-accent-950/30 text-accent-300">
+      <Waves size={24} />
+    </span>
+    <div class="space-y-1">
+      <h2 class="text-lg font-semibold text-base-50">Anime not found</h2>
+      <p class="text-sm leading-6 text-base-400">The requested sync entry could not be found.</p>
+    </div>
+    <Button href="#/shows" variant="primary">Back to anime</Button>
+  </Box>
 {:else}
-		  <div class="detail-page-shell">
-		    {#if activeBackdropUrl}
-		      <div class="detail-page-backdrop" class:is-banner-backdrop={activeBackdropIsBanner} aria-hidden="true" style={`background-image: url("${activeBackdropUrl}");`}></div>
-          <div class="detail-page-backdrop-scrim" class:is-banner-backdrop={activeBackdropIsBanner} aria-hidden="true"></div>
-		    {:else}
-		      <div class="detail-page-backdrop detail-page-backdrop-fallback" aria-hidden="true"></div>
-		    {/if}
+  <div class="space-y-6">
+    <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+      <div class="space-y-4">
+        <Box class="overflow-hidden rounded-2xl border border-base-800/80 bg-base-950/60 p-0">
+          {#if activeBackdropUrl}
+            <div class="relative">
+              <img src={activeBackdropUrl} alt={show.sonarr_title} class="h-48 w-full object-cover opacity-65 sm:h-56" />
+              <div class="absolute inset-0 bg-gradient-to-t from-base-950 via-base-950/70 to-base-950/10"></div>
+              <div class="absolute inset-x-0 bottom-0 p-5">
+                <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">{show.sonarr_title}</h1>
+                {#if subtitle}
+                  <p class="mt-2 max-w-3xl text-sm leading-6 text-base-200" title={fullSubtitle}>{subtitle}</p>
+                {/if}
+              </div>
+            </div>
+          {:else}
+            <div class="space-y-3 p-6">
+              <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">{show.sonarr_title}</h1>
+              {#if subtitle}
+                <p class="max-w-3xl text-sm leading-6 text-base-300">{subtitle}</p>
+              {/if}
+            </div>
+          {/if}
+        </Box>
 
-		    <section class="page-heading detail-page-heading">
-	      <div class="detail-hero-block">
-	        <div class="detail-page-title-block">
-	          <div class="detail-title-row">
-	            <h1>{show.sonarr_title}</h1>
-	          </div>
-	          {#if subtitle}
-	            <p class="detail-overview" title={fullSubtitle}>{subtitle}</p>
-	          {/if}
+        <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/60">
+          <div class="space-y-1">
+            <h2 class="text-base font-semibold text-base-50">Tracking rules</h2>
+            <p class="text-sm text-base-400">Choose which episode types should remain monitored for this anime.</p>
+          </div>
 
-          <div class="rule-pill-row">
-            <div class="rule-segmented" role="group" aria-label="Tracking rules">
-              <button type="button" class="rule-segment" class:is-active={trackAnimeCanon} class:is-inactive={!trackAnimeCanon} aria-pressed={trackAnimeCanon} on:click={() => (trackAnimeCanon = !trackAnimeCanon)}>
-                <span class="rule-segment-label">Anime</span>
-                <span class="rule-segment-state">{trackAnimeCanon ? 'Included' : 'Skipped'}</span>
-              </button>
-              <button type="button" class="rule-segment" class:is-active={trackMixed} class:is-inactive={!trackMixed} aria-pressed={trackMixed} on:click={() => (trackMixed = !trackMixed)}>
-                <span class="rule-segment-label">Mixed</span>
-                <span class="rule-segment-state">{trackMixed ? 'Included' : 'Skipped'}</span>
-              </button>
-              <button type="button" class="rule-segment" class:is-active={trackFiller} class:is-inactive={!trackFiller} aria-pressed={trackFiller} on:click={() => (trackFiller = !trackFiller)}>
-                <span class="rule-segment-label">Filler</span>
-                <span class="rule-segment-state">{trackFiller ? 'Included' : 'Skipped'}</span>
-              </button>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-sm font-medium text-base-100">Anime canon</div>
+                  <div class="mt-1 text-sm text-base-400">Original anime-only canon episodes.</div>
+                </div>
+                <Switch bind:checked={trackAnimeCanon} />
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-sm font-medium text-base-100">Mixed canon</div>
+                  <div class="mt-1 text-sm text-base-400">Episodes that blend canon and filler material.</div>
+                </div>
+                <Switch bind:checked={trackMixed} />
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-sm font-medium text-base-100">Filler</div>
+                  <div class="mt-1 text-sm text-base-400">Pure filler episodes for this mapping.</div>
+                </div>
+                <Switch bind:checked={trackFiller} />
+              </div>
             </div>
           </div>
-        </div>
+        </Box>
       </div>
 
-		      <aside class="detail-header-side detail-utility-panel">
-		        <div class="detail-utility-body">
-		          <label class="marker-label" for="marker-value">Start tracking after</label>
-		          <div class="marker-input-row">
-                <NumberInput
-                  id="marker-value"
-                  ariaLabel="Start tracking after episode"
-                  bind:value={markerValue}
-                  min={0}
-                  step={1}
-                  disabled={watermarkMode === WATERMARK_AUTO}
-                />
-	            <button
-	              type="button"
-	              class="marker-auto-toggle"
-	              class:active={watermarkMode === WATERMARK_AUTO}
-	              aria-pressed={watermarkMode === WATERMARK_AUTO}
-              aria-label={watermarkMode === WATERMARK_AUTO ? 'Disable automatic tracking start' : 'Enable automatic tracking start'}
-	              title={watermarkMode === WATERMARK_AUTO ? 'Automatic tracking start enabled' : 'Use Sonarr progress automatically'}
-	              on:click={() => (watermarkMode = watermarkMode === WATERMARK_AUTO ? WATERMARK_MANUAL : WATERMARK_AUTO)}
-	            >
-	              <Bot size={18} />
-	              <span>Auto</span>
-	            </button>
-		          </div>
-		          <div class="form-hint marker-hint">
-		            {#if watermarkMode === WATERMARK_AUTO}
-	              Sonarr progress sets the start point automatically.
-	            {:else if markerValue > 0}
-		              Episodes at or below #{markerValue} stay unmonitored.
-	            {:else}
-		              Episodes at or below this number stay unmonitored.
-		            {/if}
-		          </div>
-		        </div>
+      <div class="space-y-4">
+        <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/60">
+          <div class="flex items-center gap-3">
+            <label for="marker-value" class="sr-only">Start tracking after episode</label>
+            <NumberInput
+              id="marker-value"
+              min="0"
+              max={markerUpperBound}
+              step="1"
+              bind:value={markerValue}
+              defaultValue={0}
+              disabled={watermarkAutoPressed}
+              className="flex-1"
+            />
+            <Tooltip
+              withContext
+              delayDuration={120}
+              text={watermarkTooltip}
+              contentProps={{ side: 'bottom', align: 'center', sideOffset: 10 }}
+            >
+              {#snippet child({ props })}
+                <Toggle
+                  {...props}
+                  bind:pressed={watermarkAutoPressed}
+                  size="default"
+                  class="cursor-pointer"
+                  aria-label="Toggle automatic start from Sonarr"
+                >
+                  <Bot size={16} />
+                </Toggle>
+              {/snippet}
+            </Tooltip>
+          </div>
 
-	        <div class="detail-header-actions detail-header-actions-inline">
-	          <button class="btn btn-inline-icon action-compact action-remove" on:click={() => (showDeleteModal = true)}>
-	            <Trash2 size={18} />
-	            <span>Remove</span>
-	          </button>
-	          <button class="btn btn-primary btn-inline-icon action-compact action-save" on:click={handleSave} disabled={saving}>
-	            <Save size={18} />
-	            <span>{saving ? 'Saving...' : 'Save'}</span>
-	          </button>
-	        </div>
-	      </aside>
-	    </section>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <Popover bind:open={showDeleteModal} side="top" align="center" class="rounded-[1.35rem] border-base-700/80 bg-base-900/98 px-4 py-3 text-base-100 shadow-xl">
+              {#snippet child({ props })}
+                <Button {...props} variant="red" disabled={deleting}>
+                  <Trash2 size={16} />
+                  Remove
+                </Button>
+              {/snippet}
 
-	    <section class="stats-grid detail-stats">
-	      <button type="button" class="filter-card filter-card-all filter-card-summary" class:has-active={activeTypeFilters.length > 0} on:click={() => toggleTypeFilter('all')}>
-	        <span class="stat-label">All episodes</span>
-	        <span class="stat-value">{epStats.total}</span>
-	      </button>
-      <button type="button" class="filter-card filter-card-canon" class:active-filter={isTypeFilterActive('canon')} class:dimmed={activeTypeFilters.length > 0 && !isTypeFilterActive('canon')} on:click={() => toggleTypeFilter('canon')}>
-        <span class="stat-label">Manga</span>
-        <span class="stat-value">{epStats.canon}</span>
+              <div class="flex items-center gap-3">
+                <p class="pr-1 text-sm font-medium text-base-50">Are you sure?</p>
+                <div class="ml-auto flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="iconSm"
+                    class="rounded-full"
+                    disabled={deleting}
+                    aria-label="Cancel removal"
+                    onclick={() => (showDeleteModal = false)}
+                  >
+                    <X size={14} />
+                  </Button>
+                  <Button
+                    variant="blue"
+                    size="iconSm"
+                    class="rounded-full"
+                    disabled={deleting}
+                    aria-label="Confirm removal"
+                    onclick={handleDelete}
+                  >
+                    {#if deleting}
+                      <LoaderCircle size={16} class="animate-spin" />
+                    {:else}
+                      <Check size={14} />
+                    {/if}
+                  </Button>
+                </div>
+              </div>
+            </Popover>
+            <Button variant="primary" onclick={handleSave} disabled={saving}>
+              {#if saving}
+                <LoaderCircle size={16} class="animate-spin" />
+              {:else}
+                <Save size={16} />
+              {/if}
+              {saving ? 'Saving...' : 'Save rules'}
+            </Button>
+          </div>
+        </Box>
+      </div>
+    </section>
+
+    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <button type="button" class={filterButtonClasses('all', 'base')} onclick={() => toggleTypeFilter('all')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-base-500">All episodes</div>
+        <div class="mt-2 text-2xl font-semibold text-base-50">{epStats.total}</div>
       </button>
-      <button type="button" class="filter-card filter-card-anime-canon" class:active-filter={isTypeFilterActive('anime_canon')} class:dimmed={activeTypeFilters.length > 0 && !isTypeFilterActive('anime_canon')} on:click={() => toggleTypeFilter('anime_canon')}>
-        <span class="stat-label">Anime</span>
-        <span class="stat-value">{epStats.animeCanon}</span>
+      <button type="button" class={filterButtonClasses('canon', 'blue')} onclick={() => toggleTypeFilter('canon')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Manga</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.canon}</div>
       </button>
-      <button type="button" class="filter-card filter-card-mixed" class:active-filter={isTypeFilterActive('mixed_canon')} class:dimmed={activeTypeFilters.length > 0 && !isTypeFilterActive('mixed_canon')} on:click={() => toggleTypeFilter('mixed_canon')}>
-        <span class="stat-label">Mixed</span>
-        <span class="stat-value">{epStats.mixed}</span>
+      <button type="button" class={filterButtonClasses('anime_canon', 'violet')} onclick={() => toggleTypeFilter('anime_canon')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Anime</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.animeCanon}</div>
       </button>
-      <button type="button" class="filter-card filter-card-filler" class:active-filter={isTypeFilterActive('filler')} class:dimmed={activeTypeFilters.length > 0 && !isTypeFilterActive('filler')} on:click={() => toggleTypeFilter('filler')}>
-        <span class="stat-label">Filler</span>
-        <span class="stat-value">{epStats.filler}</span>
+      <button type="button" class={filterButtonClasses('mixed_canon', 'amber')} onclick={() => toggleTypeFilter('mixed_canon')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Mixed</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.mixed}</div>
+      </button>
+      <button type="button" class={filterButtonClasses('filler', 'rose')} onclick={() => toggleTypeFilter('filler')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Filler</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.filler}</div>
       </button>
     </section>
 
     {#if episodes.length === 0}
-      <div class="card detail-empty">
-        <div class="empty-state compact-empty">
-          <div class="empty-icon"><Waves size={28} /></div>
-          <h3>No episodes yet</h3>
-          <p>We have not synced episode details for this anime yet.</p>
-        </div>
-      </div>
+      <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-8 text-center">
+        <h2 class="text-lg font-semibold text-base-50">No episodes yet</h2>
+        <p class="mt-2 text-sm leading-6 text-base-400">Mizu has not synced episode details for this anime yet.</p>
+      </Box>
     {:else}
-      {#each groupedBySeason as group}
-        <div class="season-group">
-          <button class="season-header" class:collapsed={collapsedSeasons[group.season]} on:click={() => toggleSeason(group.season)}>
-            <span class="season-chevron" class:collapsed={collapsedSeasons[group.season]}>&#9660;</span>
-            <h3 class="season-title">{seasonLabel(group.season)}</h3>
-            <span class="season-count">{group.episodes.length} episodes</span>
-          </button>
-          {#if !collapsedSeasons[group.season]}
-            <div class="table-container desktop-episode-table">
-              <table>
-                <thead>
+      <section class="space-y-4">
+        {#each groupedBySeason as group, index}
+          <details class="overflow-hidden rounded-2xl border border-base-800/80 bg-base-950/60" open={index === 0}>
+            <summary class="cursor-pointer list-none border-b border-base-800/80 px-5 py-4 marker:hidden">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="text-base font-semibold text-base-50">{seasonLabel(group.season)}</h2>
+                <Badge variant="secondary" size="sm">{group.episodes.length} episodes</Badge>
+              </div>
+            </summary>
+
+            <div class="hidden overflow-x-auto md:block">
+              <table class="min-w-full border-collapse text-left text-sm">
+                <thead class="border-b border-base-800/80 text-xs uppercase tracking-[0.12em] text-base-500">
                   <tr>
-                    <th style="width:72px">#</th>
-                    <th>Title</th>
-                    <th style="width:120px" class="center-col">Type</th>
-                    <th style="width:100px" class="center-col">Monitored</th>
-                    <th style="width:78px" class="center-col">Action</th>
+                    <th class="px-5 py-3 font-medium">#</th>
+                    <th class="px-5 py-3 font-medium">Title</th>
+                    <th class="px-5 py-3 font-medium">Type</th>
+                    <th class="px-5 py-3 font-medium">Monitored</th>
+                    <th class="px-5 py-3 font-medium text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {#each group.episodes as ep}
-                    <tr class={epRowClass(ep.type)}>
-                      <td class="episode-num">{displayEpisodeNumber(ep)}</td>
-                      <td>{ep.title || '-'}</td>
-                      <td class="center-col type-cell"><Badge type={ep.type} /></td>
-                      <td class="center-col">
-                          {#if episodeActionId(ep)}
-                          {#if episodeMonitored(ep)}<Badge type="success" label="Yes" />{:else}<Badge type="info" label="No" />{/if}
+                    {@const typeBadge = episodeTypeBadge(ep.type)}
+                    {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
+                    <tr class="border-b border-base-900/80 last:border-b-0">
+                      <td class="px-5 py-4 font-medium text-base-200">{displayEpisodeNumber(ep)}</td>
+                      <td class="px-5 py-4 text-base-100">{ep.title || '-'}</td>
+                      <td class="px-5 py-4">
+                        <Badge variant={typeBadge.variant} size="sm">{typeBadge.label}</Badge>
+                      </td>
+                      <td class="px-5 py-4">
+                        {#if episodeActionId(ep)}
+                          <Badge variant={monitoredBadge.variant} size="sm">{monitoredBadge.label}</Badge>
                         {:else}
-                          <span class="form-hint">--</span>
+                          <span class="text-sm text-base-500">Unavailable</span>
                         {/if}
                       </td>
-                      <td class="center-col">
+                      <td class="px-5 py-4 text-right">
                         {#if episodeActionId(ep)}
-                          <button
-                            class="episode-monitor-btn"
-                            class:is-monitored={episodeMonitored(ep)}
+                          <Button
+                            variant={episodeMonitored(ep) ? 'green' : 'secondary'}
+                            size="sm"
                             disabled={syncingEps[episodeActionId(ep)]}
-                            title={episodeMonitored(ep) ? 'Unmonitor episode' : 'Monitor episode'}
-                            aria-label={episodeMonitored(ep) ? 'Unmonitor episode' : 'Monitor episode'}
-                            on:click={() => toggleEpisodeMonitor(ep)}
+                            onclick={() => toggleEpisodeMonitor(ep)}
                           >
                             {#if syncingEps[episodeActionId(ep)]}
-                              <span class="spinner"></span>
+                              <LoaderCircle size={14} class="animate-spin" />
                             {:else}
-                              <Eye size={18} />
+                              <Eye size={14} />
                             {/if}
-                          </button>
+                            {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
+                          </Button>
                         {/if}
                       </td>
                     </tr>
@@ -518,869 +544,45 @@
               </table>
             </div>
 
-            <div class="mobile-episode-list">
+            <div class="space-y-3 p-4 md:hidden">
               {#each group.episodes as ep}
-                <article class="mobile-episode-card {epRowClass(ep.type)}">
-                  <div class="mobile-episode-head">
-                    <strong>{episodeLabel(ep)}</strong>
-                    <Badge type={ep.type} />
+                {@const typeBadge = episodeTypeBadge(ep.type)}
+                {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
+                <div class="rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="space-y-2">
+                      <div class="text-sm font-medium text-base-200">{episodeLabel(ep)}</div>
+                      <h3 class="text-sm font-semibold leading-5 text-base-50">{ep.title || '-'}</h3>
+                    </div>
+                    <Badge variant={typeBadge.variant} size="sm">{typeBadge.label}</Badge>
                   </div>
-                  <h4>{ep.title || '-'}</h4>
-                  <div class="mobile-episode-meta">
-                    <span class="mobile-monitor-state">
-                      {#if episodeActionId(ep)}
-                        {#if episodeMonitored(ep)}
-                          <Badge type="success" label="Monitored" />
-                        {:else}
-                          <Badge type="info" label="Unmonitored" />
-                        {/if}
-                      {:else}
-                        <span class="form-hint">--</span>
-                      {/if}
-                    </span>
+
+                  <div class="mt-4 flex items-center justify-between gap-3">
                     {#if episodeActionId(ep)}
-                      <button
-                        class="episode-monitor-btn"
-                        class:is-monitored={episodeMonitored(ep)}
+                      <Badge variant={monitoredBadge.variant} size="sm">{monitoredBadge.label}</Badge>
+                      <Button
+                        variant={episodeMonitored(ep) ? 'green' : 'secondary'}
+                        size="sm"
                         disabled={syncingEps[episodeActionId(ep)]}
-                        title={episodeMonitored(ep) ? 'Unmonitor episode' : 'Monitor episode'}
-                        aria-label={episodeMonitored(ep) ? 'Unmonitor episode' : 'Monitor episode'}
-                        on:click={() => toggleEpisodeMonitor(ep)}
+                        onclick={() => toggleEpisodeMonitor(ep)}
                       >
                         {#if syncingEps[episodeActionId(ep)]}
-                          <span class="spinner"></span>
+                          <LoaderCircle size={14} class="animate-spin" />
                         {:else}
-                          <Eye size={18} />
+                          <Eye size={14} />
                         {/if}
-                      </button>
+                        {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
+                      </Button>
+                    {:else}
+                      <span class="text-sm text-base-500">Episode monitoring unavailable.</span>
                     {/if}
                   </div>
-                </article>
+                </div>
               {/each}
             </div>
-          {/if}
-        </div>
-      {/each}
+          </details>
+        {/each}
+      </section>
     {/if}
   </div>
 {/if}
-
-<Modal title="Remove Anime" show={showDeleteModal} on:close={() => !deleting && (showDeleteModal = false)}>
-  <p>This removes <strong>{show?.sonarr_title}</strong> from Mizu and clears its saved episode data. The anime stays in Sonarr.</p>
-  <svelte:fragment slot="footer">
-    <button class="btn btn-secondary" on:click={() => (showDeleteModal = false)} disabled={deleting}>Cancel</button>
-    <button class="btn btn-danger" on:click={handleDelete} disabled={deleting}>{deleting ? 'Removing...' : 'Remove'}</button>
-  </svelte:fragment>
-</Modal>
-
-<style>
-  .detail-page-shell {
-    position: relative;
-    isolation: isolate;
-    overflow: visible;
-    display: grid;
-    gap: var(--space-8);
-    max-width: 960px;
-    margin: 0 auto;
-  }
-
-  .detail-page-backdrop {
-    position: absolute;
-    top: calc(-1 * (var(--topbar-height) + clamp(20px, 2.5vw, 30px)));
-    left: 50%;
-    width: 100vw;
-    height: min(78vh, 720px);
-    transform: translateX(-50%);
-    pointer-events: none;
-  }
-
-  .detail-page-backdrop-scrim {
-    position: absolute;
-    top: calc(-1 * (var(--topbar-height) + clamp(20px, 2.5vw, 30px)));
-    left: 50%;
-    width: 100vw;
-    height: min(78vh, 720px);
-    transform: translateX(-50%);
-    pointer-events: none;
-    z-index: -2;
-    background:
-      linear-gradient(180deg, rgba(6, 12, 23, 0.04) 0%, rgba(6, 12, 23, 0.08) 16%, rgba(6, 12, 23, 0.14) 30%, rgba(6, 12, 23, 0.26) 46%, rgba(6, 12, 23, 0.44) 62%, rgba(6, 12, 23, 0.68) 78%, rgba(6, 12, 23, 0.9) 90%, #060c17 100%);
-  }
-
-  .detail-page-backdrop {
-    z-index: -3;
-    opacity: 0.58;
-    background-position: center 14%;
-    background-repeat: no-repeat;
-    background-size: cover;
-    filter: saturate(0.92) brightness(0.7);
-    -webkit-mask-image: radial-gradient(142% 112% at 50% -10%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.995) 34%, rgba(0, 0, 0, 0.93) 50%, rgba(0, 0, 0, 0.74) 63%, rgba(0, 0, 0, 0.42) 74%, rgba(0, 0, 0, 0.14) 83%, transparent 92%);
-    mask-image: radial-gradient(142% 112% at 50% -10%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.995) 34%, rgba(0, 0, 0, 0.93) 50%, rgba(0, 0, 0, 0.74) 63%, rgba(0, 0, 0, 0.42) 74%, rgba(0, 0, 0, 0.14) 83%, transparent 92%);
-  }
-
-  .detail-page-backdrop.is-banner-backdrop {
-    height: clamp(260px, 31vw, 420px);
-    background-position: center top;
-    background-size: cover;
-    filter: saturate(0.9) brightness(0.66);
-    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.985) 42%, rgba(0, 0, 0, 0.88) 60%, rgba(0, 0, 0, 0.5) 74%, rgba(0, 0, 0, 0.16) 86%, transparent 100%);
-    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.985) 42%, rgba(0, 0, 0, 0.88) 60%, rgba(0, 0, 0, 0.5) 74%, rgba(0, 0, 0, 0.16) 86%, transparent 100%);
-  }
-
-  .detail-page-backdrop-scrim.is-banner-backdrop {
-    height: clamp(260px, 31vw, 420px);
-    background:
-      linear-gradient(180deg, rgba(6, 12, 23, 0.02) 0%, rgba(6, 12, 23, 0.05) 18%, rgba(6, 12, 23, 0.1) 34%, rgba(6, 12, 23, 0.2) 50%, rgba(6, 12, 23, 0.36) 66%, rgba(6, 12, 23, 0.58) 80%, rgba(6, 12, 23, 0.82) 92%, #060c17 100%);
-  }
-
-  @media (max-width: 1040px) {
-    .detail-page-backdrop,
-    .detail-page-backdrop-scrim {
-      top: calc(-1 * (var(--topbar-height) + 20px));
-      height: min(68vh, 620px);
-    }
-
-    .detail-page-backdrop.is-banner-backdrop,
-    .detail-page-backdrop-scrim.is-banner-backdrop {
-      height: clamp(220px, 34vw, 340px);
-    }
-  }
-
-  @media (max-width: 720px) {
-    .detail-page-backdrop,
-    .detail-page-backdrop-scrim {
-      top: -18px;
-      height: min(52vh, 360px);
-    }
-
-    .detail-page-backdrop.is-banner-backdrop,
-    .detail-page-backdrop-scrim.is-banner-backdrop {
-      height: clamp(176px, 44vw, 240px);
-    }
-  }
-
-  .detail-page-backdrop-fallback {
-    background: var(--surface-elevated);
-    opacity: 0.8;
-  }
-
-  .detail-page-heading {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 332px;
-    align-items: start;
-    gap: clamp(18px, 3vw, 28px);
-  }
-
-  .detail-hero-block {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: var(--space-5);
-    min-width: 0;
-    height: 100%;
-  }
-
-  .detail-page-title-block {
-    display: grid;
-    gap: var(--space-4);
-    min-width: 0;
-    align-content: start;
-    padding-left: 14px;
-    border-left: 1px solid var(--divider-border-soft);
-  }
-
-  .detail-title-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .detail-page-title-block h1 {
-    flex: 1 1 auto;
-    font-size: var(--text-page-title);
-    line-height: var(--leading-tight);
-    margin: 0;
-  }
-
-  .detail-overview {
-    margin: 0;
-    color: var(--text-secondary);
-    max-width: 58ch;
-    font-size: var(--text-secondary-size);
-    line-height: var(--leading-copy);
-    text-wrap: pretty;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    overflow: hidden;
-  }
-
-  .detail-header-side {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    gap: var(--space-4);
-    align-content: start;
-  }
-
-  .detail-utility-panel {
-    position: sticky;
-    top: calc(var(--topbar-height) + 28px);
-    gap: var(--space-4);
-    padding: 16px;
-    border-radius: 10px;
-    background: var(--panel-bg-strong);
-  }
-
-  .detail-utility-body {
-    display: grid;
-    gap: 10px;
-  }
-
-  .detail-header-actions {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .detail-header-actions-inline {
-    padding-top: 14px;
-    border-top: 1px solid var(--divider-border-soft);
-    justify-content: stretch;
-  }
-
-  .action-remove {
-    background: var(--danger-bg);
-    border-color: var(--danger-border-strong);
-    color: var(--danger-foreground);
-  }
-
-  .action-remove:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger) 20%, var(--danger-bg));
-    border-color: var(--danger-border-strong);
-    color: #fff;
-  }
-
-  .btn-inline-icon {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .action-compact {
-    min-height: 36px;
-    padding-inline: 12px;
-  }
-
-  .action-save {
-    flex: 1 1 auto;
-    justify-content: center;
-  }
-
-  .detail-header-actions-inline .action-remove {
-    flex: 0 0 auto;
-  }
-
-  .rule-pill-row {
-    display: grid;
-    margin-top: 0;
-    padding-top: 14px;
-  }
-
-  .rule-segmented {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
-    border-radius: 10px;
-    overflow: hidden;
-    background: var(--surface-elevated);
-  }
-
-  .rule-segment {
-    display: grid;
-    gap: 2px;
-    justify-items: start;
-    padding: 10px 12px;
-    border: 0;
-    background: transparent;
-    color: var(--text-muted);
-    text-align: left;
-    cursor: pointer;
-    transition: background var(--transition), color var(--transition), border-color var(--transition);
-  }
-
-  .rule-segment + .rule-segment {
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .rule-segment:focus-visible {
-    outline: none;
-    position: relative;
-    z-index: 1;
-    box-shadow: inset 0 0 0 2px var(--focus-ring);
-  }
-
-  .rule-segment.is-active {
-    background: var(--success-bg);
-    color: var(--success);
-  }
-
-  .rule-segment.is-inactive {
-    background: var(--danger-bg);
-    color: var(--danger);
-  }
-
-  .rule-segment-label {
-    font-size: var(--text-secondary-size);
-    font-weight: var(--weight-semibold);
-    color: inherit;
-  }
-
-  .rule-segment-state {
-    font-size: var(--text-caption);
-    letter-spacing: 0.03em;
-    color: inherit;
-    opacity: 0.8;
-  }
-
-  .marker-label {
-    color: var(--text-muted);
-    font-size: var(--text-caption);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-  }
-
-  .marker-input-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .marker-auto-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    min-width: 72px;
-    height: 40px;
-    border-radius: 10px;
-    border: 0;
-    background: color-mix(in srgb, var(--surface-elevated) 82%, rgba(7, 16, 29, 0.96) 18%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    color: var(--text-secondary);
-    font-size: var(--text-meta);
-    font-weight: var(--weight-semibold);
-    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
-  }
-
-  .marker-auto-toggle.active {
-    background: color-mix(in srgb, var(--selected-bg) 72%, rgba(9, 21, 39, 0.94) 28%);
-    color: var(--text-primary);
-  }
-
-  .marker-hint {
-    margin-top: 0;
-    min-height: 18px;
-    line-height: 1.35;
-  }
-
-  .marker-auto-toggle:hover {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 18px rgba(2, 5, 12, 0.16);
-  }
-
-  .marker-auto-toggle.active:hover {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 20px rgba(2, 5, 12, 0.2);
-  }
-
-  .marker-form-group {
-    margin-bottom: 0;
-  }
-
-  .detail-stats {
-    grid-template-columns: minmax(216px, 1.3fr) repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 0;
-  }
-
-  .filter-card {
-    display: grid;
-    gap: 4px;
-    justify-items: start;
-    padding: 12px;
-    border-radius: 10px;
-    background: var(--surface);
-    text-align: left;
-    cursor: pointer;
-    transition: background var(--transition), border-color var(--transition), opacity var(--transition), filter var(--transition);
-  }
-
-  .filter-card .stat-label {
-    font-family: var(--font-body);
-    font-size: var(--text-caption);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    margin: 0;
-    white-space: nowrap;
-    color: var(--text-muted);
-    transition: color var(--transition);
-  }
-
-  .filter-card .stat-value {
-    font-family: var(--font-heading);
-    font-size: var(--text-stat);
-    line-height: 1;
-    margin: 0;
-    font-variant-numeric: tabular-nums;
-    font-weight: var(--weight-bold);
-    transition: color var(--transition);
-  }
-
-  /* ── Default: all type cards vivid (everything is showing) ── */
-  .filter-card-canon { background: color-mix(in srgb, var(--canon) 16%, var(--bg-dark)); }
-  .filter-card-canon      .stat-label { color: var(--canon); }
-  .filter-card-canon      .stat-value { color: var(--canon); }
-
-  .filter-card-anime-canon { background: color-mix(in srgb, var(--anime-canon) 16%, var(--bg-dark)); }
-  .filter-card-anime-canon .stat-label { color: var(--anime-canon); }
-  .filter-card-anime-canon .stat-value { color: var(--anime-canon); }
-
-  .filter-card-mixed { background: color-mix(in srgb, var(--mixed) 16%, var(--bg-dark)); }
-  .filter-card-mixed      .stat-label { color: var(--mixed); }
-  .filter-card-mixed      .stat-value { color: var(--mixed); }
-
-  .filter-card-filler     { background: color-mix(in srgb, var(--filler) 18%, var(--bg-dark)); }
-  .filter-card-filler     .stat-label { color: var(--filler); }
-  .filter-card-filler     .stat-value { color: var(--filler); }
-
-  /* ── "All episodes" — neutral reset button, always opaque ── */
-  .filter-card-all {
-    background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-dark));
-  }
-  .filter-card-all .stat-value { color: var(--text-primary); }
-  .filter-card-all .stat-label { color: var(--text-muted); }
-
-  /* When a filter IS active: All gets a blue hint as reset cue */
-  .filter-card-all.has-active {
-    background: color-mix(in srgb, var(--blue-base) 14%, var(--bg-dark));
-  }
-  .filter-card-all.has-active .stat-label { color: var(--blue-vivid); }
-
-  /* ── Dimmed: this type is NOT the active filter ── */
-  .filter-card.dimmed {
-    background: var(--surface);
-    border-color: var(--border);
-    opacity: 0.4;
-    filter: grayscale(0.5);
-  }
-  .filter-card.dimmed .stat-label,
-  .filter-card.dimmed .stat-value { color: var(--text-muted); }
-
-  /* ── Active filter: ring in the type's own color ── */
-  .filter-card.active-filter { box-shadow: none; }
-
-  .filter-card-all.active-filter,
-  .filter-card-all.has-active {
-    box-shadow: 0 0 0 2px var(--accent-border-strong);
-  }
-  .filter-card-canon.active-filter      { box-shadow: 0 0 0 2px var(--canon-border); }
-  .filter-card-anime-canon.active-filter { box-shadow: 0 0 0 2px var(--anime-canon-border); }
-  .filter-card-mixed.active-filter      { box-shadow: 0 0 0 2px var(--mixed-border); }
-  .filter-card-filler.active-filter     { box-shadow: 0 0 0 2px var(--filler-border-strong); }
-
-  .filter-card:hover:not(.dimmed) {
-    filter: brightness(1.1);
-  }
-  .filter-card.dimmed:hover {
-    opacity: 0.65;
-    filter: grayscale(0.2);
-  }
-
-  .filter-card-summary {
-    position: relative;
-    min-height: 100%;
-    padding: 14px 20px 14px 14px;
-  }
-
-  .filter-card-summary::after {
-    content: '';
-    position: absolute;
-    top: 12px;
-    right: 0;
-    bottom: 12px;
-    width: 1px;
-    background: transparent;
-  }
-
-  .filter-card-summary .stat-label { font-size: var(--text-caption); letter-spacing: var(--tracking-label); }
-  .filter-card-summary .stat-value { font-size: clamp(1.7rem, 1.4rem + 0.8vw, 2.1rem); }
-
-  .detail-empty {
-    min-height: 240px;
-  }
-
-  .compact-empty {
-    display: grid;
-    gap: 6px;
-    place-items: center;
-    text-align: center;
-    padding: 24px;
-  }
-
-  .compact-empty .empty-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    background: var(--empty-icon-gradient);
-    color: var(--accent-blue);
-  }
-
-  .season-group {
-    margin-bottom: 14px;
-    border-radius: 10px;
-    overflow: hidden;
-    background: var(--surface);
-  }
-
-  .season-group:last-child {
-    margin-bottom: 0;
-  }
-
-  .season-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 13px 14px;
-    background: var(--surface-elevated);
-    border: none;
-    color: var(--text-primary);
-    text-align: left;
-  }
-
-  .season-header.collapsed {
-    border-bottom: none;
-  }
-
-  .season-group .table-container {
-    border: none;
-    border-radius: 0;
-    background: var(--surface);
-  }
-
-  .season-chevron {
-    color: var(--text-secondary);
-    transition: transform var(--transition);
-  }
-
-  .season-chevron.collapsed {
-    transform: rotate(-90deg);
-  }
-
-  .season-title {
-    margin: 0;
-    font-size: 0.9375rem;
-    font-weight: var(--weight-semibold);
-    line-height: 1.3;
-  }
-
-  .season-count {
-    margin-left: auto;
-    font-size: var(--text-meta);
-    color: var(--text-secondary);
-  }
-
-  .episode-num {
-    font-weight: var(--weight-semibold);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .center-col {
-    text-align: center;
-  }
-
-  .type-cell :global(.badge) {
-    min-height: 24px;
-    border-radius: 8px;
-  }
-
-  .desktop-episode-table {
-    display: block;
-  }
-
-  .desktop-episode-table :global(tbody tr) {
-    transition: background var(--transition);
-  }
-
-  .desktop-episode-table :global(tbody tr:hover) {
-    background: var(--table-row-hover);
-  }
-
-  .mobile-episode-list {
-    display: none;
-  }
-
-  .mobile-episode-card {
-    display: grid;
-    gap: 6px;
-    padding: 12px;
-    border-top: 1px solid var(--divider-border-soft);
-    background: var(--surface-elevated);
-  }
-
-  .mobile-episode-head,
-  .mobile-episode-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-  }
-
-  .mobile-episode-card h4 {
-    font-size: 0.9375rem;
-    line-height: 1.4;
-  }
-
-  .episode-monitor-btn {
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    background: var(--surface-elevated);
-    color: var(--text-secondary);
-    transition: background var(--transition), border-color var(--transition), color var(--transition);
-  }
-
-  .episode-monitor-btn:hover:not(:disabled) {
-    border-color: var(--selected-border);
-    color: var(--text-primary);
-    background: var(--surface-soft);
-  }
-
-  .episode-monitor-btn.is-monitored {
-    color: var(--success-foreground);
-    background: var(--success-bg);
-    border-color: var(--success-border);
-  }
-
-  .episode-monitor-btn:not(.is-monitored) {
-    background: color-mix(in srgb, var(--info-bg) 64%, rgba(8, 18, 33, 0.78) 36%);
-    border-color: var(--info-border);
-    color: var(--info);
-  }
-
-  @media (max-width: 940px) {
-    .detail-page-heading {
-      grid-template-columns: minmax(0, 1fr) 272px;
-      gap: 14px;
-    }
-
-    .detail-utility-panel {
-      top: calc(var(--topbar-height) + 20px);
-    }
-
-    .detail-header-actions {
-      gap: 6px;
-    }
-
-    .action-compact {
-      min-height: 34px;
-      padding-inline: 9px;
-      font-size: var(--text-meta);
-    }
-
-    .btn-inline-icon {
-      gap: 5px;
-    }
-
-    .btn-inline-icon :global(svg) {
-      width: 20px;
-      height: 20px;
-    }
-  }
-
-  @media (max-width: 760px) {
-    .detail-page-heading {
-      grid-template-columns: 1fr;
-      align-items: start;
-    }
-
-    .detail-hero-block {
-      height: auto;
-    }
-
-    .detail-utility-panel {
-      position: static;
-      width: min(100%, 420px);
-      justify-self: start;
-    }
-
-    .detail-page-title-block {
-      padding-left: 12px;
-    }
-
-    .detail-stats {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .filter-card-summary {
-      grid-column: 1 / -1;
-      padding-right: 12px;
-    }
-
-    .filter-card-summary::after {
-      display: none;
-    }
-  }
-
-  @media (max-width: 720px) {
-    .detail-page-shell {
-      gap: 12px;
-    }
-
-    .detail-page-heading {
-      gap: 16px;
-    }
-
-    .detail-page-title-block {
-      padding-left: 10px;
-    }
-
-    .detail-header-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      width: 100%;
-    }
-
-    .detail-header-actions .btn-inline-icon {
-      flex-direction: column;
-      justify-content: center;
-      gap: 4px;
-      padding: 10px 12px;
-      min-height: 56px;
-      text-align: center;
-    }
-
-    .detail-header-actions .btn-inline-icon span {
-      display: inline;
-      font-size: var(--text-meta);
-      line-height: 1;
-    }
-
-    .detail-header-actions .btn-inline-icon :global(svg) {
-      width: 20px;
-      height: 20px;
-    }
-
-    .rule-segment {
-      padding: 9px 8px;
-    }
-
-    .rule-segment-label {
-      font-size: var(--text-secondary-size);
-    }
-
-    .rule-segment-state {
-      font-size: var(--text-caption);
-    }
-
-    .detail-stats {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-    }
-
-    .filter-card-summary {
-      grid-column: 1 / -1;
-    }
-
-    .desktop-episode-table {
-      display: none;
-    }
-
-    .mobile-episode-list {
-      display: block;
-    }
-
-    .mobile-episode-meta {
-      align-items: flex-start;
-    }
-  }
-
-  @media (max-width: 560px) {
-    .detail-page-shell {
-      gap: 8px;
-    }
-
-    .detail-header-actions {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .detail-utility-panel {
-      width: 100%;
-    }
-
-    .detail-page-title-block h1 {
-      font-size: clamp(1.55rem, 1.2rem + 1vw, 1.9rem);
-    }
-
-    .detail-page-title-block {
-      padding-left: 0;
-      border-left: none;
-    }
-
-    .detail-title-row {
-      gap: 8px;
-    }
-
-    .detail-overview {
-      max-width: none;
-      -webkit-line-clamp: 2;
-    }
-
-    .filter-card .stat-label {
-      white-space: normal;
-    }
-
-    .filter-card-summary .stat-value { font-size: 1.58rem; }
-
-    .rule-segment {
-      padding: 8px 6px;
-    }
-
-    .rule-segment-label {
-      font-size: var(--text-meta);
-    }
-
-    .rule-segment-state {
-      font-size: var(--text-caption);
-    }
-
-    .mobile-episode-head,
-    .mobile-episode-meta {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .episode-monitor-btn {
-      width: 36px;
-      height: 36px;
-    }
-  }
-</style>
-
-
-

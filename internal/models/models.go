@@ -114,20 +114,25 @@ type AppSettings struct {
 
 // SonarrSeries represents a series from the Sonarr API.
 type SonarrSeries struct {
-	ID              int              `json:"id"`
-	Title           string           `json:"title"`
-	SortTitle       string           `json:"sortTitle"`
-	Overview        string           `json:"overview"`
-	SeriesType      string           `json:"seriesType"` // "anime", "standard", etc.
-	TVDBID          int              `json:"tvdbId"`
-	IMDBID          string           `json:"imdbId"`
-	Path            string           `json:"path"`
-	Monitored       bool             `json:"monitored"`
-	SeasonCount     int              `json:"seasonCount"`
-	Tags            []int            `json:"tags"`
-	Images          []SonarrImage    `json:"images"`
-	Statistics      *SonarrStats     `json:"statistics,omitempty"`
-	AlternateTitles []SonarrAltTitle `json:"alternateTitles,omitempty"`
+	ID                 int              `json:"id"`
+	Title              string           `json:"title"`
+	SortTitle          string           `json:"sortTitle"`
+	Year               int              `json:"year,omitempty"`
+	Overview           string           `json:"overview"`
+	SeriesType         string           `json:"seriesType"` // "anime", "standard", etc.
+	TVDBID             int              `json:"tvdbId"`
+	IMDBID             string           `json:"imdbId"`
+	Path               string           `json:"path"`
+	RootFolderPath     string           `json:"rootFolderPath,omitempty"`
+	QualityProfileID   int              `json:"qualityProfileId,omitempty"`
+	SeasonFolder       bool             `json:"seasonFolder,omitempty"`
+	Monitored          bool             `json:"monitored"`
+	SeasonCount        int              `json:"seasonCount"`
+	Tags               []int            `json:"tags"`
+	Images             []SonarrImage    `json:"images"`
+	Statistics         *SonarrStats     `json:"statistics,omitempty"`
+	AlternateTitles    []SonarrAltTitle `json:"alternateTitles,omitempty"`
+	ManualMatchPending bool             `json:"manualMatchPending,omitempty"`
 }
 
 // SonarrEpisode represents an episode from the Sonarr API.
@@ -147,6 +152,16 @@ type SonarrEpisode struct {
 type SonarrTag struct {
 	ID    int    `json:"id"`
 	Label string `json:"label"`
+}
+
+type SonarrRootFolder struct {
+	ID   int    `json:"id"`
+	Path string `json:"path"`
+}
+
+type SonarrQualityProfile struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 // SonarrImage represents a series image.

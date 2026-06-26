@@ -68,6 +68,12 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 				best = MatchResult{AFLShow: aflShow, Confidence: containScore, Method: "containment"}
 			}
 
+			// One shared franchise token like "Digimon" is too weak unless the
+			// remaining tokens are also strongly aligned (for example typos).
+			if !hasStrongFuzzyTokenAgreement(normSonarr, normAFL, sharedTokens) {
+				continue
+			}
+
 			jw := jaroWinkler(normSonarr, normAFL)
 			if jw >= 0.88 && jw > best.Confidence {
 				best = MatchResult{AFLShow: aflShow, Confidence: jw, Method: "fuzzy"}
@@ -191,6 +197,45 @@ func sharedTokenCount(a, b string) int {
 	}
 
 	return shared
+}
+
+func hasStrongFuzzyTokenAgreement(a, b string, sharedTokens int) bool {
+	if sharedTokens >= 2 {
+		return true
+	}
+
+	aTokens := strings.Fields(a)
+	bTokens := strings.Fields(b)
+	if len(aTokens) < 2 || len(bTokens) < 2 || len(aTokens) != len(bTokens) {
+		return false
+	}
+
+	used := make([]bool, len(bTokens))
+	similar := 0
+
+	for _, aToken := range aTokens {
+		bestIndex := -1
+		bestScore := 0.0
+
+		for i, bToken := range bTokens {
+			if used[i] {
+				continue
+			}
+
+			score := jaroWinkler(aToken, bToken)
+			if score > bestScore {
+				bestScore = score
+				bestIndex = i
+			}
+		}
+
+		if bestIndex >= 0 && bestScore >= 0.92 {
+			used[bestIndex] = true
+			similar++
+		}
+	}
+
+	return similar == len(aTokens)
 }
 
 // --- Jaro-Winkler Similarity ---

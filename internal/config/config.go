@@ -32,11 +32,16 @@ type Config struct {
 	RateLimitDelay time.Duration `yaml:"rate_limit_delay"`
 
 	// Defaults
-	DefaultFillerAction     FillerAction `yaml:"default_filler_action"`
-	DefaultMixedCanonAction FillerAction `yaml:"default_mixed_canon_action"`
-	DefaultAnimeCanonAction FillerAction `yaml:"default_anime_canon_action"`
-	EnableTagging           bool         `yaml:"enable_tagging"`
-	FillerTagName           string       `yaml:"filler_tag_name"`
+	DefaultFillerAction       FillerAction `yaml:"default_filler_action"`
+	DefaultMixedCanonAction   FillerAction `yaml:"default_mixed_canon_action"`
+	DefaultAnimeCanonAction   FillerAction `yaml:"default_anime_canon_action"`
+	EnableTagging             bool         `yaml:"enable_tagging"`
+	FillerTagName             string       `yaml:"filler_tag_name"`
+	EnableAniListArtwork      bool         `yaml:"enable_anilist_artwork"`
+	SonarrAddRootFolder       string       `yaml:"sonarr_add_root_folder"`
+	SonarrAddQualityProfileID int          `yaml:"sonarr_add_quality_profile_id"`
+	SonarrAddMonitorMode      string       `yaml:"sonarr_add_monitor_mode"`
+	SonarrAddSeasonFolder     bool         `yaml:"sonarr_add_season_folder"`
 
 	// Notifications
 	NtfyEnabled   bool   `yaml:"ntfy_enabled"`
@@ -60,25 +65,30 @@ const (
 // DefaultConfig returns configuration with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		SonarrURL:               "http://localhost:8989",
-		SonarrAPIKey:            "",
-		ScanInterval:            6 * time.Hour,
-		ListenAddr:              ":8978",
-		BaseURL:                 "/",
-		DBPath:                  "/config/mizu.db",
-		CacheTTL:                24 * time.Hour,
-		RequestTimeout:          30 * time.Second,
-		RateLimitDelay:          2 * time.Second,
-		DefaultFillerAction:     ActionUnmonitor,
-		DefaultMixedCanonAction: ActionMonitor,
-		DefaultAnimeCanonAction: ActionMonitor,
-		EnableTagging:           false,
-		FillerTagName:           "filler",
-		NtfyEnabled:             false,
-		NtfyServerURL:           "https://ntfy.sh",
-		NtfyTopic:               "",
-		NtfyToken:               "",
-		LogLevel:                "info",
+		SonarrURL:                 "http://localhost:8989",
+		SonarrAPIKey:              "",
+		ScanInterval:              6 * time.Hour,
+		ListenAddr:                ":8978",
+		BaseURL:                   "/",
+		DBPath:                    "/config/mizu.db",
+		CacheTTL:                  24 * time.Hour,
+		RequestTimeout:            30 * time.Second,
+		RateLimitDelay:            2 * time.Second,
+		DefaultFillerAction:       ActionUnmonitor,
+		DefaultMixedCanonAction:   ActionMonitor,
+		DefaultAnimeCanonAction:   ActionMonitor,
+		EnableTagging:             false,
+		FillerTagName:             "filler",
+		EnableAniListArtwork:      false,
+		SonarrAddRootFolder:       "",
+		SonarrAddQualityProfileID: 0,
+		SonarrAddMonitorMode:      "all",
+		SonarrAddSeasonFolder:     true,
+		NtfyEnabled:               false,
+		NtfyServerURL:             "https://ntfy.sh",
+		NtfyTopic:                 "",
+		NtfyToken:                 "",
+		LogLevel:                  "info",
 	}
 }
 
@@ -157,6 +167,23 @@ func (c *Config) loadEnv() {
 	if v := os.Getenv("FILLER_TAG_NAME"); v != "" {
 		c.FillerTagName = v
 	}
+	if v := os.Getenv("ENABLE_ANILIST_ARTWORK"); v != "" {
+		c.EnableAniListArtwork = strings.ToLower(v) == "true" || v == "1"
+	}
+	if v := os.Getenv("SONARR_ADD_ROOT_FOLDER"); v != "" {
+		c.SonarrAddRootFolder = v
+	}
+	if v := os.Getenv("SONARR_ADD_QUALITY_PROFILE_ID"); v != "" {
+		if id, err := strconv.Atoi(v); err == nil {
+			c.SonarrAddQualityProfileID = id
+		}
+	}
+	if v := os.Getenv("SONARR_ADD_MONITOR_MODE"); v != "" {
+		c.SonarrAddMonitorMode = v
+	}
+	if v := os.Getenv("SONARR_ADD_SEASON_FOLDER"); v != "" {
+		c.SonarrAddSeasonFolder = strings.ToLower(v) == "true" || v == "1"
+	}
 	if v := os.Getenv("NTFY_ENABLED"); v != "" {
 		c.NtfyEnabled = strings.ToLower(v) == "true" || v == "1"
 	}
@@ -202,7 +229,19 @@ func (c *Config) validate() error {
 	default:
 		return fmt.Errorf("invalid default_anime_canon_action: %s", c.DefaultAnimeCanonAction)
 	}
+	if !isValidSonarrMonitorMode(c.SonarrAddMonitorMode) {
+		return fmt.Errorf("invalid sonarr_add_monitor_mode: %s", c.SonarrAddMonitorMode)
+	}
 	return nil
+}
+
+func isValidSonarrMonitorMode(value string) bool {
+	switch value {
+	case "", "all", "future", "missing", "existing", "pilot", "firstSeason", "latestSeason", "none":
+		return true
+	default:
+		return false
+	}
 }
 
 // parseDuration handles both Go duration strings ("6h") and plain integers ("360" = minutes).

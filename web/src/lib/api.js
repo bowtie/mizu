@@ -27,8 +27,29 @@ export function getStats() {
   return request('GET', '/stats');
 }
 
-export function getSonarrSeries() {
-  return request('GET', '/sonarr/series');
+export function getSonarrSeries(matchableOnly = false) {
+  const params = new URLSearchParams();
+  if (matchableOnly) params.set('matchable_only', 'true');
+  const suffix = params.size > 0 ? '?' + params.toString() : '';
+  return request('GET', '/sonarr/series' + suffix);
+}
+
+export function lookupSonarrSeries(query) {
+  const params = new URLSearchParams();
+  params.set('q', query || '');
+  return request('GET', '/sonarr/lookup?' + params.toString());
+}
+
+export function addSonarrSeries(data) {
+  return request('POST', '/sonarr/series', data);
+}
+
+export function getSonarrAddOptions() {
+  return request('GET', '/sonarr/add-options');
+}
+
+export function markManualMatchPending(seriesId) {
+  return request('POST', '/sonarr/manual-match-pending', { sonarr_series_id: seriesId });
 }
 
 export function testSonarrConnection(url, apiKey) {

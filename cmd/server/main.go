@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -120,6 +121,23 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	}
 	if value, err := db.GetSetting(ctx, "filler_tag_name"); err == nil && value != "" {
 		cfg.FillerTagName = value
+	}
+	if value, err := db.GetSetting(ctx, "enable_anilist_artwork"); err == nil && value != "" {
+		cfg.EnableAniListArtwork = value == "true"
+	}
+	if value, err := db.GetSetting(ctx, "sonarr_add_root_folder"); err == nil {
+		cfg.SonarrAddRootFolder = value
+	}
+	if value, err := db.GetSetting(ctx, "sonarr_add_quality_profile_id"); err == nil && value != "" {
+		if id, parseErr := strconv.Atoi(value); parseErr == nil {
+			cfg.SonarrAddQualityProfileID = id
+		}
+	}
+	if value, err := db.GetSetting(ctx, "sonarr_add_monitor_mode"); err == nil && value != "" {
+		cfg.SonarrAddMonitorMode = value
+	}
+	if value, err := db.GetSetting(ctx, "sonarr_add_season_folder"); err == nil && value != "" {
+		cfg.SonarrAddSeasonFolder = value == "true"
 	}
 }
 

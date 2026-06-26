@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +16,7 @@ import (
 	"mizu/internal/anilist"
 	"mizu/internal/config"
 	"mizu/internal/database"
+	matcherpkg "mizu/internal/matcher"
 	"mizu/internal/models"
 	"mizu/internal/sonarr"
 	"mizu/internal/sync"
@@ -71,10 +74,14 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Get("/settings/sonarr-api-key", handleGetStoredSonarrAPIKey(cfg))
 		r.Put("/settings", handleUpdateSettings(cfg, db, scheduler))
 		r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db))
-		r.Get("/sonarr/series", handleGetSonarrSeries(cfg))
+		r.Get("/sonarr/series", handleGetSonarrSeries(cfg, db, syncEngine))
+		r.Post("/sonarr/series", handleAddSonarrSeries(cfg))
+		r.Get("/sonarr/lookup", handleLookupSonarrSeries(cfg))
+		r.Get("/sonarr/add-options", handleGetSonarrAddOptions(cfg))
+		r.Post("/sonarr/manual-match-pending", handleMarkManualMatchPending(db))
 		r.Post("/sonarr/test", handleTestSonarr())
-		r.Get("/afl/search", handleAFLSearch(syncEngine))
-		r.Get("/afl/suggest", handleAFLSuggest(syncEngine))
+		r.Get("/afl/search", handleAFLSearch(syncEngine, db))
+		r.Get("/afl/suggest", handleAFLSuggest(syncEngine, db))
 	})
 
 	r.NotFound(web.SPAHandler().ServeHTTP)
@@ -164,6 +171,8 @@ func clampWatermark(value *int) int {
 	return *value
 }
 
+const manualMatchPendingSeriesIDsKey = "manual_match_pending_series_ids"
+
 func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -215,6 +224,9 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			}
 			if hydratedMapping != nil {
 				storedMapping = hydratedMapping
+			}
+			if err := clearManualMatchPendingSeriesID(r.Context(), db, req.SonarrSeriesID); err != nil {
+				log.Warn().Err(err).Int("sonarr_series_id", req.SonarrSeriesID).Msg("failed to clear manual-match pending series")
 			}
 			writeJSON(w, http.StatusCreated, storedMapping)
 			return
@@ -291,6 +303,10 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			if hydratedMapping != nil {
 				storedMapping = hydratedMapping
 			}
+		}
+
+		if err := clearManualMatchPendingSeriesID(r.Context(), db, req.SonarrSeriesID); err != nil {
+			log.Warn().Err(err).Int("sonarr_series_id", req.SonarrSeriesID).Msg("failed to clear manual-match pending series")
 		}
 
 		writeJSON(w, http.StatusCreated, storedMapping)
@@ -434,15 +450,17 @@ func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Eng
 		}
 
 		aflByNumber, aflPreferred := sync.BuildAFLEpisodeLookup(aflEpisodes)
+		coverageMax := sync.AFLCoverageMaxEpisodeNumber(aflEpisodes)
 		enriched := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
 		for _, ep := range sonarrEpisodes {
 			aflNum, aflEpisode, found := sync.SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
+			if !sync.IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
+				continue
+			}
 
 			typeValue := models.EpisodeUnknown
 			if found {
 				typeValue = aflEpisode.Type
-			} else if ep.SeasonNumber == 0 || ep.SeasonNumber == -1 {
-				typeValue = models.EpisodeSpecial
 			}
 
 			episodeNum := aflNum
@@ -586,17 +604,22 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"sonarr_url":                  cfg.SonarrURL,
-			"sonarr_api_key_masked":       maskedKey,
-			"sonarr_api_key_set":          cfg.SonarrAPIKey != "",
-			"default_filler_action":       string(cfg.DefaultFillerAction),
-			"default_mixed_canon_action":  string(cfg.DefaultMixedCanonAction),
-			"default_anime_canon_action":  string(cfg.DefaultAnimeCanonAction),
-			"sync_interval":               scanIntervalToValue(cfg.ScanInterval),
-			"enable_tagging":              cfg.EnableTagging,
-			"filler_tag_name":             cfg.FillerTagName,
-			"afl_show_cache_refreshed_at": cacheRefreshedAt,
-			"afl_show_cache_count":        cacheCount,
+			"sonarr_url":                    cfg.SonarrURL,
+			"sonarr_api_key_masked":         maskedKey,
+			"sonarr_api_key_set":            cfg.SonarrAPIKey != "",
+			"default_filler_action":         string(cfg.DefaultFillerAction),
+			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
+			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
+			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
+			"enable_tagging":                cfg.EnableTagging,
+			"filler_tag_name":               cfg.FillerTagName,
+			"enable_anilist_artwork":        cfg.EnableAniListArtwork,
+			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
+			"sonarr_add_quality_profile_id": cfg.SonarrAddQualityProfileID,
+			"sonarr_add_monitor_mode":       cfg.SonarrAddMonitorMode,
+			"sonarr_add_season_folder":      cfg.SonarrAddSeasonFolder,
+			"afl_show_cache_refreshed_at":   cacheRefreshedAt,
+			"afl_show_cache_count":          cacheCount,
 		})
 	}
 }
@@ -613,14 +636,19 @@ func handleGetStoredSonarrAPIKey(cfg *config.Config) http.HandlerFunc {
 func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedulerController) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var update struct {
-			SonarrURL               *string `json:"sonarr_url"`
-			SonarrAPIKey            *string `json:"sonarr_api_key"`
-			DefaultFillerAction     *string `json:"default_filler_action"`
-			DefaultMixedCanonAction *string `json:"default_mixed_canon_action"`
-			DefaultAnimeCanonAction *string `json:"default_anime_canon_action"`
-			SyncInterval            *string `json:"sync_interval"`
-			EnableTagging           *bool   `json:"enable_tagging"`
-			FillerTagName           *string `json:"filler_tag_name"`
+			SonarrURL                 *string `json:"sonarr_url"`
+			SonarrAPIKey              *string `json:"sonarr_api_key"`
+			DefaultFillerAction       *string `json:"default_filler_action"`
+			DefaultMixedCanonAction   *string `json:"default_mixed_canon_action"`
+			DefaultAnimeCanonAction   *string `json:"default_anime_canon_action"`
+			SyncInterval              *string `json:"sync_interval"`
+			EnableTagging             *bool   `json:"enable_tagging"`
+			FillerTagName             *string `json:"filler_tag_name"`
+			EnableAniListArtwork      *bool   `json:"enable_anilist_artwork"`
+			SonarrAddRootFolder       *string `json:"sonarr_add_root_folder"`
+			SonarrAddQualityProfileID *int    `json:"sonarr_add_quality_profile_id"`
+			SonarrAddMonitorMode      *string `json:"sonarr_add_monitor_mode"`
+			SonarrAddSeasonFolder     *bool   `json:"sonarr_add_season_folder"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -658,16 +686,40 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		if update.FillerTagName != nil && *update.FillerTagName != "" {
 			cfg.FillerTagName = *update.FillerTagName
 		}
+		if update.EnableAniListArtwork != nil {
+			cfg.EnableAniListArtwork = *update.EnableAniListArtwork
+		}
+		if update.SonarrAddRootFolder != nil {
+			cfg.SonarrAddRootFolder = *update.SonarrAddRootFolder
+		}
+		if update.SonarrAddQualityProfileID != nil {
+			cfg.SonarrAddQualityProfileID = *update.SonarrAddQualityProfileID
+		}
+		if update.SonarrAddMonitorMode != nil {
+			if !configIsValidSonarrMonitorMode(*update.SonarrAddMonitorMode) {
+				writeError(w, http.StatusBadRequest, "invalid Sonarr monitor mode")
+				return
+			}
+			cfg.SonarrAddMonitorMode = *update.SonarrAddMonitorMode
+		}
+		if update.SonarrAddSeasonFolder != nil {
+			cfg.SonarrAddSeasonFolder = *update.SonarrAddSeasonFolder
+		}
 
 		for k, v := range map[string]string{
-			"sonarr_url":                 cfg.SonarrURL,
-			"sonarr_api_key":             cfg.SonarrAPIKey,
-			"default_filler_action":      string(cfg.DefaultFillerAction),
-			"default_mixed_canon_action": string(cfg.DefaultMixedCanonAction),
-			"default_anime_canon_action": string(cfg.DefaultAnimeCanonAction),
-			"sync_interval":              scanIntervalToValue(cfg.ScanInterval),
-			"enable_tagging":             strconv.FormatBool(cfg.EnableTagging),
-			"filler_tag_name":            cfg.FillerTagName,
+			"sonarr_url":                    cfg.SonarrURL,
+			"sonarr_api_key":                cfg.SonarrAPIKey,
+			"default_filler_action":         string(cfg.DefaultFillerAction),
+			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
+			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
+			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
+			"enable_tagging":                strconv.FormatBool(cfg.EnableTagging),
+			"filler_tag_name":               cfg.FillerTagName,
+			"enable_anilist_artwork":        strconv.FormatBool(cfg.EnableAniListArtwork),
+			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
+			"sonarr_add_quality_profile_id": strconv.Itoa(cfg.SonarrAddQualityProfileID),
+			"sonarr_add_monitor_mode":       cfg.SonarrAddMonitorMode,
+			"sonarr_add_season_folder":      strconv.FormatBool(cfg.SonarrAddSeasonFolder),
 		} {
 			if err := db.SetSetting(r.Context(), k, v); err != nil {
 				log.Warn().Err(err).Str("key", k).Msg("failed to persist setting")
@@ -721,19 +773,22 @@ func handleTestSonarr() http.HandlerFunc {
 	}
 }
 
-func handleAFLSearch(engine *sync.Engine) http.HandlerFunc {
+func handleAFLSearch(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query().Get("q")
-		if query == "" {
-			writeJSON(w, http.StatusOK, []models.AFLShow{})
+		cachedShows, err := loadCachedAFLShows(r.Context(), db)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load cached AFL shows: "+err.Error())
 			return
 		}
 
-		results, err := engine.ScraperClient().SearchShows(r.Context(), query)
+		mappings, err := db.GetAllMappings(r.Context())
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "AFL search failed: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
 			return
 		}
+
+		results := excludeMappedAFLShows(filterCachedAFLShows(query, cachedShows), mappings, 0)
 
 		seriesIDParam := r.URL.Query().Get("series_id")
 		if seriesIDParam == "" {
@@ -753,28 +808,319 @@ func handleAFLSearch(engine *sync.Engine) http.HandlerFunc {
 			return
 		}
 
-		matches := engine.MatcherClient().FindMatches(r.Context(), *series, results)
+		matches := excludeMappedMatchResults(matchCachedAFLShows(engine.MatcherClient(), *series, results), mappings, seriesID)
+		if len(matches) == 0 {
+			writeJSON(w, http.StatusOK, excludeMappedAFLShows(results, mappings, seriesID))
+			return
+		}
 		writeJSON(w, http.StatusOK, matches)
 	}
 }
 
-func handleAFLSuggest(engine *sync.Engine) http.HandlerFunc {
+func handleAFLSuggest(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		seriesID, err := strconv.Atoi(r.URL.Query().Get("series_id"))
 		if err != nil || seriesID == 0 {
 			writeError(w, http.StatusBadRequest, "series_id parameter is required")
 			return
 		}
-		_, matches, err := engine.SuggestMatches(r.Context(), seriesID)
+
+		cachedShows, err := loadCachedAFLShows(r.Context(), db)
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "AFL suggest failed: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to load cached AFL shows: "+err.Error())
 			return
 		}
+
+		mappings, err := db.GetAllMappings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
+			return
+		}
+
+		series, err := engine.SonarrClient().GetSeries(r.Context(), seriesID)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to load Sonarr series: "+err.Error())
+			return
+		}
+
+		matches := excludeMappedMatchResults(matchCachedAFLShows(engine.MatcherClient(), *series, cachedShows), mappings, seriesID)
 		writeJSON(w, http.StatusOK, matches)
 	}
 }
 
-func handleGetSonarrSeries(cfg *config.Config) http.HandlerFunc {
+func loadCachedAFLShows(ctx context.Context, db *database.DB) ([]models.AFLShow, error) {
+	shows, _, err := db.GetCachedAFLShows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return shows, nil
+}
+
+func matchCachedAFLShows(m *matcherpkg.Matcher, series models.SonarrSeries, shows []models.AFLShow) []matcherpkg.MatchResult {
+	return m.FindMatches(context.Background(), series, shows)
+}
+
+func filterCachedAFLShows(query string, shows []models.AFLShow) []models.AFLShow {
+	normalizer := matcherpkg.New(0.82)
+	normalizedQuery := normalizer.Normalize(query)
+	if normalizedQuery == "" {
+		results := append([]models.AFLShow(nil), shows...)
+		sort.SliceStable(results, func(i, j int) bool {
+			return strings.ToLower(results[i].Title) < strings.ToLower(results[j].Title)
+		})
+		return results
+	}
+
+	type scoredShow struct {
+		show  models.AFLShow
+		score int
+	}
+
+	queryTokens := strings.Fields(normalizedQuery)
+	scored := make([]scoredShow, 0, len(shows))
+
+	for _, show := range shows {
+		normalizedTitle := normalizer.Normalize(show.Title)
+		if normalizedTitle == "" {
+			continue
+		}
+
+		score := 0
+		switch {
+		case normalizedTitle == normalizedQuery:
+			score = 1000
+		case strings.HasPrefix(normalizedTitle, normalizedQuery):
+			score = 920
+		case strings.Contains(normalizedTitle, normalizedQuery):
+			score = 860
+		default:
+			shared := sharedCachedSearchTokens(queryTokens, normalizedTitle)
+			if shared == 0 {
+				continue
+			}
+			score = 700 + shared*30 + int(matcherpkg.JaroWinkler(normalizedQuery, normalizedTitle)*100)
+		}
+
+		scored = append(scored, scoredShow{show: show, score: score})
+	}
+
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score == scored[j].score {
+			return strings.ToLower(scored[i].show.Title) < strings.ToLower(scored[j].show.Title)
+		}
+		return scored[i].score > scored[j].score
+	})
+
+	results := make([]models.AFLShow, 0, len(scored))
+	for _, entry := range scored {
+		results = append(results, entry.show)
+	}
+	return results
+}
+
+func sharedCachedSearchTokens(queryTokens []string, normalizedTitle string) int {
+	if len(queryTokens) == 0 || normalizedTitle == "" {
+		return 0
+	}
+
+	seen := make(map[string]struct{}, len(queryTokens))
+	for _, token := range queryTokens {
+		if len(token) < 2 {
+			continue
+		}
+		seen[token] = struct{}{}
+	}
+
+	shared := 0
+	used := make(map[string]struct{}, len(queryTokens))
+	for _, token := range strings.Fields(normalizedTitle) {
+		if len(token) < 2 {
+			continue
+		}
+		if _, ok := used[token]; ok {
+			continue
+		}
+		if _, ok := seen[token]; ok {
+			shared++
+			used[token] = struct{}{}
+		}
+	}
+
+	return shared
+}
+
+func handleGetSonarrAddOptions(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
+		rootFolders, err := c.GetRootFolders(r.Context())
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to fetch Sonarr root folders: "+err.Error())
+			return
+		}
+		qualityProfiles, err := c.GetQualityProfiles(r.Context())
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to fetch Sonarr quality profiles: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"root_folders":     rootFolders,
+			"quality_profiles": qualityProfiles,
+		})
+	}
+}
+
+func handleLookupSonarrSeries(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := strings.TrimSpace(r.URL.Query().Get("q"))
+		if query == "" {
+			writeJSON(w, http.StatusOK, []models.SonarrSeries{})
+			return
+		}
+
+		c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
+		results, err := c.LookupSeries(r.Context(), query)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to lookup Sonarr series: "+err.Error())
+			return
+		}
+
+		anime := make([]models.SonarrSeries, 0, len(results))
+		for _, item := range results {
+			if item.SeriesType == "" || item.SeriesType == "anime" || item.SeriesType == "standard" {
+				anime = append(anime, item)
+			}
+		}
+		writeJSON(w, http.StatusOK, anime)
+	}
+}
+
+func handleAddSonarrSeries(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Series           models.SonarrSeries `json:"series"`
+			RootFolderPath   *string             `json:"root_folder_path"`
+			QualityProfileID *int                `json:"quality_profile_id"`
+			MonitorMode      *string             `json:"monitor_mode"`
+			SeasonFolder     *bool               `json:"season_folder"`
+			SearchOnAdd      *bool               `json:"search_on_add"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+
+		if req.Series.Title == "" {
+			writeError(w, http.StatusBadRequest, "series is required")
+			return
+		}
+
+		rootFolder := cfg.SonarrAddRootFolder
+		if req.RootFolderPath != nil {
+			rootFolder = *req.RootFolderPath
+		}
+		qualityProfileID := cfg.SonarrAddQualityProfileID
+		if req.QualityProfileID != nil {
+			qualityProfileID = *req.QualityProfileID
+		}
+		monitorMode := "none"
+		if req.MonitorMode != nil {
+			monitorMode = *req.MonitorMode
+		}
+		seasonFolder := true
+		if req.SeasonFolder != nil {
+			seasonFolder = *req.SeasonFolder
+		}
+		searchOnAdd := false
+		if req.SearchOnAdd != nil {
+			searchOnAdd = *req.SearchOnAdd
+		}
+
+		c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
+		if rootFolder == "" {
+			animeSeries, err := c.GetAnimeSeries(r.Context())
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to load anime library while resolving Sonarr root folder")
+			}
+			rootFolders, err := c.GetRootFolders(r.Context())
+			if err != nil {
+				writeError(w, http.StatusBadGateway, "failed to fetch Sonarr root folders: "+err.Error())
+				return
+			}
+			rootFolder = preferredSonarrRootFolder(animeSeries, rootFolders)
+		}
+
+		if rootFolder == "" || qualityProfileID <= 0 {
+			writeError(w, http.StatusBadRequest, "quality profile is required before adding to Sonarr")
+			return
+		}
+		if !configIsValidSonarrMonitorMode(monitorMode) {
+			writeError(w, http.StatusBadRequest, "invalid Sonarr monitor mode")
+			return
+		}
+
+		created, err := c.AddSeries(r.Context(), req.Series, sonarr.AddSeriesOptions{
+			RootFolderPath:   rootFolder,
+			QualityProfileID: qualityProfileID,
+			SeasonFolder:     seasonFolder,
+			MonitorMode:      monitorMode,
+			SearchOnAdd:      searchOnAdd,
+		})
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to add Sonarr series: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusCreated, created)
+	}
+}
+
+func preferredSonarrRootFolder(series []models.SonarrSeries, rootFolders []models.SonarrRootFolder) string {
+	counts := make(map[string]int)
+	bestPath := ""
+	bestCount := 0
+
+	for _, item := range series {
+		path := strings.TrimSpace(item.RootFolderPath)
+		if path == "" {
+			continue
+		}
+		counts[path]++
+		if counts[path] > bestCount {
+			bestCount = counts[path]
+			bestPath = path
+		}
+	}
+
+	if bestPath != "" {
+		return bestPath
+	}
+	if len(rootFolders) > 0 {
+		return strings.TrimSpace(rootFolders[0].Path)
+	}
+	return ""
+}
+
+func handleMarkManualMatchPending(db *database.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			SonarrSeriesID int `json:"sonarr_series_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+		if req.SonarrSeriesID == 0 {
+			writeError(w, http.StatusBadRequest, "sonarr_series_id is required")
+			return
+		}
+		if err := markManualMatchPendingSeriesID(r.Context(), db, req.SonarrSeriesID); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to persist pending manual match: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"status": "pending", "sonarr_series_id": req.SonarrSeriesID})
+	}
+}
+
+func handleGetSonarrSeries(cfg *config.Config, db *database.DB, engine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
 		series, err := c.GetAnimeSeries(r.Context())
@@ -782,7 +1128,155 @@ func handleGetSonarrSeries(cfg *config.Config) http.HandlerFunc {
 			writeError(w, http.StatusBadGateway, "failed to fetch Sonarr series: "+err.Error())
 			return
 		}
+
+		if r.URL.Query().Get("matchable_only") == "true" {
+			mappings, err := db.GetAllMappings(r.Context())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
+				return
+			}
+
+			cachedShows, err := loadCachedAFLShows(r.Context(), db)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to load cached AFL shows: "+err.Error())
+				return
+			}
+
+			pendingManualMatchIDs, err := loadManualMatchPendingSeriesIDs(r.Context(), db)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to load pending manual matches: "+err.Error())
+				return
+			}
+
+			series = filterSeriesForAddModal(r.Context(), series, mappings, pendingManualMatchIDs, engine.MatcherClient(), cachedShows)
+		}
+
 		writeJSON(w, http.StatusOK, series)
+	}
+}
+
+func filterSeriesForAddModal(ctx context.Context, series []models.SonarrSeries, mappings []models.ShowMapping, pendingManualMatchIDs map[int]struct{}, matcher *matcherpkg.Matcher, cachedShows []models.AFLShow) []models.SonarrSeries {
+	mappedIDs := make(map[int]struct{}, len(mappings))
+	for _, mapping := range mappings {
+		mappedIDs[mapping.SonarrSeriesID] = struct{}{}
+	}
+
+	filtered := make([]models.SonarrSeries, 0, len(series))
+	for _, item := range series {
+		if _, ok := mappedIDs[item.ID]; ok {
+			filtered = append(filtered, item)
+			continue
+		}
+		if _, ok := pendingManualMatchIDs[item.ID]; ok {
+			item.ManualMatchPending = true
+			filtered = append(filtered, item)
+			continue
+		}
+
+		match := matcher.BestMatch(ctx, item, cachedShows)
+		if match != nil && !isMappedAFLSlugUnavailable(match.AFLShow.Slug, mappings, item.ID) {
+			filtered = append(filtered, item)
+		}
+	}
+
+	return filtered
+}
+
+func excludeMappedMatchResults(matches []matcherpkg.MatchResult, mappings []models.ShowMapping, currentSeriesID int) []matcherpkg.MatchResult {
+	filtered := make([]matcherpkg.MatchResult, 0, len(matches))
+	for _, match := range matches {
+		if isMappedAFLSlugUnavailable(match.AFLShow.Slug, mappings, currentSeriesID) {
+			continue
+		}
+		filtered = append(filtered, match)
+	}
+	return filtered
+}
+
+func excludeMappedAFLShows(shows []models.AFLShow, mappings []models.ShowMapping, currentSeriesID int) []models.AFLShow {
+	filtered := make([]models.AFLShow, 0, len(shows))
+	for _, show := range shows {
+		if isMappedAFLSlugUnavailable(show.Slug, mappings, currentSeriesID) {
+			continue
+		}
+		filtered = append(filtered, show)
+	}
+	return filtered
+}
+
+func isMappedAFLSlugUnavailable(slug string, mappings []models.ShowMapping, currentSeriesID int) bool {
+	if slug == "" {
+		return false
+	}
+
+	for _, mapping := range mappings {
+		if mapping.AFLSlug == slug && mapping.SonarrSeriesID != currentSeriesID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func loadManualMatchPendingSeriesIDs(ctx context.Context, db *database.DB) (map[int]struct{}, error) {
+	value, err := db.GetSetting(ctx, manualMatchPendingSeriesIDsKey)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make(map[int]struct{})
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, parseErr := strconv.Atoi(part)
+		if parseErr != nil || id <= 0 {
+			continue
+		}
+		ids[id] = struct{}{}
+	}
+	return ids, nil
+}
+
+func storeManualMatchPendingSeriesIDs(ctx context.Context, db *database.DB, ids map[int]struct{}) error {
+	values := make([]int, 0, len(ids))
+	for id := range ids {
+		values = append(values, id)
+	}
+	sort.Ints(values)
+
+	parts := make([]string, 0, len(values))
+	for _, id := range values {
+		parts = append(parts, strconv.Itoa(id))
+	}
+	return db.SetSetting(ctx, manualMatchPendingSeriesIDsKey, strings.Join(parts, ","))
+}
+
+func markManualMatchPendingSeriesID(ctx context.Context, db *database.DB, seriesID int) error {
+	ids, err := loadManualMatchPendingSeriesIDs(ctx, db)
+	if err != nil {
+		return err
+	}
+	ids[seriesID] = struct{}{}
+	return storeManualMatchPendingSeriesIDs(ctx, db, ids)
+}
+
+func clearManualMatchPendingSeriesID(ctx context.Context, db *database.DB, seriesID int) error {
+	ids, err := loadManualMatchPendingSeriesIDs(ctx, db)
+	if err != nil {
+		return err
+	}
+	delete(ids, seriesID)
+	return storeManualMatchPendingSeriesIDs(ctx, db, ids)
+}
+
+func configIsValidSonarrMonitorMode(value string) bool {
+	switch value {
+	case "", "all", "future", "missing", "existing", "pilot", "firstSeason", "latestSeason", "none":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -801,6 +1295,10 @@ func handleGetMappingArtwork(cfg *config.Config, db *database.DB) http.HandlerFu
 		}
 		if mapping == nil {
 			writeError(w, http.StatusNotFound, "mapping not found")
+			return
+		}
+		if !cfg.EnableAniListArtwork {
+			writeJSON(w, http.StatusOK, map[string]interface{}{})
 			return
 		}
 

@@ -1,26 +1,51 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { fade, scale } from 'svelte/transition';
   import { push } from 'svelte-spa-router';
+  import { Badge, Box, Button, Checkbox, Input, Label, ScrollArea, Select } from '@foxui/core';
   import { shows, settings, addNotification } from '../lib/stores.js';
-  import { getShows, getStatus, getSonarrSeries, triggerSync, searchAFL, suggestAFL, confirmMatch, getSettings } from '../lib/api.js';
-  import Spinner from '../components/Spinner.svelte';
-  import Badge from '../components/Badge.svelte';
-  import Modal from '../components/Modal.svelte';
-  import { Check, CircleCheckBig, Plus, Search, TriangleAlert, Waves, X } from 'lucide-svelte';
+  import {
+    addSonarrSeries,
+    getShows,
+    getSonarrAddOptions,
+    getSonarrSeries,
+    lookupSonarrSeries,
+    markManualMatchPending,
+    suggestAFL,
+    searchAFL,
+    confirmMatch,
+    getSettings,
+  } from '../lib/api.js';
+  import { episodeTypeBadge, syncStateBadge } from '../lib/fox.js';
+  import {
+    createPosterMonogram,
+    POSTER_FAILED,
+    POSTER_LOADING,
+    resolvePosterElementState,
+  } from '../lib/poster-state.js';
+  import { resolveSonarrImageUrl } from '../lib/sonarr-images.js';
+  import { Check, CircleAlert, CircleCheckBig, LoaderCircle, Plus, Search, Waves, X } from 'lucide-svelte';
 
   const START_FROM_BEGINNING = 'from_beginning';
   const START_FROM_CURRENT = 'from_current_progress';
+  const ADD_STEP_SERIES = 'series';
+  const ADD_STEP_FALLBACK_AFL = 'fallback_afl';
+  const ADD_STEP_FALLBACK_SONARR = 'fallback_sonarr';
+  const ADD_STEP_MATCH = 'match';
+  const ADD_STEP_UNSAFE_MATCH = 'unsafe_match';
+  const ADD_STEP_POST_ADD = 'post_add';
 
   let loading = true;
   let filter = '';
-  let sonarrConnected = false;
 
   let allSeries = [];
+  let addSeriesLibrary = [];
   let seriesById = {};
 
   let showAddModal = false;
-  let addStep = 'series';
+  let addStep = ADD_STEP_SERIES;
   let sonarrLoading = false;
+  let seriesQuery = '';
   let selectedSonarr = null;
   let suggestedMatches = [];
   let displayedMatches = [];
@@ -34,7 +59,29 @@
   let addTrackMixed = true;
   let addTrackAnimeCanon = true;
   let addStartMode = START_FROM_CURRENT;
+  let fallbackAflQuery = '';
+  let cachedAflShows = [];
+  let fallbackAflResults = [];
+  let fallbackAflLoading = false;
+  let selectedFallbackAfl = null;
+  let fallbackFilterTimeout = null;
+  let sonarrLookupQuery = '';
+  let sonarrLookupResults = [];
+  let sonarrLookupLoading = false;
+  let selectedSonarrLookup = null;
+  let sonarrAdding = false;
+  let sonarrRootFolderOptions = [];
+  let sonarrQualityProfileOptions = [];
+  let sonarrAddOptionsError = '';
+  let fallbackQualityProfileId = '';
+  let fallbackSeasonFolder = true;
+  let addOutcome = null;
 
+  const startModeOptions = [
+    { value: START_FROM_CURRENT, label: 'Current progress' },
+    { value: START_FROM_BEGINNING, label: 'Episode 1' },
+  ];
+  const modalSelectContentProps = { class: 'z-[70] p-1' };
   const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
   const trackedToAction = (tracked) => (tracked ? 'monitor' : 'unmonitor');
 
@@ -56,19 +103,48 @@
     .filter((series) => !new Set(($shows || []).map((show) => show.sonarr_series_id)).has(series.id))
     .sort((a, b) => a.title.localeCompare(b.title));
 
+  $: mappedSeriesIds = new Set(($shows || []).map((show) => show.sonarr_series_id));
+
+  $: filteredSeriesLibrary = addSeriesLibrary
+    .filter((series) => {
+    const query = seriesQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      (series.title || '').toLowerCase().includes(query) ||
+      String(series.year || '').includes(query)
+    );
+    })
+    .sort((a, b) => {
+      const aMapped = mappedSeriesIds.has(a.id) ? 1 : 0;
+      const bMapped = mappedSeriesIds.has(b.id) ? 1 : 0;
+      if (aMapped !== bMapped) return aMapped - bMapped;
+      return a.title.localeCompare(b.title);
+    });
+
   onMount(async () => {
     await loadLanding();
+  });
+
+  onDestroy(() => {
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = '';
+    }
+    if (fallbackFilterTimeout) {
+      clearTimeout(fallbackFilterTimeout);
+    }
   });
 
   async function loadLanding() {
     loading = true;
     try {
-      const [showsRes, statusRes, seriesRes] = await Promise.allSettled([getShows(), getStatus(), getSonarrSeries()]);
+      const [showsRes, seriesRes, settingsRes] = await Promise.allSettled([getShows(), getSonarrSeries(), getSettings()]);
       const nextShows = showsRes.status === 'fulfilled' ? (showsRes.value || []) : [];
       shows.set(nextShows);
-      sonarrConnected = statusRes.status === 'fulfilled' && statusRes.value?.status === 'ok';
       allSeries = seriesRes.status === 'fulfilled' ? (seriesRes.value || []) : [];
       seriesById = Object.fromEntries(allSeries.map((series) => [series.id, series]));
+      if (settingsRes.status === 'fulfilled') {
+        settings.set(settingsRes.value || {});
+      }
     } catch (err) {
       addNotification('Failed to load Mizu anime: ' + err.message, 'error');
     }
@@ -79,21 +155,63 @@
     if (!series?.images?.length) return '';
     const preferred = series.images.find((image) => image.coverType === 'poster') || series.images.find((image) => image.coverType === 'fanart') || series.images[0];
     if (!preferred) return '';
-    if (preferred.remoteUrl) return preferred.remoteUrl;
-    if (preferred.url && /^https?:/i.test(preferred.url)) return preferred.url;
-    return '';
-  }
-
-  function initials(title) {
-    return (title || 'Mizu').split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase();
+    return resolveSonarrImageUrl(preferred, $settings?.sonarr_url || '');
   }
 
   function markerChip(show) {
     return show.sync_watermark > 0 ? `#${show.sync_watermark}` : '#0';
   }
 
-  function syncChip(show) {
-    return show.enabled ? 'Syncing' : 'Paused';
+  function setPosterFrameState(node, state) {
+    node.dataset.posterState = state;
+  }
+
+  function observePosterFrame(node, show) {
+    let currentShow = show;
+    let currentImage = null;
+
+    const syncState = () => {
+      setPosterFrameState(node, resolvePosterElementState({
+        hasPoster: !!currentShow?.poster || !!currentImage?.getAttribute('src'),
+        complete: !!currentImage?.complete,
+        naturalWidth: currentImage?.naturalWidth || 0,
+      }));
+    };
+
+    const handleLoad = () => setPosterFrameState(node, 'loaded');
+    const handleError = () => setPosterFrameState(node, 'failed');
+
+    const bindImage = () => {
+      if (currentImage) {
+        currentImage.removeEventListener('load', handleLoad);
+        currentImage.removeEventListener('error', handleError);
+      }
+
+      currentImage = node.querySelector('img');
+
+      if (!currentImage) {
+        syncState();
+        return;
+      }
+
+      currentImage.addEventListener('load', handleLoad);
+      currentImage.addEventListener('error', handleError);
+      queueMicrotask(syncState);
+    };
+
+    bindImage();
+
+    return {
+      update(nextShow) {
+        currentShow = nextShow;
+        bindImage();
+      },
+      destroy() {
+        if (!currentImage) return;
+        currentImage.removeEventListener('load', handleLoad);
+        currentImage.removeEventListener('error', handleError);
+      },
+    };
   }
 
   function openShow(showId) {
@@ -116,34 +234,99 @@
     addStartMode = START_FROM_CURRENT;
   }
 
+  async function loadSonarrAddOptions() {
+    sonarrAddOptionsError = '';
+    try {
+      const data = await getSonarrAddOptions();
+      sonarrRootFolderOptions = (data.root_folders || []).map((folder) => ({
+        value: folder.path,
+        label: folder.path,
+      }));
+      sonarrQualityProfileOptions = (data.quality_profiles || []).map((profile) => ({
+        value: String(profile.id),
+        label: profile.name,
+      }));
+      if (!fallbackQualityProfileId) {
+        fallbackQualityProfileId = preferredAnimeQualityProfileId();
+      }
+    } catch (err) {
+      sonarrAddOptionsError = err.message;
+    }
+  }
+
+  async function refreshAddSeriesLibrary() {
+    addSeriesLibrary = (await getSonarrSeries(true)) || [];
+  }
+
+  function resetFallbackFlow() {
+    fallbackAflQuery = '';
+    fallbackAflResults = cachedAflShows;
+    selectedFallbackAfl = null;
+    sonarrLookupQuery = '';
+    sonarrLookupResults = [];
+    selectedSonarrLookup = null;
+    fallbackQualityProfileId = '';
+    fallbackSeasonFolder = true;
+    addOutcome = null;
+    selectedAfl = null;
+  }
+
   async function openAddModal() {
-    addStep = 'series';
+    addStep = ADD_STEP_SERIES;
+    seriesQuery = '';
     selectedSonarr = null;
     suggestedMatches = [];
     displayedMatches = [];
     selectedAfl = null;
     manualQuery = '';
     manualSearchVisible = false;
+    resetFallbackFlow();
     showAddModal = true;
 
-    await refreshSettings();
+    await Promise.all([refreshSettings(), loadSonarrAddOptions()]);
     resetAddRuleDefaults($settings || {});
 
     sonarrLoading = true;
     try {
-      const mapped = new Set(($shows || []).map((show) => show.sonarr_series_id));
-      allSeries = allSeries.length ? allSeries : (await getSonarrSeries()) || [];
+      const [fullSeries, modalSeries] = await Promise.all([
+        allSeries.length ? Promise.resolve(allSeries) : getSonarrSeries(),
+        getSonarrSeries(true),
+      ]);
+      allSeries = fullSeries || [];
+      addSeriesLibrary = modalSeries || [];
       seriesById = Object.fromEntries(allSeries.map((series) => [series.id, series]));
-      allSeries = allSeries.filter((series) => !mapped.has(series.id));
     } catch (err) {
       addNotification('Failed to load Sonarr series: ' + err.message, 'error');
     }
     sonarrLoading = false;
   }
 
+  function closeAddModal() {
+    showAddModal = false;
+  }
+
+  function handleAddModalBackdropClick(event) {
+    if (event.target === event.currentTarget) {
+      closeAddModal();
+    }
+  }
+
+  function handleWindowKeydown(event) {
+    if (showAddModal && event.key === 'Escape') {
+      closeAddModal();
+    }
+  }
+
+  function openExistingMapping(seriesId) {
+    const mapped = ($shows || []).find((show) => show.sonarr_series_id === seriesId);
+    if (!mapped) return;
+    closeAddModal();
+    openShow(mapped.id);
+  }
+
   async function goToMatchStep() {
     if (!selectedSonarr) return;
-    addStep = 'match';
+    addStep = ADD_STEP_MATCH;
     manualQuery = selectedSonarr.title || '';
     await loadSuggestedMatches();
   }
@@ -155,7 +338,14 @@
     try {
       suggestedMatches = await suggestAFL(selectedSonarr.id);
       displayedMatches = suggestedMatches;
-      manualSearchVisible = suggestedMatches.length === 0;
+      manualSearchVisible = suggestedMatches.length === 0 || !!selectedSonarr.manualMatchPending;
+      const bestMatch = suggestedMatches[0];
+      if (bestMatch && isCompactMatchSelection(bestMatch)) {
+        selectedAfl = bestMatch;
+      }
+      if (manualSearchVisible && selectedSonarr.manualMatchPending && manualQuery.trim()) {
+        displayedMatches = await searchAFL(manualQuery.trim(), selectedSonarr.id);
+      }
     } catch (err) {
       suggestedMatches = [];
       displayedMatches = [];
@@ -203,8 +393,244 @@
       if (mapped) openShow(mapped.id);
     } catch (err) {
       addNotification('Failed to sync anime: ' + err.message, 'error');
+    } finally {
+      confirming = false;
     }
-    confirming = false;
+  }
+
+  function isUnsafeMatch(match) {
+    return !!match && match.confidence == null;
+  }
+
+  function shouldAutoCreateMappingAfterSonarrAdd(match) {
+    return !!match && !isUnsafeMatch(match) && match.method === 'exact' && (match.confidence ?? 0) >= 1;
+  }
+
+  function isCompactMatchSelection(match) {
+    if (!match || isUnsafeMatch(match)) return false;
+    return match.method === 'exact' || match.method === 'normalized' || (match.confidence ?? 0) >= 0.95;
+  }
+
+  function preferredAnimeRootFolder() {
+    const counts = new Map();
+    let bestPath = '';
+    let bestCount = 0;
+
+    for (const series of allSeries) {
+      const path = (series?.rootFolderPath || '').trim();
+      if (!path) continue;
+      const nextCount = (counts.get(path) || 0) + 1;
+      counts.set(path, nextCount);
+      if (nextCount > bestCount) {
+        bestCount = nextCount;
+        bestPath = path;
+      }
+    }
+
+    return bestPath || sonarrRootFolderOptions[0]?.value || '';
+  }
+
+  function preferredAnimeQualityProfileId() {
+    const counts = new Map();
+    let bestValue = '';
+    let bestCount = 0;
+
+    for (const series of allSeries) {
+      const value = Number(series?.qualityProfileId || 0);
+      if (!value) continue;
+      const key = String(value);
+      const nextCount = (counts.get(key) || 0) + 1;
+      counts.set(key, nextCount);
+      if (nextCount > bestCount) {
+        bestCount = nextCount;
+        bestValue = key;
+      }
+    }
+
+    return bestValue || sonarrQualityProfileOptions[0]?.value || '';
+  }
+
+  function ensureFallbackAddDefaults() {
+    if (!fallbackQualityProfileId) {
+      fallbackQualityProfileId = preferredAnimeQualityProfileId();
+    }
+    fallbackSeasonFolder = fallbackSeasonFolder ?? true;
+  }
+
+  function buildSonarrAddPayload(series) {
+    return {
+      series: {
+        ...series,
+        seriesType: 'anime',
+      },
+      root_folder_path: preferredAnimeRootFolder(),
+      quality_profile_id: Number(fallbackQualityProfileId || 0),
+      monitor_mode: 'none',
+      season_folder: fallbackSeasonFolder ?? true,
+      search_on_add: false,
+    };
+  }
+
+  function filterFallbackAflResults(query = fallbackAflQuery) {
+    const normalized = (query || '').trim().toLowerCase();
+    if (!normalized) {
+      fallbackAflResults = cachedAflShows;
+      return;
+    }
+
+    const tokens = normalized.split(/\s+/).filter(Boolean);
+    fallbackAflResults = cachedAflShows.filter((show) => {
+      const title = (show.title || '').toLowerCase();
+      if (!title) return false;
+      if (title.includes(normalized)) return true;
+      return tokens.every((token) => title.includes(token));
+    });
+  }
+
+  function scheduleFallbackAflFilter() {
+    if (fallbackFilterTimeout) {
+      clearTimeout(fallbackFilterTimeout);
+    }
+    fallbackFilterTimeout = setTimeout(() => {
+      filterFallbackAflResults();
+    }, 120);
+  }
+
+  async function ensureCachedAflShowsLoaded() {
+    if (cachedAflShows.length > 0) {
+      fallbackAflResults = cachedAflShows;
+      return;
+    }
+
+    fallbackAflLoading = true;
+    selectedFallbackAfl = null;
+    try {
+      cachedAflShows = await searchAFL('');
+      fallbackAflResults = cachedAflShows;
+    } catch (err) {
+      cachedAflShows = [];
+      fallbackAflResults = [];
+      addNotification('AFL cache load failed: ' + err.message, 'error');
+    } finally {
+      fallbackAflLoading = false;
+    }
+  }
+
+  async function goToFallbackAflStep(prefill = '') {
+    addStep = ADD_STEP_FALLBACK_AFL;
+    resetFallbackFlow();
+    fallbackAflQuery = prefill;
+    await ensureCachedAflShowsLoaded();
+    filterFallbackAflResults(prefill);
+  }
+
+  async function loadSonarrLookupResults() {
+    if (!sonarrLookupQuery.trim()) return;
+    sonarrLookupLoading = true;
+    selectedSonarrLookup = null;
+    try {
+      sonarrLookupResults = await lookupSonarrSeries(sonarrLookupQuery.trim());
+    } catch (err) {
+      sonarrLookupResults = [];
+      addNotification('Sonarr lookup failed: ' + err.message, 'error');
+    }
+    sonarrLookupLoading = false;
+  }
+
+  async function goToFallbackSonarrStep() {
+    if (!selectedFallbackAfl) return;
+    sonarrLookupQuery = selectedFallbackAfl.title || '';
+    ensureFallbackAddDefaults();
+    addStep = ADD_STEP_FALLBACK_SONARR;
+    await loadSonarrLookupResults();
+  }
+
+  function upsertSeriesLocally(series) {
+    allSeries = [...allSeries.filter((item) => item.id !== series.id), series].sort((a, b) => a.title.localeCompare(b.title));
+    seriesById = Object.fromEntries(allSeries.map((item) => [item.id, item]));
+  }
+
+  async function handleKeepSonarrOnly() {
+    if (!selectedSonarr?.id) return;
+    try {
+      await markManualMatchPending(selectedSonarr.id);
+      await refreshAddSeriesLibrary();
+      addOutcome = {
+        title: selectedSonarr.title,
+        type: 'pending_manual_match',
+      };
+      selectedSonarr = { ...selectedSonarr, manualMatchPending: true };
+      addStep = ADD_STEP_POST_ADD;
+    } catch (err) {
+      addNotification('Failed to persist manual match reminder: ' + err.message, 'error');
+    }
+  }
+
+  async function handleAddSelectedSonarrLookup() {
+    ensureFallbackAddDefaults();
+    if (!selectedFallbackAfl || !selectedSonarrLookup) return;
+    sonarrAdding = true;
+    try {
+      const created = await addSonarrSeries(buildSonarrAddPayload(selectedSonarrLookup));
+      upsertSeriesLocally(created);
+      selectedSonarr = created;
+      manualQuery = selectedFallbackAfl.title || created.title || '';
+
+      const results = await searchAFL(manualQuery.trim(), created.id);
+      suggestedMatches = results;
+      displayedMatches = results;
+      manualSearchVisible = results.length === 0 || !!created.manualMatchPending;
+      const chosenResult = results.find((item) => matchSlug(item) === selectedFallbackAfl.slug);
+      if (shouldAutoCreateMappingAfterSonarrAdd(chosenResult)) {
+        selectedAfl = chosenResult;
+        await handleConfirmMatch();
+        return;
+      }
+
+      if (chosenResult && !isUnsafeMatch(chosenResult)) {
+        selectedAfl = chosenResult;
+        addStep = ADD_STEP_MATCH;
+        return;
+      }
+
+      if (chosenResult) {
+        selectedAfl = chosenResult;
+        addStep = ADD_STEP_UNSAFE_MATCH;
+        return;
+      }
+
+      await handleKeepSonarrOnly();
+    } catch (err) {
+      addNotification('Failed to add anime to Sonarr: ' + err.message, 'error');
+    } finally {
+      sonarrAdding = false;
+    }
+  }
+
+  async function handleConfirmUnsafeOverride() {
+    await handleConfirmMatch();
+  }
+
+  async function handlePrimaryMatchAction() {
+    if (!selectedAfl) return;
+    if (isUnsafeMatch(selectedAfl)) {
+      addStep = ADD_STEP_UNSAFE_MATCH;
+      return;
+    }
+    await handleConfirmMatch();
+  }
+
+  function returnToSeriesStep(prefill = '') {
+    addStep = ADD_STEP_SERIES;
+    addOutcome = null;
+    selectedAfl = null;
+    selectedFallbackAfl = null;
+    selectedSonarrLookup = null;
+    sonarrLookupResults = [];
+    fallbackAflResults = [];
+    if (prefill) {
+      seriesQuery = prefill;
+    }
   }
 
   function matchTitle(match) {
@@ -214,560 +640,742 @@
   function matchSlug(match) {
     return match?.afl_show?.slug || match?.slug || '';
   }
+
+  function optionState(checked) {
+    return checked ? 'Included' : 'Skipped';
+  }
+
+  function optionTone(checked, variant) {
+    return checked ? variant : 'secondary';
+  }
+
+  $: if (typeof document !== 'undefined') {
+    document.body.style.overflow = showAddModal ? 'hidden' : '';
+  }
 </script>
 
 <svelte:head>
   <title>Mizu - Anime</title>
 </svelte:head>
 
-<div class="library-shell">
-  <section class="page-heading anime-heading">
-    <h1>Anime</h1>
-    <button class="btn btn-primary anime-heading-action" on:click={openAddModal} aria-label="Add anime" title="Add anime">
+<div class="space-y-6">
+  <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">Anime</h1>
+    </div>
+    <Button variant="primary" onclick={openAddModal}>
       <Plus size={18} />
-      <span>Add Anime</span>
-    </button>
+      Add anime
+    </Button>
   </section>
 
-  <label class="search-shell anime-search-row" aria-label="Search synced anime">
-    <Search size={18} />
-    <input class="landing-search" type="text" placeholder="Search anime..." bind:value={filter} />
-  </label>
+  <section>
+    <div class="relative">
+      <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-accent-300">
+        <Search size={20} />
+      </span>
+      <Input
+        type="text"
+        variant="primary"
+        sizeVariant="lg"
+        placeholder="Search anime"
+        bind:value={filter}
+        class="w-full pl-12"
+        aria-label="Search anime"
+      />
+    </div>
+  </section>
 
   {#if loading}
-    <Spinner center size="lg" message="Pulling anime from the current..." />
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
+      <LoaderCircle size={30} class="animate-spin text-accent-400" />
+      <div class="space-y-1">
+        <h2 class="text-base font-semibold text-base-100">Loading anime</h2>
+        <p class="text-sm text-base-400">Pulling current mappings and Sonarr state.</p>
+      </div>
+    </Box>
   {:else if filteredShows.length === 0 && ($shows || []).length === 0}
-    <div class="landing-empty">
-      <div class="empty-state compact-empty">
-        <div class="empty-icon"><Waves size={28} /></div>
-        <h3>No anime synced yet</h3>
-        <p>Add your first Sonarr anime mapping to start using Mizu.</p>
-        <button class="btn btn-primary" on:click={openAddModal}>
-          <Plus size={18} />
-          <span>Add Anime</span>
-        </button>
+    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 px-6 text-center">
+      <span class="flex size-12 items-center justify-center rounded-xl border border-accent-500/20 bg-accent-950/30 text-accent-300">
+        <Waves size={24} />
+      </span>
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-base-50">No anime synced yet</h2>
+        <p class="max-w-md text-sm leading-6 text-base-400">Add your first Sonarr anime mapping to start monitoring filler decisions in Mizu.</p>
       </div>
-    </div>
+      <Button variant="primary" onclick={openAddModal}>
+        <Plus size={18} />
+        Add anime
+      </Button>
+    </Box>
   {:else if filteredShows.length === 0}
-    <div class="landing-empty">
-      <div class="empty-state compact-empty">
-        <div class="empty-icon"><TriangleAlert size={28} /></div>
-        <h3>No matching anime</h3>
-        <p>Try another search term.</p>
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 px-6 text-center">
+      <span class="flex size-12 items-center justify-center rounded-xl border border-base-700/80 bg-base-900/70 text-base-300">
+        <CircleAlert size={24} />
+      </span>
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-base-50">No matching anime</h2>
+        <p class="text-sm text-base-400">Try another title, slug, or keyword.</p>
       </div>
-    </div>
+    </Box>
   {:else}
-    <section class="shows-grid">
+    <section class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
       {#each filteredShows as show}
-        <button type="button" class="show-card" on:click={() => openShow(show.id)}>
-          <div class="show-card-media" class:no-art={!show.poster}>
-            {#if show.poster}
-              <img src={show.poster} alt={show.sonarr_title} width="320" height="480" loading="lazy" decoding="async" />
-            {:else}
-              <div class="show-card-fallback">{initials(show.sonarr_title)}</div>
-            {/if}
-            <div class="show-card-overlay">
-              <div class="show-card-copy">
-                <h3>{show.sonarr_title}</h3>
-              </div>
-              <div class="show-card-chips">
-                <span class="info-chip"><Waves size={16} /> {markerChip(show)}</span>
-                <span class="info-chip" class:info-chip-on={show.enabled} class:info-chip-off={!show.enabled}><CircleCheckBig size={16} /> {syncChip(show)}</span>
+        {@const syncBadge = syncStateBadge(show.enabled)}
+        <button
+          type="button"
+          class="group w-full cursor-pointer text-left transition-opacity duration-300 ease-in-out hover:opacity-80 focus:outline-none"
+          onclick={() => openShow(show.id)}
+          aria-label={`Open ${show.sonarr_title}`}
+        >
+          <Box class="h-full rounded-2xl border border-base-800/80 bg-base-950/60 p-3">
+            <div
+              class="poster-frame relative aspect-[2/3] overflow-hidden rounded-xl border border-base-800/80 bg-base-900/80"
+              data-poster-state={show.poster ? POSTER_LOADING : POSTER_FAILED}
+              use:observePosterFrame={show}
+            >
+              {#if show.poster}
+                <div class="poster-skeleton absolute inset-0" aria-hidden="true">
+                  <div class="pointer-events-none absolute inset-x-0 top-0 h-28 bg-linear-to-b from-base-50/6 to-transparent"></div>
+                  <div class="pointer-events-none absolute inset-0 flex items-center justify-center px-4">
+                    <div class="text-center text-[4.75rem] font-black leading-none tracking-[0.24em] text-base-50/6 sm:text-[5.5rem]">
+                      {createPosterMonogram(show.sonarr_title)}
+                    </div>
+                  </div>
+                  <div class="poster-skeleton__shine"></div>
+                </div>
+                <img
+                  src={show.poster}
+                  alt={show.sonarr_title}
+                  width="320"
+                  height="480"
+                  loading="lazy"
+                  decoding="async"
+                  class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out group-hover:scale-105"
+                />
+              {/if}
+
+              <div class="poster-fallback bg-base-900 text-3xl font-semibold tracking-tight text-base-300">
+                {createPosterMonogram(show.sonarr_title)}
               </div>
             </div>
-          </div>
+
+            <div class="mt-3 space-y-3">
+              <div>
+                <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-base-50">
+                  {show.sonarr_title}
+                </h2>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <Badge variant="secondary" size="sm">
+                  <Waves size={12} />
+                  {markerChip(show)}
+                </Badge>
+                <Badge variant={syncBadge.variant} size="sm">
+                  <CircleCheckBig size={12} />
+                  {syncBadge.label}
+                </Badge>
+              </div>
+            </div>
+          </Box>
         </button>
       {/each}
     </section>
   {/if}
 </div>
 
-<Modal title="Add Anime" show={showAddModal} on:close={() => (showAddModal = false)} size="large">
-  {#if addStep === 'series'}
-    <p class="modal-copy">Choose the Sonarr anime you want to add to Mizu.</p>
-    {#if sonarrLoading}
-      <Spinner center message="Pulling the Sonarr library into view..." />
-    {:else if availableSeries.length === 0}
-      <div class="empty-state compact-empty" style="padding:20px">
-        <h3>No anime left to add</h3>
-        <p>Everything in Sonarr is already added, or Sonarr did not return any anime series.</p>
-      </div>
-    {:else}
-      <div class="select-list">
-        {#each availableSeries as series}
-          <button type="button" class="card selectable-card" class:selected-card={selectedSonarr?.id === series.id} on:click={() => (selectedSonarr = series)}>
-            <div class="selectable-title">{series.title}</div>
-            <div class="selectable-meta">{series.year || 'Anime'}</div>
-          </button>
-        {/each}
-      </div>
-    {/if}
-  {:else}
-    <p class="modal-copy">Choose the AnimeFillerList entry for <strong>{selectedSonarr?.title}</strong>.</p>
+<svelte:window onkeydown={handleWindowKeydown} />
 
-    {#if matchLoading}
-      <Spinner center message="Surfacing strict matches..." />
-    {:else}
-      {#if manualSearchVisible}
-        <div class="form-group" style="margin-bottom:16px">
-          <label class="form-label" for="afl-search">Search manually</label>
-          <div class="match-search-row">
-            <input id="afl-search" class="form-input" type="text" placeholder="Search AnimeFillerList" bind:value={manualQuery} on:keydown={(event) => event.key === 'Enter' && handleManualSearch()} />
-            <button class="btn btn-secondary" on:click={handleManualSearch} disabled={manualSearching}>
-              <Search size={18} />
-              <span>{manualSearching ? 'Searching...' : 'Search'}</span>
-            </button>
+{#if showAddModal}
+  <div
+    class="show-add-modal-shell fixed inset-0 z-50 grid place-items-center bg-base-950/72 p-3 backdrop-blur-sm sm:p-6"
+    role="presentation"
+    onclick={handleAddModalBackdropClick}
+    transition:fade={{ duration: 180 }}
+  >
+    <section
+      class="show-add-modal-panel relative grid max-h-[calc(100vh-1.5rem)] w-full max-w-3xl gap-7 overflow-hidden rounded-2xl border border-base-800/80 bg-base-950/95 p-6 shadow-[0_24px_80px_rgba(1,6,17,0.52)] sm:max-h-[calc(100vh-3rem)] sm:p-7"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="show-add-modal-title"
+      onclick={(event) => event.stopPropagation()}
+      transition:scale={{ duration: 220, start: 0.96 }}
+    >
+      <button
+        type="button"
+        class="show-add-modal-close absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-base-800/80 bg-base-900/80 text-base-300 transition-colors hover:bg-base-800 hover:text-base-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+        onclick={closeAddModal}
+        aria-label="Close add anime modal"
+      >
+        <X size={16} />
+      </button>
+
+      <div class="space-y-7">
+        <div class="space-y-2 border-b border-base-800/80 pb-5 pr-12">
+          <h2 id="show-add-modal-title" class="text-xl font-semibold tracking-tight text-base-50">Add anime</h2>
+          <p class="text-sm leading-6 text-base-400">
+            {#if addStep === ADD_STEP_SERIES}
+              Search your actionable Sonarr anime library first. If the anime is missing, switch to cached AFL search and add it into Sonarr from here.
+            {:else if addStep === ADD_STEP_FALLBACK_AFL}
+              Search cached AnimeFillerList titles, then use the chosen title to look up the right Sonarr series before adding it.
+            {:else if addStep === ADD_STEP_FALLBACK_SONARR}
+              Confirm the Sonarr series Mizu should add for <span class="font-medium text-base-200">{selectedFallbackAfl?.title}</span>.
+            {:else if addStep === ADD_STEP_POST_ADD}
+              <span class="font-medium text-base-200">{addOutcome?.title}</span> is in Sonarr now, but still needs a safe AFL mapping before Mizu can track it.
+            {:else if addStep === ADD_STEP_UNSAFE_MATCH}
+              Mizu found a possible cached AFL entry for <span class="font-medium text-base-200">{selectedSonarr?.title}</span>, but it needs your confirmation before creating the mapping.
+            {:else}
+              Match <span class="font-medium text-base-200">{selectedSonarr?.title}</span> with the correct AnimeFillerList entry.
+            {/if}
+          </p>
+        </div>
+
+        {#if addStep === ADD_STEP_SERIES}
+          {#if sonarrLoading}
+            <div class="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+              <LoaderCircle size={28} class="animate-spin text-accent-400" />
+              <p class="text-sm text-base-400">Loading available Sonarr anime.</p>
+            </div>
+          {:else if allSeries.length === 0}
+            <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-6 text-center">
+              <h3 class="text-base font-semibold text-base-50">No anime found in Sonarr</h3>
+              <p class="mt-2 text-sm leading-6 text-base-400">Sonarr returned no anime series for this library.</p>
+            </Box>
+          {:else}
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <Label for="show-add-series-search">Search</Label>
+                <div class="relative">
+                  <div class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-base-400">
+                    <Search size={16} />
+                  </div>
+                  <Input
+                    id="show-add-series-search"
+                    type="text"
+                    variant="secondary"
+                    placeholder="Search Sonarr anime"
+                    class="pl-10"
+                    bind:value={seriesQuery}
+                  />
+                </div>
+              </div>
+
+              {#if filteredSeriesLibrary.length === 0}
+                <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/60 p-6 text-center">
+                  <h3 class="text-base font-semibold text-base-50">No anime match that search</h3>
+                  <p class="mt-2 text-sm leading-6 text-base-400">Try a different title, year, or jump into the cached AFL list and add it from there.</p>
+                  <div class="flex justify-center">
+                    <Button variant="secondary" onclick={() => goToFallbackAflStep(seriesQuery.trim())}>
+                      <Search size={16} />
+                      Not in Sonarr? Search AFL and add to Sonarr
+                    </Button>
+                  </div>
+                </Box>
+              {:else}
+                <ScrollArea class="h-[23rem] rounded-2xl border border-base-800/80 bg-base-950/40 p-2">
+                  <div class="series-poster-list space-y-2">
+                    {#each filteredSeriesLibrary as series}
+                      {@const seriesPoster = posterUrl(series)}
+                      {@const seriesMapped = mappedSeriesIds.has(series.id)}
+                      {@const manualPending = !!series.manualMatchPending}
+                      <button
+                        type="button"
+                        class="group w-full text-left"
+                        onclick={() => {
+                          if (seriesMapped) {
+                            openExistingMapping(series.id);
+                            return;
+                          }
+                          selectedSonarr = series;
+                        }}
+                        aria-pressed={selectedSonarr?.id === series.id}
+                      >
+                        <div class={`rounded-xl border p-3 transition-colors ${selectedSonarr?.id === series.id ? 'border-accent-500/40 bg-accent-950/20' : seriesMapped ? 'border-base-800/80 bg-base-950/55 hover:border-base-700 hover:bg-base-900/60' : 'border-base-800/80 bg-base-950/70 hover:border-base-700 hover:bg-base-900/70'}`}>
+                          <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+                            <div
+                              class="poster-frame poster-thumb relative aspect-[2/3] w-12 overflow-hidden rounded-lg border border-base-800/80 bg-base-900/80 sm:w-14"
+                              data-poster-state={seriesPoster ? POSTER_LOADING : POSTER_FAILED}
+                              use:observePosterFrame={series}
+                            >
+                              <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
+                                {#if seriesPoster}
+                                  <div class="poster-skeleton absolute inset-0" aria-hidden="true">
+                                    <div class="pointer-events-none absolute inset-x-0 top-0 h-16 bg-linear-to-b from-base-50/8 to-transparent"></div>
+                                    <div class="pointer-events-none absolute inset-0 flex items-center justify-center px-2">
+                                      <div class="text-center text-2xl font-black leading-none tracking-[0.22em] text-base-50/8">
+                                        {createPosterMonogram(series.title)}
+                                      </div>
+                                    </div>
+                                    <div class="poster-skeleton__shine"></div>
+                                  </div>
+                                  <img
+                                    src={seriesPoster}
+                                    alt={series.title}
+                                    width="160"
+                                    height="240"
+                                    loading="lazy"
+                                    decoding="async"
+                                    class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
+                                  />
+                                {/if}
+                              </div>
+                              <div class="poster-fallback bg-base-900 text-3xl font-semibold tracking-tight text-base-300">
+                                {createPosterMonogram(series.title)}
+                              </div>
+                            </div>
+
+                            <div class="min-w-0 space-y-1">
+                              <div class="line-clamp-2 text-sm font-semibold leading-5 text-base-50">{series.title}</div>
+                              <div class="flex flex-wrap items-center gap-2 text-xs text-base-400">
+                                <span>{series.year || 'Anime'}</span>
+                                {#if series.statistics?.episodeCount}
+                                  <span aria-hidden="true">•</span>
+                                  <span>{series.statistics.episodeCount} eps</span>
+                                {/if}
+                                {#if manualPending}
+                                  <span aria-hidden="true">•</span>
+                                  <span class="text-amber-200">Needs match</span>
+                                {:else if seriesMapped}
+                                  <span aria-hidden="true">•</span>
+                                  <span class="text-base-300">Already added</span>
+                                {/if}
+                              </div>
+                            </div>
+
+                            {#if seriesMapped}
+                              <div class="inline-flex shrink-0 items-center rounded-full border border-base-700 bg-base-900/80 px-2.5 py-1 text-[0.7rem] font-medium tracking-wide text-base-300">
+                                Open
+                              </div>
+                            {:else if manualPending}
+                              <div class="inline-flex shrink-0 items-center rounded-full border border-amber-500/30 bg-amber-950/30 px-2.5 py-1 text-[0.7rem] font-medium tracking-wide text-amber-100">
+                                Match
+                              </div>
+                            {:else if selectedSonarr?.id === series.id}
+                              <div class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-accent-400/40 bg-accent-500/15 text-accent-100">
+                                <Check size={14} />
+                              </div>
+                            {:else}
+                              <div class="h-8 w-8 shrink-0"></div>
+                            {/if}
+                          </div>
+                        </div>
+                      </button>
+                    {/each}
+                  </div>
+                </ScrollArea>
+              {/if}
+
+            </div>
+          {/if}
+        {:else if addStep === ADD_STEP_FALLBACK_AFL}
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <Label for="fallback-afl-search">Cached AFL title</Label>
+              <Input
+                id="fallback-afl-search"
+                type="text"
+                variant="secondary"
+                placeholder="Filter cached AnimeFillerList titles"
+                bind:value={fallbackAflQuery}
+                oninput={scheduleFallbackAflFilter}
+              />
+            </div>
+
+            {#if fallbackAflLoading}
+              <div class="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+                <LoaderCircle size={28} class="animate-spin text-accent-400" />
+                <p class="text-sm text-base-400">Loading cached AnimeFillerList titles.</p>
+              </div>
+            {:else if fallbackAflResults.length === 0}
+              <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-6 text-center">
+                <h3 class="text-base font-semibold text-base-50">No cached AFL titles found</h3>
+                <p class="mt-2 text-sm leading-6 text-base-400">Try another filter or refresh the AFL cache in Settings if this anime is new.</p>
+              </Box>
+            {:else}
+              <ScrollArea class="h-[22rem] rounded-2xl border border-base-800/80 bg-base-950/40 p-2">
+                <div class="space-y-2">
+                  {#each fallbackAflResults as result}
+                    <button type="button" class="w-full text-left" onclick={() => (selectedFallbackAfl = result)}>
+                      <Box class={`rounded-xl border p-4 transition-colors ${selectedFallbackAfl?.slug === result.slug ? 'border-accent-500/40 bg-accent-950/20' : 'border-base-800/80 bg-base-950/70 hover:border-base-700 hover:bg-base-900/70'}`}>
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="min-w-0">
+                            <div class="truncate text-sm font-semibold text-base-50">{result.title}</div>
+                          </div>
+                          {#if selectedFallbackAfl?.slug === result.slug}
+                            <div class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-accent-400/40 bg-accent-500/15 text-accent-100">
+                              <Check size={14} />
+                            </div>
+                          {/if}
+                        </div>
+                      </Box>
+                    </button>
+                  {/each}
+                </div>
+              </ScrollArea>
+            {/if}
           </div>
-          <div class="form-hint" style="margin-top:8px">We could not find a strong automatic match for this anime.</div>
-        </div>
-      {/if}
+        {:else if addStep === ADD_STEP_FALLBACK_SONARR}
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <Label for="fallback-sonarr-search">Sonarr lookup</Label>
+              <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <Input
+                  id="fallback-sonarr-search"
+                  type="text"
+                  variant="secondary"
+                  placeholder="Search Sonarr for the selected AFL anime"
+                  bind:value={sonarrLookupQuery}
+                  onkeydown={(event) => event.key === 'Enter' && loadSonarrLookupResults()}
+                />
+                <Button variant="secondary" onclick={loadSonarrLookupResults} disabled={sonarrLookupLoading || !sonarrLookupQuery.trim()}>
+                  {#if sonarrLookupLoading}
+                    <LoaderCircle size={16} class="animate-spin" />
+                  {:else}
+                    <Search size={16} />
+                  {/if}
+                  Search
+                </Button>
+              </div>
+            </div>
 
-      {#if displayedMatches.length === 0}
-        <div class="empty-state compact-empty" style="padding:20px">
-          <h3>No matches</h3>
-          <p>We could not find a strong AnimeFillerList match automatically or from the current search.</p>
-          <p class="form-hint" style="margin-top:12px">If this anime is new, refresh the AnimeFillerList show list in Settings and try again.</p>
-        </div>
-      {:else}
-        <div class="select-list compact">
-          {#each displayedMatches as result}
-            <button type="button" class="card selectable-card" class:selected-card={selectedAfl && matchSlug(selectedAfl) === matchSlug(result)} on:click={() => (selectedAfl = result)}>
-              <div class="selectable-title emphasis">{matchTitle(result)}</div>
-              <div class="selectable-meta">{matchSlug(result)}</div>
-              {#if result.confidence != null}
-                <div class="match-score-row">
-                  <Badge type="info" label={`${Math.round(result.confidence * 100)}%`} />
-                  <span class="selectable-meta">{result.method}</span>
+            {#if sonarrLookupLoading}
+              <div class="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+                <LoaderCircle size={28} class="animate-spin text-accent-400" />
+                <p class="text-sm text-base-400">Looking up Sonarr candidates.</p>
+              </div>
+            {:else if sonarrLookupResults.length === 0}
+              <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-6 text-center">
+                <h3 class="text-base font-semibold text-base-50">No Sonarr results found</h3>
+                <p class="mt-2 text-sm leading-6 text-base-400">Try another title variation for {selectedFallbackAfl?.title} and search again.</p>
+              </Box>
+            {:else}
+              <ScrollArea class="h-[18rem] rounded-2xl border border-base-800/80 bg-base-950/40 p-2">
+                <div class="space-y-2">
+                  {#each sonarrLookupResults as result}
+                    {@const lookupPoster = posterUrl(result)}
+                    <button type="button" class="w-full text-left" onclick={() => (selectedSonarrLookup = result)}>
+                      <Box class={`rounded-xl border p-4 transition-colors ${selectedSonarrLookup?.tvdbId === result.tvdbId && selectedSonarrLookup?.title === result.title ? 'border-accent-500/40 bg-accent-950/20' : 'border-base-800/80 bg-base-950/70 hover:border-base-700 hover:bg-base-900/70'}`}>
+                        <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+                          <div
+                            class="poster-frame poster-thumb relative aspect-[2/3] w-12 overflow-hidden rounded-lg border border-base-800/80 bg-base-900/80 sm:w-14"
+                            data-poster-state={lookupPoster ? POSTER_LOADING : POSTER_FAILED}
+                            use:observePosterFrame={result}
+                          >
+                            <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
+                              {#if lookupPoster}
+                                <div class="poster-skeleton absolute inset-0" aria-hidden="true">
+                                  <div class="pointer-events-none absolute inset-x-0 top-0 h-16 bg-linear-to-b from-base-50/8 to-transparent"></div>
+                                  <div class="pointer-events-none absolute inset-0 flex items-center justify-center px-2">
+                                    <div class="text-center text-2xl font-black leading-none tracking-[0.22em] text-base-50/8">
+                                      {createPosterMonogram(result.title)}
+                                    </div>
+                                  </div>
+                                  <div class="poster-skeleton__shine"></div>
+                                </div>
+                                <img
+                                  src={lookupPoster}
+                                  alt={result.title}
+                                  width="160"
+                                  height="240"
+                                  loading="lazy"
+                                  decoding="async"
+                                  class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
+                                />
+                              {/if}
+                            </div>
+                            <div class="poster-fallback bg-base-900 text-3xl font-semibold tracking-tight text-base-300">
+                              {createPosterMonogram(result.title)}
+                            </div>
+                          </div>
+
+                          <div class="min-w-0 space-y-1">
+                            <div class="truncate text-sm font-semibold text-base-50">{result.title}</div>
+                            <div class="flex flex-wrap items-center gap-2 text-xs text-base-400">
+                              <span>{result.year || 'Unknown year'}</span>
+                              {#if result.network}
+                                <span aria-hidden="true">•</span>
+                                <span>{result.network}</span>
+                              {/if}
+                              {#if result.status}
+                                <span aria-hidden="true">•</span>
+                                <span>{result.status}</span>
+                              {/if}
+                            </div>
+                          </div>
+                          {#if selectedSonarrLookup?.tvdbId === result.tvdbId && selectedSonarrLookup?.title === result.title}
+                            <div class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-accent-400/40 bg-accent-500/15 text-accent-100">
+                              <Check size={14} />
+                            </div>
+                          {/if}
+                        </div>
+                      </Box>
+                    </button>
+                  {/each}
+                </div>
+              </ScrollArea>
+            {/if}
+
+            <Box class="grid gap-3 rounded-2xl border border-base-800/80 bg-base-950/70 p-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
+              <div class="space-y-2">
+                <Label for="fallback-quality-profile">Quality profile</Label>
+                <div class="max-w-xs">
+                  <Select
+                    id="fallback-quality-profile"
+                    bind:value={fallbackQualityProfileId}
+                    type="single"
+                    items={sonarrQualityProfileOptions}
+                    contentProps={modalSelectContentProps}
+                    placeholder="Choose a quality profile"
+                  />
+                </div>
+              </div>
+
+              <label class="flex items-center justify-between gap-4 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+                <div class="text-sm font-medium text-base-100">Season folder</div>
+                <Checkbox bind:checked={fallbackSeasonFolder} variant="secondary" />
+              </label>
+
+              {#if sonarrAddOptionsError}
+                <div class="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
+                  Unable to load Sonarr quality profiles right now: {sonarrAddOptionsError}
                 </div>
               {/if}
-            </button>
-          {/each}
-        </div>
-      {/if}
-
-      {#if selectedAfl}
-        <div class="review-panel">
-          <h3>Tracking rules</h3>
-          <div class="rule-pill-row" role="group" aria-label="Initial tracking rules">
-            <label class="rule-pill rule-pill-anime" class:active={addTrackAnimeCanon}>
-              <input type="checkbox" bind:checked={addTrackAnimeCanon} />
-              {#if addTrackAnimeCanon}<Check size={18} />{:else}<X size={18} />{/if}
-              <span>Anime canon</span>
-            </label>
-            <label class="rule-pill rule-pill-mixed" class:active={addTrackMixed}>
-              <input type="checkbox" bind:checked={addTrackMixed} />
-              {#if addTrackMixed}<Check size={18} />{:else}<X size={18} />{/if}
-              <span>Mixed canon</span>
-            </label>
-            <label class="rule-pill rule-pill-filler" class:active={addTrackFiller}>
-              <input type="checkbox" bind:checked={addTrackFiller} />
-              {#if addTrackFiller}<Check size={18} />{:else}<X size={18} />{/if}
-              <span>Filler</span>
-            </label>
+            </Box>
           </div>
-          <div class="form-group" style="margin-top:14px;margin-bottom:0">
-            <label class="form-label" for="start-mode">Start tracking from</label>
-            <select id="start-mode" class="form-select" bind:value={addStartMode}>
-              <option value={START_FROM_CURRENT}>Current progress</option>
-              <option value={START_FROM_BEGINNING}>Episode 1</option>
-            </select>
-            <div class="form-hint">Current progress uses Sonarr's latest tracked episode. Episode 1 starts from the beginning.</div>
+        {:else if addStep === ADD_STEP_UNSAFE_MATCH}
+          <Box class="space-y-4 rounded-2xl border border-amber-500/20 bg-amber-950/20 p-5">
+            <div class="flex items-start gap-3">
+              <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-500/30 bg-amber-900/40 text-amber-100">
+                <CircleAlert size={16} />
+              </span>
+              <div class="space-y-2">
+                <h3 class="text-base font-semibold text-base-50">This cached AFL match needs confirmation</h3>
+                <p class="text-sm leading-6 text-amber-100/85">
+                  Mizu could not safely verify that <span class="font-medium text-base-50">{matchTitle(selectedAfl)}</span> is the right AnimeFillerList entry for
+                  <span class="font-medium text-base-50"> {selectedSonarr?.title}</span>. You can still create the mapping manually, or keep the series in Sonarr only and match it later.
+                </p>
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+              <div class="text-sm font-semibold text-base-50">{matchTitle(selectedAfl)}</div>
+              <div class="mt-1 text-sm text-base-400">{matchSlug(selectedAfl)}</div>
+            </div>
+          </Box>
+        {:else if addStep === ADD_STEP_POST_ADD}
+          <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/70 p-5">
+            <div class="flex items-start gap-3">
+              <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-accent-500/30 bg-accent-950/40 text-accent-100">
+                <CircleCheckBig size={16} />
+              </span>
+              <div class="space-y-2">
+                <h3 class="text-base font-semibold text-base-50">Added to Sonarr</h3>
+                <p class="text-sm leading-6 text-base-300">
+                  {addOutcome?.title || selectedSonarr?.title} is in Sonarr now. Mizu did not create a mapping because it could not confirm a safe AFL match, so this anime will stay visible in the add modal as <span class="font-medium text-base-100">Needs match</span>.
+                </p>
+              </div>
+            </div>
+          </Box>
+        {:else}
+          {#if manualSearchVisible}
+            <div class="space-y-3 rounded-2xl border border-base-800/80 bg-base-950/60 p-4">
+              <div class="space-y-1">
+                <Label for="afl-search">Manual search</Label>
+                <p class="text-sm text-base-400">Automatic matching was not strong enough, so you can search the cached AnimeFillerList titles directly.</p>
+              </div>
+              <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <Input
+                  id="afl-search"
+                  type="text"
+                  variant="secondary"
+                  placeholder="Search cached AnimeFillerList titles"
+                  bind:value={manualQuery}
+                  onkeydown={(event) => event.key === 'Enter' && handleManualSearch()}
+                />
+                <Button variant="secondary" onclick={handleManualSearch} disabled={manualSearching}>
+                  {#if manualSearching}
+                    <LoaderCircle size={16} class="animate-spin" />
+                  {:else}
+                    <Search size={16} />
+                  {/if}
+                  Search
+                </Button>
+              </div>
+            </div>
+          {/if}
+
+          {#if matchLoading}
+            <div class="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+              <LoaderCircle size={28} class="animate-spin text-accent-400" />
+              <p class="text-sm text-base-400">Looking for strong cached AnimeFillerList matches.</p>
+            </div>
+          {:else if displayedMatches.length === 0}
+            <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-6 text-center">
+              <h3 class="text-base font-semibold text-base-50">No matches found</h3>
+              <p class="mt-2 text-sm leading-6 text-base-400">Refresh the AnimeFillerList cache in Settings if this anime is new, then try again.</p>
+            </Box>
+          {:else if selectedAfl && isCompactMatchSelection(selectedAfl)}
+            <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/70 p-5">
+              <div class="space-y-2">
+                <div class="text-sm font-semibold text-base-50">{matchTitle(selectedAfl)}</div>
+                <div class="flex flex-wrap gap-2">
+                  <Badge variant="blue" size="sm">{Math.round((selectedAfl.confidence || 0) * 100)}% confidence</Badge>
+                  <Badge variant="secondary" size="sm">{selectedAfl.method}</Badge>
+                </div>
+                <p class="text-sm leading-6 text-base-400">Looks like an exact cached AFL match, so this step is just a quick confirmation before Mizu creates the mapping.</p>
+              </div>
+            </Box>
+          {:else}
+            <ScrollArea class="h-[18rem] rounded-2xl border border-base-800/80 bg-base-950/40 p-2">
+              <div class="space-y-2">
+                {#each displayedMatches as result}
+                  <button type="button" class="w-full text-left" onclick={() => (selectedAfl = result)}>
+                    <Box class={`rounded-xl border p-4 transition-colors ${selectedAfl && matchSlug(selectedAfl) === matchSlug(result) ? 'border-accent-500/40 bg-accent-950/20' : 'border-base-800/80 bg-base-950/70 hover:border-base-700 hover:bg-base-900/70'}`}>
+                      <div class="space-y-2">
+                        <div>
+                          <div class="text-sm font-semibold text-base-50">{matchTitle(result)}</div>
+                          <div class="text-sm text-base-400">{matchSlug(result)}</div>
+                        </div>
+                        {#if result.confidence != null}
+                          <div class="flex flex-wrap gap-2">
+                            <Badge variant="blue" size="sm">{Math.round(result.confidence * 100)}% confidence</Badge>
+                            <Badge variant="secondary" size="sm">{result.method}</Badge>
+                          </div>
+                        {:else}
+                          <div class="flex flex-wrap gap-2">
+                            <Badge variant="amber" size="sm">Manual review</Badge>
+                          </div>
+                        {/if}
+                      </div>
+                    </Box>
+                  </button>
+                {/each}
+              </div>
+            </ScrollArea>
+          {/if}
+
+          {#if selectedAfl}
+            <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/70 p-4">
+              <div class="space-y-1">
+                <h3 class="text-base font-semibold text-base-50">Default tracking rules</h3>
+                <p class="text-sm text-base-400">Set the initial monitoring rules for this mapping before it is created.</p>
+              </div>
+
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+                  <Checkbox bind:checked={addTrackAnimeCanon} variant="secondary" />
+                  <div class="space-y-1">
+                    <div class="text-sm font-medium text-base-100">Anime canon</div>
+                    <Badge variant={optionTone(addTrackAnimeCanon, 'violet')} size="sm">{optionState(addTrackAnimeCanon)}</Badge>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+                  <Checkbox bind:checked={addTrackMixed} variant="secondary" />
+                  <div class="space-y-1">
+                    <div class="text-sm font-medium text-base-100">Mixed canon</div>
+                    <Badge variant={optionTone(addTrackMixed, 'amber')} size="sm">{optionState(addTrackMixed)}</Badge>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+                  <Checkbox bind:checked={addTrackFiller} variant="secondary" />
+                  <div class="space-y-1">
+                    <div class="text-sm font-medium text-base-100">Filler</div>
+                    <Badge variant={optionTone(addTrackFiller, 'rose')} size="sm">{optionState(addTrackFiller)}</Badge>
+                  </div>
+                </label>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="start-mode">Start tracking from</Label>
+                <Select
+                  id="start-mode"
+                  bind:value={addStartMode}
+                  type="single"
+                  items={startModeOptions}
+                  contentProps={modalSelectContentProps}
+                  placeholder="Choose a start point"
+                />
+                <p class="text-sm text-base-400">Current progress uses Sonarr’s latest monitored episode. Episode 1 starts from the beginning.</p>
+              </div>
+            </Box>
+          {/if}
+        {/if}
+
+        <div class="flex flex-col-reverse gap-3 border-t border-base-800/80 pt-5 sm:flex-row sm:justify-between">
+          <div class="flex flex-col-reverse gap-3 sm:flex-row">
+            <Button variant="secondary" onclick={closeAddModal}>Cancel</Button>
+            {#if addStep === ADD_STEP_FALLBACK_AFL}
+              <Button variant="ghost" onclick={() => returnToSeriesStep()}>Back to Sonarr</Button>
+            {:else if addStep === ADD_STEP_FALLBACK_SONARR}
+              <Button variant="ghost" onclick={() => (addStep = ADD_STEP_FALLBACK_AFL)}>Back to AFL</Button>
+            {:else if addStep === ADD_STEP_MATCH}
+              <Button variant="ghost" onclick={() => returnToSeriesStep(selectedSonarr?.title || '')}>Change anime</Button>
+            {:else if addStep === ADD_STEP_UNSAFE_MATCH}
+              <Button variant="ghost" onclick={() => (addStep = ADD_STEP_MATCH)}>Back to matches</Button>
+            {:else if addStep === ADD_STEP_POST_ADD}
+              <Button variant="ghost" onclick={() => returnToSeriesStep(addOutcome?.title || '')}>Back to library</Button>
+            {/if}
+          </div>
+
+          <div class="flex flex-col gap-3 sm:flex-row">
+            {#if addStep === ADD_STEP_SERIES && selectedSonarr}
+              <Button variant="primary" onclick={goToMatchStep}>Next</Button>
+            {/if}
+            {#if addStep === ADD_STEP_FALLBACK_AFL && selectedFallbackAfl}
+              <Button variant="primary" onclick={goToFallbackSonarrStep}>Next</Button>
+            {/if}
+            {#if addStep === ADD_STEP_FALLBACK_SONARR}
+              <Button variant="primary" onclick={handleAddSelectedSonarrLookup} disabled={sonarrAdding}>
+                {#if sonarrAdding}
+                  <LoaderCircle size={16} class="animate-spin" />
+                {:else}
+                  <Plus size={16} />
+                {/if}
+                {sonarrAdding ? 'Adding to Sonarr...' : 'Add to Sonarr'}
+              </Button>
+            {/if}
+            {#if addStep === ADD_STEP_MATCH && selectedAfl}
+              <Button variant="primary" onclick={handlePrimaryMatchAction} disabled={confirming}>
+                {#if confirming}
+                  <LoaderCircle size={16} class="animate-spin" />
+                {:else}
+                  {#if isUnsafeMatch(selectedAfl)}
+                    <CircleAlert size={16} />
+                  {:else}
+                    <Check size={16} />
+                  {/if}
+                {/if}
+                {#if confirming}
+                  Adding...
+                {:else if isUnsafeMatch(selectedAfl)}
+                  Review unsafe match
+                {:else}
+                  Add anime
+                {/if}
+              </Button>
+            {/if}
+            {#if addStep === ADD_STEP_UNSAFE_MATCH}
+              <Button variant="secondary" onclick={handleKeepSonarrOnly}>Keep Sonarr only</Button>
+              <Button variant="primary" onclick={handleConfirmUnsafeOverride} disabled={confirming}>
+                {#if confirming}
+                  <LoaderCircle size={16} class="animate-spin" />
+                {:else}
+                  <Check size={16} />
+                {/if}
+                {confirming ? 'Creating mapping...' : 'Create mapping anyway'}
+              </Button>
+            {/if}
+            {#if addStep === ADD_STEP_POST_ADD}
+              <Button variant="primary" onclick={closeAddModal}>
+                <Check size={16} />
+                Done
+              </Button>
+            {/if}
           </div>
         </div>
-      {/if}
-    {/if}
-  {/if}
-
-  <svelte:fragment slot="footer">
-    <button class="btn btn-secondary" on:click={() => (showAddModal = false)}>Cancel</button>
-    {#if addStep === 'series' && selectedSonarr}
-      <button class="btn btn-primary" on:click={goToMatchStep}>Next</button>
-    {/if}
-    {#if addStep === 'match'}
-      <button class="btn btn-secondary" on:click={() => (addStep = 'series')}>Change anime</button>
-    {/if}
-    {#if addStep === 'match' && selectedAfl}
-      <button class="btn btn-primary" on:click={handleConfirmMatch} disabled={confirming}>
-        {#if confirming}<span class="spinner"></span> Adding...{:else}Add anime{/if}
-      </button>
-    {/if}
-  </svelte:fragment>
-</Modal>
-
-<style>
-  .library-shell {
-    position: relative;
-    isolation: isolate;
-    display: grid;
-    gap: var(--space-8);
-    max-width: var(--content-max);
-    margin: 0 auto;
-  }
-
-  .anime-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-5);
-  }
-
-  .anime-heading h1 {
-    font-size: var(--text-page-title);
-    font-weight: var(--weight-bold);
-    line-height: var(--leading-tight);
-  }
-
-  .anime-heading-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    flex-shrink: 0;
-  }
-
-  .search-shell {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 46px;
-    padding: 0 16px;
-    border: 0;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--surface-elevated) 78%, rgba(7, 16, 29, 0.96) 22%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    color: var(--text-muted);
-    transition: background var(--transition), box-shadow var(--transition);
-  }
-
-  .anime-search-row {
-    width: 100%;
-  }
-
-  .landing-search {
-    width: 100%;
-    min-width: 0;
-    border: none;
-    outline: none;
-    background: transparent;
-    font: inherit;
-    color: var(--text-primary);
-    caret-color: var(--accent-cream);
-  }
-
-  .landing-search::placeholder {
-    color: var(--text-muted);
-  }
-
-  .shows-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 18px;
-    align-items: start;
-  }
-
-  .show-card {
-    overflow: hidden;
-    min-width: 0;
-    border-radius: var(--radius);
-    background: var(--surface-elevated);
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
-    display: grid;
-    transition: transform var(--transition), box-shadow var(--transition);
-    box-shadow: var(--shadow-card);
-  }
-
-  .show-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
-  }
-
-  .show-card-media {
-    position: relative;
-    aspect-ratio: 2 / 3;
-    min-height: 240px;
-    overflow: hidden;
-    background: linear-gradient(180deg, var(--hero-card-start) 0%, var(--hero-card-end) 100%);
-  }
-
-  .show-card-media::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, var(--hero-card-scrim-top) 20%, var(--hero-card-scrim-mid) 50%, var(--hero-card-scrim-bottom) 100%);
-  }
-
-  .show-card-media img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .show-card-media.no-art {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .show-card-fallback {
-    width: 64px;
-    height: 64px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--brand-mark-gradient);
-    border: 1px solid var(--border-light);
-    font-family: var(--font-heading);
-    font-size: 1.25rem;
-    font-weight: var(--weight-bold);
-    color: var(--accent-cream);
-    position: relative;
-    z-index: 1;
-  }
-
-  .show-card-overlay {
-    position: absolute;
-    inset: auto 0 0;
-    z-index: 1;
-    display: grid;
-    gap: var(--space-2);
-    padding: 12px 10px 10px;
-  }
-
-  .show-card-copy h3 {
-    font-size: 0.9375rem;
-    line-height: 1.28;
-    color: var(--accent-cream);
-    font-weight: var(--weight-bold);
-  }
-
-  .show-card-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .info-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 22px;
-    padding: 0 7px;
-    border-radius: 5px;
-    background: rgba(5, 13, 26, 0.70);
-    border: 1px solid var(--border);
-    color: var(--text-b);
-    font-size: var(--text-caption);
-    font-weight: var(--weight-semibold);
-    line-height: 1;
-    backdrop-filter: blur(4px);
-  }
-
-  .info-chip-on {
-    background: var(--success-bg);
-    border-color: var(--success-border-strong);
-    color: var(--success-foreground);
-  }
-
-  .info-chip-off {
-    background: var(--danger-bg);
-    border-color: var(--danger-border-strong);
-    color: var(--danger-foreground);
-  }
-
-  .landing-empty {
-    min-height: 240px;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-  }
-
-  .compact-empty {
-    display: grid;
-    gap: 12px;
-    place-items: center;
-    text-align: center;
-    padding: 24px;
-  }
-
-  .compact-empty .empty-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    background: var(--empty-icon-gradient);
-    color: var(--accent-blue);
-  }
-
-  .modal-copy {
-    margin-bottom: 12px;
-    font-size: var(--text-secondary-size);
-    line-height: var(--leading-copy);
-    color: var(--text-secondary);
-  }
-
-  .select-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 320px;
-    overflow-y: auto;
-  }
-
-  .select-list.compact {
-    max-height: 260px;
-  }
-
-  .selectable-card {
-    padding: 14px;
-    text-align: left;
-    cursor: pointer;
-    border-radius: 10px;
-  }
-
-  .selected-card {
-    border-color: var(--selected-border);
-    background: var(--card-accent-wash);
-  }
-
-  .selectable-title {
-    font-family: var(--font-heading);
-    font-size: var(--text-title-sm);
-    line-height: 1.25;
-    font-weight: var(--weight-bold);
-  }
-
-  .selectable-title.emphasis {
-    font-size: var(--text-title-md);
-  }
-
-  .selectable-meta {
-    margin-top: 4px;
-    color: var(--text-secondary);
-    font-size: var(--text-secondary-size);
-    line-height: 1.5;
-  }
-
-  .match-score-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-  }
-
-  .review-panel {
-    margin-top: 12px;
-    padding: 16px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--panel-bg-soft);
-  }
-
-  .review-panel h3 {
-    margin-bottom: 12px;
-    font-size: var(--text-title-md);
-  }
-
-  .rule-pill-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .rule-pill {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-height: 38px;
-    padding: 0 12px;
-    border-radius: 10px;
-    border: 0;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: var(--text-secondary-size);
-    font-weight: var(--weight-semibold);
-    line-height: 1.35;
-    cursor: pointer;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
-  }
-
-  .rule-pill input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .rule-pill-anime.active {
-    background: var(--anime-canon-wash);
-    color: var(--text-primary);
-  }
-
-  .rule-pill-mixed.active {
-    background: var(--mixed-wash);
-    color: var(--text-primary);
-  }
-
-  .rule-pill-filler.active {
-    background: var(--filler-wash);
-    color: var(--danger-foreground);
-  }
-
-  .rule-pill-filler:not(.active) {
-    color: var(--danger-foreground);
-  }
-
-  .match-search-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: center;
-  }
-
-  @media (max-width: 1100px) {
-    .shows-grid { gap: 16px; }
-    .show-card-media { min-height: 220px; }
-  }
-
-  @media (max-width: 840px) {
-    .shows-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-    .show-card-media { min-height: 200px; }
-  }
-
-  @media (max-width: 560px) {
-    .library-shell { gap: var(--space-6); }
-
-    .anime-heading {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-3);
-    }
-
-    .anime-heading-action { width: 100%; justify-content: center; }
-
-    .shows-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .show-card-media { min-height: 180px; }
-
-    .match-search-row { grid-template-columns: 1fr; }
-    .rule-pill-row { display: grid; grid-template-columns: 1fr; }
-  }
-</style>
-
-
-
-
-
-
-
-
-
+      </div>
+    </section>
+  </div>
+{/if}

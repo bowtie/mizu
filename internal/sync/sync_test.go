@@ -324,3 +324,43 @@ func TestSelectAFLEpisodeForSonarrRejectsWeakGlobalSpecialMatch(t *testing.T) {
 		t.Fatal("expected weak global title overlap to remain unmatched for a special")
 	}
 }
+
+func TestAFLCoverageMaxEpisodeNumber(t *testing.T) {
+	aflEpisodes := []models.AFLEpisode{
+		{Number: 12, Title: "12", Type: models.EpisodeCanon},
+		{Number: 120, Title: "120", Type: models.EpisodeCanon},
+		{Number: 1196, Title: "1196", Type: models.EpisodeCanon},
+	}
+
+	if got := AFLCoverageMaxEpisodeNumber(aflEpisodes); got != 1196 {
+		t.Fatalf("expected AFL coverage ceiling 1196, got %d", got)
+	}
+}
+
+func TestIsWithinAFLCoverageRejectsMainlineEpisodeBeyondCeiling(t *testing.T) {
+	absolute := 1197
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          21,
+		EpisodeNumber:         50,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "A New Successor Episode",
+	}
+
+	if IsWithinAFLCoverage(sonarrEp, 1197, false, 1196) {
+		t.Fatal("expected mainline episode beyond AFL ceiling to be excluded from coverage")
+	}
+}
+
+func TestIsWithinAFLCoverageKeepsMatchedSpecial(t *testing.T) {
+	absolute := 1076
+	sonarrEp := models.SonarrEpisode{
+		SeasonNumber:          -1,
+		EpisodeNumber:         1,
+		AbsoluteEpisodeNumber: &absolute,
+		Title:                 "Special Episode",
+	}
+
+	if !IsWithinAFLCoverage(sonarrEp, 1076, true, 1076) {
+		t.Fatal("expected matched special to remain inside AFL coverage")
+	}
+}

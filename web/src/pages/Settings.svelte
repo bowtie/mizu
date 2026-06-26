@@ -1,9 +1,9 @@
 <script>
   import { onMount } from 'svelte';
+  import { Badge, Box, Button, Checkbox, Input, Label, Select, Switch } from '@foxui/core';
   import { settings, addNotification } from '../lib/stores.js';
-  import { getSettings, getStoredSonarrApiKey, updateSettings, testSonarrConnection, refreshAflCache } from '../lib/api.js';
-  import Spinner from '../components/Spinner.svelte';
-  import { Check, ChevronDown, Eye, EyeOff, Plug, RefreshCw, Save, X } from 'lucide-svelte';
+  import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../lib/api.js';
+  import { Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
 
   let loading = true;
   let saving = false;
@@ -11,7 +11,6 @@
   let refreshingCache = false;
   let revealingKey = false;
   let testResult = null;
-  let showAdvancedTagging = false;
 
   let sonarrUrl = '';
   let sonarrApiKey = '';
@@ -21,6 +20,7 @@
   let apiKeyDirty = false;
   let syncInterval = '6h';
   let enableTagging = false;
+  let enableAniListArtwork = false;
   let fillerTagName = 'filler';
   let trackFillerDefault = false;
   let trackMixedDefault = true;
@@ -56,6 +56,7 @@
         apiKeyDirty = false;
         syncInterval = data.sync_interval || '6h';
         enableTagging = data.enable_tagging || false;
+        enableAniListArtwork = data.enable_anilist_artwork || false;
         fillerTagName = data.filler_tag_name || 'filler';
         trackFillerDefault = actionToTracked(data.default_filler_action, false);
         trackMixedDefault = actionToTracked(data.default_mixed_canon_action, true);
@@ -118,6 +119,7 @@
         default_anime_canon_action: trackedToAction(trackAnimeCanonDefault),
         sync_interval: syncInterval,
         enable_tagging: enableTagging,
+        enable_anilist_artwork: enableAniListArtwork,
         filler_tag_name: fillerTagName,
       };
 
@@ -178,459 +180,166 @@
   <title>Mizu - Settings</title>
 </svelte:head>
 
-<div class="settings-shell">
-  <section class="page-heading row-heading">
-    <h1>Settings</h1>
-    <button class="btn btn-primary" on:click={handleSave} disabled={saving}>
-      <Save size={18} />
-      <span>{saving ? 'Saving...' : 'Save settings'}</span>
-    </button>
+<div class="space-y-6">
+  <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">Settings</h1>
+    </div>
+    <Button variant="primary" onclick={handleSave} disabled={saving}>
+      {#if saving}
+        <LoaderCircle size={16} class="animate-spin" />
+      {:else}
+        <Save size={16} />
+      {/if}
+      {saving ? 'Saving...' : 'Save settings'}
+    </Button>
   </section>
 
   {#if loading}
-    <Spinner center size="lg" message="Loading settings from the current..." />
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
+      <LoaderCircle size={30} class="animate-spin text-accent-400" />
+      <div class="space-y-1">
+        <h2 class="text-base font-semibold text-base-100">Loading settings</h2>
+        <p class="text-sm text-base-400">Pulling current Sonarr and sync configuration.</p>
+      </div>
+    </Box>
   {:else}
-    <section class="settings-grid">
-      <div class="card settings-panel">
-        <div class="panel-head">
-          <div>
-            <h3>Sonarr</h3>
-            <p>Connection settings for your Sonarr instance.</p>
-          </div>
-          {#if testResult}<span class="test-result" class:error={!testResult.success}>{testResult.message}</span>{/if}
-        </div>
-
-        <div class="panel-body">
-        <div class="form-group">
-          <label class="form-label" for="sonarr-url">Sonarr URL</label>
-          <input id="sonarr-url" class="form-input settings-field" type="text" placeholder="http://localhost:8989" bind:value={sonarrUrl} />
-          <div class="form-hint">Full URL to your Sonarr instance.</div>
-        </div>
-
-        <div class="form-group">
-          <div class="field-head">
-            <label class="form-label" for="sonarr-key">API key</label>
-            {#if hasSavedApiKey || apiKeyDirty}
-              <button type="button" class="inline-toggle" on:click={toggleApiKeyVisibility} disabled={revealingKey}>
-                {#if apiKeyVisible}
-                  <EyeOff size={18} />
-                  <span>Hide</span>
-                {:else}
-                  <Eye size={18} />
-                  <span>{revealingKey ? 'Loading...' : 'View'}</span>
-                {/if}
-              </button>
+    <div class="mx-auto max-w-4xl space-y-5">
+      <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-lg font-semibold text-base-50">Sonarr</h2>
+            {#if testResult}
+              <Badge variant={testResult.success ? 'green' : 'rose'} size="sm">{testResult.message}</Badge>
             {/if}
           </div>
-          <input
-            id="sonarr-key"
-            class="form-input settings-field"
-            type={apiKeyVisible ? 'text' : 'password'}
-            value={sonarrApiKey}
-            placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
-            on:input={handleApiKeyInput}
-          />
-          <div class="form-hint">{hasSavedApiKey && !apiKeyDirty ? 'Saved key is masked by default.' : 'Found in Sonarr under Settings → General → Security.'}</div>
-        </div>
-
-        <button class="btn btn-secondary" on:click={handleTestConnection} disabled={testing}>
-          <Plug size={18} />
-          <span>{testing ? 'Testing...' : 'Test connection'}</span>
-        </button>
-        </div>
-      </div>
-
-      <div class="card settings-panel">
-        <div class="panel-head">
-          <div>
-            <h3>Sync</h3>
-            <p>Choose how often Mizu syncs and refreshes the AnimeFillerList show list.</p>
-          </div>
-        </div>
-
-        <div class="panel-body">
-        <div class="form-group">
-          <label class="form-label" for="sync-interval">Sync interval</label>
-          <select id="sync-interval" class="form-select settings-field" bind:value={syncInterval}>
-            {#each syncIntervalOptions as opt}
-              <option value={opt.value}>{opt.label}</option>
-            {/each}
-          </select>
-          <div class="form-hint">How often Mizu checks Sonarr and AnimeFillerList for changes.</div>
-        </div>
-
-        <div class="cache-status-card">
-          <div><span>Show list refresh</span><strong>Monthly automatic refresh</strong></div>
-          <div><span>Last refreshed</span><strong>{formatCacheTime(cacheRefreshedAt)}</strong></div>
-          <div><span>Cached shows</span><strong>{cacheCount}</strong></div>
-        </div>
-
-        <button class="btn btn-secondary" on:click={handleRefreshCache} disabled={refreshingCache}>
-          <RefreshCw size={18} />
-          <span>{refreshingCache ? 'Refreshing...' : 'Refresh show list'}</span>
-        </button>
-        </div>
-      </div>
-    </section>
-
-    <section class="settings-grid secondary">
-      <div class="card settings-panel">
-        <div class="panel-head">
-          <div>
-            <h3>Defaults</h3>
-            <p>Default tracking rules for newly added anime.</p>
-          </div>
-        </div>
-
-        <div class="panel-body">
-        <div class="rule-pill-row" role="group" aria-label="Default tracking rules">
-          <label class="rule-pill rule-pill-anime" class:active={trackAnimeCanonDefault}>
-            <input type="checkbox" bind:checked={trackAnimeCanonDefault} />
-            {#if trackAnimeCanonDefault}<Check size={18} />{:else}<X size={18} />{/if}
-            <span>Anime canon</span>
-          </label>
-          <label class="rule-pill rule-pill-mixed" class:active={trackMixedDefault}>
-            <input type="checkbox" bind:checked={trackMixedDefault} />
-            {#if trackMixedDefault}<Check size={18} />{:else}<X size={18} />{/if}
-            <span>Mixed canon</span>
-          </label>
-          <label class="rule-pill rule-pill-filler" class:active={trackFillerDefault}>
-            <input type="checkbox" bind:checked={trackFillerDefault} />
-            {#if trackFillerDefault}<Check size={18} />{:else}<X size={18} />{/if}
-            <span>Filler</span>
-          </label>
-        </div>
-        </div>
-      </div>
-
-      <div class="card settings-panel advanced-panel">
-        <button class="advanced-toggle" type="button" on:click={() => (showAdvancedTagging = !showAdvancedTagging)}>
-          <div>
-            <h3>Advanced tagging</h3>
-            <p>Add a Sonarr tag to anime with filler-related episodes.</p>
-          </div>
-          <span class:open={showAdvancedTagging}><ChevronDown size={18} /></span>
-        </button>
-
-        {#if showAdvancedTagging}
-          <div class="advanced-content">
-            <label class="check-card subdued-check-card">
-              <input type="checkbox" bind:checked={enableTagging} />
-              <div><strong>Enable Sonarr tagging</strong><small>Useful if you want to filter or spot filler-heavy anime inside Sonarr.</small></div>
-            </label>
-            {#if enableTagging}
-              <div class="form-group advanced-form-group">
-                <label class="form-label" for="tag-name">Tag name</label>
-                <input id="tag-name" class="form-input settings-field" type="text" placeholder="filler" bind:value={fillerTagName} />
-                <div class="form-hint">The tag label to apply in Sonarr.</div>
-              </div>
+          <Button variant="secondary" onclick={handleTestConnection} disabled={testing}>
+            {#if testing}
+              <LoaderCircle size={16} class="animate-spin" />
+            {:else}
+              <Plug size={16} />
             {/if}
+            {testing ? 'Testing...' : 'Test connection'}
+          </Button>
+        </div>
+
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <Label for="sonarr-url">URL</Label>
+            <Input id="sonarr-url" type="text" variant="secondary" sizeVariant="lg" placeholder="http://localhost:8989" bind:value={sonarrUrl} class="w-full" />
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <Label for="sonarr-key">API key</Label>
+              {#if hasSavedApiKey || apiKeyDirty}
+                <Button type="button" variant="ghost" size="sm" onclick={toggleApiKeyVisibility} disabled={revealingKey}>
+                  {#if apiKeyVisible}
+                    <EyeOff size={16} />
+                    Hide
+                  {:else}
+                    <Eye size={16} />
+                    {revealingKey ? 'Loading...' : 'View'}
+                  {/if}
+                </Button>
+              {/if}
+            </div>
+
+            <Input
+              id="sonarr-key"
+              type={apiKeyVisible ? 'text' : 'password'}
+              variant="secondary"
+              sizeVariant="lg"
+              bind:value={sonarrApiKey}
+              placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
+              oninput={handleApiKeyInput}
+              class="w-full"
+            />
+          </div>
+        </div>
+      </Box>
+
+      <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-lg font-semibold text-base-50">Sync defaults</h2>
+            <Badge variant="secondary" size="sm">{cacheCount} cached</Badge>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" size="sm">Last refreshed: {formatCacheTime(cacheRefreshedAt)}</Badge>
+            <Button variant="secondary" onclick={handleRefreshCache} disabled={refreshingCache}>
+              {#if refreshingCache}
+                <LoaderCircle size={16} class="animate-spin" />
+              {:else}
+                <RefreshCw size={16} />
+              {/if}
+              {refreshingCache ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <Label for="sync-interval">Interval</Label>
+            <Select id="sync-interval" bind:value={syncInterval} type="single" items={syncIntervalOptions} placeholder="Choose an interval" />
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="text-base font-semibold text-base-50">Default tracking rules</h3>
+            <Badge variant="secondary" size="sm">New anime</Badge>
+          </div>
+          <p class="text-sm leading-6 text-base-400">Applied automatically when you add a new anime mapping.</p>
+
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+              <div class="text-sm font-medium text-base-100">Anime canon</div>
+              <Switch bind:checked={trackAnimeCanonDefault} />
+            </div>
+
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+              <div class="text-sm font-medium text-base-100">Mixed canon</div>
+              <Switch bind:checked={trackMixedDefault} />
+            </div>
+
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+              <div class="text-sm font-medium text-base-100">Filler</div>
+              <Switch bind:checked={trackFillerDefault} />
+            </div>
+          </div>
+        </div>
+      </Box>
+
+      <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/60">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-lg font-semibold text-base-50">Misc</h2>
+          <Badge variant={enableTagging || enableAniListArtwork ? 'green' : 'secondary'} size="sm">
+            {enableTagging || enableAniListArtwork ? 'Configured' : 'Off'}
+          </Badge>
+        </div>
+
+        <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+          <Checkbox bind:checked={enableTagging} variant="secondary" />
+          <div class="space-y-1">
+            <div class="text-sm font-medium text-base-100">Enable Sonarr tagging</div>
+            <div class="text-sm text-base-400">Apply a filler tag inside Sonarr.</div>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+          <Checkbox bind:checked={enableAniListArtwork} variant="secondary" />
+          <div class="space-y-1">
+            <div class="text-sm font-medium text-base-100">AniList artwork</div>
+            <div class="text-sm text-base-400">When off, Mizu uses Sonarr images only.</div>
+          </div>
+        </label>
+
+        {#if enableTagging}
+          <div class="space-y-2">
+            <Label for="tag-name">Tag name</Label>
+            <Input id="tag-name" type="text" variant="secondary" sizeVariant="lg" placeholder="filler" bind:value={fillerTagName} class="w-full" />
           </div>
         {/if}
-      </div>
-    </section>
+      </Box>
+    </div>
   {/if}
 </div>
-
-<style>
-  .settings-shell {
-    position: relative;
-    isolation: isolate;
-    display: grid;
-    gap: var(--space-8);
-    max-width: var(--content-max);
-    margin: 0 auto;
-  }
-
-  .row-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-5);
-    padding-bottom: 8px;
-  }
-
-  .row-heading h1 {
-    font-size: var(--text-page-title);
-    font-weight: var(--weight-bold);
-    line-height: var(--leading-tight);
-  }
-
-  .row-heading .btn,
-  .settings-panel .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    flex-shrink: 0;
-  }
-
-  .settings-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
-    align-items: start;
-  }
-
-  .settings-grid.secondary {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-panel {
-    padding: 0;
-    display: grid;
-    gap: 0;
-    background: var(--surface);
-    border: none;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    box-shadow: var(--shadow-card);
-  }
-
-  .panel-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 16px 18px 14px;
-    background: var(--surface-elevated);
-  }
-
-  .panel-head h3 {
-    font-size: var(--text-title-sm);
-    font-weight: var(--weight-bold);
-    color: var(--text-primary);
-  }
-
-  .panel-head p {
-    margin-top: 3px;
-    color: var(--text-muted);
-    font-size: var(--text-secondary-size);
-    line-height: var(--leading-copy);
-  }
-
-  .panel-body {
-    padding: 16px 18px;
-    display: grid;
-    gap: 18px;
-  }
-
-  .test-result {
-    color: var(--text-primary);
-    font-size: var(--text-meta);
-    line-height: 1.45;
-  }
-
-  .test-result.error {
-    color: var(--danger);
-  }
-
-  .field-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 7px;
-  }
-
-  .field-head .form-label {
-    margin-bottom: 0;
-  }
-
-  .inline-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-secondary);
-    font-size: var(--text-meta);
-    font-weight: var(--weight-semibold);
-  }
-
-  .settings-field {
-    background: var(--surface-elevated);
-    border-color: var(--border);
-  }
-
-  .settings-field:focus {
-    border-color: var(--focus-border);
-  }
-
-  .cache-status-card {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-    padding: 12px 14px;
-    border-radius: var(--radius);
-    background: var(--surface-elevated);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  }
-
-  .cache-status-card span {
-    display: block;
-    color: var(--text-muted);
-    font-size: var(--text-caption);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    margin-bottom: 2px;
-  }
-
-  .cache-status-card strong {
-    font-size: 0.9375rem;
-    color: var(--text-primary);
-  }
-
-  .rule-pill-row {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .rule-pill {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    min-height: 34px;
-    padding: 0 13px;
-    border-radius: 999px;
-    background: var(--surface-elevated);
-    color: var(--text-muted);
-    font-size: var(--text-secondary-size);
-    font-weight: var(--weight-semibold);
-    line-height: 1.35;
-    cursor: pointer;
-    transition: background var(--transition), border-color var(--transition), color var(--transition);
-  }
-
-  .rule-pill input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .rule-pill-anime.active,
-  .rule-pill-mixed.active,
-  .rule-pill-filler.active {
-    background: var(--success-bg);
-    color: var(--success);
-  }
-
-  .rule-pill-anime:not(.active),
-  .rule-pill-mixed:not(.active),
-  .rule-pill-filler:not(.active) {
-    background: var(--danger-bg);
-    color: var(--danger);
-  }
-
-  .advanced-panel {
-    gap: 0;
-  }
-
-  .advanced-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-    text-align: left;
-    padding: 14px 18px;
-  }
-
-  .advanced-toggle p {
-    margin-top: 3px;
-    color: var(--text-muted);
-    font-size: var(--text-secondary-size);
-    line-height: var(--leading-copy);
-  }
-
-  .advanced-toggle span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    transition: transform var(--transition);
-    flex-shrink: 0;
-  }
-
-  .advanced-toggle span.open {
-    transform: rotate(180deg);
-  }
-
-  .advanced-content {
-    display: grid;
-    gap: 14px;
-    padding: 0 18px 16px;
-    border-top: 1px solid var(--divider-border-soft);
-    margin-top: 0;
-    padding-top: 14px;
-  }
-
-  .check-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 14px;
-    border-radius: var(--radius);
-    background: var(--surface-elevated);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    cursor: pointer;
-    transition: border-color var(--transition), background var(--transition);
-  }
-
-  .check-card:has(input:checked) {
-    background: rgba(26, 143, 255, 0.06);
-  }
-
-  .check-card input {
-    margin-top: 3px;
-    accent-color: var(--blue-base);
-  }
-
-  .check-card strong {
-    display: block;
-    margin-bottom: 3px;
-    font-size: 0.9375rem;
-    font-weight: var(--weight-semibold);
-    color: var(--text-primary);
-  }
-
-  .check-card small {
-    display: block;
-    color: var(--text-muted);
-    font-size: var(--text-meta);
-    line-height: 1.5;
-  }
-
-  .subdued-check-card {
-    background: var(--surface);
-  }
-
-  .advanced-form-group {
-    margin-bottom: 0;
-  }
-
-  @media (max-width: 900px) {
-    .cache-status-card {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  @media (max-width: 720px) {
-    .row-heading {
-      align-items: stretch;
-      flex-direction: column;
-    }
-
-    .row-heading .btn {
-      width: 100%;
-      justify-content: center;
-    }
-
-    .rule-pill-row {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
-
-

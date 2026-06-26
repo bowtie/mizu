@@ -14,14 +14,14 @@
   };
 
   $: if ($location === '/') push('/shows');
-  $: isDetailRoute = /^\/shows\/[^/]+$/.test($location || '');
 </script>
 
-<div class="app-shell">
-  <div class="app-shell-backdrop" aria-hidden="true"></div>
+<div class="min-h-screen bg-base-900 text-base-50">
   <Navbar />
-  <main class="main-content shell-main" class:detail-route-shell={isDetailRoute}>
-    <Router {routes} />
+  <main class="min-h-screen px-4 pb-28 pt-8 md:pb-8">
+    <div class="mx-auto w-full max-w-5xl">
+      <Router {routes} />
+    </div>
   </main>
   <Toast />
 </div>

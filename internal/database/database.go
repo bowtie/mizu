@@ -318,6 +318,40 @@ func (db *DB) BulkUpsertEpisodes(ctx context.Context, episodes []models.EpisodeI
 	return tx.Commit()
 }
 
+func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, episodes []models.EpisodeInfo) error {
+	tx, err := db.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM episode_info WHERE mapping_id = ?`, mappingID); err != nil {
+		return err
+	}
+
+	if len(episodes) == 0 {
+		return tx.Commit()
+	}
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped)
+		VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	now := time.Now()
+	for _, e := range episodes {
+		_, err := stmt.ExecContext(ctx, mappingID, e.EpisodeNum, e.Title, e.Type, now)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (db *DB) CreateSyncLog(ctx context.Context, triggerType string) (int64, error) {
 	result, err := db.conn.ExecContext(ctx, `
 		INSERT INTO sync_logs (trigger_type) VALUES (?)`, triggerType)

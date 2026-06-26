@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -18,6 +19,14 @@ type Client struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
+}
+
+type AddSeriesOptions struct {
+	RootFolderPath   string
+	QualityProfileID int
+	SeasonFolder     bool
+	MonitorMode      string
+	SearchOnAdd      bool
 }
 
 // New creates a new Sonarr API client.
@@ -124,6 +133,31 @@ func (c *Client) GetAnimeSeries(ctx context.Context) ([]models.SonarrSeries, err
 	return anime, nil
 }
 
+func (c *Client) LookupSeries(ctx context.Context, term string) ([]models.SonarrSeries, error) {
+	path := "/series/lookup?term=" + url.QueryEscape(term)
+	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]models.SonarrSeries](resp)
+}
+
+func (c *Client) GetRootFolders(ctx context.Context) ([]models.SonarrRootFolder, error) {
+	resp, err := c.doRequest(ctx, http.MethodGet, "/rootfolder", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]models.SonarrRootFolder](resp)
+}
+
+func (c *Client) GetQualityProfiles(ctx context.Context) ([]models.SonarrQualityProfile, error) {
+	resp, err := c.doRequest(ctx, http.MethodGet, "/qualityprofile", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]models.SonarrQualityProfile](resp)
+}
+
 // GetSeries returns a single series by ID.
 func (c *Client) GetSeries(ctx context.Context, seriesID int) (*models.SonarrSeries, error) {
 	path := fmt.Sprintf("/series/%d", seriesID)
@@ -143,6 +177,38 @@ func (c *Client) UpdateSeries(ctx context.Context, series *models.SonarrSeries) 
 	}
 	resp.Body.Close()
 	return nil
+}
+
+func (c *Client) AddSeries(ctx context.Context, series models.SonarrSeries, options AddSeriesOptions) (*models.SonarrSeries, error) {
+	payloadBytes, err := json.Marshal(series)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling series payload: %w", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return nil, fmt.Errorf("decoding series payload: %w", err)
+	}
+
+	payload["rootFolderPath"] = options.RootFolderPath
+	payload["qualityProfileId"] = options.QualityProfileID
+	payload["seasonFolder"] = options.SeasonFolder
+	monitorMode := options.MonitorMode
+	if monitorMode == "" {
+		monitorMode = "none"
+	}
+	payload["seriesType"] = "anime"
+	payload["monitored"] = monitorMode != "none"
+	payload["addOptions"] = map[string]interface{}{
+		"monitor":                  monitorMode,
+		"searchForMissingEpisodes": options.SearchOnAdd,
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodPost, "/series", payload)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[*models.SonarrSeries](resp)
 }
 
 // --- Episodes ---

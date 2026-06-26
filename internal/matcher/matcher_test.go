@@ -69,3 +69,16 @@ func TestFindMatchesRejectsWeakFuzzyWithoutSharedTokens(t *testing.T) {
 		t.Fatalf("FindMatches() top match = %q, want %q", matches[0].AFLShow.Title, "Dragon Ball Super")
 	}
 }
+
+func TestFindMatchesRejectsSingleSharedFranchiseTokenFalsePositive(t *testing.T) {
+	m := New(0.82)
+	series := models.SonarrSeries{Title: "Digimon Beatbreak"}
+	aflShows := []models.AFLShow{
+		{Title: "Digimon Adventure"},
+	}
+
+	matches := m.FindMatches(context.Background(), series, aflShows)
+	if len(matches) != 0 {
+		t.Fatalf("FindMatches() returned %d matches, want 0 for franchise-only overlap", len(matches))
+	}
+}

@@ -296,6 +296,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 		aflPreferred[ep.Number] = ep
 	}
+	coverageMax := AFLCoverageMaxEpisodeNumber(aflEpisodes)
 
 	sonarrEpisodes, err := e.sonarr.GetEpisodes(ctx, series.ID)
 	if err != nil {
@@ -303,6 +304,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 	}
 
 	watermarkChanged, effectiveWatermark := e.refreshWatermark(ctx, mapping, sonarrEpisodes)
+	effectiveWatermark = clampWatermarkToCoverage(effectiveWatermark, coverageMax)
 	if watermarkChanged {
 		log.Info().Str("series", series.Title).Int("watermark", effectiveWatermark).Str("mode", string(mapping.WatermarkMode)).Msg("updated sync watermark")
 	}
@@ -314,10 +316,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 
 	for _, ep := range sonarrEpisodes {
 		aflNum, aflEpisode, found := selectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
-		if aflNum <= 0 {
-			continue
-		}
-		if isSpecialSeason(ep.SeasonNumber) && !found {
+		if !IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
 			continue
 		}
 		result.EpisodesSeen++
@@ -359,7 +358,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 
-	if err := e.db.BulkUpsertEpisodes(ctx, dbEpisodes); err != nil {
+	if err := e.db.ReplaceEpisodesForMapping(ctx, mapping.ID, dbEpisodes); err != nil {
 		log.Warn().Err(err).Str("series", series.Title).Msg("failed to cache episode data")
 	}
 
@@ -443,6 +442,29 @@ func BuildAFLEpisodeLookup(aflEpisodes []models.AFLEpisode) (map[int][]models.AF
 		aflPreferred[ep.Number] = ep
 	}
 	return aflByNumber, aflPreferred
+}
+
+func AFLCoverageMaxEpisodeNumber(aflEpisodes []models.AFLEpisode) int {
+	maxEpisode := 0
+	for _, ep := range aflEpisodes {
+		if ep.Number > maxEpisode {
+			maxEpisode = ep.Number
+		}
+	}
+	return maxEpisode
+}
+
+func IsWithinAFLCoverage(sonarrEp models.SonarrEpisode, aflNum int, found bool, coverageMax int) bool {
+	if aflNum <= 0 {
+		return false
+	}
+	if isSpecialSeason(sonarrEp.SeasonNumber) {
+		return found
+	}
+	if coverageMax <= 0 {
+		return false
+	}
+	return aflNum <= coverageMax
 }
 
 func SelectAFLEpisodeForSonarr(sonarrEp models.SonarrEpisode, aflByNumber map[int][]models.AFLEpisode, aflPreferred map[int]models.AFLEpisode) (int, models.AFLEpisode, bool) {
@@ -720,6 +742,16 @@ func initialWatermarkForEpisodes(episodes []models.SonarrEpisode, now time.Time)
 		}
 	}
 	return maxWatermark
+}
+
+func clampWatermarkToCoverage(watermark, coverageMax int) int {
+	if coverageMax <= 0 {
+		return watermark
+	}
+	if watermark > coverageMax {
+		return coverageMax
+	}
+	return watermark
 }
 
 func (e *Engine) completeSyncLog(ctx context.Context, logID int64, status string, showsProcessed, episodesUpdated int, errors string) {

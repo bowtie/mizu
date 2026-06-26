@@ -1,12 +1,14 @@
 <script>
   import { onMount } from 'svelte';
+  import { autoAnimate } from '@formkit/auto-animate';
+  import { slide } from 'svelte/transition';
+  import { Badge, Box, Button } from '@foxui/core';
   import { addNotification } from '../lib/stores.js';
   import { getSyncLogs, triggerSync } from '../lib/api.js';
-  import Spinner from '../components/Spinner.svelte';
-  import Badge from '../components/Badge.svelte';
-  import { ChevronDown, History, RefreshCw, TriangleAlert } from 'lucide-svelte';
+  import { itemStatusBadge, runStatusBadge } from '../lib/fox.js';
+  import { ChevronDown, History, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-svelte';
 
-  const PAGE_SIZE = 12;
+  const PAGE_SIZE = 5;
 
   let loading = true;
   let logs = [];
@@ -59,9 +61,9 @@
   function formatDuration(startedAt, completedAt) {
     if (!startedAt || !completedAt) return 'Running';
     const ms = new Date(completedAt) - new Date(startedAt);
-    if (ms < 1000) return ms + 'ms';
-    if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
-    return Math.floor(ms / 60000) + 'm ' + Math.round((ms % 60000) / 1000) + 's';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
   }
 
   function formatTime(dt) {
@@ -72,24 +74,6 @@
   function formatTrigger(trigger) {
     if (!trigger) return '-';
     return trigger === 'manual' ? 'Manual' : 'Scheduled';
-  }
-
-  function runStatusType(status) {
-    switch (status) {
-      case 'success': return 'success';
-      case 'partial': return 'partial';
-      case 'failed': return 'failed';
-      case 'running': return 'running';
-      default: return 'unknown';
-    }
-  }
-
-  function itemStatusType(status) {
-    switch (status) {
-      case 'success': return 'success';
-      case 'failed': return 'failed';
-      default: return 'info';
-    }
   }
 
   function humanSummary(log) {
@@ -114,331 +98,128 @@
   <title>Mizu - Activity</title>
 </svelte:head>
 
-<div class="activity-shell">
-  <section class="page-heading activity-heading">
-    <h1>Activity</h1>
-    <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
-      <RefreshCw size={18} />
-      <span>{syncing ? 'Syncing...' : 'Sync now'}</span>
-    </button>
+<div class="space-y-6">
+  <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">Activity</h1>
+    </div>
+    <Button variant="primary" onclick={handleSync} disabled={syncing}>
+      {#if syncing}
+        <LoaderCircle size={16} class="animate-spin" />
+      {:else}
+        <RefreshCw size={16} />
+      {/if}
+      {syncing ? 'Syncing...' : 'Sync now'}
+    </Button>
   </section>
 
   {#if loading}
-    <Spinner center size="lg" message="Surfacing recent activity..." />
-  {:else if logs.length === 0}
-    <div class="activity-empty">
-      <div class="empty-state compact-empty">
-        <div class="empty-icon"><History size={28} /></div>
-        <h3>No sync activity yet</h3>
-        <p>Run a sync to start building your history.</p>
-        <button class="btn btn-primary" on:click={handleSync} disabled={syncing}>
-          <RefreshCw size={18} />
-          <span>Sync now</span>
-        </button>
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
+      <LoaderCircle size={30} class="animate-spin text-accent-400" />
+      <div class="space-y-1">
+        <h2 class="text-base font-semibold text-base-100">Loading activity</h2>
+        <p class="text-sm text-base-400">Surfacing recent sync history.</p>
       </div>
-    </div>
+    </Box>
+  {:else if logs.length === 0}
+    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 px-6 text-center">
+      <span class="flex size-12 items-center justify-center rounded-xl border border-accent-500/20 bg-accent-950/30 text-accent-300">
+        <History size={24} />
+      </span>
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-base-50">No sync activity yet</h2>
+        <p class="max-w-md text-sm leading-6 text-base-400">Run a sync to start building the activity history for your anime library.</p>
+      </div>
+      <Button variant="primary" onclick={handleSync} disabled={syncing}>
+        <RefreshCw size={16} />
+        Sync now
+      </Button>
+    </Box>
   {:else}
-    <section class="activity-list">
-      {#each logs as log}
-        <article class="card run-card" class:expanded={expandedId === log.id}>
-          <div class="run-card-head">
-            <div class="run-card-meta">
-              <Badge type={runStatusType(log.status)} label={log.status} />
-              <span>{formatTime(log.started_at)}</span>
-              <span>{formatTrigger(log.trigger)}</span>
-              <span>{formatDuration(log.started_at, log.completed_at)}</span>
-            </div>
-            {#if hasDetails(log)}
-              <button class="run-expand-btn" on:click={() => toggleExpand(log.id)} aria-label={expandedId === log.id ? 'Hide run details' : 'Show run details'}>
-                <span>Details</span>
-                <ChevronDown size={18} />
-              </button>
-            {/if}
-          </div>
-
-          <div class="run-card-body">
-            <h3>{humanSummary(log)}</h3>
-            {#if log.errors}
-              <p>This run completed with errors that need attention.</p>
-            {:else if log.items?.length}
-              <p>Open details to see what changed for this run.</p>
-            {/if}
-          </div>
-
-          {#if expandedId === log.id && hasDetails(log)}
-            <div class="run-card-detail">
-              {#if log.items?.length}
-                <ul class="run-detail-list">
-                  {#each log.items as item}
-                    <li class="run-detail-item">
-                      <div class="run-detail-head">
-                        <strong>{item.sonarr_title}</strong>
-                        <Badge type={itemStatusType(item.status)} label={item.status} />
-                      </div>
-                      <p>{detailLine(item)}</p>
-                      {#if item.error}
-                        <div class="run-detail-error">
-                          <TriangleAlert size={18} />
-                          <span>{item.error}</span>
-                        </div>
-                      {/if}
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-
-              {#if log.errors}
-                <div class="activity-errors">
-                  <div class="error-head"><TriangleAlert size={18} /> Run errors</div>
-                  {log.errors}
+    <section class="space-y-4" use:autoAnimate>
+      {#each logs as log (log.id)}
+        {@const runBadge = runStatusBadge(log.status)}
+        <Box class="rounded-2xl border border-base-800/80 bg-base-950/60">
+          <div class="space-y-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div class="space-y-3">
+                <div class="flex flex-wrap gap-2">
+                  <Badge variant={runBadge.variant} size="sm">{runBadge.label}</Badge>
+                  <Badge variant="secondary" size="sm">{formatTrigger(log.trigger)}</Badge>
+                  <Badge variant="secondary" size="sm">{formatDuration(log.started_at, log.completed_at)}</Badge>
                 </div>
+
+                <div class="space-y-1">
+                  <h2 class="text-base font-semibold text-base-50">{humanSummary(log)}</h2>
+                  <p class="text-sm text-base-400">{formatTime(log.started_at)}</p>
+                </div>
+              </div>
+
+              {#if hasDetails(log)}
+                <Button variant="ghost" onclick={() => toggleExpand(log.id)} data-current={expandedId === log.id ? 'true' : undefined}>
+                  Details
+                  <ChevronDown size={16} class={expandedId === log.id ? 'rotate-180' : ''} />
+                </Button>
               {/if}
             </div>
-          {/if}
-        </article>
+
+            {#if log.errors}
+              <div class="rounded-xl border border-rose-500/20 bg-rose-950/20 px-4 py-3 text-sm text-rose-200">
+                This run completed with errors that need attention.
+              </div>
+            {/if}
+
+            {#if expandedId === log.id && hasDetails(log)}
+              <div class="space-y-4 pt-1" transition:slide={{ duration: 220 }}>
+                {#if log.items?.length}
+                  <div class="space-y-3">
+                    {#each log.items as item}
+                      {@const itemBadge = itemStatusBadge(item.status)}
+                      <div class="rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div class="space-y-2">
+                            <h3 class="text-sm font-semibold text-base-50">{item.sonarr_title}</h3>
+                            <p class="text-sm leading-6 text-base-400">{detailLine(item)}</p>
+                          </div>
+                          <Badge variant={itemBadge.variant} size="sm">{itemBadge.label}</Badge>
+                        </div>
+
+                        {#if item.error}
+                          <div class="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
+                            <TriangleAlert size={16} class="mt-0.5 shrink-0" />
+                            <span>{item.error}</span>
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+
+                {#if log.errors}
+                  <div class="rounded-xl border border-rose-500/20 bg-rose-950/20 p-4 text-sm text-rose-200">
+                    <div class="mb-2 flex items-center gap-2 font-medium">
+                      <TriangleAlert size={16} />
+                      Run errors
+                    </div>
+                    {log.errors}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        </Box>
       {/each}
     </section>
 
     {#if hasMore}
-      <div class="load-more-row">
-        <button class="btn btn-secondary" on:click={() => loadActivity(false)} disabled={loadingMore}>
-          <span>{loadingMore ? 'Loading...' : 'Load more'}</span>
-        </button>
+      <div class="flex justify-center">
+        <Button variant="secondary" onclick={() => loadActivity(false)} disabled={loadingMore}>
+          {#if loadingMore}
+            <LoaderCircle size={16} class="animate-spin" />
+          {/if}
+          {loadingMore ? 'Loading...' : 'Load more'}
+        </Button>
       </div>
     {/if}
   {/if}
 </div>
-
-<style>
-  .activity-shell {
-    position: relative;
-    isolation: isolate;
-    display: grid;
-    gap: var(--space-8);
-    max-width: var(--content-max);
-    margin: 0 auto;
-  }
-
-  .activity-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-
-  .activity-heading h1 {
-    margin-bottom: 4px;
-    font-size: var(--text-page-title);
-    line-height: var(--leading-tight);
-  }
-
-  .activity-heading .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .activity-list {
-    display: grid;
-    gap: 14px;
-  }
-
-  .run-card {
-    padding: 16px 18px;
-    display: grid;
-    gap: 14px;
-    background: var(--panel-bg-strong);
-    border: none;
-    box-shadow: var(--shadow-card);
-  }
-
-  .run-card-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .run-card-meta {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    color: var(--text-secondary);
-    font-size: var(--text-meta);
-    line-height: 1.4;
-  }
-
-  .run-expand-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 34px;
-    padding: 0 10px;
-    border-radius: 8px;
-    border: 0;
-    background: color-mix(in srgb, var(--surface-elevated) 82%, rgba(7, 16, 29, 0.96) 18%);
-    color: var(--text-secondary);
-    font-size: var(--text-meta);
-    font-weight: var(--weight-semibold);
-  }
-
-  .run-card.expanded .run-expand-btn :global(svg) {
-    transform: rotate(180deg);
-  }
-
-  .run-card-body {
-    display: grid;
-    gap: 6px;
-  }
-
-  .run-card-body h3 {
-    font-size: var(--text-title-md);
-    line-height: 1.25;
-  }
-
-  .run-card-body p {
-    color: var(--text-secondary);
-    font-size: var(--text-secondary-size);
-    line-height: var(--leading-copy);
-  }
-
-  .run-card-detail {
-    display: grid;
-    gap: 10px;
-    padding-top: 12px;
-    box-shadow: inset 0 1px 0 var(--divider-border-soft);
-  }
-
-  .run-detail-list {
-    display: grid;
-    gap: 10px;
-    list-style: none;
-  }
-
-  .run-detail-item {
-    display: grid;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: var(--panel-bg-soft);
-    border: none;
-  }
-
-  .run-detail-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .run-detail-item p {
-    color: var(--text-secondary);
-    font-size: var(--text-secondary-size);
-    line-height: var(--leading-copy);
-  }
-
-  .run-detail-error,
-  .error-head {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .run-detail-error {
-    color: var(--danger-foreground);
-    font-size: var(--text-meta);
-    line-height: 1.45;
-  }
-
-  .activity-errors {
-    display: grid;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--danger) 10%, rgba(7, 16, 29, 0.92) 90%);
-    box-shadow: inset 3px 0 0 rgba(255, 77, 106, 0.42);
-    color: var(--danger-foreground);
-    font-size: var(--text-secondary-size);
-    line-height: var(--leading-copy);
-  }
-
-  .error-head {
-    font-weight: 700;
-    color: var(--danger-foreground);
-  }
-
-  .load-more-row {
-    display: flex;
-    justify-content: center;
-  }
-
-  .activity-empty {
-    min-height: 240px;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .compact-empty {
-    display: grid;
-    gap: 10px;
-    place-items: center;
-    text-align: center;
-    padding: 24px;
-  }
-
-  .compact-empty .empty-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    background: var(--empty-icon-gradient);
-    color: var(--accent-blue);
-    box-shadow: 0 12px 26px rgba(125, 200, 240, 0.18);
-  }
-
-  @media (max-width: 720px) {
-    .activity-heading {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .activity-heading .btn {
-      width: 100%;
-    }
-
-    .run-card {
-      padding: 14px;
-    }
-
-    .run-card-head {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .run-card-meta {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .run-expand-btn {
-      width: 100%;
-      justify-content: center;
-    }
-
-    .run-detail-head {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-  }
-</style>
-
-
-
-
-
-

@@ -1,169 +1,131 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { ChevronDown, ChevronUp } from 'lucide-svelte';
+  import { onDestroy } from 'svelte';
+  import { Minus, Plus } from 'lucide-svelte';
 
   export let id = undefined;
-  export let name = undefined;
   export let value = 0;
   export let min = 0;
   export let max = Number.POSITIVE_INFINITY;
   export let step = 1;
+  export let defaultValue = 0;
   export let disabled = false;
-  export let ariaLabel = 'Number input';
+  export let className = '';
 
-  const dispatch = createEventDispatcher();
+  const HOLD_DELAY_MS = 325;
+  const HOLD_INTERVAL_MS = 85;
 
-  let draftValue = String(value ?? min ?? 0);
-  let isFocused = false;
+  let holdTimeout = null;
+  let holdInterval = null;
 
-  const clamp = (next) => {
-    const parsed = Number(next);
-    if (!Number.isFinite(parsed)) return min;
-    return Math.min(max, Math.max(min, parsed));
-  };
-
-  $: if (!isFocused) {
-    draftValue = String(clamp(value));
+  function asNumber(nextValue, fallback = 0) {
+    const numeric = Number(nextValue);
+    return Number.isNaN(numeric) ? fallback : numeric;
   }
 
-  function sync(nextValue, emitChange = false) {
-    const normalized = clamp(nextValue);
-    value = normalized;
-    draftValue = String(normalized);
-    dispatch('input', { value: normalized });
-    if (emitChange) {
-      dispatch('change', { value: normalized });
-    }
+  function clamp(nextValue) {
+    const numeric = Number(nextValue);
+    const minValue = asNumber(min, 0);
+    const maxValue = asNumber(max, Number.POSITIVE_INFINITY);
+    if (Number.isNaN(numeric)) return fallbackValue();
+    return Math.min(Math.max(numeric, minValue), maxValue);
+  }
+
+  function fallbackValue() {
+    return clamp(defaultValue);
+  }
+
+  function updateValue(nextValue) {
+    value = clamp(nextValue);
   }
 
   function handleInput(event) {
-    const cleaned = event.currentTarget.value.replace(/[^\d-]/g, '');
-    draftValue = cleaned;
-
-    if (cleaned === '' || cleaned === '-') {
-      value = min;
-      dispatch('input', { value });
+    const raw = event.currentTarget.value;
+    if (raw === '') {
+      value = fallbackValue();
       return;
     }
 
-    const parsed = Number(cleaned);
-    if (Number.isFinite(parsed)) {
-      value = clamp(parsed);
-      dispatch('input', { value });
-    }
+    updateValue(raw);
+  }
+
+  function adjust(diff) {
+    if (disabled) return;
+    updateValue(asNumber(value, 0) + asNumber(diff, 1));
   }
 
   function handleBlur() {
-    isFocused = false;
-    sync(draftValue === '' || draftValue === '-' ? min : draftValue, true);
+    value = clamp(value);
   }
 
-  function handleFocus() {
-    isFocused = true;
-  }
-
-  function adjust(direction) {
-    if (disabled) return;
-    const baseValue = draftValue === '' || draftValue === '-' ? value : Number(draftValue);
-    sync((Number.isFinite(baseValue) ? baseValue : value) + direction * step, true);
-  }
-
-  function handleKeydown(event) {
-    if (disabled) return;
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      adjust(1);
+  function clearHold() {
+    if (holdTimeout) {
+      clearTimeout(holdTimeout);
+      holdTimeout = null;
     }
 
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      adjust(-1);
+    if (holdInterval) {
+      clearInterval(holdInterval);
+      holdInterval = null;
     }
   }
+
+  function startHold(diff) {
+    if (disabled) return;
+
+    adjust(diff);
+
+    holdTimeout = setTimeout(() => {
+      holdInterval = setInterval(() => {
+        adjust(diff);
+      }, HOLD_INTERVAL_MS);
+    }, HOLD_DELAY_MS);
+  }
+
+  onDestroy(clearHold);
 </script>
 
-<div class="ui-field-shell number-input" class:is-disabled={disabled}>
+<div class={`flex w-full max-w-44 items-center rounded-2xl border border-blue-500/18 bg-blue-950/12 text-blue-200 shadow-[inset_0_1px_0_rgba(96,165,250,0.08)] transition focus-within:border-blue-400/45 focus-within:ring-2 focus-within:ring-blue-500/25 ${disabled ? 'opacity-60' : ''} ${className}`.trim()}>
+  <button
+    type="button"
+    class="flex h-11 w-11 items-center justify-center rounded-l-2xl text-blue-300 transition hover:bg-blue-500/8 hover:text-blue-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-blue-300"
+    onclick={(event) => event.preventDefault()}
+    onpointerdown={() => startHold(-step)}
+    onpointerup={clearHold}
+    onpointerleave={clearHold}
+    onpointercancel={clearHold}
+    disabled={disabled || asNumber(value, 0) <= asNumber(min, 0)}
+    aria-label="Decrease value"
+  >
+    <Minus size={16} />
+  </button>
+
   <input
     {id}
-    {name}
-    type="text"
-    inputmode="numeric"
-    pattern="[0-9]*"
-    role="spinbutton"
-    class="ui-field-control number-input-field"
-    bind:value={draftValue}
-    aria-label={ariaLabel}
-    aria-valuenow={value}
-    aria-valuemin={min}
-    aria-valuemax={Number.isFinite(max) ? max : undefined}
-    aria-disabled={disabled ? 'true' : undefined}
+    type="number"
+    class="h-11 min-w-0 flex-1 border-0 bg-transparent px-2 text-center text-lg font-semibold text-base-50 outline-none [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+    bind:value
+    {min}
+    {max}
+    {step}
     {disabled}
-    on:input={handleInput}
-    on:focus={handleFocus}
-    on:blur={handleBlur}
-    on:keydown={handleKeydown}
+    inputmode="numeric"
+    autocomplete="off"
+    oninput={handleInput}
+    onblur={handleBlur}
+    onkeydown={clearHold}
   />
-  <div class="number-input-stepper">
-    <button
-      type="button"
-      class="ui-field-button number-step-button"
-      aria-label="Increase value"
-      aria-controls={id}
-      on:click={() => adjust(1)}
-      disabled={disabled || value >= max}
-    >
-      <ChevronUp size={14} />
-    </button>
-    <button
-      type="button"
-      class="ui-field-button number-step-button"
-      aria-label="Decrease value"
-      aria-controls={id}
-      on:click={() => adjust(-1)}
-      disabled={disabled || value <= min}
-    >
-      <ChevronDown size={14} />
-    </button>
-  </div>
+
+  <button
+    type="button"
+    class="flex h-11 w-11 items-center justify-center rounded-r-2xl text-blue-300 transition hover:bg-blue-500/8 hover:text-blue-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-blue-300"
+    onclick={(event) => event.preventDefault()}
+    onpointerdown={() => startHold(step)}
+    onpointerup={clearHold}
+    onpointerleave={clearHold}
+    onpointercancel={clearHold}
+    disabled={disabled || asNumber(value, 0) >= asNumber(max, Number.POSITIVE_INFINITY)}
+    aria-label="Increase value"
+  >
+    <Plus size={16} />
+  </button>
 </div>
-
-<style>
-  .number-input {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 32px;
-    width: 100%;
-    overflow: hidden;
-  }
-
-  .number-input.is-disabled {
-    opacity: 0.72;
-  }
-
-  .number-input-field {
-    min-width: 0;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    text-align: left;
-  }
-
-  .number-input-field:disabled {
-    cursor: not-allowed;
-  }
-
-  .number-input-stepper {
-    display: grid;
-    grid-template-rows: 1fr 1fr;
-    border-left: 1px solid var(--divider-border);
-  }
-
-  .number-step-button {
-    width: 100%;
-    min-height: 0;
-    border-radius: 0;
-  }
-
-  .number-step-button + .number-step-button {
-    border-top: 1px solid var(--divider-border);
-  }
-</style>

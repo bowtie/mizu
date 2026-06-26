@@ -17,6 +17,11 @@ export const settings = writable({
   sync_interval: '6h',
   enable_tagging: false,
   filler_tag_name: 'filler',
+  enable_anilist_artwork: false,
+  sonarr_add_root_folder: '',
+  sonarr_add_quality_profile_id: 0,
+  sonarr_add_monitor_mode: 'all',
+  sonarr_add_season_folder: true,
   afl_show_cache_refreshed_at: null,
   afl_show_cache_count: 0,
 });
