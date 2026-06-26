@@ -5,14 +5,13 @@
   import Toast from './components/Toast.svelte';
 
   const routes = {
+    '/': wrap({ asyncComponent: () => import('./pages/Dashboard.svelte') }),
     '/shows': wrap({ asyncComponent: () => import('./pages/Shows.svelte') }),
     '/shows/:id': wrap({ asyncComponent: () => import('./pages/ShowDetail.svelte') }),
     '/activity': wrap({ asyncComponent: () => import('./pages/Activity.svelte') }),
     '/settings': wrap({ asyncComponent: () => import('./pages/Settings.svelte') }),
     '/logs': wrap({ asyncComponent: () => import('./pages/Activity.svelte') }),
   };
-
-  $: if (router.location === '/') push('/shows');
 </script>
 
 <div class="min-h-screen bg-base-900 text-base-50">

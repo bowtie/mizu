@@ -37,6 +37,7 @@
 
   let loading = true;
   let filter = '';
+  let sortBy = 'title';
 
   let allSeries = [];
   let addSeriesLibrary = [];
@@ -81,6 +82,24 @@
     { value: START_FROM_CURRENT, label: 'Current progress' },
     { value: START_FROM_BEGINNING, label: 'Episode 1' },
   ];
+  const sortOptions = [
+    { value: 'title', label: 'Title (A-Z)' },
+    { value: 'title_desc', label: 'Title (Z-A)' },
+    { value: 'watermark', label: 'Latest progress' },
+  ];
+  const wizardSteps = [
+    { key: ADD_STEP_SERIES, label: 'Select' },
+    { key: ADD_STEP_MATCH, label: 'Match' },
+    { key: ADD_STEP_UNSAFE_MATCH, label: 'Confirm' },
+    { key: ADD_STEP_POST_ADD, label: 'Done' },
+  ];
+  const wizardFallbackSteps = [
+    { key: ADD_STEP_FALLBACK_AFL, label: 'AFL Search' },
+    { key: ADD_STEP_FALLBACK_SONARR, label: 'Add to Sonarr' },
+    { key: ADD_STEP_MATCH, label: 'Match' },
+  ];
+  $: activeWizardSteps = [ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep) ? wizardFallbackSteps : wizardSteps;
+  $: currentStepIndex = activeWizardSteps.findIndex((s) => s.key === addStep);
   const modalSelectContentProps = { class: 'z-[70] p-1' };
   const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
   const trackedToAction = (tracked) => (tracked ? 'monitor' : 'unmonitor');
@@ -93,11 +112,18 @@
     };
   });
 
-  $: filteredShows = mappedShows.filter((show) => {
-    if (!filter) return true;
-    const query = filter.toLowerCase();
-    return (show.sonarr_title || '').toLowerCase().includes(query) || (show.afl_title || show.afl_slug || '').toLowerCase().includes(query);
-  });
+  $: filteredShows = mappedShows
+    .filter((show) => {
+      if (!filter) return true;
+      const query = filter.toLowerCase();
+      return (show.sonarr_title || '').toLowerCase().includes(query) || (show.afl_title || show.afl_slug || '').toLowerCase().includes(query);
+    })
+    .sort((a, b) => {
+      if (sortBy === 'title') return (a.sonarr_title || '').localeCompare(b.sonarr_title || '');
+      if (sortBy === 'title_desc') return (b.sonarr_title || '').localeCompare(a.sonarr_title || '');
+      if (sortBy === 'watermark') return (b.sync_watermark || 0) - (a.sync_watermark || 0);
+      return 0;
+    });
 
   $: availableSeries = allSeries
     .filter((series) => !new Set(($shows || []).map((show) => show.sonarr_series_id)).has(series.id))
@@ -669,8 +695,8 @@
     </Button>
   </section>
 
-  <section>
-    <div class="relative">
+  <section class="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div class="relative flex-1">
       <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-accent-300">
         <Search size={20} />
       </span>
@@ -683,6 +709,9 @@
         class="w-full pl-12"
         aria-label="Search anime"
       />
+    </div>
+    <div class="sm:w-48">
+      <Select bind:value={sortBy} type="single" items={sortOptions} placeholder="Sort by" />
     </div>
   </section>
 
@@ -811,8 +840,28 @@
       </button>
 
       <div class="space-y-7">
-        <div class="space-y-2 border-b border-base-800/80 pb-5 pr-12">
+        <div class="space-y-3 border-b border-base-800/80 pb-5 pr-12">
           <h2 id="show-add-modal-title" class="text-xl font-semibold tracking-tight text-base-50">Add anime</h2>
+          <!-- Step indicator -->
+          <div class="flex items-center gap-1.5">
+            {#each activeWizardSteps as step, i}
+              {@const isCurrent = step.key === addStep}
+              {@const isPast = currentStepIndex > i}
+              <div class="flex items-center gap-1.5">
+                <span class="flex size-5 items-center justify-center rounded-full text-xs font-medium {isCurrent ? 'bg-accent-500 text-base-950' : isPast ? 'bg-accent-500/20 text-accent-300' : 'bg-base-800 text-base-500'}">
+                  {#if isPast}
+                    <Check size={12} />
+                  {:else}
+                    {i + 1}
+                  {/if}
+                </span>
+                <span class="text-xs font-medium {isCurrent ? 'text-base-200' : 'text-base-500'}">{step.label}</span>
+                {#if i < activeWizardSteps.length - 1}
+                  <span class="mx-0.5 h-px w-4 bg-base-800"></span>
+                {/if}
+              </div>
+            {/each}
+          </div>
           <p class="text-sm leading-6 text-base-400">
             {#if addStep === ADD_STEP_SERIES}
               Search your actionable Sonarr anime library first. If the anime is missing, switch to cached AFL search and add it into Sonarr from here.

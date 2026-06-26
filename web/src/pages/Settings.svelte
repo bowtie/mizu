@@ -28,6 +28,9 @@
   let cacheRefreshedAt = null;
   let cacheCount = 0;
 
+  // Pristine snapshots for dirty tracking
+  let pristine = {};
+
   const syncIntervalOptions = [
     { value: '1h', label: 'Every 1 hour' },
     { value: '3h', label: 'Every 3 hours' },
@@ -64,12 +67,38 @@
         cacheRefreshedAt = data.afl_show_cache_refreshed_at || null;
         cacheCount = data.afl_show_cache_count || 0;
         settings.set(data);
+        pristine = {
+          sonarrUrl,
+          sonarrApiKey,
+          apiKeyDirty,
+          syncInterval,
+          enableTagging,
+          enableAniListArtwork,
+          fillerTagName,
+          trackFillerDefault,
+          trackMixedDefault,
+          trackAnimeCanonDefault,
+        };
       }
     } catch (err) {
       addNotification('Failed to load settings: ' + err.message, 'error');
     }
     loading = false;
   }
+
+  $: settingsDirty = !loading && (
+    sonarrUrl !== pristine.sonarrUrl ||
+    apiKeyDirty ||
+    syncInterval !== pristine.syncInterval ||
+    enableTagging !== pristine.enableTagging ||
+    enableAniListArtwork !== pristine.enableAniListArtwork ||
+    fillerTagName !== pristine.fillerTagName ||
+    trackFillerDefault !== pristine.trackFillerDefault ||
+    trackMixedDefault !== pristine.trackMixedDefault ||
+    trackAnimeCanonDefault !== pristine.trackAnimeCanonDefault
+  );
+
+  $: urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
 
   function handleApiKeyInput(event) {
     apiKeyDirty = true;
@@ -141,6 +170,10 @@
       addNotification('Please enter a Sonarr URL first', 'warning');
       return;
     }
+    if (!urlValid) {
+      addNotification('URL must start with http:// or https://', 'warning');
+      return;
+    }
     testing = true;
     testResult = null;
     try {
@@ -181,11 +214,13 @@
 </svelte:head>
 
 <div class="space-y-6">
+  <!-- Header -->
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">Settings</h1>
+      <p class="mt-1 text-sm text-base-400">Configure Sonarr connection, sync behavior, and defaults.</p>
     </div>
-    <Button variant="primary" onclick={handleSave} disabled={saving}>
+    <Button variant="primary" onclick={handleSave} disabled={saving || !settingsDirty}>
       {#if saving}
         <LoaderCircle size={16} class="animate-spin" />
       {:else}
@@ -205,15 +240,23 @@
     </Box>
   {:else}
     <div class="mx-auto max-w-4xl space-y-5">
+      {#if settingsDirty}
+        <div class="flex items-center gap-2 rounded-xl border border-accent-500/20 bg-accent-950/20 px-4 py-2.5 text-sm text-accent-200">
+          You have unsaved changes.
+        </div>
+      {/if}
+
+      <!-- Connection section (critical) -->
       <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold text-base-50">Sonarr</h2>
+            <h2 class="text-lg font-semibold text-base-50">Connection</h2>
+            <Badge variant="secondary" size="sm">Required</Badge>
             {#if testResult}
               <Badge variant={testResult.success ? 'green' : 'rose'} size="sm">{testResult.message}</Badge>
             {/if}
           </div>
-          <Button variant="secondary" onclick={handleTestConnection} disabled={testing}>
+          <Button variant="secondary" onclick={handleTestConnection} disabled={testing || !sonarrUrl || !urlValid}>
             {#if testing}
               <LoaderCircle size={16} class="animate-spin" />
             {:else}
@@ -225,8 +268,11 @@
 
         <div class="space-y-4">
           <div class="space-y-2">
-            <Label for="sonarr-url">URL</Label>
+            <Label for="sonarr-url">Sonarr URL</Label>
             <Input id="sonarr-url" type="text" variant="secondary" sizeVariant="lg" placeholder="http://localhost:8989" bind:value={sonarrUrl} class="w-full" />
+            {#if sonarrUrl && !urlValid}
+              <p class="text-sm text-rose-300">URL must start with http:// or https://</p>
+            {/if}
           </div>
 
           <div class="space-y-2">
@@ -259,10 +305,11 @@
         </div>
       </Box>
 
+      <!-- Sync section -->
       <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold text-base-50">Sync defaults</h2>
+            <h2 class="text-lg font-semibold text-base-50">Sync</h2>
             <Badge variant="secondary" size="sm">{cacheCount} cached</Badge>
           </div>
           <div class="flex flex-wrap items-center gap-2">
@@ -280,65 +327,69 @@
 
         <div class="space-y-4">
           <div class="space-y-2">
-            <Label for="sync-interval">Interval</Label>
+            <Label for="sync-interval">Sync interval</Label>
             <Select id="sync-interval" bind:value={syncInterval} type="single" items={syncIntervalOptions} placeholder="Choose an interval" />
+            <p class="text-sm text-base-400">How often Mizu checks for episode changes and updates Sonarr.</p>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <h3 class="text-base font-semibold text-base-50">Default tracking rules</h3>
-            <Badge variant="secondary" size="sm">New anime</Badge>
-          </div>
-          <p class="text-sm leading-6 text-base-400">Applied automatically when you add a new anime mapping.</p>
-
-          <div class="grid gap-3 md:grid-cols-3">
-            <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
-              <div class="text-sm font-medium text-base-100">Anime canon</div>
-              <Switch bind:checked={trackAnimeCanonDefault} />
+          <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+            <Checkbox bind:checked={enableTagging} variant="secondary" />
+            <div class="space-y-1">
+              <div class="text-sm font-medium text-base-100">Sonarr tagging</div>
+              <div class="text-sm text-base-400">Apply a filler tag to episodes inside Sonarr.</div>
             </div>
+          </label>
 
-            <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
-              <div class="text-sm font-medium text-base-100">Mixed canon</div>
-              <Switch bind:checked={trackMixedDefault} />
+          {#if enableTagging}
+            <div class="space-y-2">
+              <Label for="tag-name">Tag name</Label>
+              <Input id="tag-name" type="text" variant="secondary" sizeVariant="lg" placeholder="filler" bind:value={fillerTagName} class="w-full" />
             </div>
+          {/if}
 
-            <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
-              <div class="text-sm font-medium text-base-100">Filler</div>
-              <Switch bind:checked={trackFillerDefault} />
+          <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+            <Checkbox bind:checked={enableAniListArtwork} variant="secondary" />
+            <div class="space-y-1">
+              <div class="text-sm font-medium text-base-100">AniList artwork</div>
+              <div class="text-sm text-base-400">Use AniList banners and posters instead of Sonarr images only.</div>
             </div>
-          </div>
+          </label>
         </div>
       </Box>
 
-      <Box class="space-y-4 rounded-2xl border border-base-800/80 bg-base-950/60">
-        <div class="flex flex-wrap items-center gap-3">
-          <h2 class="text-lg font-semibold text-base-50">Misc</h2>
-          <Badge variant={enableTagging || enableAniListArtwork ? 'green' : 'secondary'} size="sm">
-            {enableTagging || enableAniListArtwork ? 'Configured' : 'Off'}
-          </Badge>
+      <!-- Defaults section -->
+      <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-lg font-semibold text-base-50">Defaults</h2>
+          <Badge variant="secondary" size="sm">New anime</Badge>
         </div>
+        <p class="text-sm leading-6 text-base-400">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
 
-        <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
-          <Checkbox bind:checked={enableTagging} variant="secondary" />
-          <div class="space-y-1">
-            <div class="text-sm font-medium text-base-100">Enable Sonarr tagging</div>
-            <div class="text-sm text-base-400">Apply a filler tag inside Sonarr.</div>
+        <div class="grid gap-3 md:grid-cols-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+            <div>
+              <div class="text-sm font-medium text-base-100">Anime canon</div>
+              <div class="mt-0.5 text-xs text-base-400">Original anime episodes</div>
+            </div>
+            <Switch bind:checked={trackAnimeCanonDefault} />
           </div>
-        </label>
 
-        <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
-          <Checkbox bind:checked={enableAniListArtwork} variant="secondary" />
-          <div class="space-y-1">
-            <div class="text-sm font-medium text-base-100">AniList artwork</div>
-            <div class="text-sm text-base-400">When off, Mizu uses Sonarr images only.</div>
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+            <div>
+              <div class="text-sm font-medium text-base-100">Mixed canon</div>
+              <div class="mt-0.5 text-xs text-base-400">Canon + filler blend</div>
+            </div>
+            <Switch bind:checked={trackMixedDefault} />
           </div>
-        </label>
 
-        {#if enableTagging}
-          <div class="space-y-2">
-            <Label for="tag-name">Tag name</Label>
-            <Input id="tag-name" type="text" variant="secondary" sizeVariant="lg" placeholder="filler" bind:value={fillerTagName} class="w-full" />
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+            <div>
+              <div class="text-sm font-medium text-base-100">Filler</div>
+              <div class="mt-0.5 text-xs text-base-400">Pure filler episodes</div>
+            </div>
+            <Switch bind:checked={trackFillerDefault} />
           </div>
-        {/if}
+        </div>
       </Box>
     </div>
   {/if}

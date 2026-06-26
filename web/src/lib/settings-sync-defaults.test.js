@@ -8,12 +8,11 @@ const settingsSvelte = readFileSync(
   "utf8",
 );
 
-test("settings page keeps sync defaults flat and avoids redundant sync stats", () => {
-  assert.match(settingsSvelte, />Sync defaults</);
+test("settings page groups config into Connection, Sync, and Defaults sections", () => {
+  assert.match(settingsSvelte, />Connection</);
+  assert.match(settingsSvelte, />Sync</);
+  assert.match(settingsSvelte, />Defaults</);
+  assert.doesNotMatch(settingsSvelte, />Sync defaults</);
   assert.doesNotMatch(settingsSvelte, />Cadence</);
   assert.doesNotMatch(settingsSvelte, />Monthly refresh</);
-  assert.match(
-    settingsSvelte,
-    /<h3 class="text-base font-semibold text-base-50">Default tracking rules<\/h3>/,
-  );
 });

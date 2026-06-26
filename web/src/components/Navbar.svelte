@@ -3,9 +3,10 @@
   import { router } from 'svelte-spa-router';
   import { Badge, Button, Tooltip } from '@foxui/core';
   import { getStatus } from '../lib/api.js';
-  import { History, RadioTower, Settings as SettingsIcon, Tv, Waves } from 'lucide-svelte';
+  import { History, LayoutDashboard, RadioTower, Settings as SettingsIcon, Tv, Waves } from 'lucide-svelte';
 
   const navItems = [
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/shows', label: 'Anime', icon: Tv },
     { path: '/activity', label: 'Activity', icon: History },
     { path: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -24,6 +25,9 @@
   });
 
   function isActive(itemPath, currentPath) {
+    if (itemPath === '/') {
+      return currentPath === '/';
+    }
     if (itemPath === '/shows') {
       return currentPath === '/shows' || currentPath.startsWith('/shows/');
     }
@@ -37,7 +41,7 @@
 <header class="sticky top-4 z-40 hidden px-4 md:block">
   <div class="mx-auto flex max-w-6xl flex-col rounded-2xl border border-base-800/80 bg-base-950/82 px-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-xl">
     <div class="flex min-h-16 items-center justify-between gap-4 py-3">
-      <a href="#/shows" class="flex min-w-0 items-center gap-3" aria-label="Mizu home">
+      <a href="#/" class="flex min-w-0 items-center gap-3" aria-label="Mizu home">
         <span class="flex size-9 items-center justify-center rounded-lg border border-blue-500/20 bg-blue-950/30 text-blue-300">
           <Waves size={18} />
         </span>

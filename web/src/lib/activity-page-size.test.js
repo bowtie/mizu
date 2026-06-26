@@ -8,6 +8,6 @@ const activitySvelte = readFileSync(
   "utf8",
 );
 
-test("activity page requests five log entries per page", () => {
-  assert.match(activitySvelte, /const PAGE_SIZE = 5;/);
+test("activity page requests eight log entries per page", () => {
+  assert.match(activitySvelte, /const PAGE_SIZE = 8;/);
 });
