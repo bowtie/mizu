@@ -1,8 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { Badge, Box, Button, Checkbox, Input, Label, Select, Switch } from '@foxui/core';
-  import { settings, addNotification } from '../lib/stores.js';
-  import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../lib/api.js';
+  import { settings, addNotification } from '../../lib/stores.js';
+  import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.js';
   import { Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
 
   let loading = true;

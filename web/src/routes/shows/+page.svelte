@@ -1,9 +1,9 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
-  import { push } from 'svelte-spa-router';
+  import { goto } from '$app/navigation';
   import { Badge, Box, Button, Checkbox, Input, Label, ScrollArea, Select } from '@foxui/core';
-  import { shows, settings, addNotification } from '../lib/stores.js';
+  import { shows, settings, addNotification } from '../../lib/stores.js';
   import {
     addSonarrSeries,
     getShows,
@@ -15,15 +15,15 @@
     searchAFL,
     confirmMatch,
     getSettings,
-  } from '../lib/api.js';
-  import { episodeTypeBadge, syncStateBadge } from '../lib/fox.js';
+  } from '../../lib/api.js';
+  import { episodeTypeBadge, syncStateBadge } from '../../lib/fox.js';
   import {
     createPosterMonogram,
     POSTER_FAILED,
     POSTER_LOADING,
     resolvePosterElementState,
-  } from '../lib/poster-state.js';
-  import { resolveSonarrImageUrl } from '../lib/sonarr-images.js';
+  } from '../../lib/poster-state.js';
+  import { resolveSonarrImageUrl } from '../../lib/sonarr-images.js';
   import { Check, CircleAlert, CircleCheckBig, LoaderCircle, Plus, Search, Waves, X } from 'lucide-svelte';
 
   const START_FROM_BEGINNING = 'from_beginning';
@@ -241,7 +241,7 @@
   }
 
   function openShow(showId) {
-    push(`/shows/${showId}`);
+    goto(`/shows/${showId}`);
   }
 
   async function refreshSettings() {

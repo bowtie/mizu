@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const showsSvelte = readFileSync(resolve(import.meta.dirname, "../pages/Shows.svelte"), "utf8");
+const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+page.svelte"), "utf8");
 const apiJs = readFileSync(resolve(import.meta.dirname, "./api.js"), "utf8");
 const storesJs = readFileSync(resolve(import.meta.dirname, "./stores.js"), "utf8");
 const settingsSvelte = readFileSync(
-  resolve(import.meta.dirname, "../pages/Settings.svelte"),
+  resolve(import.meta.dirname, "../routes/settings/+page.svelte"),
   "utf8",
 );
 

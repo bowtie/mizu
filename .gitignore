@@ -18,4 +18,6 @@ web/.codex-cache/
 web/.bun-home/
 web/.bun-tmp/
 web/dist/
+web/.svelte-kit/
+web/build/
 

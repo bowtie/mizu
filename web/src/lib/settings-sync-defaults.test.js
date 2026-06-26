@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const settingsSvelte = readFileSync(
-  resolve(import.meta.dirname, "../pages/Settings.svelte"),
+  resolve(import.meta.dirname, "../routes/settings/+page.svelte"),
   "utf8",
 );
 

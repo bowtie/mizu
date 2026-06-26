@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const showsSvelte = readFileSync(resolve(import.meta.dirname, "../pages/Shows.svelte"), "utf8");
+const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+page.svelte"), "utf8");
 
 test("shows page uses a local centered add modal overlay instead of the shared fox modal", () => {
   assert.match(showsSvelte, /import\s+\{\s*fade,\s*scale\s*\}\s+from\s+'svelte\/transition'/);

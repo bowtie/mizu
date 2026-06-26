@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const appCss = readFileSync(resolve(import.meta.dirname, "../app.css"), "utf8");
-const showsSvelte = readFileSync(resolve(import.meta.dirname, "../pages/Shows.svelte"), "utf8");
+const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+page.svelte"), "utf8");
 
 test("poster image keeps Fox-style utility transition classes", () => {
   assert.match(

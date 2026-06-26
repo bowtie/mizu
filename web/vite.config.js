@@ -1,11 +1,6 @@
 import { defineConfig, lazyPlugins } from "vite-plus";
-import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
-import { fileURLToPath, URL } from "node:url";
-
-const appEnvironmentShim = fileURLToPath(
-  new URL("./src/shims/app-environment.js", import.meta.url),
-);
 
 export default defineConfig({
   fmt: {},
@@ -17,17 +12,7 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.js"],
   },
-  resolve: {
-    alias: {
-      "$app/environment": appEnvironmentShim,
-    },
-  },
-  plugins: lazyPlugins(() => [svelte(), tailwindcss()]),
-  build: {
-    outDir: "../internal/web/dist",
-    emptyOutDir: true,
-    sourcemap: false,
-  },
+  plugins: lazyPlugins(() => [sveltekit(), tailwindcss()]),
   server: {
     port: 5173,
     proxy: {

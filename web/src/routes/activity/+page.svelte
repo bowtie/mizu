@@ -3,9 +3,9 @@
   import { autoAnimate } from '@formkit/auto-animate';
   import { slide } from 'svelte/transition';
   import { Badge, Box, Button, Input } from '@foxui/core';
-  import { addNotification } from '../lib/stores.js';
-  import { getSyncLogs, triggerSync } from '../lib/api.js';
-  import { itemStatusBadge, runStatusBadge } from '../lib/fox.js';
+  import { addNotification } from '../../lib/stores.js';
+  import { getSyncLogs, triggerSync } from '../../lib/api.js';
+  import { itemStatusBadge, runStatusBadge } from '../../lib/fox.js';
   import { ChevronDown, History, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-svelte';
 
   const PAGE_SIZE = 8;

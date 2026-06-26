@@ -1,16 +1,15 @@
 <script>
   import { onMount } from 'svelte';
-  import { push } from 'svelte-spa-router';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { Badge, Box, Button, Popover, Switch, Toggle, Tooltip } from '@foxui/core';
-  import NumberInput from '../components/NumberInput.svelte';
-  import { addNotification } from '../lib/stores.js';
-  import { deleteShow, getAniListArtwork, getEpisodes, getSettings, getShows, getSonarrSeries, setEpisodeMonitor, updateShow } from '../lib/api.js';
-  import { episodeTypeBadge, monitorStateBadge } from '../lib/fox.js';
-  import { resolveSonarrImageUrl } from '../lib/sonarr-images.js';
+  import NumberInput from '../../../components/NumberInput.svelte';
+  import { addNotification } from '../../../lib/stores.js';
+  import { deleteShow, getAniListArtwork, getEpisodes, getSettings, getShows, getSonarrSeries, setEpisodeMonitor, updateShow } from '../../../lib/api.js';
+  import { episodeTypeBadge, monitorStateBadge } from '../../../lib/fox.js';
+  import { resolveSonarrImageUrl } from '../../../lib/sonarr-images.js';
   import { Bot, Check, Eye, LoaderCircle, Save, Trash2, Waves, X } from 'lucide-svelte';
   import { List, Settings2 } from 'lucide-svelte';
-
-  export let params = {};
 
   const WATERMARK_AUTO = 'auto';
   const WATERMARK_MANUAL = 'manual';
@@ -65,7 +64,7 @@
     return `${(safeBoundary > 96 ? truncated.slice(0, safeBoundary) : truncated).trim()}...`;
   }
 
-  $: showId = params.id;
+  $: showId = $page.params.id;
   $: pageTitle = show ? `Mizu - ${show.sonarr_title}` : 'Mizu - Anime';
   $: rulesDirty = !!show && (
     trackFiller !== pristineFiller ||
@@ -131,7 +130,7 @@
       show = (allShows || []).find((item) => String(item.id) === String(showId));
       if (!show) {
         addNotification('Anime not found', 'error');
-        push('/shows');
+        goto('/shows');
         return;
       }
 
@@ -182,7 +181,7 @@
       await deleteShow(showId);
       addNotification('Anime removed', 'success');
       showDeleteModal = false;
-      push('/shows');
+      goto('/shows');
     } catch (err) {
       addNotification('Failed to remove anime: ' + err.message, 'error');
     }
@@ -329,7 +328,7 @@
       <h2 class="text-lg font-semibold text-base-50">Anime not found</h2>
       <p class="text-sm leading-6 text-base-400">The requested sync entry could not be found.</p>
     </div>
-    <Button href="#/shows" variant="primary">Back to anime</Button>
+    <Button href="/shows" variant="primary">Back to anime</Button>
   </Box>
 {:else}
   <div class="space-y-6">

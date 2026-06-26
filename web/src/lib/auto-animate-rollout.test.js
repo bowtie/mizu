@@ -6,9 +6,9 @@ import { resolve } from "node:path";
 const packageJson = JSON.parse(
   readFileSync(resolve(import.meta.dirname, "../../package.json"), "utf8"),
 );
-const showsSvelte = readFileSync(resolve(import.meta.dirname, "../pages/Shows.svelte"), "utf8");
+const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+page.svelte"), "utf8");
 const activitySvelte = readFileSync(
-  resolve(import.meta.dirname, "../pages/Activity.svelte"),
+  resolve(import.meta.dirname, "../routes/activity/+page.svelte"),
   "utf8",
 );
 

@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { push } from 'svelte-spa-router';
+  import { goto } from '$app/navigation';
   import { Badge, Box, Button } from '@foxui/core';
   import { shows, syncStatus, settings, addNotification } from '../lib/stores.js';
   import { getShows, getStats, getSyncLogs, triggerSync, getSettings, getStatus } from '../lib/api.js';
@@ -129,7 +129,7 @@
       </p>
     </div>
     <div class="flex gap-2">
-      <Button variant="secondary" onclick={() => push('/shows')}>
+      <Button variant="secondary" onclick={() => goto('/shows')}>
         <Tv size={16} />
         Browse anime
       </Button>
@@ -172,7 +172,7 @@
                     {failedSyncs.length} {failedSyncs.length === 1 ? 'sync run needs review' : 'sync runs need review'}
                   </h3>
                   <p class="text-sm text-base-400">Recent syncs completed with errors or partial results.</p>
-                  <Button variant="ghost" size="sm" onclick={() => push('/activity')} class="mt-2 -ml-2">
+                  <Button variant="ghost" size="sm" onclick={() => goto('/activity')} class="mt-2 -ml-2">
                     View activity
                     <ArrowRight size={14} />
                   </Button>
@@ -191,7 +191,7 @@
                     {pausedCount} {pausedCount === 1 ? 'anime paused' : 'anime paused'}
                   </h3>
                   <p class="text-sm text-base-400">Paused anime are not being synced automatically.</p>
-                  <Button variant="ghost" size="sm" onclick={() => push('/shows')} class="mt-2 -ml-2">
+                  <Button variant="ghost" size="sm" onclick={() => goto('/shows')} class="mt-2 -ml-2">
                     Manage anime
                     <ArrowRight size={14} />
                   </Button>
@@ -241,7 +241,7 @@
                 <h3 class="text-base font-semibold text-base-50">{humanSummary(lastSync)}</h3>
                 <p class="text-sm text-base-400">{formatTime(lastSync.started_at)}</p>
               </div>
-              <Button variant="ghost" size="sm" onclick={() => push('/activity')}>
+              <Button variant="ghost" size="sm" onclick={() => goto('/activity')}>
                 Full history
                 <ArrowRight size={14} />
               </Button>
@@ -262,15 +262,15 @@
       <section>
         <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-400">Quick actions</h2>
         <div class="space-y-2">
-          <Button variant="secondary" onclick={() => push('/shows')} class="w-full justify-start">
+          <Button variant="secondary" onclick={() => goto('/shows')} class="w-full justify-start">
             <Tv size={16} />
             Browse anime library
           </Button>
-          <Button variant="secondary" onclick={() => push('/activity')} class="w-full justify-start">
+          <Button variant="secondary" onclick={() => goto('/activity')} class="w-full justify-start">
             <History size={16} />
             View sync activity
           </Button>
-          <Button variant="secondary" onclick={() => push('/settings')} class="w-full justify-start">
+          <Button variant="secondary" onclick={() => goto('/settings')} class="w-full justify-start">
             <RefreshCw size={16} />
             Configure settings
           </Button>
@@ -283,7 +283,7 @@
       <section>
         <div class="mb-3 flex items-center justify-between">
           <h2 class="text-sm font-semibold uppercase tracking-wide text-base-400">Your anime</h2>
-          <Button variant="ghost" size="sm" onclick={() => push('/shows')}>
+          <Button variant="ghost" size="sm" onclick={() => goto('/shows')}>
             View all
             <ArrowRight size={14} />
           </Button>
@@ -292,7 +292,7 @@
           {#each $shows.slice(0, 6) as show (show.id)}
             {@const stateBadge = syncStateBadge(show.enabled)}
             <Box class="cursor-pointer rounded-2xl border border-base-800/80 bg-base-950/60 p-4 transition-colors hover:border-base-700"
-                 onclick={() => push(`/shows/${show.id}`)}>
+                 onclick={() => goto(`/shows/${show.id}`)}>
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 space-y-1">
                   <h3 class="truncate text-sm font-semibold text-base-50">{show.sonarr_title}</h3>
