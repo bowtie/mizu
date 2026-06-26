@@ -7,9 +7,9 @@
       "dependencies": {
         "@formkit/auto-animate": "^0.9.0",
         "@foxui/colors": "^0.8.5",
-        "@foxui/core": "^0.8.2",
+        "@foxui/core": "^0.9.1",
         "lucide-svelte": "^1.0.1",
-        "svelte-spa-router": "^4.0.2",
+        "svelte-spa-router": "^5.1.1",
         "tailwindcss-animate": "^1.0.7",
       },
       "devDependencies": {
@@ -52,7 +52,7 @@
 
     "@foxui/colors": ["@foxui/colors@0.8.5", "", { "dependencies": { "@foxui/core": "0.9.1", "@texel/color": "^1.1.11", "@use-gesture/vanilla": "^10.3.1", "bits-ui": "^2.16.2" }, "peerDependencies": { "svelte": ">=5", "tailwindcss": ">=3" } }, "sha512-22nfzr158bAI5xgJYaUTrM6q7bi2fgNtlrUnxoe7MdwFW9ofJST96E/xl+8gaIZdzlDPnLsO2NZLEdaMx58tzQ=="],
 
-    "@foxui/core": ["@foxui/core@0.8.2", "", { "dependencies": { "@number-flow/svelte": "^0.4.0", "bits-ui": "^2.16.2", "clsx": "^2.1.1", "dompurify": "^3.3.1", "mode-watcher": "^1.1.0", "svelte-sonner": "^1.0.7", "tailwind-merge": "^3.5.0", "tailwind-variants": "^3.2.2", "web-haptics": "^0.0.6" }, "peerDependencies": { "svelte": ">=5", "tailwindcss": ">=3" } }, "sha512-cVfFCQX4SfL7mezfQHAHln8M+ZiEZlwa4lIXMFUATLuhl4YCcwv7IvvtU+hMvq2ky+vsCEEry1XvXOLdSe6zAA=="],
+    "@foxui/core": ["@foxui/core@0.9.1", "", { "dependencies": { "@fontsource-variable/geist": "^5.2.8", "@fontsource-variable/geist-mono": "^5.2.7", "@jis3r/icons": "^2.7.0", "@lucide/svelte": "^1.8.0", "@number-flow/svelte": "^0.4.0", "bits-ui": "^2.16.2", "clsx": "^2.1.1", "dompurify": "^3.3.1", "mode-watcher": "^1.1.0", "svelte-sonner": "^1.0.7", "tailwind-merge": "^3.5.0", "tailwind-variants": "^3.2.2", "web-haptics": "^0.0.6" }, "peerDependencies": { "svelte": ">=5", "tailwindcss": ">=3" } }, "sha512-GnMegqx5gz71U85FK85ayEEHuD3bvpNET8HeNsJU1Gj+OVkKKvUY9q/XqmCY3tsfEqY0Mv+RM1iQSnsZn5LZ6w=="],
 
     "@internationalized/date": ["@internationalized/date@3.12.0", "", { "dependencies": { "@swc/helpers": "^0.5.0" } }, "sha512-/PyIMzK29jtXaGU23qTvNZxvBXRtKbNnGDFD+PY6CZw/Y8Ex8pFUzkuCJCG9aOqmShjqhS9mPqP6Dk5onQY8rQ=="],
 
@@ -416,7 +416,7 @@
 
     "svelte-sonner": ["svelte-sonner@1.1.0", "", { "dependencies": { "runed": "^0.28.0" }, "peerDependencies": { "svelte": "^5.0.0" } }, "sha512-3lYM6ZIqWe+p9vwwWHGWP/ZdvHiUtzURsud2quIxivrX4rvpXh6i+geBGn0m3JS6KwW6W8VgbOl3xQMcDuh6gg=="],
 
-    "svelte-spa-router": ["svelte-spa-router@4.0.2", "", { "dependencies": { "regexparam": "2.0.2" } }, "sha512-T1WYYk+ymwCr5m5U+n91k4dRAT6cw5HgmoPaI/TpKgAmuugymFoSBlfzkcKIK83QH4H8gUMn4tdQ0B9enFBM6g=="],
+    "svelte-spa-router": ["svelte-spa-router@5.1.1", "", { "dependencies": { "regexparam": "2.0.2" }, "peerDependencies": { "svelte": "^5.0.0" } }, "sha512-/9PiiyS2jQIXlP+NlKRcPl/Bgwm6WTCTmJq8TZw5IShEbozwcfpX2V3YEL4lAVgJJ2Ni+ipAH7aYVEupeNwtHA=="],
 
     "svelte-toolbelt": ["svelte-toolbelt@0.10.6", "", { "dependencies": { "clsx": "^2.1.1", "runed": "^0.35.1", "style-to-object": "^1.0.8" }, "peerDependencies": { "svelte": "^5.30.2" } }, "sha512-YWuX+RE+CnWYx09yseAe4ZVMM7e7GRFZM6OYWpBKOb++s+SQ8RBIMMe+Bs/CznBMc0QPLjr+vDBxTAkozXsFXQ=="],
 
@@ -463,8 +463,6 @@
     "ws": ["ws@8.21.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g=="],
 
     "zimmerframe": ["zimmerframe@1.1.4", "", {}, "sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ=="],
-
-    "@foxui/colors/@foxui/core": ["@foxui/core@0.9.1", "", { "dependencies": { "@fontsource-variable/geist": "^5.2.8", "@fontsource-variable/geist-mono": "^5.2.7", "@jis3r/icons": "^2.7.0", "@lucide/svelte": "^1.8.0", "@number-flow/svelte": "^0.4.0", "bits-ui": "^2.16.2", "clsx": "^2.1.1", "dompurify": "^3.3.1", "mode-watcher": "^1.1.0", "svelte-sonner": "^1.0.7", "tailwind-merge": "^3.5.0", "tailwind-variants": "^3.2.2", "web-haptics": "^0.0.6" }, "peerDependencies": { "svelte": ">=5", "tailwindcss": ">=3" } }, "sha512-GnMegqx5gz71U85FK85ayEEHuD3bvpNET8HeNsJU1Gj+OVkKKvUY9q/XqmCY3tsfEqY0Mv+RM1iQSnsZn5LZ6w=="],
 
     "@tailwindcss/node/jiti": ["jiti@2.7.0", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ=="],
 

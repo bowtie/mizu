@@ -6,6 +6,7 @@ web/node_modules/
 internal/web/dist/
 config.yml
 *.db
+*.db.bak
 .DS_Store
 Thumbs.db
 .tmp/

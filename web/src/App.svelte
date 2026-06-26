@@ -1,6 +1,5 @@
 <script>
-  import Router from 'svelte-spa-router';
-  import { location, push } from 'svelte-spa-router';
+  import Router, { router, push } from 'svelte-spa-router';
   import wrap from 'svelte-spa-router/wrap';
   import Navbar from './components/Navbar.svelte';
   import Toast from './components/Toast.svelte';
@@ -13,7 +12,7 @@
     '/logs': wrap({ asyncComponent: () => import('./pages/Activity.svelte') }),
   };
 
-  $: if ($location === '/') push('/shows');
+  $: if (router.location === '/') push('/shows');
 </script>
 
 <div class="min-h-screen bg-base-900 text-base-50">

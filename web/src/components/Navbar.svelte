@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { location } from 'svelte-spa-router';
+  import { router } from 'svelte-spa-router';
   import { Badge, Button, Tooltip } from '@foxui/core';
   import { getStatus } from '../lib/api.js';
   import { History, RadioTower, Settings as SettingsIcon, Tv, Waves } from 'lucide-svelte';
@@ -48,10 +48,10 @@
         {#each navItems as item}
           <Button
             href={`#${item.path}`}
-            variant={isActive(item.path, $location) ? 'secondary' : 'ghost'}
+            variant={isActive(item.path, router.location) ? 'secondary' : 'ghost'}
             size="default"
             class="rounded-lg border-transparent"
-            aria-current={isActive(item.path, $location) ? 'page' : undefined}
+            aria-current={isActive(item.path, router.location) ? 'page' : undefined}
           >
             <svelte:component this={item.icon} size={16} />
             {item.label}
@@ -89,10 +89,10 @@
     {#each navItems as item}
       <Button
         href={`#${item.path}`}
-        variant={isActive(item.path, $location) ? 'secondary' : 'ghost'}
+        variant={isActive(item.path, router.location) ? 'secondary' : 'ghost'}
         size="default"
         class="min-w-0 flex-1 justify-center rounded-xl border-transparent whitespace-nowrap"
-        aria-current={isActive(item.path, $location) ? 'page' : undefined}
+        aria-current={isActive(item.path, router.location) ? 'page' : undefined}
       >
         <svelte:component this={item.icon} size={16} />
         {item.label}
