@@ -1,9 +1,9 @@
-const BASE = '/api';
+const BASE = "/api";
 
 async function request(method, path, body = null) {
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   };
   if (body) opts.body = JSON.stringify(body);
 
@@ -16,132 +16,132 @@ async function request(method, path, body = null) {
 }
 
 export function getStatus() {
-  return request('GET', '/health');
+  return request("GET", "/health");
 }
 
 export function getVersion() {
-  return request('GET', '/version');
+  return request("GET", "/version");
 }
 
 export function getStats() {
-  return request('GET', '/stats');
+  return request("GET", "/stats");
 }
 
 export function getSonarrSeries(matchableOnly = false) {
   const params = new URLSearchParams();
-  if (matchableOnly) params.set('matchable_only', 'true');
-  const suffix = params.size > 0 ? '?' + params.toString() : '';
-  return request('GET', '/sonarr/series' + suffix);
+  if (matchableOnly) params.set("matchable_only", "true");
+  const suffix = params.size > 0 ? "?" + params.toString() : "";
+  return request("GET", "/sonarr/series" + suffix);
 }
 
 export function lookupSonarrSeries(query) {
   const params = new URLSearchParams();
-  params.set('q', query || '');
-  return request('GET', '/sonarr/lookup?' + params.toString());
+  params.set("q", query || "");
+  return request("GET", "/sonarr/lookup?" + params.toString());
 }
 
 export function addSonarrSeries(data) {
-  return request('POST', '/sonarr/series', data);
+  return request("POST", "/sonarr/series", data);
 }
 
 export function getSonarrAddOptions() {
-  return request('GET', '/sonarr/add-options');
+  return request("GET", "/sonarr/add-options");
 }
 
 export function markManualMatchPending(seriesId) {
-  return request('POST', '/sonarr/manual-match-pending', { sonarr_series_id: seriesId });
+  return request("POST", "/sonarr/manual-match-pending", { sonarr_series_id: seriesId });
 }
 
 export function testSonarrConnection(url, apiKey) {
-  return request('POST', '/sonarr/test', { url, api_key: apiKey });
+  return request("POST", "/sonarr/test", { url, api_key: apiKey });
 }
 
 export function getShows() {
-  return request('GET', '/mappings');
+  return request("GET", "/mappings");
 }
 
 export function getShow(id) {
-  return request('GET', '/mappings/' + id);
+  return request("GET", "/mappings/" + id);
 }
 
 export function createShow(data) {
-  return request('POST', '/mappings', data);
+  return request("POST", "/mappings", data);
 }
 
 export function updateShow(id, data) {
-  return request('PUT', '/mappings/' + id, data);
+  return request("PUT", "/mappings/" + id, data);
 }
 
 export function deleteShow(id) {
-  return request('DELETE', '/mappings/' + id);
+  return request("DELETE", "/mappings/" + id);
 }
 
 export function autoMatch(sonarrSeriesId) {
-  return request('POST', '/mappings', { sonarr_series_id: sonarrSeriesId, auto_match: true });
+  return request("POST", "/mappings", { sonarr_series_id: sonarrSeriesId, auto_match: true });
 }
 
 export function confirmMatch(data) {
-  return request('POST', '/mappings', data);
+  return request("POST", "/mappings", data);
 }
 
 export function suggestAFL(seriesId) {
-  return request('GET', '/afl/suggest?series_id=' + encodeURIComponent(seriesId));
+  return request("GET", "/afl/suggest?series_id=" + encodeURIComponent(seriesId));
 }
 
 export function searchAFL(query, seriesId = null) {
   const params = new URLSearchParams();
-  params.set('q', query || '');
-  if (seriesId != null) params.set('series_id', String(seriesId));
-  return request('GET', '/afl/search?' + params.toString());
+  params.set("q", query || "");
+  if (seriesId != null) params.set("series_id", String(seriesId));
+  return request("GET", "/afl/search?" + params.toString());
 }
 
 export function getEpisodes(showId) {
-  return request('GET', '/mappings/' + showId + '/episodes');
+  return request("GET", "/mappings/" + showId + "/episodes");
 }
 
 export function getAniListArtwork(showId) {
-  return request('GET', '/mappings/' + showId + '/artwork');
+  return request("GET", "/mappings/" + showId + "/artwork");
 }
 
 export function getSonarrEpisodes(showId) {
-  return request('GET', '/mappings/' + showId + '/episodes/sonarr');
+  return request("GET", "/mappings/" + showId + "/episodes/sonarr");
 }
 
 export function syncEpisode(showId, epNum) {
-  return request('POST', '/mappings/' + showId + '/episodes/' + epNum + '/sync');
+  return request("POST", "/mappings/" + showId + "/episodes/" + epNum + "/sync");
 }
 
 export function setEpisodeMonitor(showId, epId, monitored) {
-  return request('PUT', '/mappings/' + showId + '/episodes/' + epId + '/monitor', { monitored });
+  return request("PUT", "/mappings/" + showId + "/episodes/" + epId + "/monitor", { monitored });
 }
 
 export function resyncAll(showId) {
-  return request('POST', '/mappings/' + showId + '/resync');
+  return request("POST", "/mappings/" + showId + "/resync");
 }
 
 export function triggerSync() {
-  return request('POST', '/sync');
+  return request("POST", "/sync");
 }
 
 export function getSyncLogs(limit = 12, offset = 0) {
   const params = new URLSearchParams();
-  params.set('limit', String(limit));
-  params.set('offset', String(offset));
-  return request('GET', '/logs?' + params.toString());
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  return request("GET", "/logs?" + params.toString());
 }
 
 export function getSettings() {
-  return request('GET', '/settings');
+  return request("GET", "/settings");
 }
 
 export function getStoredSonarrApiKey() {
-  return request('GET', '/settings/sonarr-api-key');
+  return request("GET", "/settings/sonarr-api-key");
 }
 
 export function updateSettings(data) {
-  return request('PUT', '/settings', data);
+  return request("PUT", "/settings", data);
 }
 
 export function refreshAflCache() {
-  return request('POST', '/settings/afl-cache/refresh');
+  return request("POST", "/settings/afl-cache/refresh");
 }

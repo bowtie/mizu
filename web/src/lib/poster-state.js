@@ -1,9 +1,9 @@
-export const POSTER_LOADING = 'loading';
-export const POSTER_LOADED = 'loaded';
-export const POSTER_FAILED = 'failed';
+export const POSTER_LOADING = "loading";
+export const POSTER_LOADED = "loaded";
+export const POSTER_FAILED = "failed";
 
 export function getPosterStateKey(show) {
-  return `${show?.id ?? 'unknown'}::${show?.poster ?? ''}`;
+  return `${show?.id ?? "unknown"}::${show?.poster ?? ""}`;
 }
 
 export function createPosterStateMap(shows, previousStates = {}) {
@@ -46,11 +46,11 @@ export function resolvePosterElementState({ hasPoster, complete, naturalWidth })
 }
 
 export function createPosterMonogram(title) {
-  return (title || '')
+  return (title || "")
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .map((part) => part[0] || '')
-    .join('')
+    .map((part) => part[0] || "")
+    .join("")
     .toUpperCase();
 }

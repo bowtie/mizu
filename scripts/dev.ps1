@@ -16,18 +16,15 @@ if (-not (Test-Path $resolvedConfigPath)) {
     throw "Config file not found: $resolvedConfigPath"
 }
 
-$bun = Get-Command bun -ErrorAction SilentlyContinue
-$frontendExecutable = if ($bun) {
-    $bun.Source
+$vp = Get-Command vp -ErrorAction SilentlyContinue
+$frontendExecutable = if ($vp) {
+    $vp.Source
 } else {
-    (Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue)
+    $vpBin = Join-Path $env:USERPROFILE ".vite-plus\bin\vp.exe"
+    if (Test-Path $vpBin) { $vpBin } else { throw "vp not found. Install Vite+: irm https://vite.plus/ps1 | iex" }
 }
 
-if (-not $frontendExecutable) {
-    $frontendExecutable = (Get-Command npm -ErrorAction Stop).Source
-}
-
-$frontendArguments = "run dev"
+$frontendArguments = "dev"
 $backendScriptPath = Join-Path $root "scripts\dev-backend.ps1"
 
 function Write-DevLog {
@@ -42,7 +39,6 @@ function Write-DevLog {
 
 function Start-FrontendProcess {
     Start-Process -FilePath $frontendExecutable -ArgumentList @(
-        "run",
         "dev"
     ) -WorkingDirectory (Join-Path $root "web") -NoNewWindow -PassThru
 }
@@ -54,7 +50,7 @@ Write-Host "Backend:  http://localhost:8978" -ForegroundColor DarkGray
 Write-Host ""
 
 if ($SeparateWindows) {
-    $frontendScript = "Set-Location '$root\web'; & '$frontendExecutable' run dev"
+    $frontendScript = "Set-Location '$root\web'; & '$frontendExecutable' dev"
 
     Start-Process -FilePath "powershell" -ArgumentList @(
         "-NoExit",

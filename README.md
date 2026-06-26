@@ -193,25 +193,40 @@ All endpoints are under `/api`.
 
 ## Development
 
-`ash
+This project uses [Vite+](https://viteplus.dev/) as its frontend toolchain. Install it first:
+
+```powershell
+irm https://vite.plus/ps1 | iex
+```
+
+```bash
 # One command from the repo root (single terminal)
 bun run dev
 
 # Optional: keep the old two-window workflow
 bun run dev:windows
 
-# Frontend (hot reload)
-cd web && npm run dev
+# Frontend (hot reload via Vite+)
+cd web && vp dev
 
 # Backend
 go run ./cmd/server --config config.yml
-` 
 
-un run dev opens two PowerShell windows:
-- frontend Vite dev server on http://localhost:5173`r
-- backend watcher that restarts go run ./cmd/server --config config.yml whenever Go or config files change
+# Tests
+cd web && vp test
 
-The Vite dev server proxies /api requests to the Go backend on port 8978.
+# Lint + format + type-check
+cd web && vp check
+
+# Production build
+cd web && vp build
+```
+
+`bun run dev` opens two PowerShell windows:
+- frontend Vite+ dev server on http://localhost:5173
+- backend watcher that restarts `go run ./cmd/server --config config.yml` whenever Go or config files change
+
+The Vite+ dev server proxies /api requests to the Go backend on port 8978.
 
 ## License
 
