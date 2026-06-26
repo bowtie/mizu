@@ -1,6 +1,6 @@
 module mizu
 
-go 1.22
+go 1.26
 
 require (
 	github.com/PuerkitoBio/goquery v1.9.1

@@ -77,7 +77,7 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		errMsg := fmt.Sprintf("failed to load mappings from database: %v", err)
 		log.Error().Err(err).Msg(errMsg)
 		e.completeSyncLog(ctx, logID, "failed", 0, 0, errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	enabledMappings := make([]models.ShowMapping, 0, len(mappings))
