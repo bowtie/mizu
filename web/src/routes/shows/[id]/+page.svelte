@@ -231,11 +231,11 @@
   }
 
   let filterButtons = $derived([
-    { type: 'all', label: 'All episodes', count: epStats.total, active: isTypeFilterActive('all') },
-    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon') },
-    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon') },
-    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon') },
-    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler') },
+    { type: 'all', label: 'All episodes', count: epStats.total, active: isTypeFilterActive('all'), activeClass: 'border-blue-500 bg-blue-600 text-white' },
+    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), activeClass: 'border-sky-500 bg-sky-600 text-white' },
+    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), activeClass: 'border-violet-500 bg-violet-600 text-white' },
+    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), activeClass: 'border-amber-500 bg-amber-600 text-white' },
+    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), activeClass: 'border-rose-500 bg-rose-600 text-white' },
   ]);
 
   function isSpecialSeasonNumber(num) {
@@ -479,8 +479,8 @@
         <button
           type="button"
           class="rounded-2xl border-2 p-4 text-left transition-all {btn.active
-            ? 'border-blue-500 bg-blue-600 text-white'
-            : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-blue-500'} {dimmed ? 'opacity-40' : ''}"
+            ? btn.activeClass
+            : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'} {dimmed ? 'opacity-40' : ''}"
           onclick={() => toggleTypeFilter(btn.type)}
         >
           <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">{btn.label}</div>
