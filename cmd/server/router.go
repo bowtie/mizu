@@ -469,12 +469,26 @@ func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Eng
 			return
 		}
 
-		// Serve from cache if available
+		// Serve from in-memory cache if available
 		if cached, ok := epCache.get(id); ok {
 			writeJSON(w, http.StatusOK, cached)
 			return
 		}
 
+		// Serve from database (populated by syncs) — instant, no external calls
+		dbEpisodes, err := db.GetEpisodes(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load episodes: "+err.Error())
+			return
+		}
+
+		if len(dbEpisodes) > 0 {
+			epCache.set(id, dbEpisodes)
+			writeJSON(w, http.StatusOK, dbEpisodes)
+			return
+		}
+
+		// DB is empty — fetch live from Sonarr + AFL as a fallback
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil || mapping == nil {
 			writeError(w, http.StatusNotFound, "mapping not found")
@@ -485,62 +499,80 @@ func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Eng
 			return
 		}
 
-		c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
-		sonarrEpisodes, err := c.GetEpisodes(r.Context(), mapping.SonarrSeriesID)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "failed to fetch episodes from Sonarr: "+err.Error())
+		enriched, herr := fetchEpisodesLive(cfg, syncEngine, id, mapping.SonarrSeriesID, mapping.AFLSlug)
+		if herr != nil {
+			writeError(w, herr.code, herr.message)
 			return
 		}
 
-		_, aflEpisodes, err := syncEngine.ScraperClient().GetShowEpisodes(r.Context(), mapping.AFLSlug)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "failed to fetch AFL episodes: "+err.Error())
-			return
-		}
-
-		aflByNumber, aflPreferred := sync.BuildAFLEpisodeLookup(aflEpisodes)
-		coverageMax := sync.AFLCoverageMaxEpisodeNumber(aflEpisodes)
-		enriched := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
-		for _, ep := range sonarrEpisodes {
-			aflNum, aflEpisode, found := sync.SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
-			if !sync.IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
-				continue
-			}
-
-			typeValue := models.EpisodeUnknown
-			if found {
-				typeValue = aflEpisode.Type
-			}
-
-			episodeNum := aflNum
-			aflEpisodeNum := aflNum
-			if ep.SeasonNumber == 0 || ep.SeasonNumber == -1 {
-				episodeNum = ep.EpisodeNumber
-			} else if episodeNum <= 0 {
-				if ep.AbsoluteEpisodeNumber != nil && *ep.AbsoluteEpisodeNumber > 0 {
-					episodeNum = *ep.AbsoluteEpisodeNumber
-				} else {
-					episodeNum = ep.EpisodeNumber
-				}
-			}
-
-			enriched = append(enriched, models.EpisodeInfo{
-				MappingID:             id,
-				EpisodeNum:            episodeNum,
-				AFLEpisodeNumber:      aflEpisodeNum,
-				Title:                 ep.Title,
-				Type:                  typeValue,
-				SonarrEpisodeID:       ep.ID,
-				SeasonNumber:          ep.SeasonNumber,
-				SonarrEpisodeNumber:   ep.EpisodeNumber,
-				AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
-				Monitored:             ep.Monitored,
-			})
-		}
+		// Persist to DB so future loads are instant
+		_ = db.ReplaceEpisodesForMapping(r.Context(), id, enriched)
 
 		epCache.set(id, enriched)
 		writeJSON(w, http.StatusOK, enriched)
 	}
+}
+
+type httpError struct {
+	code    int
+	message string
+}
+
+func (e *httpError) Error() string { return e.message }
+
+func fetchEpisodesLive(cfg *config.Config, syncEngine *sync.Engine, mappingID int64, sonarrSeriesID int, aflSlug string) ([]models.EpisodeInfo, *httpError) {
+	c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
+	sonarrEpisodes, err := c.GetEpisodes(context.Background(), sonarrSeriesID)
+	if err != nil {
+		return nil, &httpError{http.StatusBadGateway, "failed to fetch episodes from Sonarr: " + err.Error()}
+	}
+
+	_, aflEpisodes, err := syncEngine.ScraperClient().GetShowEpisodes(context.Background(), aflSlug)
+	if err != nil {
+		return nil, &httpError{http.StatusBadGateway, "failed to fetch AFL episodes: " + err.Error()}
+	}
+
+	aflByNumber, aflPreferred := sync.BuildAFLEpisodeLookup(aflEpisodes)
+	coverageMax := sync.AFLCoverageMaxEpisodeNumber(aflEpisodes)
+	enriched := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
+	for _, ep := range sonarrEpisodes {
+		aflNum, aflEpisode, found := sync.SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
+		if !sync.IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
+			continue
+		}
+
+		typeValue := models.EpisodeUnknown
+		if found {
+			typeValue = aflEpisode.Type
+		}
+
+		episodeNum := aflNum
+		aflEpisodeNum := aflNum
+		if ep.SeasonNumber == 0 || ep.SeasonNumber == -1 {
+			episodeNum = ep.EpisodeNumber
+		} else if episodeNum <= 0 {
+			if ep.AbsoluteEpisodeNumber != nil && *ep.AbsoluteEpisodeNumber > 0 {
+				episodeNum = *ep.AbsoluteEpisodeNumber
+			} else {
+				episodeNum = ep.EpisodeNumber
+			}
+		}
+
+		enriched = append(enriched, models.EpisodeInfo{
+			MappingID:             mappingID,
+			EpisodeNum:            episodeNum,
+			AFLEpisodeNumber:      aflEpisodeNum,
+			Title:                 ep.Title,
+			Type:                  typeValue,
+			SonarrEpisodeID:       ep.ID,
+			SeasonNumber:          ep.SeasonNumber,
+			SonarrEpisodeNumber:   ep.EpisodeNumber,
+			AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
+			Monitored:             ep.Monitored,
+		})
+	}
+
+	return enriched, nil
 }
 func handleGetSonarrEpisodes(cfg *config.Config, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

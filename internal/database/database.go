@@ -68,6 +68,11 @@ func (db *DB) migrate() error {
 			title TEXT NOT NULL DEFAULT '',
 			type TEXT NOT NULL DEFAULT 'unknown',
 			last_scraped DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			sonarr_episode_id INTEGER NOT NULL DEFAULT 0,
+			season_number INTEGER NOT NULL DEFAULT 0,
+			sonarr_episode_number INTEGER NOT NULL DEFAULT 0,
+			absolute_episode_number INTEGER,
+			monitored INTEGER NOT NULL DEFAULT 0,
 			FOREIGN KEY (mapping_id) REFERENCES show_mappings(id) ON DELETE CASCADE,
 			UNIQUE(mapping_id, episode_num)
 		)`,
@@ -113,6 +118,11 @@ func (db *DB) migrate() error {
 		"ALTER TABLE show_mappings ADD COLUMN sync_watermark INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE show_mappings ADD COLUMN start_mode TEXT NOT NULL DEFAULT 'from_current_progress'",
 		"ALTER TABLE show_mappings ADD COLUMN watermark_mode TEXT NOT NULL DEFAULT 'auto'",
+		"ALTER TABLE episode_info ADD COLUMN sonarr_episode_id INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE episode_info ADD COLUMN season_number INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE episode_info ADD COLUMN sonarr_episode_number INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE episode_info ADD COLUMN absolute_episode_number INTEGER",
+		"ALTER TABLE episode_info ADD COLUMN monitored INTEGER NOT NULL DEFAULT 0",
 	} {
 		db.conn.Exec(alterSQL)
 	}
@@ -265,7 +275,9 @@ func (db *DB) DeleteMapping(ctx context.Context, id int64) error {
 
 func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.EpisodeInfo, error) {
 	rows, err := db.conn.QueryContext(ctx, `
-		SELECT id, mapping_id, episode_num, title, type, last_scraped
+		SELECT id, mapping_id, episode_num, title, type, last_scraped,
+		       sonarr_episode_id, season_number, sonarr_episode_number,
+		       absolute_episode_number, monitored
 		FROM episode_info WHERE mapping_id = ? ORDER BY episode_num ASC`, mappingID)
 	if err != nil {
 		return nil, err
@@ -275,9 +287,16 @@ func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.Episod
 	var episodes []models.EpisodeInfo
 	for rows.Next() {
 		var e models.EpisodeInfo
-		err := rows.Scan(&e.ID, &e.MappingID, &e.EpisodeNum, &e.Title, &e.Type, &e.LastScraped)
+		var absNum sql.NullInt64
+		err := rows.Scan(&e.ID, &e.MappingID, &e.EpisodeNum, &e.Title, &e.Type, &e.LastScraped,
+			&e.SonarrEpisodeID, &e.SeasonNumber, &e.SonarrEpisodeNumber,
+			&absNum, &e.Monitored)
 		if err != nil {
 			return nil, err
+		}
+		if absNum.Valid {
+			val := int(absNum.Int64)
+			e.AbsoluteEpisodeNumber = &val
 		}
 		episodes = append(episodes, e)
 	}
@@ -296,12 +315,18 @@ func (db *DB) BulkUpsertEpisodes(ctx context.Context, episodes []models.EpisodeI
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped,
+			sonarr_episode_id, season_number, sonarr_episode_number, absolute_episode_number, monitored)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(mapping_id, episode_num) DO UPDATE SET
 		    title = excluded.title,
 		    type = excluded.type,
-		    last_scraped = excluded.last_scraped`)
+		    last_scraped = excluded.last_scraped,
+		    sonarr_episode_id = excluded.sonarr_episode_id,
+		    season_number = excluded.season_number,
+		    sonarr_episode_number = excluded.sonarr_episode_number,
+		    absolute_episode_number = excluded.absolute_episode_number,
+		    monitored = excluded.monitored`)
 	if err != nil {
 		return err
 	}
@@ -309,7 +334,12 @@ func (db *DB) BulkUpsertEpisodes(ctx context.Context, episodes []models.EpisodeI
 
 	now := time.Now()
 	for _, e := range episodes {
-		_, err := stmt.ExecContext(ctx, e.MappingID, e.EpisodeNum, e.Title, e.Type, now)
+		var absNum any
+		if e.AbsoluteEpisodeNumber != nil {
+			absNum = *e.AbsoluteEpisodeNumber
+		}
+		_, err := stmt.ExecContext(ctx, e.MappingID, e.EpisodeNum, e.Title, e.Type, now,
+			e.SonarrEpisodeID, e.SeasonNumber, e.SonarrEpisodeNumber, absNum, e.Monitored)
 		if err != nil {
 			return err
 		}
@@ -334,8 +364,9 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 	}
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped)
-		VALUES (?, ?, ?, ?, ?)`)
+		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped,
+			sonarr_episode_id, season_number, sonarr_episode_number, absolute_episode_number, monitored)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -343,7 +374,12 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 
 	now := time.Now()
 	for _, e := range episodes {
-		_, err := stmt.ExecContext(ctx, mappingID, e.EpisodeNum, e.Title, e.Type, now)
+		var absNum any
+		if e.AbsoluteEpisodeNumber != nil {
+			absNum = *e.AbsoluteEpisodeNumber
+		}
+		_, err := stmt.ExecContext(ctx, mappingID, e.EpisodeNum, e.Title, e.Type, now,
+			e.SonarrEpisodeID, e.SeasonNumber, e.SonarrEpisodeNumber, absNum, e.Monitored)
 		if err != nil {
 			return err
 		}

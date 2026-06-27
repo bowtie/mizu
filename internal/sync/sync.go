@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	matcherpkg "mizu/internal/matcher"
@@ -14,6 +13,8 @@ import (
 	"mizu/internal/notifier"
 	"mizu/internal/scraper"
 	"mizu/internal/sonarr"
+
+	"github.com/rs/zerolog/log"
 )
 
 type Engine struct {
@@ -332,10 +333,15 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 
 		if !isSpecialSeason(ep.SeasonNumber) {
 			dbEpisodes = append(dbEpisodes, models.EpisodeInfo{
-				MappingID:  mapping.ID,
-				EpisodeNum: aflNum,
-				Title:      title,
-				Type:       epType,
+				MappingID:             mapping.ID,
+				EpisodeNum:            aflNum,
+				Title:                 title,
+				Type:                  epType,
+				SonarrEpisodeID:       ep.ID,
+				SeasonNumber:          ep.SeasonNumber,
+				SonarrEpisodeNumber:   ep.EpisodeNumber,
+				AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
+				Monitored:             ep.Monitored,
 			})
 		}
 
