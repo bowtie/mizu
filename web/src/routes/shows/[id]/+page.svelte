@@ -278,17 +278,23 @@
     const isDimmed = type !== 'all' && hasScopedFilter && !active;
     const toneClasses = {
       base: 'border-border/80 bg-popover/60 text-foreground',
-      blue: 'border-primary/20 bg-primary/10 text-primary',
-      violet: 'border-primary/20 bg-primary/10 text-primary',
-      amber: 'border-warning/20 bg-warning/10 text-warning',
-      rose: 'border-destructive/20 bg-destructive/10 text-destructive',
+      blue: 'border-primary/30 bg-primary/15 text-primary',
+      violet: 'border-primary/30 bg-primary/15 text-primary',
+      amber: 'border-warning/30 bg-warning/15 text-warning',
+      rose: 'border-destructive/30 bg-destructive/15 text-destructive',
+    };
+    const activeToneClasses = {
+      base: 'border-primary bg-primary text-primary-foreground',
+      blue: 'border-primary bg-primary text-primary-foreground',
+      violet: 'border-primary bg-primary text-primary-foreground',
+      amber: 'border-warning bg-warning text-warning-foreground',
+      rose: 'border-destructive bg-destructive text-destructive-foreground',
     };
 
     return [
-      'rounded-2xl border p-4 text-left transition-colors',
-      toneClasses[tone] || toneClasses.base,
-      active ? 'ring-1 ring-primary/50' : '',
-      isDimmed ? 'border-border/60 bg-popover/40 text-muted-foreground' : 'hover:border-border hover:bg-card/70',
+      'rounded-2xl border p-4 text-left transition-all',
+      active ? activeToneClasses[tone] || activeToneClasses.base : toneClasses[tone] || toneClasses.base,
+      isDimmed ? 'border-border/60 bg-popover/30 text-muted-foreground opacity-50' : 'hover:border-border hover:bg-card/70',
       type === 'all' && hasScopedFilter && !active ? 'border-primary/30 bg-primary/10 text-primary' : '',
     ].filter(Boolean).join(' ');
   }
