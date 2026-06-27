@@ -285,11 +285,11 @@
     };
 
     return [
-      'rounded-2xl border p-4 text-left transition-all',
+      'rounded-2xl border-2 p-4 text-left transition-all',
       active
         ? activeToneClasses[tone] || activeToneClasses.base
-        : 'border-border bg-card text-foreground',
-      isDimmed ? 'opacity-40' : 'hover:border-primary/40 hover:bg-muted',
+        : 'border-border bg-secondary text-foreground',
+      isDimmed ? 'opacity-40' : 'hover:border-primary/50 hover:bg-secondary/70',
     ].filter(Boolean).join(' ');
   }
 
