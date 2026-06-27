@@ -115,7 +115,7 @@
     const series = seriesById[show.sonarr_series_id] || null;
     return {
       ...show,
-      poster: posterUrl(series),
+      poster: ($settings?.enable_anilist_artwork && show.anilist_poster_url) ? show.anilist_poster_url : posterUrl(series),
     };
   });
 

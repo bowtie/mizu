@@ -53,6 +53,8 @@ type ShowMapping struct {
 	StartMode        StartMode     `json:"start_mode"`
 	WatermarkMode    WatermarkMode `json:"watermark_mode"`
 	SyncWatermark    int           `json:"sync_watermark"`
+	AnilistPosterURL string        `json:"anilist_poster_url,omitempty"`
+	AnilistBannerURL string        `json:"anilist_banner_url,omitempty"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UpdatedAt        time.Time     `json:"updated_at"`
 }

@@ -139,9 +139,20 @@
 
       sonarrBaseUrl = appSettings?.sonarr_url || '';
 
-      // Fetch artwork in parallel with series if needed (series is only for backdrop)
-      const artworkResult = appSettings?.enable_anilist_artwork ? await getAniListArtwork(showId).catch(() => null) : null;
-      artwork = artworkResult?.banner_image || artworkResult?.poster_image ? artworkResult : null;
+      // Use cached AniList artwork from mapping if available, otherwise fetch from API
+      if (appSettings?.enable_anilist_artwork) {
+        if (show.anilist_banner_url || show.anilist_poster_url) {
+          artwork = {
+            banner_image: show.anilist_banner_url || '',
+            poster_image: show.anilist_poster_url || '',
+          };
+        } else {
+          const artworkResult = await getAniListArtwork(showId).catch(() => null);
+          artwork = artworkResult?.banner_image || artworkResult?.poster_image ? artworkResult : null;
+        }
+      } else {
+        artwork = null;
+      }
 
       // Only fetch the backdrop from series if we don't have artwork already
       if (!artwork) {

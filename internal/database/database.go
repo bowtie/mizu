@@ -58,6 +58,8 @@ func (db *DB) migrate() error {
 			start_mode TEXT NOT NULL DEFAULT 'from_current_progress',
 			watermark_mode TEXT NOT NULL DEFAULT 'auto',
 			sync_watermark INTEGER NOT NULL DEFAULT 0,
+			anilist_poster_url TEXT NOT NULL DEFAULT '',
+			anilist_banner_url TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -123,6 +125,8 @@ func (db *DB) migrate() error {
 		"ALTER TABLE episode_info ADD COLUMN sonarr_episode_number INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE episode_info ADD COLUMN absolute_episode_number INTEGER",
 		"ALTER TABLE episode_info ADD COLUMN monitored INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE show_mappings ADD COLUMN anilist_poster_url TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE show_mappings ADD COLUMN anilist_banner_url TEXT NOT NULL DEFAULT ''",
 	} {
 		db.conn.Exec(alterSQL)
 	}
@@ -148,7 +152,8 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
-		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark, created_at, updated_at
+		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
+		       anilist_poster_url, anilist_banner_url, created_at, updated_at
 		FROM show_mappings ORDER BY sonarr_title ASC`)
 	if err != nil {
 		return nil, err
@@ -161,7 +166,8 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 		err := rows.Scan(
 			&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 			&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
-			&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark, &m.CreatedAt, &m.UpdatedAt,
+			&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
+			&m.AnilistPosterURL, &m.AnilistBannerURL, &m.CreatedAt, &m.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -176,11 +182,13 @@ func (db *DB) GetMappingByID(ctx context.Context, id int64) (*models.ShowMapping
 	err := db.conn.QueryRowContext(ctx, `
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
-		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark, created_at, updated_at
+		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
+		       anilist_poster_url, anilist_banner_url, created_at, updated_at
 		FROM show_mappings WHERE id = ?`, id).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
-		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark, &m.CreatedAt, &m.UpdatedAt,
+		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
+		&m.AnilistPosterURL, &m.AnilistBannerURL, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -197,11 +205,13 @@ func (db *DB) GetMappingBySonarrID(ctx context.Context, seriesID int) (*models.S
 	err := db.conn.QueryRowContext(ctx, `
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
-		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark, created_at, updated_at
+		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
+		       anilist_poster_url, anilist_banner_url, created_at, updated_at
 		FROM show_mappings WHERE sonarr_series_id = ?`, seriesID).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
-		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark, &m.CreatedAt, &m.UpdatedAt,
+		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
+		&m.AnilistPosterURL, &m.AnilistBannerURL, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -254,6 +264,11 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 		m.AutoMatched, m.MatchConfidence, m.FillerAction, m.MixedAction,
 		m.AnimeCanonAction, m.Enabled, m.StartMode, m.WatermarkMode, m.SyncWatermark, now, now,
 	)
+	return err
+}
+
+func (db *DB) UpdateAnilistArtwork(ctx context.Context, mappingID int64, posterURL, bannerURL string) error {
+	_, err := db.conn.ExecContext(ctx, `UPDATE show_mappings SET anilist_poster_url = ?, anilist_banner_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, posterURL, bannerURL, mappingID)
 	return err
 }
 

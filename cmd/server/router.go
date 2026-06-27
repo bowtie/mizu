@@ -1398,6 +1398,8 @@ func handleGetMappingArtwork(cfg *config.Config, db *database.DB) http.HandlerFu
 			return
 		}
 
+		_ = db.UpdateAnilistArtwork(r.Context(), id, artwork.PosterImage, artwork.BannerImage)
+
 		writeJSON(w, http.StatusOK, artwork)
 	}
 }
