@@ -1387,7 +1387,9 @@
 
         <div class="flex flex-col-reverse gap-3 border-t border-border/80 pt-5 sm:flex-row sm:justify-between">
           <div class="flex flex-col-reverse gap-3 sm:flex-row">
-            <Button variant="secondary" onclick={closeAddModal}>Cancel</Button>
+            {#if addStep !== ADD_STEP_POST_ADD}
+              <Button variant="secondary" onclick={closeAddModal}>Cancel</Button>
+            {/if}
             {#if addStep === ADD_STEP_FALLBACK_AFL}
               <Button variant="ghost" onclick={() => returnToSeriesStep()}>Back to Sonarr</Button>
             {:else if addStep === ADD_STEP_FALLBACK_SONARR}
@@ -1396,8 +1398,6 @@
               <Button variant="ghost" onclick={() => returnToSeriesStep(selectedSonarr?.title || '')}>Change anime</Button>
             {:else if addStep === ADD_STEP_UNSAFE_MATCH}
               <Button variant="ghost" onclick={() => (addStep = ADD_STEP_MATCH)}>Back to matches</Button>
-            {:else if addStep === ADD_STEP_POST_ADD}
-              <Button variant="ghost" onclick={() => returnToSeriesStep(addOutcome?.title || '')}>Back to library</Button>
             {/if}
           </div>
 
