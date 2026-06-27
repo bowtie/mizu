@@ -9,9 +9,6 @@ test("tailwindcss-animate is enabled in the app stylesheet", () => {
   assert.match(appCss, /@plugin "tailwindcss-animate";/);
 });
 
-test("fox modal has a fallback animation path based on dialog state attributes", () => {
-  assert.match(appCss, /\[data-dialog-overlay]\[data-state="open"]/);
-  assert.match(appCss, /\[data-dialog-overlay]\[data-state="closed"]/);
-  assert.match(appCss, /\[data-dialog-content]\[data-state="open"]/);
-  assert.match(appCss, /\[data-dialog-content]\[data-state="closed"]/);
+test("tw-animate-css is imported for dialog/popover animation utilities", () => {
+  assert.match(appCss, /@import "tw-animate-css"/);
 });

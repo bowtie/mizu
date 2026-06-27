@@ -1,7 +1,10 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
   import { slide } from 'svelte/transition';
-  import { Badge, Box, Button, Input } from '@foxui/core';
+  import { Badge } from '$lib/components/ui/badge/index.js';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import Box from '$lib/components/Box.svelte';
   import { addNotification } from '../../lib/stores.js';
   import { getSyncLogs, triggerSync } from '../../lib/api.js';
   import { itemStatusBadge, runStatusBadge } from '../../lib/fox.js';
@@ -141,10 +144,10 @@
   <!-- Header -->
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">Activity</h1>
-      <p class="mt-1 text-sm text-base-400">Sync history and per-anime change logs.</p>
+      <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Activity</h1>
+      <p class="mt-1 text-sm text-muted-foreground">Sync history and per-anime change logs.</p>
     </div>
-    <Button variant="primary" onclick={handleSync} disabled={syncing}>
+    <Button variant="default" onclick={handleSync} disabled={syncing}>
       {#if syncing}
         <LoaderCircle size={16} class="animate-spin" />
       {:else}
@@ -155,23 +158,23 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
       <LoaderCircle size={30} class="animate-spin text-accent-400" />
       <div class="space-y-1">
-        <h2 class="text-base font-semibold text-base-100">Loading activity</h2>
-        <p class="text-sm text-base-400">Surfacing recent sync history.</p>
+        <h2 class="text-base font-semibold text-foreground">Loading activity</h2>
+        <p class="text-sm text-muted-foreground">Surfacing recent sync history.</p>
       </div>
     </Box>
   {:else if logs.length === 0}
-    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 px-6 text-center">
+    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 px-6 text-center">
       <span class="flex size-12 items-center justify-center rounded-xl border border-accent-500/20 bg-accent-950/30 text-accent-300">
         <History size={24} />
       </span>
       <div class="space-y-1">
-        <h2 class="text-lg font-semibold text-base-50">No sync activity yet</h2>
-        <p class="max-w-md text-sm leading-6 text-base-400">Run a sync to start building the activity history for your anime library.</p>
+        <h2 class="text-lg font-semibold text-foreground">No sync activity yet</h2>
+        <p class="max-w-md text-sm leading-6 text-muted-foreground">Run a sync to start building the activity history for your anime library.</p>
       </div>
-      <Button variant="primary" onclick={handleSync} disabled={syncing}>
+      <Button variant="default" onclick={handleSync} disabled={syncing}>
         <RefreshCw size={16} />
         Sync now
       </Button>
@@ -185,7 +188,7 @@
             type="button"
             class="rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors {statusFilter === filter.value
               ? 'border-accent-500/40 bg-accent-950/20 text-accent-200'
-              : 'border-base-800/80 bg-base-950/60 text-base-400 hover:text-base-200'}"
+              : 'border-border/80 bg-popover/60 text-muted-foreground hover:text-foreground'}"
             onclick={() => (statusFilter = filter.value)}
           >
             {filter.label}
@@ -193,34 +196,34 @@
         {/each}
       </div>
       <div class="relative sm:w-64">
-        <Search size={16} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base-500" />
+        <Search size={16} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input bind:value={searchQuery} placeholder="Search logs..." class="pl-9" />
       </div>
     </section>
 
     <!-- Log list -->
     {#if filteredLogs.length === 0}
-      <Box class="flex min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
-        <p class="text-sm font-medium text-base-200">No matching logs</p>
-        <p class="text-sm text-base-400">Try adjusting your filters or search query.</p>
+      <Box class="flex min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-border/80 bg-popover/60 text-center">
+        <p class="text-sm font-medium text-foreground">No matching logs</p>
+        <p class="text-sm text-muted-foreground">Try adjusting your filters or search query.</p>
       </Box>
     {:else}
       <section class="space-y-4">
         {#each filteredLogs as log (log.id)}
           {@const runBadge = runStatusBadge(log.status)}
-          <Box class="rounded-2xl border border-base-800/80 bg-base-950/60">
+          <Box class="rounded-2xl border border-border/80 bg-popover/60">
             <div class="space-y-4">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-3">
                   <div class="flex flex-wrap gap-2">
-                    <Badge variant={runBadge.variant} size="sm">{runBadge.label}</Badge>
-                    <Badge variant="secondary" size="sm">{formatTrigger(log.trigger)}</Badge>
-                    <Badge variant="secondary" size="sm">{formatDuration(log.started_at, log.completed_at)}</Badge>
+                    <Badge variant={runBadge.variant}>{runBadge.label}</Badge>
+                    <Badge variant="secondary">{formatTrigger(log.trigger)}</Badge>
+                    <Badge variant="secondary">{formatDuration(log.started_at, log.completed_at)}</Badge>
                   </div>
 
                   <div class="space-y-1">
-                    <h2 class="text-base font-semibold text-base-50">{humanSummary(log)}</h2>
-                    <p class="text-sm text-base-400">{formatTime(log.started_at)}</p>
+                    <h2 class="text-base font-semibold text-foreground">{humanSummary(log)}</h2>
+                    <p class="text-sm text-muted-foreground">{formatTime(log.started_at)}</p>
                   </div>
                 </div>
 
@@ -233,7 +236,7 @@
               </div>
 
               {#if log.errors}
-                <div class="rounded-xl border border-rose-500/20 bg-rose-950/20 px-4 py-3 text-sm text-rose-200">
+                <div class="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   This run completed with errors that need attention.
                 </div>
               {/if}
@@ -244,17 +247,17 @@
                     <div class="space-y-3">
                       {#each log.items as item}
                         {@const itemBadge = itemStatusBadge(item.status)}
-                        <div class="rounded-xl border border-base-800/80 bg-base-950/70 p-4">
+                        <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
                           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div class="space-y-2">
-                              <h3 class="text-sm font-semibold text-base-50">{item.sonarr_title}</h3>
-                              <p class="text-sm leading-6 text-base-400">{detailLine(item)}</p>
+                              <h3 class="text-sm font-semibold text-foreground">{item.sonarr_title}</h3>
+                              <p class="text-sm leading-6 text-muted-foreground">{detailLine(item)}</p>
                             </div>
-                            <Badge variant={itemBadge.variant} size="sm">{itemBadge.label}</Badge>
+                            <Badge variant={itemBadge.variant}>{itemBadge.label}</Badge>
                           </div>
 
                           {#if item.error}
-                            <div class="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
+                            <div class="mt-3 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                               <TriangleAlert size={16} class="mt-0.5 shrink-0" />
                               <span>{item.error}</span>
                             </div>
@@ -265,7 +268,7 @@
                   {/if}
 
                   {#if log.errors}
-                    <div class="rounded-xl border border-rose-500/20 bg-rose-950/20 p-4 text-sm text-rose-200">
+                    <div class="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
                       <div class="mb-2 flex items-center gap-2 font-medium">
                         <TriangleAlert size={16} />
                         Run errors

@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 
 const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+page.svelte"), "utf8");
 
-test("shows page uses a local centered add modal overlay instead of the shared fox modal", () => {
+test("shows page uses a local centered add modal overlay instead of a shared modal component", () => {
   assert.match(showsSvelte, /import\s+\{\s*fade,\s*scale\s*\}\s+from\s+'svelte\/transition'/);
   assert.match(showsSvelte, /show-add-modal-shell/);
   assert.match(showsSvelte, /show-add-modal-panel/);
@@ -13,10 +13,10 @@ test("shows page uses a local centered add modal overlay instead of the shared f
   assert.doesNotMatch(showsSvelte, /<Modal\b/);
 });
 
-test("shows add modal keeps a restrained fox-style surface instead of the custom gradient treatment", () => {
+test("shows add modal keeps a restrained surface instead of the custom gradient treatment", () => {
   assert.doesNotMatch(showsSvelte, /bg-\[radial-gradient/);
   assert.doesNotMatch(showsSvelte, /Sonarr import/);
-  assert.match(showsSvelte, /show-add-modal-panel[\s\S]*bg-base-950\/95/);
+  assert.match(showsSvelte, /show-add-modal-panel[\s\S]*bg-popover\/95/);
 });
 
 test("shows add modal renders the Sonarr chooser as a searchable poster list", () => {

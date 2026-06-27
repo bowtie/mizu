@@ -1,6 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { Badge, Box, Button, Checkbox, Input, Label, Select, Switch } from '@foxui/core';
+  import { Badge } from '$lib/components/ui/badge/index.js';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Checkbox } from '$lib/components/ui/checkbox/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Label } from '$lib/components/ui/label/index.js';
+  import { Switch } from '$lib/components/ui/switch/index.js';
+  import * as Select from '$lib/components/ui/select/index.js';
+  import Box from '$lib/components/Box.svelte';
   import { settings, addNotification } from '../../lib/stores.js';
   import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.js';
   import { Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
@@ -217,10 +224,10 @@
   <!-- Header -->
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">Settings</h1>
-      <p class="mt-1 text-sm text-base-400">Configure Sonarr connection, sync behavior, and defaults.</p>
+      <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Settings</h1>
+      <p class="mt-1 text-sm text-muted-foreground">Configure Sonarr connection, sync behavior, and defaults.</p>
     </div>
-    <Button variant="primary" onclick={handleSave} disabled={saving || !settingsDirty}>
+    <Button variant="default" onclick={handleSave} disabled={saving || !settingsDirty}>
       {#if saving}
         <LoaderCircle size={16} class="animate-spin" />
       {:else}
@@ -231,29 +238,29 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
-      <LoaderCircle size={30} class="animate-spin text-accent-400" />
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
+      <LoaderCircle size={30} class="animate-spin text-primary" />
       <div class="space-y-1">
-        <h2 class="text-base font-semibold text-base-100">Loading settings</h2>
-        <p class="text-sm text-base-400">Pulling current Sonarr and sync configuration.</p>
+        <h2 class="text-base font-semibold text-foreground">Loading settings</h2>
+        <p class="text-sm text-muted-foreground">Pulling current Sonarr and sync configuration.</p>
       </div>
     </Box>
   {:else}
     <div class="mx-auto max-w-4xl space-y-5">
       {#if settingsDirty}
-        <div class="flex items-center gap-2 rounded-xl border border-accent-500/20 bg-accent-950/20 px-4 py-2.5 text-sm text-accent-200">
+        <div class="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-4 py-2.5 text-sm text-primary">
           You have unsaved changes.
         </div>
       {/if}
 
       <!-- Connection section (critical) -->
-      <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
+      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold text-base-50">Connection</h2>
-            <Badge variant="secondary" size="sm">Required</Badge>
+            <h2 class="text-lg font-semibold text-foreground">Connection</h2>
+            <Badge variant="secondary">Required</Badge>
             {#if testResult}
-              <Badge variant={testResult.success ? 'green' : 'rose'} size="sm">{testResult.message}</Badge>
+              <Badge variant={testResult.success ? 'success' : 'destructive'}>{testResult.message}</Badge>
             {/if}
           </div>
           <Button variant="secondary" onclick={handleTestConnection} disabled={testing || !sonarrUrl || !urlValid}>
@@ -269,9 +276,9 @@
         <div class="space-y-4">
           <div class="space-y-2">
             <Label for="sonarr-url">Sonarr URL</Label>
-            <Input id="sonarr-url" type="text" variant="secondary" sizeVariant="lg" placeholder="http://localhost:8989" bind:value={sonarrUrl} class="w-full" />
+            <Input id="sonarr-url" type="text" placeholder="http://localhost:8989" bind:value={sonarrUrl} class="h-11 w-full" />
             {#if sonarrUrl && !urlValid}
-              <p class="text-sm text-rose-300">URL must start with http:// or https://</p>
+              <p class="text-sm text-destructive">URL must start with http:// or https://</p>
             {/if}
           </div>
 
@@ -294,26 +301,24 @@
             <Input
               id="sonarr-key"
               type={apiKeyVisible ? 'text' : 'password'}
-              variant="secondary"
-              sizeVariant="lg"
               bind:value={sonarrApiKey}
               placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
               oninput={handleApiKeyInput}
-              class="w-full"
+              class="h-11 w-full"
             />
           </div>
         </div>
       </Box>
 
       <!-- Sync section -->
-      <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
+      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold text-base-50">Sync</h2>
-            <Badge variant="secondary" size="sm">{cacheCount} cached</Badge>
+            <h2 class="text-lg font-semibold text-foreground">Sync</h2>
+            <Badge variant="secondary">{cacheCount} cached</Badge>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" size="sm">Last refreshed: {formatCacheTime(cacheRefreshedAt)}</Badge>
+            <Badge variant="secondary">Last refreshed: {formatCacheTime(cacheRefreshedAt)}</Badge>
             <Button variant="secondary" onclick={handleRefreshCache} disabled={refreshingCache}>
               {#if refreshingCache}
                 <LoaderCircle size={16} class="animate-spin" />
@@ -328,64 +333,78 @@
         <div class="space-y-4">
           <div class="space-y-2">
             <Label for="sync-interval">Sync interval</Label>
-            <Select id="sync-interval" bind:value={syncInterval} type="single" items={syncIntervalOptions} placeholder="Choose an interval" />
-            <p class="text-sm text-base-400">How often Mizu checks for episode changes and updates Sonarr.</p>
+            <Select.Root type="single" bind:value={syncInterval}>
+              <Select.Trigger id="sync-interval" class="w-full">
+                {#if syncInterval}
+                  {@const selected = syncIntervalOptions.find(i => i.value === syncInterval)}
+                  {selected?.label || 'Choose an interval'}
+                {:else}
+                  <span class="text-muted-foreground">Choose an interval</span>
+                {/if}
+              </Select.Trigger>
+              <Select.Content>
+                {#each syncIntervalOptions as item}
+                  <Select.Item value={item.value} label={item.label} />
+                {/each}
+              </Select.Content>
+            </Select.Root>
+            <p class="text-sm text-muted-foreground">How often Mizu checks for episode changes and updates Sonarr.</p>
           </div>
 
-          <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
-            <Checkbox bind:checked={enableTagging} variant="secondary" />
+          <label class="flex items-start gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
+            <Checkbox bind:checked={enableTagging} />
             <div class="space-y-1">
-              <div class="text-sm font-medium text-base-100">Sonarr tagging</div>
-              <div class="text-sm text-base-400">Apply a filler tag to episodes inside Sonarr.</div>
+              <div class="text-sm font-medium text-foreground">Sonarr tagging</div>
+              <div class="text-sm text-muted-foreground">Apply a filler tag to episodes inside Sonarr.</div>
             </div>
           </label>
 
           {#if enableTagging}
             <div class="space-y-2">
               <Label for="tag-name">Tag name</Label>
-              <Input id="tag-name" type="text" variant="secondary" sizeVariant="lg" placeholder="filler" bind:value={fillerTagName} class="w-full" />
+              <Input id="tag-name" type="text" placeholder="filler" bind:value={fillerTagName} class="h-11 w-full" />
             </div>
           {/if}
 
-          <label class="flex items-start gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
-            <Checkbox bind:checked={enableAniListArtwork} variant="secondary" />
+          <label class="flex items-start gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
+            <Checkbox bind:checked={enableAniListArtwork} />
             <div class="space-y-1">
-              <div class="text-sm font-medium text-base-100">AniList artwork</div>
-              <div class="text-sm text-base-400">Use AniList banners and posters instead of Sonarr images only.</div>
+              <div class="text-sm font-medium text-foreground">AniList artwork</div>
+              <div class="text-sm text-muted-foreground">Use AniList banners and posters instead of Sonarr images only.</div>
             </div>
           </label>
         </div>
       </Box>
 
       <!-- Defaults section -->
-      <Box class="space-y-5 rounded-2xl border border-base-800/80 bg-base-950/60">
+      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60">
         <div class="flex flex-wrap items-center gap-2">
-          <h2 class="text-lg font-semibold text-base-50">Defaults</h2>
-          <Badge variant="secondary" size="sm">New anime</Badge>
+          <h2 class="text-lg font-semibold text-foreground">Defaults</h2>
+          <Badge variant="secondary">New anime</Badge>
         </div>
-        <p class="text-sm leading-6 text-base-400">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
+        <p class="text-sm leading-6 text-muted-foreground">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
 
         <div class="grid gap-3 md:grid-cols-3">
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
             <div>
-              <div class="text-sm font-medium text-base-100">Anime canon</div>
-              <div class="mt-0.5 text-xs text-base-400">Original anime episodes</div>
+              <div class="text-sm font-medium text-foreground">Anime canon</div>
+              <div class="mt-0.5 text-xs text-muted-foreground">Original anime episodes</div>
             </div>
             <Switch bind:checked={trackAnimeCanonDefault} />
           </div>
 
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
             <div>
-              <div class="text-sm font-medium text-base-100">Mixed canon</div>
-              <div class="mt-0.5 text-xs text-base-400">Canon + filler blend</div>
+              <div class="text-sm font-medium text-foreground">Mixed canon</div>
+              <div class="mt-0.5 text-xs text-muted-foreground">Canon + filler blend</div>
             </div>
             <Switch bind:checked={trackMixedDefault} />
           </div>
 
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-base-800/80 bg-base-950/70 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
             <div>
-              <div class="text-sm font-medium text-base-100">Filler</div>
-              <div class="mt-0.5 text-xs text-base-400">Pure filler episodes</div>
+              <div class="text-sm font-medium text-foreground">Filler</div>
+              <div class="mt-0.5 text-xs text-muted-foreground">Pure filler episodes</div>
             </div>
             <Switch bind:checked={trackFillerDefault} />
           </div>

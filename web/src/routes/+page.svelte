@@ -1,7 +1,9 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Badge, Box, Button } from '@foxui/core';
+  import { Badge } from '$lib/components/ui/badge/index.js';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import Box from '$lib/components/Box.svelte';
   import { shows, syncStatus, settings, addNotification } from '../lib/stores.js';
   import { getShows, getStats, getSyncLogs, triggerSync, getSettings, getStatus } from '../lib/api.js';
   import { runStatusBadge, syncStateBadge } from '../lib/fox.js';
@@ -18,11 +20,11 @@
     Waves,
   } from 'lucide-svelte';
 
-  let loading = true;
-  let syncing = false;
-  let stats = null;
-  let recentLogs = [];
-  let connected = false;
+  let loading = $state(true);
+  let syncing = $state(false);
+  let stats = $state(null);
+  let recentLogs = $state([]);
+  let connected = $state(false);
 
   onMount(async () => {
     await Promise.all([loadDashboard(), loadShows(), loadSettings(), loadStatus()]);
@@ -102,16 +104,16 @@
     return `Checked ${anime} anime, changed ${episodes} ${episodes === 1 ? 'episode' : 'episodes'}.`;
   }
 
-  $: showCount = $shows.length;
-  $: pausedCount = ($shows || []).filter((s) => !s.enabled).length;
-  $: lastSync = recentLogs[0] || null;
-  $: failedSyncs = recentLogs.filter((l) => l.status === 'failed' || l.status === 'partial');
-  $: needsAttention = failedSyncs.length > 0 || pausedCount > 0;
+  let showCount = $derived($shows.length);
+  let pausedCount = $derived(($shows || []).filter((s) => !s.enabled).length);
+  let lastSync = $derived(recentLogs[0] || null);
+  let failedSyncs = $derived(recentLogs.filter((l) => l.status === 'failed' || l.status === 'partial'));
+  let needsAttention = $derived(failedSyncs.length > 0 || pausedCount > 0);
 
   const statCards = [
     { label: 'Anime tracked', key: 'shows', icon: Tv, accent: 'text-accent-300' },
-    { label: 'Total episodes', key: 'total', icon: Waves, accent: 'text-blue-300' },
-    { label: 'Filler managed', key: 'filler', icon: CircleCheckBig, accent: 'text-rose-300' },
+    { label: 'Total episodes', key: 'total', icon: Waves, accent: 'text-primary' },
+    { label: 'Filler managed', key: 'filler', icon: CircleCheckBig, accent: 'text-destructive' },
     { label: 'Canon episodes', key: 'canon', icon: CircleCheckBig, accent: 'text-emerald-300' },
   ];
 </script>
@@ -124,8 +126,8 @@
   <!-- Header -->
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-base-50 sm:text-3xl">Dashboard</h1>
-      <p class="mt-1 text-sm text-base-400">
+      <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Dashboard</h1>
+      <p class="mt-1 text-sm text-muted-foreground">
         {#if showCount > 0}
           Tracking {showCount} {showCount === 1 ? 'anime' : 'anime'} · {stats?.total || 0} episodes
         {:else}
@@ -138,7 +140,7 @@
         <Tv size={16} />
         Browse anime
       </Button>
-      <Button variant="primary" onclick={handleSync} disabled={syncing}>
+      <Button variant="default" onclick={handleSync} disabled={syncing}>
         {#if syncing}
           <LoaderCircle size={16} class="animate-spin" />
         {:else}
@@ -150,33 +152,33 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-popover/60 text-center">
       <LoaderCircle size={30} class="animate-spin text-accent-400" />
       <div class="space-y-1">
-        <h2 class="text-base font-semibold text-base-100">Loading dashboard</h2>
-        <p class="text-sm text-base-400">Gathering your library overview.</p>
+        <h2 class="text-base font-semibold text-foreground">Loading dashboard</h2>
+        <p class="text-sm text-muted-foreground">Gathering your library overview.</p>
       </div>
     </Box>
   {:else}
     <!-- Needs attention -->
     {#if needsAttention}
       <section class="space-y-3">
-        <h2 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-base-400">
-          <CircleAlert size={16} class="text-amber-400" />
+        <h2 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <CircleAlert size={16} class="text-warning" />
           Needs attention
         </h2>
         <div class="grid gap-3 sm:grid-cols-2">
           {#if failedSyncs.length > 0}
-            <Box class="rounded-2xl border border-rose-500/20 bg-rose-950/20 p-4">
+            <Box class="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
               <div class="flex items-start gap-3">
-                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-950/40 text-rose-300">
+                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 text-destructive">
                   <TriangleAlert size={18} />
                 </span>
                 <div class="space-y-1">
-                  <h3 class="text-sm font-semibold text-base-50">
+                  <h3 class="text-sm font-semibold text-foreground">
                     {failedSyncs.length} {failedSyncs.length === 1 ? 'sync run needs review' : 'sync runs need review'}
                   </h3>
-                  <p class="text-sm text-base-400">Recent syncs completed with errors or partial results.</p>
+                  <p class="text-sm text-muted-foreground">Recent syncs completed with errors or partial results.</p>
                   <Button variant="ghost" size="sm" onclick={() => goto('/activity')} class="mt-2 -ml-2">
                     View activity
                     <ArrowRight size={14} />
@@ -186,16 +188,16 @@
             </Box>
           {/if}
           {#if pausedCount > 0}
-            <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-4">
+            <Box class="rounded-2xl border border-border bg-popover/60 p-4">
               <div class="flex items-start gap-3">
-                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-base-700 bg-base-900 text-base-300">
+                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground">
                   <Waves size={18} />
                 </span>
                 <div class="space-y-1">
-                  <h3 class="text-sm font-semibold text-base-50">
+                  <h3 class="text-sm font-semibold text-foreground">
                     {pausedCount} {pausedCount === 1 ? 'anime paused' : 'anime paused'}
                   </h3>
-                  <p class="text-sm text-base-400">Paused anime are not being synced automatically.</p>
+                  <p class="text-sm text-muted-foreground">Paused anime are not being synced automatically.</p>
                   <Button variant="ghost" size="sm" onclick={() => goto('/shows')} class="mt-2 -ml-2">
                     Manage anime
                     <ArrowRight size={14} />
@@ -212,16 +214,16 @@
     {#if stats}
       <section class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {#each statCards as card}
-          <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-4">
+          <Box class="rounded-2xl border border-border bg-popover/60 p-4">
             <div class="flex items-center gap-3">
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-base-800 bg-base-900 {card.accent}">
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card {card.accent}">
                 <card.icon size={18} />
               </span>
               <div>
-                <p class="text-xl font-bold tabular-nums text-base-50">
+                <p class="text-xl font-bold tabular-nums text-foreground">
                   {(card.key === 'shows' ? showCount : stats[card.key] || 0).toLocaleString()}
                 </p>
-                <p class="text-xs text-base-400">{card.label}</p>
+                <p class="text-xs text-muted-foreground">{card.label}</p>
               </div>
             </div>
           </Box>
@@ -233,18 +235,18 @@
     <div class="grid gap-4 lg:grid-cols-3">
       <!-- Last sync summary -->
       <section class="lg:col-span-2">
-        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-400">Last sync</h2>
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Last sync</h2>
         {#if lastSync}
           {@const lastBadge = runStatusBadge(lastSync.status)}
-          <Box class="rounded-2xl border border-base-800/80 bg-base-950/60 p-5">
+          <Box class="rounded-2xl border border-border bg-popover/60 p-5">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div class="space-y-2">
                 <div class="flex flex-wrap gap-2">
-                  <Badge variant={lastBadge.variant} size="sm">{lastBadge.label}</Badge>
-                  <Badge variant="secondary" size="sm">{formatDuration(lastSync.started_at, lastSync.completed_at)}</Badge>
+                  <Badge variant={lastBadge.variant}>{lastBadge.label}</Badge>
+                  <Badge variant="secondary">{formatDuration(lastSync.started_at, lastSync.completed_at)}</Badge>
                 </div>
-                <h3 class="text-base font-semibold text-base-50">{humanSummary(lastSync)}</h3>
-                <p class="text-sm text-base-400">{formatTime(lastSync.started_at)}</p>
+                <h3 class="text-base font-semibold text-foreground">{humanSummary(lastSync)}</h3>
+                <p class="text-sm text-muted-foreground">{formatTime(lastSync.started_at)}</p>
               </div>
               <Button variant="ghost" size="sm" onclick={() => goto('/activity')}>
                 Full history
@@ -253,11 +255,11 @@
             </div>
           </Box>
         {:else}
-          <Box class="flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border border-base-800/80 bg-base-950/60 text-center">
-            <History size={24} class="text-base-500" />
+          <Box class="flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-popover/60 text-center">
+            <History size={24} class="text-muted-foreground" />
             <div class="space-y-1">
-              <h3 class="text-sm font-semibold text-base-200">No syncs yet</h3>
-              <p class="text-sm text-base-400">Run your first sync to see results here.</p>
+              <h3 class="text-sm font-semibold text-muted-foreground">No syncs yet</h3>
+              <p class="text-sm text-muted-foreground">Run your first sync to see results here.</p>
             </div>
           </Box>
         {/if}
@@ -265,7 +267,7 @@
 
       <!-- Quick actions -->
       <section>
-        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-400">Quick actions</h2>
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Quick actions</h2>
         <div class="space-y-2">
           <Button variant="secondary" onclick={() => goto('/shows')} class="w-full justify-start">
             <Tv size={16} />
@@ -287,7 +289,7 @@
     {#if showCount > 0}
       <section>
         <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-base-400">Your anime</h2>
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Your anime</h2>
           <Button variant="ghost" size="sm" onclick={() => goto('/shows')}>
             View all
             <ArrowRight size={14} />
@@ -296,14 +298,14 @@
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {#each $shows.slice(0, 6) as show (show.id)}
             {@const stateBadge = syncStateBadge(show.enabled)}
-            <Box class="cursor-pointer rounded-2xl border border-base-800/80 bg-base-950/60 p-4 transition-colors hover:border-base-700"
+            <Box class="cursor-pointer rounded-2xl border border-border bg-popover/60 p-4 transition-colors hover:border-border"
                  onclick={() => goto(`/shows/${show.id}`)}>
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 space-y-1">
-                  <h3 class="truncate text-sm font-semibold text-base-50">{show.sonarr_title}</h3>
-                  <p class="truncate text-xs text-base-400">{show.afl_title || show.afl_slug}</p>
+                  <h3 class="truncate text-sm font-semibold text-foreground">{show.sonarr_title}</h3>
+                  <p class="truncate text-xs text-muted-foreground">{show.afl_title || show.afl_slug}</p>
                 </div>
-                <Badge variant={stateBadge.variant} size="sm">{stateBadge.label}</Badge>
+                <Badge variant={stateBadge.variant}>{stateBadge.label}</Badge>
               </div>
             </Box>
           {/each}

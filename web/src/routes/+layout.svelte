@@ -6,7 +6,7 @@
   let { children } = $props();
 </script>
 
-<div class="dark blue slate min-h-screen bg-base-900 text-base-50">
+<div class="dark min-h-screen bg-background text-foreground">
   <Navbar />
   <main class="min-h-screen px-4 pb-32 pt-8 md:pb-10">
     <div class="mx-auto w-full max-w-5xl">
