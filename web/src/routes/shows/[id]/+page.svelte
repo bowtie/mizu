@@ -154,12 +154,12 @@
         artwork = null;
       }
 
-      // Only fetch the backdrop from series if we don't have artwork already
-      if (!artwork) {
-        getSonarrSeries().then((allSeries) => {
+      // Always fetch series for overview/description; also used as backdrop fallback
+      getSonarrSeries()
+        .then((allSeries) => {
           series = (allSeries || []).find((item) => item.id === show.sonarr_series_id) || null;
-        }).catch(() => {});
-      }
+        })
+        .catch(() => {});
 
       episodes = episodesResult || [];
       trackFiller = actionToTracked(show.filler_action, false);
