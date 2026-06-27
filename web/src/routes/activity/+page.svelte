@@ -1,6 +1,5 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
-  import { autoAnimate } from '@formkit/auto-animate';
   import { slide } from 'svelte/transition';
   import { Badge, Box, Button, Input } from '@foxui/core';
   import { addNotification } from '../../lib/stores.js';
@@ -206,7 +205,7 @@
         <p class="text-sm text-base-400">Try adjusting your filters or search query.</p>
       </Box>
     {:else}
-      <section class="space-y-4" use:autoAnimate>
+      <section class="space-y-4">
         {#each filteredLogs as log (log.id)}
           {@const runBadge = runStatusBadge(log.status)}
           <Box class="rounded-2xl border border-base-800/80 bg-base-950/60">

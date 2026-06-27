@@ -51,6 +51,7 @@
 
       <nav class="hidden items-center gap-1 md:flex" aria-label="Primary">
         {#each navItems as item}
+          {@const Icon = item.icon}
           <Button
             href={item.path}
             variant={isActive(item.path, currentPath) ? 'secondary' : 'ghost'}
@@ -58,7 +59,7 @@
             class="rounded-lg border-transparent"
             aria-current={isActive(item.path, currentPath) ? 'page' : undefined}
           >
-            <svelte:component this={item.icon} size={16} />
+            <Icon size={16} />
             {item.label}
           </Button>
         {/each}
@@ -92,6 +93,7 @@
     aria-label="Primary mobile"
   >
     {#each navItems as item}
+      {@const Icon = item.icon}
       <Button
         href={item.path}
         variant={isActive(item.path, currentPath) ? 'secondary' : 'ghost'}
@@ -99,7 +101,7 @@
         class="min-w-0 flex-1 justify-center rounded-xl border-transparent whitespace-nowrap"
         aria-current={isActive(item.path, currentPath) ? 'page' : undefined}
       >
-        <svelte:component this={item.icon} size={16} />
+        <Icon size={16} />
         {item.label}
       </Button>
     {/each}

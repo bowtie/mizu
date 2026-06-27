@@ -24,14 +24,13 @@ test("shows page does not wire AutoAnimate into the poster grid or modal body", 
   assert.doesNotMatch(showsSvelte, /use:autoAnimate/);
 });
 
-test("activity page wires AutoAnimate into the log list and expanded detail region", () => {
-  assert.match(activitySvelte, /import\s+\{\s*autoAnimate\s*\}\s+from\s+'@formkit\/auto-animate'/);
+test("activity page uses slide transitions for expanded detail region", () => {
   assert.match(activitySvelte, /import\s+\{\s*slide\s*\}\s+from\s+'svelte\/transition'/);
-  assert.match(activitySvelte, /<section class="space-y-4"\s+use:autoAnimate>/);
   assert.match(activitySvelte, /transition:slide=\{\{\s*duration:\s*220\s*\}\}/);
   assert.doesNotMatch(
     activitySvelte,
     /Open details to inspect which anime changed during this run\./,
   );
   assert.doesNotMatch(activitySvelte, /border-t border-base-800\/80 pt-4/);
+  assert.doesNotMatch(activitySvelte, /use:autoAnimate/);
 });
