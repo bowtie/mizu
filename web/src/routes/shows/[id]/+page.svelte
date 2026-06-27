@@ -19,23 +19,22 @@
   const WATERMARK_AUTO = 'auto';
   const WATERMARK_MANUAL = 'manual';
 
-  let loading = true;
-  let saving = false;
-  let deleting = false;
-  let showDeleteModal = false;
-  let show = null;
-  let series = null;
-  let artwork = null;
-  let sonarrBaseUrl = '';
-  let episodes = [];
-  let trackFiller = false;
-  let trackMixed = true;
-  let trackAnimeCanon = true;
-  let watermarkMode = WATERMARK_AUTO;
-  let watermarkAutoPressed = true;
-  let markerValue = 0;
-  let activeTypeFilters = [];
-  let syncingEps = {};
+  let loading = $state(true);
+  let saving = $state(false);
+  let deleting = $state(false);
+  let showDeleteModal = $state(false);
+  let show = $state(null);
+  let series = $state(null);
+  let artwork = $state(null);
+  let sonarrBaseUrl = $state('');
+  let episodes = $state([]);
+  let trackFiller = $state(false);
+  let trackMixed = $state(true);
+  let trackAnimeCanon = $state(true);
+  let watermarkAutoPressed = $state(true);
+  let markerValue = $state(0);
+  let activeTypeFilters = $state([]);
+  let syncingEps = $state({});
   let pristineFiller = false;
   let pristineMixed = true;
   let pristineAnimeCanon = true;
@@ -58,17 +57,17 @@
     return `${(safeBoundary > 96 ? truncated.slice(0, safeBoundary) : truncated).trim()}...`;
   }
 
-  $: showId = $page.params.id;
-  $: pageTitle = show ? `Mizu - ${show.sonarr_title}` : 'Mizu - Anime';
-  $: rulesDirty = !!show && (
+  let showId = $derived($page.params.id);
+  let pageTitle = $derived(show ? `Mizu - ${show.sonarr_title}` : 'Mizu - Anime');
+  let rulesDirty = $derived(!!show && (
     trackFiller !== pristineFiller ||
     trackMixed !== pristineMixed ||
     trackAnimeCanon !== pristineAnimeCanon ||
     watermarkAutoPressed !== pristineWatermarkAuto ||
     (watermarkAutoPressed === false && markerValue !== pristineMarkerValue)
-  );
-  $: filteredEpisodes = episodes.filter((ep) => (activeTypeFilters.length === 0 ? true : activeTypeFilters.includes(ep.type)));
-  $: groupedBySeason = (() => {
+  ));
+  let filteredEpisodes = $derived(episodes.filter((ep) => (activeTypeFilters.length === 0 ? true : activeTypeFilters.includes(ep.type))));
+  let groupedBySeason = $derived((() => {
     const groups = {};
     for (const ep of filteredEpisodes) {
       const season = episodeSeason(ep);
@@ -86,25 +85,25 @@
         if (b.season === -1) return -1;
         return b.season - a.season;
       });
-  })();
-  $: epStats = {
+  })());
+  let epStats = $derived({
     total: episodes.length,
     canon: episodes.filter((ep) => ep.type === 'canon').length,
     mixed: episodes.filter((ep) => ep.type === 'mixed_canon').length,
     animeCanon: episodes.filter((ep) => ep.type === 'anime_canon').length,
     filler: episodes.filter((ep) => ep.type === 'filler').length,
     special: episodes.filter((ep) => ep.type === 'special').length,
-  };
-  $: markerUpperBound = episodes.length > 0
+  });
+  let markerUpperBound = $derived(episodes.length > 0
     ? episodes.reduce((highest, ep) => Math.max(highest, displayEpisodeNumber(ep)), 0)
-    : undefined;
-  $: activeBackdropUrl = artwork?.banner_image || artwork?.poster_image || backdropUrl(series);
-  $: fullSubtitle = series?.overview || '';
-  $: subtitle = briefOverview(fullSubtitle);
-  $: watermarkMode = watermarkAutoPressed ? WATERMARK_AUTO : WATERMARK_MANUAL;
-  $: watermarkTooltip = watermarkAutoPressed
+    : undefined);
+  let activeBackdropUrl = $derived(artwork?.banner_image || artwork?.poster_image || backdropUrl(series));
+  let fullSubtitle = $derived(series?.overview || '');
+  let subtitle = $derived(briefOverview(fullSubtitle));
+  let watermarkMode = $derived(watermarkAutoPressed ? WATERMARK_AUTO : WATERMARK_MANUAL);
+  let watermarkTooltip = $derived(watermarkAutoPressed
     ? 'Using Sonarr progress as the start point.'
-    : 'Using the episode input as the start point.';
+    : 'Using the episode input as the start point.');
 
   onMount(async () => {
     await loadShow();
@@ -230,6 +229,14 @@
     if (type === 'all') return activeTypeFilters.length === 0;
     return activeTypeFilters.includes(type);
   }
+
+  let filterButtons = $derived([
+    { type: 'all', label: 'All episodes', count: epStats.total, active: isTypeFilterActive('all') },
+    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon') },
+    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon') },
+    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon') },
+    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler') },
+  ]);
 
   function isSpecialSeasonNumber(num) {
     return num === -1 || num === 0;
@@ -467,18 +474,11 @@
 
     <!-- Episodes -->
     <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      {#each [
-        { type: 'all', label: 'All episodes', count: epStats.total },
-        { type: 'canon', label: 'Manga', count: epStats.canon },
-        { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon },
-        { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed },
-        { type: 'filler', label: 'Filler', count: epStats.filler },
-      ] as btn}
-        {@const active = isTypeFilterActive(btn.type)}
-        {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !active}
+      {#each filterButtons as btn (btn.type)}
+        {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !btn.active}
         <button
           type="button"
-          class="rounded-2xl border-2 p-4 text-left transition-all {active
+          class="rounded-2xl border-2 p-4 text-left transition-all {btn.active
             ? 'border-blue-500 bg-blue-600 text-white'
             : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-blue-500'} {dimmed ? 'opacity-40' : ''}"
           onclick={() => toggleTypeFilter(btn.type)}
