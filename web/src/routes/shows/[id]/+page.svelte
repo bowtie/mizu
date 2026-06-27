@@ -45,14 +45,6 @@
   const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
   const trackedToAction = (tracked) => (tracked ? 'monitor' : 'unmonitor');
 
-  const breakdownItems = [
-    { label: 'Total', key: 'total', tone: 'text-foreground' },
-    { label: 'Manga', key: 'canon', tone: 'text-primary' },
-    { label: 'Anime', key: 'animeCanon', tone: 'text-primary' },
-    { label: 'Mixed', key: 'mixed', tone: 'text-warning' },
-    { label: 'Filler', key: 'filler', tone: 'text-destructive' },
-  ];
-
   function briefOverview(copy) {
     const normalized = (copy || '').replace(/\s+/g, ' ').trim();
     if (!normalized) return '';
@@ -492,21 +484,6 @@
               </div>
             </div>
           </Box>
-
-      <!-- Episode breakdown -->
-      <Box class="rounded-2xl border border-border/80 bg-popover/60 p-5">
-        <div class="space-y-3">
-          <h2 class="text-base font-semibold text-foreground">Episode breakdown</h2>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {#each breakdownItems as item}
-              <div class="rounded-xl border border-border/80 bg-popover/70 p-3 text-center">
-                <div class="text-2xl font-bold tabular-nums {item.tone}">{epStats[item.key]}</div>
-                <div class="mt-1 text-xs text-muted-foreground">{item.label}</div>
-              </div>
-            {/each}
-          </div>
-        </div>
-      </Box>
     </section>
 
     <!-- Episodes -->
