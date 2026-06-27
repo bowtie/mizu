@@ -288,8 +288,8 @@
       'rounded-2xl border p-4 text-left transition-all',
       active
         ? activeToneClasses[tone] || activeToneClasses.base
-        : 'border-border/80 bg-popover/60 text-foreground',
-      isDimmed ? 'opacity-40' : 'hover:border-border hover:bg-card/70',
+        : 'border-border bg-card text-foreground',
+      isDimmed ? 'opacity-40' : 'hover:border-primary/40 hover:bg-muted',
     ].filter(Boolean).join(' ');
   }
 
