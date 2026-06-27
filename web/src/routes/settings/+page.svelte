@@ -154,7 +154,7 @@
       }
 
       await updateSettings(payload);
-      addNotification('Settings saved successfully', 'success');
+      addNotification('Settings saved', 'success');
       await loadSettings();
     } catch (err) {
       addNotification('Failed to save settings: ' + err.message, 'error');
@@ -180,7 +180,7 @@
         throw new Error(result?.error || 'Connection failed');
       }
       testResult = { success: true, message: 'Connection successful' };
-      addNotification('Sonarr connection test passed', 'success');
+      addNotification('Sonarr connection test passed', 'success', 6000);
     } catch (err) {
       testResult = { success: false, message: err.message };
       addNotification('Sonarr connection test failed: ' + err.message, 'error');
@@ -192,7 +192,7 @@
     refreshingCache = true;
     try {
       await refreshAflCache();
-      addNotification('AFL show list refreshed', 'success');
+      addNotification('AFL show list refreshed', 'success', 6000);
       await loadSettings();
     } catch (err) {
       addNotification('Failed to refresh AFL cache: ' + err.message, 'error');

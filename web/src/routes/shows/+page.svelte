@@ -415,7 +415,7 @@
         anime_canon_action: trackedToAction(addTrackAnimeCanon),
         start_mode: addStartMode,
       });
-      addNotification(`Synced "${selectedSonarr.title}"`, 'success');
+      addNotification(`Added "${selectedSonarr.title}" to Mizu`, 'success');
       addOutcome = {
         title: selectedSonarr.title,
         type: 'mapping_created',

@@ -62,7 +62,7 @@
     syncing = true;
     try {
       await triggerSync();
-      addNotification('Sync triggered successfully', 'success');
+      addNotification('Sync started', 'info');
       // Poll for updates while sync is running
       startPolling();
     } catch (err) {

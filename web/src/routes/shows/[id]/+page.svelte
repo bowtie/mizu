@@ -191,7 +191,7 @@
         payload.sync_watermark = clampMarkerValue(markerValue, episodes);
       }
       await updateShow(showId, payload);
-      addNotification('Anime rules updated', 'success');
+      addNotification(`Saved tracking rules for ${show?.sonarr_title || 'anime'}`, 'success');
       await loadShow();
     } catch (err) {
       addNotification('Failed to save anime: ' + err.message, 'error');
@@ -203,7 +203,7 @@
     deleting = true;
     try {
       await deleteShow(showId);
-      addNotification('Anime removed', 'success');
+      addNotification(`Removed ${show?.sonarr_title || 'anime'} from Mizu`, 'success');
       showDeleteModal = false;
       goto('/shows');
     } catch (err) {
@@ -227,7 +227,7 @@
         ep.monitored = nextState;
         episodes = episodes;
       }
-      addNotification(`${episodeLabel(ep)} ${nextState ? 'monitored' : 'unmonitored'}`, 'success');
+      addNotification(`${episodeLabel(ep)} ${nextState ? 'now monitored' : 'now unmonitored'}`, 'success');
     } catch (err) {
       addNotification('Failed to update episode: ' + err.message, 'error');
     }
@@ -377,7 +377,7 @@
               <X size={14} />
             </Button>
             <Button
-              variant="default"
+              variant="destructive"
               size="icon-sm"
               class="rounded-full"
               disabled={deleting}
