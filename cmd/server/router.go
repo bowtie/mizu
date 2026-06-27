@@ -7,12 +7,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	stdsync "sync"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-	"github.com/rs/zerolog/log"
 	"mizu/internal/anilist"
 	"mizu/internal/config"
 	"mizu/internal/database"
@@ -21,7 +18,51 @@ import (
 	"mizu/internal/sonarr"
 	"mizu/internal/sync"
 	"mizu/internal/web"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/rs/zerolog/log"
 )
+
+// episodeCache provides a short-lived in-memory cache for enriched episode
+// data so that navigating to an anime page doesn't always hit Sonarr + AFL.
+type episodeCache struct {
+	mu      stdsync.RWMutex
+	entries map[int64]episodeCacheEntry
+	ttl     time.Duration
+}
+
+type episodeCacheEntry struct {
+	data      []models.EpisodeInfo
+	expiresAt time.Time
+}
+
+func newEpisodeCache(ttl time.Duration) *episodeCache {
+	return &episodeCache{entries: make(map[int64]episodeCacheEntry), ttl: ttl}
+}
+
+func (c *episodeCache) get(mappingID int64) ([]models.EpisodeInfo, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	e, ok := c.entries[mappingID]
+	if !ok || time.Now().After(e.expiresAt) {
+		return nil, false
+	}
+	return e.data, true
+}
+
+func (c *episodeCache) set(mappingID int64, data []models.EpisodeInfo) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[mappingID] = episodeCacheEntry{data: data, expiresAt: time.Now().Add(c.ttl)}
+}
+
+func (c *episodeCache) invalidate(mappingID int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.entries, mappingID)
+}
 
 func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, scheduler *schedulerController) http.Handler {
 	r := chi.NewRouter()
@@ -35,6 +76,8 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+
+	epCache := newEpisodeCache(2 * time.Minute)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +104,9 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 				r.Put("/", handleUpdateMapping(syncEngine, db))
 				r.Delete("/", handleDeleteMapping(db))
 				r.Get("/artwork", handleGetMappingArtwork(cfg, db))
-				r.Get("/episodes", handleGetEpisodes(cfg, db, syncEngine))
+				r.Get("/episodes", handleGetEpisodes(cfg, db, syncEngine, epCache))
 				r.Get("/episodes/sonarr", handleGetSonarrEpisodes(cfg, db))
-				r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(cfg, db))
+				r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(cfg, db, epCache))
 				r.Post("/resync", handleResyncMapping(syncEngine))
 			})
 		})
@@ -418,11 +461,17 @@ func handleDeleteMapping(db *database.DB) http.HandlerFunc {
 	}
 }
 
-func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
+func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, epCache *episodeCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid mapping ID")
+			return
+		}
+
+		// Serve from cache if available
+		if cached, ok := epCache.get(id); ok {
+			writeJSON(w, http.StatusOK, cached)
 			return
 		}
 
@@ -489,6 +538,7 @@ func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Eng
 			})
 		}
 
+		epCache.set(id, enriched)
 		writeJSON(w, http.StatusOK, enriched)
 	}
 }
@@ -519,7 +569,7 @@ func handleGetSonarrEpisodes(cfg *config.Config, db *database.DB) http.HandlerFu
 	}
 }
 
-func handleSetEpisodeMonitor(cfg *config.Config, db *database.DB) http.HandlerFunc {
+func handleSetEpisodeMonitor(cfg *config.Config, db *database.DB, epCache *episodeCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		epID, err := strconv.Atoi(chi.URLParam(r, "epId"))
 		if err != nil {
@@ -537,6 +587,10 @@ func handleSetEpisodeMonitor(cfg *config.Config, db *database.DB) http.HandlerFu
 		if err := c.SetEpisodeMonitored(r.Context(), epID, req.Monitored); err != nil {
 			writeError(w, http.StatusBadGateway, "failed to update episode in Sonarr: "+err.Error())
 			return
+		}
+		// Invalidate cache for this mapping so the next fetch reflects the change
+		if id, idErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64); idErr == nil {
+			epCache.invalidate(id)
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"monitored": req.Monitored})
 	}
