@@ -8,7 +8,6 @@ Automatically manage filler episodes in Sonarr using data from [AnimeFillerList]
 - **Fuzzy matching** -- Jaro-Winkler algorithm matches Sonarr series to AFL entries, even with title variations
 - **Configurable actions** -- Per-show rules: unmonitor, keep (monitor), or skip+delete filler episodes
 - **Mixed canon support** -- Separate rules for mixed canon/filler episodes
-- **Sonarr tagging** -- Optionally tag series that contain filler episodes
 - **Push notifications** -- Get notified on sync results via [ntfy.sh](https://ntfy.sh) (self-hosted or public)
 - **Web dashboard** -- Dark-themed UI for managing mappings, viewing episodes, and configuring settings
 - **Scheduled sync** -- Automatic periodic sync with configurable intervals
@@ -78,8 +77,6 @@ All settings can be configured via environment variables, a YAML config file, or
 | `CACHE_TTL` | `24h` | How long to cache scraped AFL data |
 | `DEFAULT_FILLER_ACTION` | `unmonitor` | Default action for filler episodes |
 | `DEFAULT_MIXED_CANON_ACTION` | `monitor` | Default action for mixed canon episodes |
-| `ENABLE_TAGGING` | `false` | Add a tag to series with filler in Sonarr |
-| `FILLER_TAG_NAME` | `filler` | Tag name to use in Sonarr |
 | `NTFY_ENABLED` | `false` | Enable ntfy push notifications |
 | `NTFY_SERVER_URL` | `https://ntfy.sh` | ntfy server URL |
 | `NTFY_TOPIC` | *(empty)* | ntfy topic name |
@@ -99,9 +96,6 @@ cache_ttl: 24h
 
 default_filler_action: unmonitor    # unmonitor | monitor | skip
 default_mixed_canon_action: monitor # unmonitor | monitor | skip
-
-enable_tagging: false
-filler_tag_name: filler
 
 ntfy_enabled: false
 ntfy_server_url: https://ntfy.sh

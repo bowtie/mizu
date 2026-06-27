@@ -35,8 +35,6 @@ type Config struct {
 	DefaultFillerAction       FillerAction `yaml:"default_filler_action"`
 	DefaultMixedCanonAction   FillerAction `yaml:"default_mixed_canon_action"`
 	DefaultAnimeCanonAction   FillerAction `yaml:"default_anime_canon_action"`
-	EnableTagging             bool         `yaml:"enable_tagging"`
-	FillerTagName             string       `yaml:"filler_tag_name"`
 	EnableAniListArtwork      bool         `yaml:"enable_anilist_artwork"`
 	SonarrAddRootFolder       string       `yaml:"sonarr_add_root_folder"`
 	SonarrAddQualityProfileID int          `yaml:"sonarr_add_quality_profile_id"`
@@ -77,8 +75,6 @@ func DefaultConfig() *Config {
 		DefaultFillerAction:       ActionUnmonitor,
 		DefaultMixedCanonAction:   ActionMonitor,
 		DefaultAnimeCanonAction:   ActionMonitor,
-		EnableTagging:             false,
-		FillerTagName:             "filler",
 		EnableAniListArtwork:      false,
 		SonarrAddRootFolder:       "",
 		SonarrAddQualityProfileID: 0,
@@ -160,12 +156,6 @@ func (c *Config) loadEnv() {
 	}
 	if v := os.Getenv("DEFAULT_ANIME_CANON_ACTION"); v != "" {
 		c.DefaultAnimeCanonAction = FillerAction(v)
-	}
-	if v := os.Getenv("ENABLE_TAGGING"); v != "" {
-		c.EnableTagging = strings.ToLower(v) == "true" || v == "1"
-	}
-	if v := os.Getenv("FILLER_TAG_NAME"); v != "" {
-		c.FillerTagName = v
 	}
 	if v := os.Getenv("ENABLE_ANILIST_ARTWORK"); v != "" {
 		c.EnableAniListArtwork = strings.ToLower(v) == "true" || v == "1"

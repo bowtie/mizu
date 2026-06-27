@@ -11,11 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	syncengine "mizu/internal/sync"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -115,12 +116,6 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		if _, d, parseErr := normalizeScanInterval(value); parseErr == nil {
 			cfg.ScanInterval = d
 		}
-	}
-	if value, err := db.GetSetting(ctx, "enable_tagging"); err == nil && value != "" {
-		cfg.EnableTagging = value == "true"
-	}
-	if value, err := db.GetSetting(ctx, "filler_tag_name"); err == nil && value != "" {
-		cfg.FillerTagName = value
 	}
 	if value, err := db.GetSetting(ctx, "enable_anilist_artwork"); err == nil && value != "" {
 		cfg.EnableAniListArtwork = value == "true"

@@ -93,14 +93,6 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		return nil
 	}
 
-	var fillerTagID int
-	if e.cfg.EnableTagging {
-		fillerTagID, err = e.sonarr.EnsureTag(ctx, e.cfg.FillerTagName)
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to ensure filler tag, continuing without tagging")
-		}
-	}
-
 	showsProcessed := 0
 	episodesUpdated := 0
 	var syncErrors []string
@@ -122,7 +114,7 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 			continue
 		}
 
-		result, err := e.processSeries(ctx, *series, &mapping, fillerTagID, false)
+		result, err := e.processSeries(ctx, *series, &mapping, false)
 		if err != nil {
 			errMsg := fmt.Sprintf("error processing %q: %v", mapping.SonarrTitle, err)
 			log.Error().Err(err).Str("series", mapping.SonarrTitle).Msg("failed to process series")
@@ -192,7 +184,7 @@ func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
 		return fmt.Errorf("fetching Sonarr series: %w", err)
 	}
 
-	result, err := e.processSeries(ctx, *series, mapping, 0, true)
+	result, err := e.processSeries(ctx, *series, mapping, true)
 	if err != nil {
 		return fmt.Errorf("processing series: %w", err)
 	}
@@ -256,22 +248,14 @@ func (e *Engine) HydrateMapping(ctx context.Context, mappingID int64) (*models.S
 		return nil, fmt.Errorf("fetching Sonarr series: %w", err)
 	}
 
-	fillerTagID := 0
-	if e.cfg.EnableTagging {
-		fillerTagID, err = e.sonarr.EnsureTag(ctx, e.cfg.FillerTagName)
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to ensure filler tag during mapping hydration")
-		}
-	}
-
-	if _, err := e.processSeries(ctx, *series, mapping, fillerTagID, false); err != nil {
+	if _, err := e.processSeries(ctx, *series, mapping, false); err != nil {
 		return nil, err
 	}
 
 	return e.db.GetMappingByID(ctx, mappingID)
 }
 
-func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, mapping *models.ShowMapping, fillerTagID int, resyncAll bool) (processSeriesResult, error) {
+func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, mapping *models.ShowMapping, resyncAll bool) (processSeriesResult, error) {
 	mapping.StartMode = normalizeStartMode(mapping.StartMode)
 	mapping.WatermarkMode = normalizeWatermarkMode(mapping.WatermarkMode, mapping.StartMode)
 
@@ -384,21 +368,6 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 			result.MonitoredCount = len(toMonitor)
 			result.EpisodesUpdated += len(toMonitor)
 			log.Info().Str("series", series.Title).Int("count", len(toMonitor)).Msg("monitored episodes")
-		}
-	}
-
-	if e.cfg.EnableTagging && fillerTagID > 0 {
-		hasFiller := false
-		for _, ep := range aflEpisodes {
-			if ep.Type == models.EpisodeFiller || ep.Type == models.EpisodeMixedCanon || ep.Type == models.EpisodeAnimeCanon {
-				hasFiller = true
-				break
-			}
-		}
-		if hasFiller {
-			if err := e.sonarr.AddTagToSeries(ctx, &series, fillerTagID); err != nil {
-				log.Warn().Err(err).Str("series", series.Title).Msg("failed to add filler tag")
-			}
 		}
 	}
 

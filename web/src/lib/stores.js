@@ -15,8 +15,6 @@ export const settings = writable({
   default_mixed_canon_action: "monitor",
   default_anime_canon_action: "monitor",
   sync_interval: "6h",
-  enable_tagging: false,
-  filler_tag_name: "filler",
   enable_anilist_artwork: false,
   sonarr_add_root_folder: "",
   sonarr_add_quality_profile_id: 0,

@@ -26,9 +26,7 @@
   let apiKeyVisible = false;
   let apiKeyDirty = false;
   let syncInterval = '6h';
-  let enableTagging = false;
   let enableAniListArtwork = false;
-  let fillerTagName = 'filler';
   let trackFillerDefault = false;
   let trackMixedDefault = true;
   let trackAnimeCanonDefault = true;
@@ -65,9 +63,7 @@
         apiKeyVisible = false;
         apiKeyDirty = false;
         syncInterval = data.sync_interval || '6h';
-        enableTagging = data.enable_tagging || false;
         enableAniListArtwork = data.enable_anilist_artwork || false;
-        fillerTagName = data.filler_tag_name || 'filler';
         trackFillerDefault = actionToTracked(data.default_filler_action, false);
         trackMixedDefault = actionToTracked(data.default_mixed_canon_action, true);
         trackAnimeCanonDefault = actionToTracked(data.default_anime_canon_action, true);
@@ -79,9 +75,7 @@
           sonarrApiKey,
           apiKeyDirty,
           syncInterval,
-          enableTagging,
           enableAniListArtwork,
-          fillerTagName,
           trackFillerDefault,
           trackMixedDefault,
           trackAnimeCanonDefault,
@@ -97,9 +91,7 @@
     sonarrUrl !== pristine.sonarrUrl ||
     apiKeyDirty ||
     syncInterval !== pristine.syncInterval ||
-    enableTagging !== pristine.enableTagging ||
     enableAniListArtwork !== pristine.enableAniListArtwork ||
-    fillerTagName !== pristine.fillerTagName ||
     trackFillerDefault !== pristine.trackFillerDefault ||
     trackMixedDefault !== pristine.trackMixedDefault ||
     trackAnimeCanonDefault !== pristine.trackAnimeCanonDefault
@@ -154,9 +146,7 @@
         default_mixed_canon_action: trackedToAction(trackMixedDefault),
         default_anime_canon_action: trackedToAction(trackAnimeCanonDefault),
         sync_interval: syncInterval,
-        enable_tagging: enableTagging,
         enable_anilist_artwork: enableAniListArtwork,
-        filler_tag_name: fillerTagName,
       };
 
       if (apiKeyDirty || !hasSavedApiKey) {
@@ -349,21 +339,6 @@
               </Select.Content>
             </Select.Root>
             <p class="text-sm text-muted-foreground">How often Mizu checks for episode changes and updates Sonarr.</p>
-          </div>
-
-          <div class="flex flex-col gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <label class="flex items-start gap-3 sm:flex-1">
-              <Checkbox bind:checked={enableTagging} />
-              <div class="space-y-1">
-                <div class="text-sm font-medium text-foreground">Sonarr tagging</div>
-                <div class="text-sm text-muted-foreground">Apply a filler tag to episodes inside Sonarr.</div>
-              </div>
-            </label>
-            {#if enableTagging}
-              <div class="sm:w-48 sm:shrink-0">
-                <Input id="tag-name" type="text" placeholder="filler" bind:value={fillerTagName} class="h-10 w-full" />
-              </div>
-            {/if}
           </div>
 
           <label class="flex items-start gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">

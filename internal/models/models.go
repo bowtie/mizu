@@ -128,7 +128,6 @@ type SonarrSeries struct {
 	SeasonFolder       bool             `json:"seasonFolder,omitempty"`
 	Monitored          bool             `json:"monitored"`
 	SeasonCount        int              `json:"seasonCount"`
-	Tags               []int            `json:"tags"`
 	Images             []SonarrImage    `json:"images"`
 	Statistics         *SonarrStats     `json:"statistics,omitempty"`
 	AlternateTitles    []SonarrAltTitle `json:"alternateTitles,omitempty"`
@@ -146,12 +145,6 @@ type SonarrEpisode struct {
 	Monitored             bool      `json:"monitored"`
 	HasFile               bool      `json:"hasFile"`
 	AirDateUTC            time.Time `json:"airDateUtc"`
-}
-
-// SonarrTag represents a tag in Sonarr.
-type SonarrTag struct {
-	ID    int    `json:"id"`
-	Label string `json:"label"`
 }
 
 type SonarrRootFolder struct {

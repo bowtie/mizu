@@ -10,8 +10,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"mizu/internal/models"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Client communicates with the Sonarr API v3.
@@ -271,78 +272,4 @@ func (c *Client) BulkSetEpisodesMonitored(ctx context.Context, episodeIDs []int,
 		Msg("bulk updated episode monitoring")
 
 	return nil
-}
-
-// --- Tags ---
-
-// GetTags returns all tags from Sonarr.
-func (c *Client) GetTags(ctx context.Context) ([]models.SonarrTag, error) {
-	resp, err := c.doRequest(ctx, http.MethodGet, "/tag", nil)
-	if err != nil {
-		return nil, err
-	}
-	return decodeResponse[[]models.SonarrTag](resp)
-}
-
-// CreateTag creates a new tag and returns it.
-func (c *Client) CreateTag(ctx context.Context, label string) (*models.SonarrTag, error) {
-	payload := map[string]string{"label": label}
-	resp, err := c.doRequest(ctx, http.MethodPost, "/tag", payload)
-	if err != nil {
-		return nil, fmt.Errorf("creating tag %q: %w", label, err)
-	}
-	return decodeResponse[*models.SonarrTag](resp)
-}
-
-// EnsureTag finds or creates a tag by label, returning its ID.
-func (c *Client) EnsureTag(ctx context.Context, label string) (int, error) {
-	tags, err := c.GetTags(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	for _, t := range tags {
-		if t.Label == label {
-			return t.ID, nil
-		}
-	}
-
-	// Tag doesn't exist, create it
-	newTag, err := c.CreateTag(ctx, label)
-	if err != nil {
-		return 0, err
-	}
-
-	log.Info().Str("label", label).Int("id", newTag.ID).Msg("created new Sonarr tag")
-	return newTag.ID, nil
-}
-
-// AddTagToSeries adds a tag to a series if it doesn't already have it.
-func (c *Client) AddTagToSeries(ctx context.Context, series *models.SonarrSeries, tagID int) error {
-	// Check if tag already applied
-	for _, t := range series.Tags {
-		if t == tagID {
-			return nil // Already tagged
-		}
-	}
-
-	series.Tags = append(series.Tags, tagID)
-	return c.UpdateSeries(ctx, series)
-}
-
-// RemoveTagFromSeries removes a tag from a series.
-func (c *Client) RemoveTagFromSeries(ctx context.Context, series *models.SonarrSeries, tagID int) error {
-	newTags := make([]int, 0, len(series.Tags))
-	for _, t := range series.Tags {
-		if t != tagID {
-			newTags = append(newTags, t)
-		}
-	}
-
-	if len(newTags) == len(series.Tags) {
-		return nil // Tag wasn't present
-	}
-
-	series.Tags = newTags
-	return c.UpdateSeries(ctx, series)
 }

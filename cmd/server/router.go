@@ -697,8 +697,6 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
 			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
 			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
-			"enable_tagging":                cfg.EnableTagging,
-			"filler_tag_name":               cfg.FillerTagName,
 			"enable_anilist_artwork":        cfg.EnableAniListArtwork,
 			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
 			"sonarr_add_quality_profile_id": cfg.SonarrAddQualityProfileID,
@@ -728,8 +726,6 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			DefaultMixedCanonAction   *string `json:"default_mixed_canon_action"`
 			DefaultAnimeCanonAction   *string `json:"default_anime_canon_action"`
 			SyncInterval              *string `json:"sync_interval"`
-			EnableTagging             *bool   `json:"enable_tagging"`
-			FillerTagName             *string `json:"filler_tag_name"`
 			EnableAniListArtwork      *bool   `json:"enable_anilist_artwork"`
 			SonarrAddRootFolder       *string `json:"sonarr_add_root_folder"`
 			SonarrAddQualityProfileID *int    `json:"sonarr_add_quality_profile_id"`
@@ -766,12 +762,6 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			scheduler.UpdateInterval(d)
 			update.SyncInterval = &normalized
 		}
-		if update.EnableTagging != nil {
-			cfg.EnableTagging = *update.EnableTagging
-		}
-		if update.FillerTagName != nil && *update.FillerTagName != "" {
-			cfg.FillerTagName = *update.FillerTagName
-		}
 		if update.EnableAniListArtwork != nil {
 			cfg.EnableAniListArtwork = *update.EnableAniListArtwork
 		}
@@ -799,8 +789,6 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
 			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
 			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
-			"enable_tagging":                strconv.FormatBool(cfg.EnableTagging),
-			"filler_tag_name":               cfg.FillerTagName,
 			"enable_anilist_artwork":        strconv.FormatBool(cfg.EnableAniListArtwork),
 			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
 			"sonarr_add_quality_profile_id": strconv.Itoa(cfg.SonarrAddQualityProfileID),
