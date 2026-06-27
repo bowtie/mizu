@@ -313,6 +313,86 @@
   <title>{pageTitle}</title>
 </svelte:head>
 
+{#snippet headerActions()}
+  <div class="flex shrink-0 items-center gap-2">
+    <Tooltip.Provider delayDuration={120}>
+      <Tooltip.Root>
+        <Tooltip.Trigger>
+          <Toggle
+            bind:pressed={watermarkAutoPressed}
+            size="default"
+            class="cursor-pointer"
+            aria-label="Toggle automatic start from Sonarr"
+          >
+            <Bot size={16} />
+          </Toggle>
+        </Tooltip.Trigger>
+        <Tooltip.Content side="bottom" align="center" sideOffset={10}>
+          {watermarkTooltip}
+        </Tooltip.Content>
+      </Tooltip.Root>
+    </Tooltip.Provider>
+    <label for="marker-value" class="sr-only">Start tracking after episode</label>
+    <NumberInput
+      id="marker-value"
+      min="0"
+      max={markerUpperBound}
+      step="1"
+      bind:value={markerValue}
+      defaultValue={0}
+      disabled={watermarkAutoPressed}
+      className="w-24"
+    />
+    <Popover.Root bind:open={showDeleteModal}>
+      <Popover.Trigger>
+        <Button variant="destructive" disabled={deleting}>
+          <Trash2 size={16} />
+          Remove
+        </Button>
+      </Popover.Trigger>
+      <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
+        <div class="flex items-center gap-3">
+          <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
+          <div class="ml-auto flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              class="rounded-full"
+              disabled={deleting}
+              aria-label="Cancel removal"
+              onclick={() => (showDeleteModal = false)}
+            >
+              <X size={14} />
+            </Button>
+            <Button
+              variant="default"
+              size="icon-sm"
+              class="rounded-full"
+              disabled={deleting}
+              aria-label="Confirm removal"
+              onclick={handleDelete}
+            >
+              {#if deleting}
+                <LoaderCircle size={16} class="animate-spin" />
+              {:else}
+                <Check size={14} />
+              {/if}
+            </Button>
+          </div>
+        </div>
+      </Popover.Content>
+    </Popover.Root>
+    <Button variant="default" onclick={handleSave} disabled={saving || !rulesDirty}>
+      {#if saving}
+        <LoaderCircle size={16} class="animate-spin" />
+      {:else}
+        <Save size={16} />
+      {/if}
+      {saving ? 'Saving...' : 'Save'}
+    </Button>
+  </div>
+{/snippet}
+
 {#if loading}
   <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
     <LoaderCircle size={30} class="animate-spin text-primary" />
@@ -347,55 +427,7 @@
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground" title={fullSubtitle}>{subtitle}</p>
               {/if}
             </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <Popover.Root bind:open={showDeleteModal}>
-                <Popover.Trigger>
-                  <Button variant="destructive" disabled={deleting}>
-                    <Trash2 size={16} />
-                    Remove
-                  </Button>
-                </Popover.Trigger>
-                <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
-                  <div class="flex items-center gap-3">
-                    <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
-                    <div class="ml-auto flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        size="icon-sm"
-                        class="rounded-full"
-                        disabled={deleting}
-                        aria-label="Cancel removal"
-                        onclick={() => (showDeleteModal = false)}
-                      >
-                        <X size={14} />
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="icon-sm"
-                        class="rounded-full"
-                        disabled={deleting}
-                        aria-label="Confirm removal"
-                        onclick={handleDelete}
-                      >
-                        {#if deleting}
-                          <LoaderCircle size={16} class="animate-spin" />
-                        {:else}
-                          <Check size={14} />
-                        {/if}
-                      </Button>
-                    </div>
-                  </div>
-                </Popover.Content>
-              </Popover.Root>
-              <Button variant="default" onclick={handleSave} disabled={saving || !rulesDirty}>
-                {#if saving}
-                  <LoaderCircle size={16} class="animate-spin" />
-                {:else}
-                  <Save size={16} />
-                {/if}
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
+            {@render headerActions()}
           </div>
         </div>
       {:else}
@@ -406,55 +438,7 @@
               <p class="max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
             {/if}
           </div>
-          <div class="flex shrink-0 items-center gap-2">
-            <Popover.Root bind:open={showDeleteModal}>
-              <Popover.Trigger>
-                <Button variant="destructive" disabled={deleting}>
-                  <Trash2 size={16} />
-                  Remove
-                </Button>
-              </Popover.Trigger>
-              <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
-                <div class="flex items-center gap-3">
-                  <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
-                  <div class="ml-auto flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="icon-sm"
-                      class="rounded-full"
-                      disabled={deleting}
-                      aria-label="Cancel removal"
-                      onclick={() => (showDeleteModal = false)}
-                    >
-                      <X size={14} />
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="icon-sm"
-                      class="rounded-full"
-                      disabled={deleting}
-                      aria-label="Confirm removal"
-                      onclick={handleDelete}
-                    >
-                      {#if deleting}
-                        <LoaderCircle size={16} class="animate-spin" />
-                      {:else}
-                        <Check size={14} />
-                      {/if}
-                    </Button>
-                  </div>
-                </div>
-              </Popover.Content>
-            </Popover.Root>
-            <Button variant="default" onclick={handleSave} disabled={saving || !rulesDirty}>
-              {#if saving}
-                <LoaderCircle size={16} class="animate-spin" />
-              {:else}
-                <Save size={16} />
-              {/if}
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
+          {@render headerActions()}
         </div>
       {/if}
     </Box>
@@ -504,44 +488,6 @@
               </div>
             </div>
           </Box>
-
-      <!-- Watermark / start tracking -->
-      <Box class="space-y-3 rounded-2xl border border-border/80 bg-popover/60 p-5">
-        <div class="space-y-1">
-          <h2 class="text-base font-semibold text-foreground">Start tracking from</h2>
-          <p class="text-sm text-muted-foreground">{watermarkTooltip}</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <label for="marker-value" class="sr-only">Start tracking after episode</label>
-          <NumberInput
-            id="marker-value"
-            min="0"
-            max={markerUpperBound}
-            step="1"
-            bind:value={markerValue}
-            defaultValue={0}
-            disabled={watermarkAutoPressed}
-            className="flex-1"
-          />
-          <Tooltip.Provider delayDuration={120}>
-            <Tooltip.Root>
-              <Tooltip.Trigger>
-                <Toggle
-                  bind:pressed={watermarkAutoPressed}
-                  size="default"
-                  class="cursor-pointer"
-                  aria-label="Toggle automatic start from Sonarr"
-                >
-                  <Bot size={16} />
-                </Toggle>
-              </Tooltip.Trigger>
-              <Tooltip.Content side="bottom" align="center" sideOffset={10}>
-                {watermarkTooltip}
-              </Tooltip.Content>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        </div>
-      </Box>
 
       <!-- Episode breakdown -->
       <Box class="rounded-2xl border border-border/80 bg-popover/60 p-5">
