@@ -276,26 +276,20 @@
     const active = isTypeFilterActive(type);
     const hasScopedFilter = activeTypeFilters.length > 0;
     const isDimmed = type !== 'all' && hasScopedFilter && !active;
-    const toneClasses = {
-      base: 'border-border/80 bg-popover/60 text-foreground',
-      blue: 'border-primary/30 bg-primary/15 text-primary',
-      violet: 'border-primary/30 bg-primary/15 text-primary',
-      amber: 'border-warning/30 bg-warning/15 text-warning',
-      rose: 'border-destructive/30 bg-destructive/15 text-destructive',
-    };
     const activeToneClasses = {
-      base: 'border-primary bg-primary text-primary-foreground',
-      blue: 'border-primary bg-primary text-primary-foreground',
-      violet: 'border-primary bg-primary text-primary-foreground',
-      amber: 'border-warning bg-warning text-warning-foreground',
-      rose: 'border-destructive bg-destructive text-destructive-foreground',
+      base: 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20',
+      blue: 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20',
+      violet: 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20',
+      amber: 'border-warning bg-warning text-warning-foreground shadow-lg shadow-warning/20',
+      rose: 'border-destructive bg-destructive text-destructive-foreground shadow-lg shadow-destructive/20',
     };
 
     return [
       'rounded-2xl border p-4 text-left transition-all',
-      active ? activeToneClasses[tone] || activeToneClasses.base : toneClasses[tone] || toneClasses.base,
-      isDimmed ? 'border-border/60 bg-popover/30 text-muted-foreground opacity-50' : 'hover:border-border hover:bg-card/70',
-      type === 'all' && hasScopedFilter && !active ? 'border-primary/30 bg-primary/10 text-primary' : '',
+      active
+        ? activeToneClasses[tone] || activeToneClasses.base
+        : 'border-border/80 bg-popover/60 text-foreground',
+      isDimmed ? 'opacity-40' : 'hover:border-border hover:bg-card/70',
     ].filter(Boolean).join(' ');
   }
 
