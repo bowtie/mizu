@@ -478,7 +478,7 @@
         {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !btn.active}
         <button
           type="button"
-          class="rounded-2xl border-2 p-4 text-left transition-all {btn.active
+          class="rounded-2xl border p-4 text-left transition-all {btn.active
             ? btn.activeClass
             : 'border-border bg-secondary text-foreground hover:border-primary/50'} {dimmed ? 'opacity-40' : ''}"
           onclick={() => toggleTypeFilter(btn.type)}
