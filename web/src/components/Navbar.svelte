@@ -42,7 +42,7 @@
 </script>
 
 <header class="sticky top-4 z-40 hidden px-4 md:block">
-  <div class="mx-auto flex max-w-6xl flex-col rounded-2xl border border-border bg-popover/82 px-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-xl">
+  <div class="mx-auto flex max-w-6xl flex-col rounded-2xl border border-border bg-popover px-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)]">
     <div class="flex min-h-16 items-center justify-between gap-4 py-3">
       <a href="/" class="flex min-w-0 items-center gap-3" aria-label="Mizu home">
         <span class="flex size-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
@@ -88,7 +88,7 @@
 
 <div class="fixed inset-x-0 bottom-4 z-40 px-4 md:hidden">
   <nav
-    class="mx-auto flex max-w-sm items-center gap-2 rounded-2xl border border-border bg-popover/88 p-2 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-xl"
+    class="mx-auto flex max-w-sm items-center gap-2 rounded-2xl border border-border bg-popover p-2 shadow-[0_10px_30px_rgba(2,6,23,0.28)]"
     aria-label="Primary mobile"
   >
     {#each navItems as item}
