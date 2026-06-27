@@ -159,7 +159,7 @@
 
   {#if loading}
     <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
-      <LoaderCircle size={30} class="animate-spin text-accent-400" />
+      <LoaderCircle size={30} class="animate-spin text-primary" />
       <div class="space-y-1">
         <h2 class="text-base font-semibold text-foreground">Loading activity</h2>
         <p class="text-sm text-muted-foreground">Surfacing recent sync history.</p>
@@ -167,7 +167,7 @@
     </Box>
   {:else if logs.length === 0}
     <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 px-6 text-center">
-      <span class="flex size-12 items-center justify-center rounded-xl border border-accent-500/20 bg-accent-950/30 text-accent-300">
+      <span class="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
         <History size={24} />
       </span>
       <div class="space-y-1">
@@ -187,7 +187,7 @@
           <button
             type="button"
             class="rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors {statusFilter === filter.value
-              ? 'border-accent-500/40 bg-accent-950/20 text-accent-200'
+              ? 'border-primary/40 bg-primary/20 text-primary'
               : 'border-border/80 bg-popover/60 text-muted-foreground hover:text-foreground'}"
             onclick={() => (statusFilter = filter.value)}
           >
