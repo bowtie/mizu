@@ -6,18 +6,10 @@
 
   const displayed = new Map<number>();
 
-  const toastTitleMap: Record<string, string> = {
-    success: 'Success',
-    error: 'Error',
-    warning: 'Warning',
-    info: 'Notice',
-  };
-
-  function showToast(type: string, title: string, message: string, id: number, duration: number) {
+  function showToast(type: string, message: string, id: number, duration: number) {
     const toastId = `${id}`;
     const opts = {
       id: toastId,
-      description: message,
       duration: duration > 0 ? duration : Infinity,
       onDismiss: () => {
         displayed.delete(id);
@@ -25,11 +17,11 @@
       },
     };
 
-    if (type === 'success') return toast.success(title, opts);
-    if (type === 'error') return toast.error(title, opts);
-    if (type === 'warning') return toast.warning(title, opts);
-    if (type === 'info') return toast.info(title, opts);
-    return toast(title, opts);
+    if (type === 'success') return toast.success(message, opts);
+    if (type === 'error') return toast.error(message, opts);
+    if (type === 'warning') return toast.warning(message, opts);
+    if (type === 'info') return toast.info(message, opts);
+    return toast(message, opts);
   }
 
   $effect(() => {
@@ -38,14 +30,7 @@
     for (const notif of $notifications) {
       if (displayed.has(notif.id)) continue;
 
-      showToast(
-        notif.type,
-        toastTitleMap[notif.type] || 'Notice',
-        notif.message,
-        notif.id,
-        notif.duration
-      );
-
+      showToast(notif.type, notif.message, notif.id, notif.duration);
       displayed.set(notif.id, notif.id);
     }
 
