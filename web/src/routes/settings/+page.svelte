@@ -236,7 +236,7 @@
       </div>
     </Box>
   {:else}
-    <div class="mx-auto max-w-4xl space-y-5">
+    <div class="space-y-5">
       {#if settingsDirty}
         <div class="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-4 py-2.5 text-sm text-primary">
           You have unsaved changes.
