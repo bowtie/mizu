@@ -254,7 +254,7 @@
       {/if}
 
       <!-- Connection section (critical) -->
-      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60">
+      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60 p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold text-foreground">Connection</h2>
@@ -311,7 +311,7 @@
       </Box>
 
       <!-- Sync section -->
-      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60">
+      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60 p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold text-foreground">Sync</h2>
@@ -377,7 +377,7 @@
       </Box>
 
       <!-- Defaults section -->
-      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60">
+      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60 p-5">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-lg font-semibold text-foreground">Defaults</h2>
           <Badge variant="secondary">New anime</Badge>
