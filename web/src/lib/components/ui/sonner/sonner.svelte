@@ -12,8 +12,9 @@
 
 <Sonner
 	theme={mode.current}
+	richColors
 	class="toaster group"
-	style="--normal-bg: var(--color-popover); --normal-text: var(--color-popover-foreground); --normal-border: var(--color-border);"
+	style="--normal-bg: var(--color-popover); --normal-text: var(--color-popover-foreground); --normal-border: var(--color-border); --success-bg: var(--color-success); --success-border: var(--color-success); --success-text: var(--color-success-foreground); --error-bg: var(--color-destructive); --error-border: var(--color-destructive); --error-text: var(--color-destructive-foreground); --warning-bg: var(--color-warning); --warning-border: var(--color-warning); --warning-text: var(--color-warning-foreground); --info-bg: var(--color-info); --info-border: var(--color-info); --info-text: var(--color-info-foreground);"
 	{...restProps}
 >
 	{#snippet loadingIcon()}
