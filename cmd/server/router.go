@@ -482,7 +482,7 @@ func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Eng
 			return
 		}
 
-		if len(dbEpisodes) > 0 {
+		if len(dbEpisodes) > 0 && hasSonarrEpisodeIDs(dbEpisodes) {
 			epCache.set(id, dbEpisodes)
 			writeJSON(w, http.StatusOK, dbEpisodes)
 			return
@@ -511,6 +511,15 @@ func handleGetEpisodes(cfg *config.Config, db *database.DB, syncEngine *sync.Eng
 		epCache.set(id, enriched)
 		writeJSON(w, http.StatusOK, enriched)
 	}
+}
+
+func hasSonarrEpisodeIDs(episodes []models.EpisodeInfo) bool {
+	for _, ep := range episodes {
+		if ep.SonarrEpisodeID != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 type httpError struct {
