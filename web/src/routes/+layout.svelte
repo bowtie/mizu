@@ -8,7 +8,7 @@
 
 <div class="dark min-h-screen bg-background text-foreground">
   <Navbar />
-  <main class="min-h-screen px-4 pb-32 pt-8 md:pb-10">
+  <main class="min-h-screen px-6 pb-32 pt-10 md:px-8 md:pb-12">
     <div class="mx-auto w-full max-w-5xl">
       {@render children()}
     </div>

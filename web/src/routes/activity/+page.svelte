@@ -140,7 +140,7 @@
   <title>Mizu - Activity</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-8">
   <!-- Header -->
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
