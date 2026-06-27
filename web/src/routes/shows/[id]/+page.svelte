@@ -491,7 +491,7 @@
                 {/snippet}
 
                 <div class="flex items-center gap-3">
-                  <p class="pr-1 text-sm font-medium text-base-50">Are you sure?</p>
+                  <p class="pr-1 text-sm font-medium text-base-50">Remove {show?.sonarr_title || 'this anime'}?</p>
                   <div class="ml-auto flex items-center gap-2">
                     <Button
                       variant="secondary"

@@ -6,9 +6,9 @@
   let { children } = $props();
 </script>
 
-<div class="min-h-screen bg-base-900 text-base-50">
+<div class="dark min-h-screen bg-base-900 text-base-50">
   <Navbar />
-  <main class="min-h-screen px-4 pb-28 pt-8 md:pb-8">
+  <main class="min-h-screen px-4 pb-32 pt-8 md:pb-10">
     <div class="mx-auto w-full max-w-5xl">
       {@render children()}
     </div>

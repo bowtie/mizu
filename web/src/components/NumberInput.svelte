@@ -2,14 +2,16 @@
   import { onDestroy } from 'svelte';
   import { Minus, Plus } from 'lucide-svelte';
 
-  export let id = undefined;
-  export let value = 0;
-  export let min = 0;
-  export let max = Number.POSITIVE_INFINITY;
-  export let step = 1;
-  export let defaultValue = 0;
-  export let disabled = false;
-  export let className = '';
+  let {
+    id = undefined,
+    value = $bindable(0),
+    min = 0,
+    max = Number.POSITIVE_INFINITY,
+    step = 1,
+    defaultValue = 0,
+    disabled = false,
+    className = '',
+  } = $props();
 
   const HOLD_DELAY_MS = 325;
   const HOLD_INTERVAL_MS = 85;

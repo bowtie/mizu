@@ -46,14 +46,18 @@
     try {
       const data = await getShows();
       shows.set(data || []);
-    } catch {}
+    } catch (err) {
+      addNotification('Failed to load shows: ' + err.message, 'error');
+    }
   }
 
   async function loadSettings() {
     try {
       const data = await getSettings();
       settings.set(data);
-    } catch {}
+    } catch (err) {
+      addNotification('Failed to load settings: ' + err.message, 'error');
+    }
   }
 
   async function loadStatus() {
@@ -61,8 +65,9 @@
       const data = await getStatus();
       connected = data?.status === 'ok';
       syncStatus.update((s) => ({ ...s, connected }));
-    } catch {
+    } catch (err) {
       connected = false;
+      syncStatus.update((s) => ({ ...s, connected: false }));
     }
   }
 
