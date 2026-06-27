@@ -272,20 +272,6 @@
       : `Episode #${displayEpisodeNumber(ep)}`;
   }
 
-  function filterButtonClasses(type, tone) {
-    const active = isTypeFilterActive(type);
-    const hasScopedFilter = activeTypeFilters.length > 0;
-    const isDimmed = type !== 'all' && hasScopedFilter && !active;
-
-    return [
-      'rounded-2xl border-2 p-4 text-left transition-all',
-      active
-        ? 'border-primary bg-primary text-primary-foreground'
-        : 'border-border bg-secondary text-foreground hover:border-primary/50',
-      isDimmed ? 'opacity-40' : '',
-    ].filter(Boolean).join(' ');
-  }
-
   function clampMarkerValue(nextValue, sourceEpisodes = episodes) {
     const normalized = Math.max(0, Number(nextValue) || 0);
     if (!sourceEpisodes?.length) return normalized;
@@ -481,26 +467,26 @@
 
     <!-- Episodes -->
     <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <button type="button" class={filterButtonClasses('all', 'base')} onclick={() => toggleTypeFilter('all')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">All episodes</div>
-        <div class="mt-2 text-2xl font-semibold">{epStats.total}</div>
-      </button>
-      <button type="button" class={filterButtonClasses('canon', 'blue')} onclick={() => toggleTypeFilter('canon')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Manga</div>
-        <div class="mt-2 text-2xl font-semibold">{epStats.canon}</div>
-      </button>
-      <button type="button" class={filterButtonClasses('anime_canon', 'violet')} onclick={() => toggleTypeFilter('anime_canon')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Anime</div>
-        <div class="mt-2 text-2xl font-semibold">{epStats.animeCanon}</div>
-      </button>
-      <button type="button" class={filterButtonClasses('mixed_canon', 'amber')} onclick={() => toggleTypeFilter('mixed_canon')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Mixed</div>
-        <div class="mt-2 text-2xl font-semibold">{epStats.mixed}</div>
-      </button>
-      <button type="button" class={filterButtonClasses('filler', 'rose')} onclick={() => toggleTypeFilter('filler')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Filler</div>
-        <div class="mt-2 text-2xl font-semibold">{epStats.filler}</div>
-      </button>
+      {#each [
+        { type: 'all', label: 'All episodes', count: epStats.total },
+        { type: 'canon', label: 'Manga', count: epStats.canon },
+        { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon },
+        { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed },
+        { type: 'filler', label: 'Filler', count: epStats.filler },
+      ] as btn}
+        {@const active = isTypeFilterActive(btn.type)}
+        {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !active}
+        <button
+          type="button"
+          class="rounded-2xl border-2 p-4 text-left transition-all {active
+            ? 'border-blue-500 bg-blue-600 text-white'
+            : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-blue-500'} {dimmed ? 'opacity-40' : ''}"
+          onclick={() => toggleTypeFilter(btn.type)}
+        >
+          <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">{btn.label}</div>
+          <div class="mt-2 text-2xl font-semibold">{btn.count}</div>
+        </button>
+      {/each}
     </section>
 
     {#if episodes.length === 0}
