@@ -416,14 +416,13 @@
         start_mode: addStartMode,
       });
       addNotification(`Synced "${selectedSonarr.title}"`, 'success');
-      showAddModal = false;
+      addOutcome = {
+        title: selectedSonarr.title,
+        type: 'mapping_created',
+        mappingId: created?.id || null,
+      };
       await loadLanding();
-      if (created?.id) {
-        openShow(created.id);
-        return;
-      }
-      const mapped = ($shows || []).find((show) => show.sonarr_series_id === selectedSonarr.id);
-      if (mapped) openShow(mapped.id);
+      addStep = ADD_STEP_POST_ADD;
     } catch (err) {
       addNotification('Failed to sync anime: ' + err.message, 'error');
     } finally {
@@ -889,7 +888,11 @@
             {:else if addStep === ADD_STEP_FALLBACK_SONARR}
               Confirm the Sonarr series Mizu should add for <span class="font-medium text-muted-foreground">{selectedFallbackAfl?.title}</span>.
             {:else if addStep === ADD_STEP_POST_ADD}
-              <span class="font-medium text-muted-foreground">{addOutcome?.title}</span> is in Sonarr now, but still needs a safe AFL mapping before Mizu can track it.
+              {#if addOutcome?.type === 'mapping_created'}
+                <span class="font-medium text-muted-foreground">{addOutcome?.title}</span> is now tracked by Mizu.
+              {:else}
+                <span class="font-medium text-muted-foreground">{addOutcome?.title}</span> is in Sonarr now, but still needs a safe AFL mapping before Mizu can track it.
+              {/if}
             {:else if addStep === ADD_STEP_UNSAFE_MATCH}
               Mizu found a possible cached AFL entry for <span class="font-medium text-muted-foreground">{selectedSonarr?.title}</span>, but it needs your confirmation before creating the mapping.
             {:else}
@@ -1229,10 +1232,17 @@
                 <CircleCheckBig size={16} />
               </span>
               <div class="space-y-2">
-                <h3 class="text-base font-semibold text-foreground">Added to Sonarr</h3>
-                <p class="text-sm leading-6 text-muted-foreground">
-                  {addOutcome?.title || selectedSonarr?.title} is in Sonarr now. Mizu did not create a mapping because it could not confirm a safe AFL match, so this anime will stay visible in the add modal as <span class="font-medium text-foreground">Needs match</span>.
-                </p>
+                {#if addOutcome?.type === 'mapping_created'}
+                  <h3 class="text-base font-semibold text-foreground">Mapping created</h3>
+                  <p class="text-sm leading-6 text-muted-foreground">
+                    <span class="font-medium text-foreground">{addOutcome?.title}</span> is now tracked by Mizu. You can configure its tracking rules and episode monitoring on the detail page.
+                  </p>
+                {:else}
+                  <h3 class="text-base font-semibold text-foreground">Added to Sonarr</h3>
+                  <p class="text-sm leading-6 text-muted-foreground">
+                    {addOutcome?.title || selectedSonarr?.title} is in Sonarr now. Mizu did not create a mapping because it could not confirm a safe AFL match, so this anime will stay visible in the add modal as <span class="font-medium text-foreground">Needs match</span>.
+                  </p>
+                {/if}
               </div>
             </div>
           </Box>
@@ -1440,10 +1450,22 @@
               </Button>
             {/if}
             {#if addStep === ADD_STEP_POST_ADD}
-              <Button onclick={closeAddModal}>
-                <Check size={16} />
-                Done
-              </Button>
+              {#if addOutcome?.type === 'mapping_created'}
+                <Button variant="secondary" onclick={closeAddModal}>Close</Button>
+                <Button onclick={() => {
+                  const id = addOutcome?.mappingId || (($shows || []).find((show) => show.sonarr_series_id === selectedSonarr?.id)?.id);
+                  if (id) openShow(id);
+                  else closeAddModal();
+                }}>
+                  <Check size={16} />
+                  View anime
+                </Button>
+              {:else}
+                <Button onclick={closeAddModal}>
+                  <Check size={16} />
+                  Done
+                </Button>
+              {/if}
             {/if}
           </div>
         </div>
