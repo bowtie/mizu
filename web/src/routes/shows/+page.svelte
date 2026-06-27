@@ -771,13 +771,13 @@
         {@const syncBadge = syncStateBadge(show.enabled)}
         <button
           type="button"
-          class="group w-full cursor-pointer text-left transition-opacity duration-300 ease-in-out hover:opacity-80 focus:outline-none"
+          class="group w-full cursor-pointer text-left focus:outline-none"
           onclick={() => openShow(show.id)}
           aria-label={`Open ${show.sonarr_title}`}
         >
-          <Box class="h-full rounded-2xl border border-border/80 bg-popover/60 p-3">
+          <Box class="h-full rounded-2xl border border-border/80 bg-popover/60 p-3 transition-all duration-300 ease-out group-hover:border-primary/40 group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)] group-focus-visible:border-primary/40">
             <div
-              class="poster-frame relative aspect-[2/3] overflow-hidden rounded-xl border border-border/80 bg-card/80"
+              class="poster-frame relative aspect-[2/3] overflow-hidden rounded-xl border border-border/80 bg-card/80 transition-transform duration-300 ease-out group-hover:scale-[1.03]"
               data-poster-state={show.poster ? POSTER_LOADING : POSTER_FAILED}
               use:observePosterFrame={show}
             >
@@ -798,7 +798,7 @@
                   height="480"
                   loading="lazy"
                   decoding="async"
-                  class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out group-hover:scale-105"
+                  class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
                 />
               {/if}
 
