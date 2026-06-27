@@ -24,10 +24,10 @@
   let pollTimer = null;
 
   const statusFilters = [
-    { value: 'all', label: 'All' },
-    { value: 'success', label: 'Success' },
-    { value: 'partial', label: 'Partial' },
-    { value: 'failed', label: 'Failed' },
+    { value: 'all', label: 'All', activeClass: 'border-primary/40 bg-primary/20 text-primary' },
+    { value: 'success', label: 'Success', activeClass: 'border-success/40 bg-success/20 text-success' },
+    { value: 'partial', label: 'Partial', activeClass: 'border-warning/40 bg-warning/20 text-warning' },
+    { value: 'failed', label: 'Failed', activeClass: 'border-destructive/40 bg-destructive/20 text-destructive' },
   ];
 
   onMount(async () => {
@@ -187,7 +187,7 @@
           <button
             type="button"
             class="rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors {statusFilter === filter.value
-              ? 'border-primary/40 bg-primary/20 text-primary'
+              ? filter.activeClass
               : 'border-border/80 bg-popover/60 text-muted-foreground hover:text-foreground'}"
             onclick={() => (statusFilter = filter.value)}
           >
