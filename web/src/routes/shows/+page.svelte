@@ -711,7 +711,7 @@
         type="text"
         placeholder="Search anime"
         bind:value={filter}
-        class="h-11 w-full pl-12"
+        class="h-10 w-full pl-12"
         aria-label="Search anime"
       />
     </div>
