@@ -180,7 +180,7 @@ a {
   text-decoration: none;
 }
 ::selection {
-  background: color-mix(in oklab, var(--color-blue-500) 32%, transparent);
+  background: color-mix(in oklab, var(--primary) 32%, transparent);
 }
 img {
   display: block;
@@ -191,8 +191,8 @@ img {
   transition: opacity 180ms ease;
   background: linear-gradient(
     180deg,
-    color-mix(in oklab, var(--color-slate-900) 82%, var(--color-blue-950)) 0%,
-    color-mix(in oklab, var(--color-slate-950) 92%, black) 100%
+    color-mix(in oklab, var(--card) 82%, var(--primary)) 0%,
+    color-mix(in oklab, var(--background) 92%, black) 100%
   );
 }
 .poster-skeleton__shine {
@@ -203,11 +203,11 @@ img {
     linear-gradient(
       180deg,
       transparent 0%,
-      color-mix(in oklab, var(--color-slate-50) 4%, transparent) 100%
+      color-mix(in oklab, var(--foreground) 4%, transparent) 100%
     ),
     radial-gradient(
       circle at top left,
-      color-mix(in oklab, var(--color-blue-300) 10%, transparent) 0%,
+      color-mix(in oklab, var(--primary) 10%, transparent) 0%,
       transparent 55%
     );
 }

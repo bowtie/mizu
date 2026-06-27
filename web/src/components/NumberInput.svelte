@@ -86,10 +86,10 @@
   onDestroy(clearHold);
 </script>
 
-<div class={`flex w-full max-w-44 items-center rounded-2xl border border-blue-500/18 bg-blue-950/12 text-blue-200 shadow-[inset_0_1px_0_rgba(96,165,250,0.08)] transition focus-within:border-blue-400/45 focus-within:ring-2 focus-within:ring-blue-500/25 ${disabled ? 'opacity-60' : ''} ${className}`.trim()}>
+<div class={`flex w-full max-w-44 items-center rounded-2xl border border-primary/20 bg-secondary/40 text-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25 ${disabled ? 'opacity-60' : ''} ${className}`.trim()}>
   <button
     type="button"
-    class="flex h-11 w-11 items-center justify-center rounded-l-2xl text-blue-300 transition hover:bg-blue-500/8 hover:text-blue-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-blue-300"
+    class="flex h-11 w-11 items-center justify-center rounded-l-2xl text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
     onclick={(event) => event.preventDefault()}
     onpointerdown={() => startHold(-step)}
     onpointerup={clearHold}
@@ -104,7 +104,7 @@
   <input
     {id}
     type="number"
-    class="h-11 min-w-0 flex-1 border-0 bg-transparent px-2 text-center text-lg font-semibold text-base-50 outline-none [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+    class="h-11 min-w-0 flex-1 border-0 bg-transparent px-2 text-center text-lg font-semibold text-foreground outline-none [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
     bind:value
     {min}
     {max}
@@ -119,7 +119,7 @@
 
   <button
     type="button"
-    class="flex h-11 w-11 items-center justify-center rounded-r-2xl text-blue-300 transition hover:bg-blue-500/8 hover:text-blue-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-blue-300"
+    class="flex h-11 w-11 items-center justify-center rounded-r-2xl text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
     onclick={(event) => event.preventDefault()}
     onpointerdown={() => startHold(step)}
     onpointerup={clearHold}
