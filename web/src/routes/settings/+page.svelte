@@ -341,7 +341,7 @@
             <p class="text-sm text-muted-foreground">How often Mizu checks for episode changes and updates Sonarr.</p>
           </div>
 
-          <label class="flex items-start gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
+          <label class="flex items-center gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
             <Checkbox bind:checked={enableAniListArtwork} />
             <div class="space-y-1">
               <div class="text-sm font-medium text-foreground">AniList artwork</div>
