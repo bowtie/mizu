@@ -276,20 +276,13 @@
     const active = isTypeFilterActive(type);
     const hasScopedFilter = activeTypeFilters.length > 0;
     const isDimmed = type !== 'all' && hasScopedFilter && !active;
-    const activeToneClasses = {
-      base: 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20',
-      blue: 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20',
-      violet: 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20',
-      amber: 'border-warning bg-warning text-warning-foreground shadow-lg shadow-warning/20',
-      rose: 'border-destructive bg-destructive text-destructive-foreground shadow-lg shadow-destructive/20',
-    };
 
     return [
       'rounded-2xl border-2 p-4 text-left transition-all',
       active
-        ? activeToneClasses[tone] || activeToneClasses.base
-        : 'border-border bg-secondary text-foreground',
-      isDimmed ? 'opacity-40' : 'hover:border-primary/50 hover:bg-secondary/70',
+        ? 'border-primary bg-primary text-primary-foreground'
+        : 'border-border bg-secondary text-foreground hover:border-primary/50',
+      isDimmed ? 'opacity-40' : '',
     ].filter(Boolean).join(' ');
   }
 
