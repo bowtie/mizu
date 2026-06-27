@@ -211,7 +211,7 @@
       <section class="space-y-4">
         {#each filteredLogs as log (log.id)}
           {@const runBadge = runStatusBadge(log.status)}
-          <Box class="rounded-2xl border border-border/80 bg-popover/60">
+          <Box class="rounded-2xl border border-border/80 bg-popover/60 p-5">
             <div class="space-y-4">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-3">
