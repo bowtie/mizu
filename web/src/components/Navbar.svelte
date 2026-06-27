@@ -6,14 +6,12 @@
   import * as Tooltip from '$lib/components/ui/tooltip/index.js';
   import { getStatus } from '../lib/api.js';
   import History from '@lucide/svelte/icons/history';
-  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
   import RadioTower from '@lucide/svelte/icons/radio-tower';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import Tv from '@lucide/svelte/icons/tv';
   import Waves from '@lucide/svelte/icons/waves';
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/shows', label: 'Anime', icon: Tv },
     { path: '/activity', label: 'Activity', icon: History },
     { path: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -33,11 +31,8 @@
   });
 
   function isActive(itemPath: string, path: string) {
-    if (itemPath === '/') {
-      return path === '/';
-    }
     if (itemPath === '/shows') {
-      return path === '/shows' || path.startsWith('/shows/');
+      return path === '/shows' || path.startsWith('/shows/') || path === '/';
     }
     if (itemPath === '/activity') {
       return path === '/activity' || path === '/logs';
