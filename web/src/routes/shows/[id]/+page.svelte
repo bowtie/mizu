@@ -449,7 +449,7 @@
 
     <!-- Overview -->
     <section class="space-y-4">
-      <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/60">
+      <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/60 p-5">
         <div class="flex items-center justify-between gap-3">
           <div class="space-y-1">
             <h2 class="text-base font-semibold text-foreground">Tracking rules</h2>
