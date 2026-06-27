@@ -836,13 +836,13 @@
 
 {#if showAddModal}
   <div
-    class="show-add-modal-shell fixed inset-0 z-50 grid place-items-center bg-popover/72 p-3 backdrop-blur-sm sm:p-6"
+    class="show-add-modal-shell fixed inset-0 z-50 grid place-items-center bg-background/80 p-3 sm:p-6"
     role="presentation"
     onclick={handleAddModalBackdropClick}
     transition:fade={{ duration: 180 }}
   >
     <section
-      class="show-add-modal-panel relative grid max-h-[calc(100vh-1.5rem)] w-full max-w-3xl gap-7 overflow-hidden rounded-2xl border border-border/80 bg-popover/95 p-6 shadow-[0_24px_80px_rgba(1,6,17,0.52)] sm:max-h-[calc(100vh-3rem)] sm:p-7"
+      class="show-add-modal-panel relative grid max-h-[calc(100vh-1.5rem)] w-full max-w-3xl gap-6 overflow-hidden rounded-2xl border border-border bg-popover p-6 shadow-[0_24px_80px_rgba(0,0,0,0.5)] sm:max-h-[calc(100vh-3rem)] sm:p-7"
       role="dialog"
       aria-modal="true"
       aria-labelledby="show-add-modal-title"
@@ -939,15 +939,16 @@
                   </div>
                 </Box>
               {:else}
-                <ScrollArea class="h-[23rem] rounded-2xl border border-border/80 bg-popover/40 p-2">
-                  <div class="series-poster-list space-y-2">
+                <ScrollArea class="h-[23rem] rounded-xl border border-border">
+                  <div class="divide-y divide-border">
                     {#each filteredSeriesLibrary as series}
                       {@const seriesPoster = posterUrl(series)}
                       {@const seriesMapped = mappedSeriesIds.has(series.id)}
                       {@const manualPending = !!series.manualMatchPending}
+                      {@const isSelected = selectedSonarr?.id === series.id}
                       <button
                         type="button"
-                        class="group w-full text-left"
+                        class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors {isSelected ? 'bg-primary/15' : seriesMapped ? 'opacity-60 hover:bg-muted/50' : 'hover:bg-muted/50'}"
                         onclick={() => {
                           if (seriesMapped) {
                             openExistingMapping(series.id);
@@ -955,77 +956,63 @@
                           }
                           selectedSonarr = series;
                         }}
-                        aria-pressed={selectedSonarr?.id === series.id}
+                        aria-pressed={isSelected}
                       >
-                        <div class={`rounded-xl border p-3 transition-colors ${selectedSonarr?.id === series.id ? 'border-primary/40 bg-primary/20' : seriesMapped ? 'border-border/80 bg-popover/55 hover:border-border hover:bg-card/60' : 'border-border/80 bg-popover/70 hover:border-border hover:bg-card/70'}`}>
-                          <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-                            <div
-                              class="poster-frame poster-thumb relative aspect-[2/3] w-12 overflow-hidden rounded-lg border border-border/80 bg-card/80 sm:w-14"
-                              data-poster-state={seriesPoster ? POSTER_LOADING : POSTER_FAILED}
-                              use:observePosterFrame={series}
-                            >
-                              <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
-                                {#if seriesPoster}
-                                  <div class="poster-skeleton absolute inset-0" aria-hidden="true">
-                                    <div class="pointer-events-none absolute inset-x-0 top-0 h-16 bg-linear-to-b from-foreground/8 to-transparent"></div>
-                                    <div class="pointer-events-none absolute inset-0 flex items-center justify-center px-2">
-                                      <div class="text-center text-2xl font-black leading-none tracking-[0.22em] text-foreground/8">
-                                        {createPosterMonogram(series.title)}
-                                      </div>
-                                    </div>
-                                    <div class="poster-skeleton__shine"></div>
-                                  </div>
-                                  <img
-                                    src={seriesPoster}
-                                    alt={series.title}
-                                    width="160"
-                                    height="240"
-                                    loading="lazy"
-                                    decoding="async"
-                                    class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
-                                  />
-                                {/if}
+                        <div
+                          class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-md border border-border bg-card sm:w-11"
+                          data-poster-state={seriesPoster ? POSTER_LOADING : POSTER_FAILED}
+                          use:observePosterFrame={series}
+                        >
+                          <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
+                            {#if seriesPoster}
+                              <div class="poster-skeleton absolute inset-0" aria-hidden="true">
+                                <div class="poster-skeleton__shine"></div>
                               </div>
-                              <div class="poster-fallback bg-card text-3xl font-semibold tracking-tight text-muted-foreground">
-                                {createPosterMonogram(series.title)}
-                              </div>
-                            </div>
+                              <img
+                                src={seriesPoster}
+                                alt={series.title}
+                                width="160"
+                                height="240"
+                                loading="lazy"
+                                decoding="async"
+                                class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
+                              />
+                            {/if}
+                          </div>
+                          <div class="poster-fallback bg-card text-xl font-semibold tracking-tight text-muted-foreground">
+                            {createPosterMonogram(series.title)}
+                          </div>
+                        </div>
 
-                            <div class="min-w-0 space-y-1">
-                              <div class="line-clamp-2 text-sm font-semibold leading-5 text-foreground">{series.title}</div>
-                              <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span>{series.year || 'Anime'}</span>
-                                {#if series.statistics?.episodeCount}
-                                  <span aria-hidden="true">•</span>
-                                  <span>{series.statistics.episodeCount} eps</span>
-                                {/if}
-                                {#if manualPending}
-                                  <span aria-hidden="true">•</span>
-                                  <span class="text-warning">Needs match</span>
-                                {:else if seriesMapped}
-                                  <span aria-hidden="true">•</span>
-                                  <span class="text-muted-foreground">Already added</span>
-                                {/if}
-                              </div>
-                            </div>
-
-                            {#if seriesMapped}
-                              <div class="inline-flex shrink-0 items-center rounded-full border border-border bg-card/80 px-2.5 py-1 text-[0.7rem] font-medium tracking-wide text-muted-foreground">
-                                Open
-                              </div>
-                            {:else if manualPending}
-                              <div class="inline-flex shrink-0 items-center rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[0.7rem] font-medium tracking-wide text-warning">
-                                Match
-                              </div>
-                            {:else if selectedSonarr?.id === series.id}
-                              <div class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-primary">
-                                <Check size={14} />
-                              </div>
-                            {:else}
-                              <div class="h-8 w-8 shrink-0"></div>
+                        <div class="min-w-0 flex-1 space-y-0.5">
+                          <div class="line-clamp-1 text-sm font-medium text-foreground">{series.title}</div>
+                          <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                            <span>{series.year || 'Anime'}</span>
+                            {#if series.statistics?.episodeCount}
+                              <span aria-hidden="true">•</span>
+                              <span>{series.statistics.episodeCount} eps</span>
+                            {/if}
+                            {#if manualPending}
+                              <span aria-hidden="true">•</span>
+                              <span class="text-warning">Needs match</span>
+                            {:else if seriesMapped}
+                              <span aria-hidden="true">•</span>
+                              <span>Already added</span>
                             {/if}
                           </div>
                         </div>
+
+                        {#if seriesMapped}
+                          <Badge variant="secondary" class="shrink-0">Open</Badge>
+                        {:else if manualPending}
+                          <Badge variant="warning" class="shrink-0">Match</Badge>
+                        {:else if isSelected}
+                          <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <Check size={14} />
+                          </div>
+                        {:else}
+                          <div class="h-7 w-7 shrink-0 rounded-full border border-border group-hover:border-primary/40"></div>
+                        {/if}
                       </button>
                     {/each}
                   </div>
@@ -1058,22 +1045,25 @@
                 <p class="mt-2 text-sm leading-6 text-muted-foreground">Try another filter or refresh the AFL cache in Settings if this anime is new.</p>
               </Box>
             {:else}
-              <ScrollArea class="h-[22rem] rounded-2xl border border-border/80 bg-popover/40 p-2">
-                <div class="space-y-2">
+              <ScrollArea class="h-[22rem] rounded-xl border border-border">
+                <div class="divide-y divide-border">
                   {#each fallbackAflResults as result}
-                    <button type="button" class="w-full text-left" onclick={() => (selectedFallbackAfl = result)}>
-                      <Box class={`rounded-xl border p-4 transition-colors ${selectedFallbackAfl?.slug === result.slug ? 'border-primary/40 bg-primary/20' : 'border-border/80 bg-popover/70 hover:border-border hover:bg-card/70'}`}>
-                        <div class="flex items-center justify-between gap-3">
-                          <div class="min-w-0">
-                            <div class="truncate text-sm font-semibold text-foreground">{result.title}</div>
-                          </div>
-                          {#if selectedFallbackAfl?.slug === result.slug}
-                            <div class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-primary">
-                              <Check size={14} />
-                            </div>
-                          {/if}
+                    {@const isSelected = selectedFallbackAfl?.slug === result.slug}
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors {isSelected ? 'bg-primary/15' : 'hover:bg-muted/50'}"
+                      onclick={() => (selectedFallbackAfl = result)}
+                    >
+                      <div class="min-w-0">
+                        <div class="truncate text-sm font-medium text-foreground">{result.title}</div>
+                      </div>
+                      {#if isSelected}
+                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check size={14} />
                         </div>
-                      </Box>
+                      {:else}
+                        <div class="h-7 w-7 shrink-0 rounded-full border border-border"></div>
+                      {/if}
                     </button>
                   {/each}
                 </div>
@@ -1114,66 +1104,64 @@
                 <p class="mt-2 text-sm leading-6 text-muted-foreground">Try another title variation for {selectedFallbackAfl?.title} and search again.</p>
               </Box>
             {:else}
-              <ScrollArea class="h-[18rem] rounded-2xl border border-border/80 bg-popover/40 p-2">
-                <div class="space-y-2">
+              <ScrollArea class="h-[18rem] rounded-xl border border-border">
+                <div class="divide-y divide-border">
                   {#each sonarrLookupResults as result}
                     {@const lookupPoster = posterUrl(result)}
-                    <button type="button" class="w-full text-left" onclick={() => (selectedSonarrLookup = result)}>
-                      <Box class={`rounded-xl border p-4 transition-colors ${selectedSonarrLookup?.tvdbId === result.tvdbId && selectedSonarrLookup?.title === result.title ? 'border-primary/40 bg-primary/20' : 'border-border/80 bg-popover/70 hover:border-border hover:bg-card/70'}`}>
-                        <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-                          <div
-                            class="poster-frame poster-thumb relative aspect-[2/3] w-12 overflow-hidden rounded-lg border border-border/80 bg-card/80 sm:w-14"
-                            data-poster-state={lookupPoster ? POSTER_LOADING : POSTER_FAILED}
-                            use:observePosterFrame={result}
-                          >
-                            <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
-                              {#if lookupPoster}
-                                <div class="poster-skeleton absolute inset-0" aria-hidden="true">
-                                  <div class="pointer-events-none absolute inset-x-0 top-0 h-16 bg-linear-to-b from-foreground/8 to-transparent"></div>
-                                  <div class="pointer-events-none absolute inset-0 flex items-center justify-center px-2">
-                                    <div class="text-center text-2xl font-black leading-none tracking-[0.22em] text-foreground/8">
-                                      {createPosterMonogram(result.title)}
-                                    </div>
-                                  </div>
-                                  <div class="poster-skeleton__shine"></div>
-                                </div>
-                                <img
-                                  src={lookupPoster}
-                                  alt={result.title}
-                                  width="160"
-                                  height="240"
-                                  loading="lazy"
-                                  decoding="async"
-                                  class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
-                                />
-                              {/if}
+                    {@const isSelected = selectedSonarrLookup?.tvdbId === result.tvdbId && selectedSonarrLookup?.title === result.title}
+                    <button
+                      type="button"
+                      class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors {isSelected ? 'bg-primary/15' : 'hover:bg-muted/50'}"
+                      onclick={() => (selectedSonarrLookup = result)}
+                    >
+                      <div
+                        class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-md border border-border bg-card sm:w-11"
+                        data-poster-state={lookupPoster ? POSTER_LOADING : POSTER_FAILED}
+                        use:observePosterFrame={result}
+                      >
+                        <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
+                          {#if lookupPoster}
+                            <div class="poster-skeleton absolute inset-0" aria-hidden="true">
+                              <div class="poster-skeleton__shine"></div>
                             </div>
-                            <div class="poster-fallback bg-card text-3xl font-semibold tracking-tight text-muted-foreground">
-                              {createPosterMonogram(result.title)}
-                            </div>
-                          </div>
-
-                          <div class="min-w-0 space-y-1">
-                            <div class="truncate text-sm font-semibold text-foreground">{result.title}</div>
-                            <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <span>{result.year || 'Unknown year'}</span>
-                              {#if result.network}
-                                <span aria-hidden="true">•</span>
-                                <span>{result.network}</span>
-                              {/if}
-                              {#if result.status}
-                                <span aria-hidden="true">•</span>
-                                <span>{result.status}</span>
-                              {/if}
-                            </div>
-                          </div>
-                          {#if selectedSonarrLookup?.tvdbId === result.tvdbId && selectedSonarrLookup?.title === result.title}
-                            <div class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-primary">
-                              <Check size={14} />
-                            </div>
+                            <img
+                              src={lookupPoster}
+                              alt={result.title}
+                              width="160"
+                              height="240"
+                              loading="lazy"
+                              decoding="async"
+                              class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
+                            />
                           {/if}
                         </div>
-                      </Box>
+                        <div class="poster-fallback bg-card text-xl font-semibold tracking-tight text-muted-foreground">
+                          {createPosterMonogram(result.title)}
+                        </div>
+                      </div>
+
+                      <div class="min-w-0 flex-1 space-y-0.5">
+                        <div class="truncate text-sm font-medium text-foreground">{result.title}</div>
+                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                          <span>{result.year || 'Unknown year'}</span>
+                          {#if result.network}
+                            <span aria-hidden="true">•</span>
+                            <span>{result.network}</span>
+                          {/if}
+                          {#if result.status}
+                            <span aria-hidden="true">•</span>
+                            <span>{result.status}</span>
+                          {/if}
+                        </div>
+                      </div>
+
+                      {#if isSelected}
+                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check size={14} />
+                        </div>
+                      {:else}
+                        <div class="h-7 w-7 shrink-0 rounded-full border border-border"></div>
+                      {/if}
                     </button>
                   {/each}
                 </div>
@@ -1297,28 +1285,34 @@
               </div>
             </Box>
           {:else}
-            <ScrollArea class="h-[18rem] rounded-2xl border border-border/80 bg-popover/40 p-2">
-              <div class="space-y-2">
+            <ScrollArea class="h-[18rem] rounded-xl border border-border">
+              <div class="divide-y divide-border">
                 {#each displayedMatches as result}
-                  <button type="button" class="w-full text-left" onclick={() => (selectedAfl = result)}>
-                    <Box class={`rounded-xl border p-4 transition-colors ${selectedAfl && matchSlug(selectedAfl) === matchSlug(result) ? 'border-primary/40 bg-primary/20' : 'border-border/80 bg-popover/70 hover:border-border hover:bg-card/70'}`}>
-                      <div class="space-y-2">
-                        <div>
-                          <div class="text-sm font-semibold text-foreground">{matchTitle(result)}</div>
-                          <div class="text-sm text-muted-foreground">{matchSlug(result)}</div>
-                        </div>
+                  {@const isSelected = selectedAfl && matchSlug(selectedAfl) === matchSlug(result)}
+                  <button
+                    type="button"
+                    class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors {isSelected ? 'bg-primary/15' : 'hover:bg-muted/50'}"
+                    onclick={() => (selectedAfl = result)}
+                  >
+                    <div class="min-w-0 space-y-1">
+                      <div class="truncate text-sm font-medium text-foreground">{matchTitle(result)}</div>
+                      <div class="truncate text-xs text-muted-foreground">{matchSlug(result)}</div>
+                      <div class="flex flex-wrap gap-2">
                         {#if result.confidence != null}
-                          <div class="flex flex-wrap gap-2">
-                            <Badge variant="info">{Math.round(result.confidence * 100)}% confidence</Badge>
-                            <Badge variant="secondary">{result.method}</Badge>
-                          </div>
+                          <Badge variant="info">{Math.round(result.confidence * 100)}% confidence</Badge>
+                          <Badge variant="secondary">{result.method}</Badge>
                         {:else}
-                          <div class="flex flex-wrap gap-2">
-                            <Badge variant="warning">Manual review</Badge>
-                          </div>
+                          <Badge variant="warning">Manual review</Badge>
                         {/if}
                       </div>
-                    </Box>
+                    </div>
+                    {#if isSelected}
+                      <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check size={14} />
+                      </div>
+                    {:else}
+                      <div class="h-7 w-7 shrink-0 rounded-full border border-border"></div>
+                    {/if}
                   </button>
                 {/each}
               </div>

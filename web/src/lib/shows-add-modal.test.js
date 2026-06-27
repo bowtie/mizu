@@ -16,14 +16,13 @@ test("shows page uses a local centered add modal overlay instead of a shared mod
 test("shows add modal keeps a restrained surface instead of the custom gradient treatment", () => {
   assert.doesNotMatch(showsSvelte, /bg-\[radial-gradient/);
   assert.doesNotMatch(showsSvelte, /Sonarr import/);
-  assert.match(showsSvelte, /show-add-modal-panel[\s\S]*bg-popover\/95/);
+  assert.match(showsSvelte, /show-add-modal-panel[\s\S]*bg-popover/);
 });
 
 test("shows add modal renders the Sonarr chooser as a searchable poster list", () => {
   assert.match(showsSvelte, /let seriesQuery = ''/);
   assert.match(showsSvelte, /placeholder="Search Sonarr anime"/);
   assert.match(showsSvelte, /getSonarrSeries\(true\)/);
-  assert.match(showsSvelte, /series-poster-list space-y-2/);
   assert.match(showsSvelte, /poster-thumb relative aspect-\[2\/3\]/);
   assert.match(showsSvelte, /posterUrl\(series\)/);
   assert.match(showsSvelte, /createPosterMonogram\(series\.title\)/);
