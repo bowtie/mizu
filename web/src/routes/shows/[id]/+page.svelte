@@ -498,7 +498,7 @@
       <section class="space-y-4">
         {#each groupedBySeason as group, index}
           <details class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60" open={index === 0}>
-            <summary class="cursor-pointer list-none border-b border-border/80 px-5 py-4 marker:hidden">
+            <summary class="cursor-pointer list-none px-5 py-4 marker:hidden open:border-b open:border-border/80">
               <div class="flex flex-wrap items-center gap-3">
                 <h2 class="text-base font-semibold text-foreground">{seasonLabel(group.season)}</h2>
                 <Badge variant="secondary">{group.episodes.length} episodes</Badge>
