@@ -377,7 +377,7 @@
               <X size={14} />
             </Button>
             <Button
-              variant="destructive"
+              variant="default"
               size="icon-sm"
               class="rounded-full"
               disabled={deleting}
