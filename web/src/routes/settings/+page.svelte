@@ -351,8 +351,8 @@
             <p class="text-sm text-muted-foreground">How often Mizu checks for episode changes and updates Sonarr.</p>
           </div>
 
-          <div class="rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
-            <label class="flex items-start gap-3">
+          <div class="flex flex-col gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <label class="flex items-start gap-3 sm:flex-1">
               <Checkbox bind:checked={enableTagging} />
               <div class="space-y-1">
                 <div class="text-sm font-medium text-foreground">Sonarr tagging</div>
@@ -360,7 +360,7 @@
               </div>
             </label>
             {#if enableTagging}
-              <div class="mt-3 pl-7">
+              <div class="sm:w-48 sm:shrink-0">
                 <Input id="tag-name" type="text" placeholder="filler" bind:value={fillerTagName} class="h-10 w-full" />
               </div>
             {/if}
