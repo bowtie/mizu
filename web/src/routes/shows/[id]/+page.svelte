@@ -482,23 +482,23 @@
     <!-- Episodes -->
     <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <button type="button" class={filterButtonClasses('all', 'base')} onclick={() => toggleTypeFilter('all')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">All episodes</div>
-        <div class="mt-2 text-2xl font-semibold text-foreground">{epStats.total}</div>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">All episodes</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.total}</div>
       </button>
       <button type="button" class={filterButtonClasses('canon', 'blue')} onclick={() => toggleTypeFilter('canon')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Manga</div>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Manga</div>
         <div class="mt-2 text-2xl font-semibold">{epStats.canon}</div>
       </button>
       <button type="button" class={filterButtonClasses('anime_canon', 'violet')} onclick={() => toggleTypeFilter('anime_canon')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Anime</div>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Anime</div>
         <div class="mt-2 text-2xl font-semibold">{epStats.animeCanon}</div>
       </button>
       <button type="button" class={filterButtonClasses('mixed_canon', 'amber')} onclick={() => toggleTypeFilter('mixed_canon')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Mixed</div>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Mixed</div>
         <div class="mt-2 text-2xl font-semibold">{epStats.mixed}</div>
       </button>
       <button type="button" class={filterButtonClasses('filler', 'rose')} onclick={() => toggleTypeFilter('filler')}>
-        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Filler</div>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">Filler</div>
         <div class="mt-2 text-2xl font-semibold">{epStats.filler}</div>
       </button>
     </section>
