@@ -15,13 +15,9 @@
   import { episodeTypeBadge, monitorStateBadge } from '../../../lib/fox.js';
   import { resolveSonarrImageUrl } from '../../../lib/sonarr-images.js';
   import { Bot, Check, Eye, LoaderCircle, Save, Trash2, Waves, X } from 'lucide-svelte';
-  import { List, Settings2 } from 'lucide-svelte';
 
   const WATERMARK_AUTO = 'auto';
   const WATERMARK_MANUAL = 'manual';
-  const TAB_OVERVIEW = 'overview';
-  const TAB_EPISODES = 'episodes';
-  let activeTab = TAB_OVERVIEW;
 
   let loading = true;
   let saving = false;
@@ -338,155 +334,20 @@
   </Box>
 {:else}
   <div class="space-y-6">
-    <!-- Backdrop hero (always visible) -->
+    <!-- Backdrop hero with Save + Remove actions -->
     <Box class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60 p-0">
       {#if activeBackdropUrl}
         <div class="relative">
           <img src={activeBackdropUrl} alt={show.sonarr_title} class="h-48 w-full object-cover opacity-65 sm:h-56" />
           <div class="absolute inset-0 bg-gradient-to-t from-popover via-popover/70 to-popover/10"></div>
-          <div class="absolute inset-x-0 bottom-0 p-5">
-            <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
-            {#if subtitle}
-              <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground" title={fullSubtitle}>{subtitle}</p>
-            {/if}
-          </div>
-        </div>
-      {:else}
-        <div class="space-y-3 p-6">
-          <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
-          {#if subtitle}
-            <p class="max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
-          {/if}
-        </div>
-      {/if}
-    </Box>
-
-    <!-- Tab bar -->
-    <div class="flex items-center gap-1 rounded-xl border border-border/80 bg-popover/60 p-1">
-      <button
-        type="button"
-        class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors {activeTab === TAB_OVERVIEW ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-muted-foreground'}"
-        onclick={() => (activeTab = TAB_OVERVIEW)}
-      >
-        <Settings2 size={16} />
-        Overview
-        {#if rulesDirty}
-          <span class="size-1.5 rounded-full bg-primary"></span>
-        {/if}
-      </button>
-      <button
-        type="button"
-        class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors {activeTab === TAB_EPISODES ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-muted-foreground'}"
-        onclick={() => (activeTab = TAB_EPISODES)}
-      >
-        <List size={16} />
-        Episodes
-        <span class="text-xs text-muted-foreground">{epStats.total}</span>
-      </button>
-    </div>
-
-    <!-- Overview tab -->
-    {#if activeTab === TAB_OVERVIEW}
-      <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
-        <div class="space-y-4">
-          <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/60">
-            <div class="space-y-1">
-              <h2 class="text-base font-semibold text-foreground">Tracking rules</h2>
-              <p class="text-sm text-muted-foreground">Choose which episode types should remain monitored for this anime.</p>
+          <div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5">
+            <div class="min-w-0">
+              <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
+              {#if subtitle}
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground" title={fullSubtitle}>{subtitle}</p>
+              {/if}
             </div>
-
-            <div class="grid gap-3 md:grid-cols-3">
-              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium text-foreground">Anime canon</div>
-                    <div class="mt-1 text-sm text-muted-foreground">Original anime-only canon episodes.</div>
-                  </div>
-                  <Switch bind:checked={trackAnimeCanon} />
-                </div>
-              </div>
-
-              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium text-foreground">Mixed canon</div>
-                    <div class="mt-1 text-sm text-muted-foreground">Episodes that blend canon and filler material.</div>
-                  </div>
-                  <Switch bind:checked={trackMixed} />
-                </div>
-              </div>
-
-              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium text-foreground">Filler</div>
-                    <div class="mt-1 text-sm text-muted-foreground">Pure filler episodes for this mapping.</div>
-                  </div>
-                  <Switch bind:checked={trackFiller} />
-                </div>
-              </div>
-            </div>
-          </Box>
-
-          <!-- Episode stats summary for overview -->
-          <Box class="rounded-2xl border border-border/80 bg-popover/60 p-5">
-            <div class="space-y-3">
-              <h2 class="text-base font-semibold text-foreground">Episode breakdown</h2>
-              <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                {#each breakdownItems as item}
-                  <div class="rounded-xl border border-border/80 bg-popover/70 p-3 text-center">
-                    <div class="text-2xl font-bold tabular-nums {item.tone}">{epStats[item.key]}</div>
-                    <div class="mt-1 text-xs text-muted-foreground">{item.label}</div>
-                  </div>
-                {/each}
-              </div>
-              <Button variant="ghost" size="sm" onclick={() => (activeTab = TAB_EPISODES)} class="-ml-2">
-                View all episodes
-                <List size={14} />
-              </Button>
-            </div>
-          </Box>
-        </div>
-
-        <div class="space-y-4">
-          <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/60">
-            {#if rulesDirty}
-              <div class="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">
-                You have unsaved changes.
-              </div>
-            {/if}
-            <div class="flex items-center gap-3">
-              <label for="marker-value" class="sr-only">Start tracking after episode</label>
-              <NumberInput
-                id="marker-value"
-                min="0"
-                max={markerUpperBound}
-                step="1"
-                bind:value={markerValue}
-                defaultValue={0}
-                disabled={watermarkAutoPressed}
-                className="flex-1"
-              />
-              <Tooltip.Provider delayDuration={120}>
-                <Tooltip.Root>
-                  <Tooltip.Trigger>
-                    <Toggle
-                      bind:pressed={watermarkAutoPressed}
-                      size="default"
-                      class="cursor-pointer"
-                      aria-label="Toggle automatic start from Sonarr"
-                    >
-                      <Bot size={16} />
-                    </Toggle>
-                  </Tooltip.Trigger>
-                  <Tooltip.Content side="bottom" align="center" sideOffset={10}>
-                    {watermarkTooltip}
-                  </Tooltip.Content>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            </div>
-
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="flex shrink-0 items-center gap-2">
               <Popover.Root bind:open={showDeleteModal}>
                 <Popover.Trigger>
                   <Button variant="destructive" disabled={deleting}>
@@ -494,7 +355,7 @@
                     Remove
                   </Button>
                 </Popover.Trigger>
-                <Popover.Content side="top" align="center" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
+                <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
                   <div class="flex items-center gap-3">
                     <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
                     <div class="ml-auto flex items-center gap-2">
@@ -532,146 +393,302 @@
                 {:else}
                   <Save size={16} />
                 {/if}
-                {saving ? 'Saving...' : 'Save rules'}
+                {saving ? 'Saving...' : 'Save'}
               </Button>
             </div>
-          </Box>
+          </div>
         </div>
-      </section>
-    {/if}
-
-    <!-- Episodes tab -->
-    {#if activeTab === TAB_EPISODES}
-      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <button type="button" class={filterButtonClasses('all', 'base')} onclick={() => toggleTypeFilter('all')}>
-          <div class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">All episodes</div>
-          <div class="mt-2 text-2xl font-semibold text-foreground">{epStats.total}</div>
-        </button>
-        <button type="button" class={filterButtonClasses('canon', 'blue')} onclick={() => toggleTypeFilter('canon')}>
-          <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Manga</div>
-          <div class="mt-2 text-2xl font-semibold">{epStats.canon}</div>
-        </button>
-        <button type="button" class={filterButtonClasses('anime_canon', 'violet')} onclick={() => toggleTypeFilter('anime_canon')}>
-          <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Anime</div>
-          <div class="mt-2 text-2xl font-semibold">{epStats.animeCanon}</div>
-        </button>
-        <button type="button" class={filterButtonClasses('mixed_canon', 'amber')} onclick={() => toggleTypeFilter('mixed_canon')}>
-          <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Mixed</div>
-          <div class="mt-2 text-2xl font-semibold">{epStats.mixed}</div>
-        </button>
-        <button type="button" class={filterButtonClasses('filler', 'rose')} onclick={() => toggleTypeFilter('filler')}>
-          <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Filler</div>
-          <div class="mt-2 text-2xl font-semibold">{epStats.filler}</div>
-        </button>
-      </section>
-
-      {#if episodes.length === 0}
-        <Box class="rounded-2xl border border-border/80 bg-popover/60 p-8 text-center">
-          <h2 class="text-lg font-semibold text-foreground">No episodes yet</h2>
-          <p class="mt-2 text-sm leading-6 text-muted-foreground">Mizu has not synced episode details for this anime yet.</p>
-        </Box>
       {:else}
-        <section class="space-y-4">
-          {#each groupedBySeason as group, index}
-            <details class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60" open={index === 0}>
-              <summary class="cursor-pointer list-none border-b border-border/80 px-5 py-4 marker:hidden">
-                <div class="flex flex-wrap items-center gap-3">
-                  <h2 class="text-base font-semibold text-foreground">{seasonLabel(group.season)}</h2>
-                  <Badge variant="secondary">{group.episodes.length} episodes</Badge>
-                </div>
-              </summary>
-
-              <div class="hidden overflow-x-auto md:block">
-                <table class="min-w-full border-collapse text-left text-sm">
-                  <thead class="border-b border-border/80 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                    <tr>
-                      <th class="px-5 py-3 font-medium">#</th>
-                      <th class="px-5 py-3 font-medium">Title</th>
-                      <th class="px-5 py-3 font-medium">Type</th>
-                      <th class="px-5 py-3 font-medium">Monitored</th>
-                      <th class="px-5 py-3 font-medium text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each group.episodes as ep}
-                      {@const typeBadge = episodeTypeBadge(ep.type)}
-                      {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
-                      <tr class="border-b border-border/80 last:border-b-0">
-                        <td class="px-5 py-4 font-medium text-muted-foreground">{displayEpisodeNumber(ep)}</td>
-                        <td class="px-5 py-4 text-foreground">{ep.title || '-'}</td>
-                        <td class="px-5 py-4">
-                          <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
-                        </td>
-                        <td class="px-5 py-4">
-                          {#if episodeActionId(ep)}
-                            <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
-                          {:else}
-                            <span class="text-sm text-muted-foreground">Unavailable</span>
-                          {/if}
-                        </td>
-                        <td class="px-5 py-4 text-right">
-                          {#if episodeActionId(ep)}
-                            <Button
-                              variant={episodeMonitored(ep) ? 'default' : 'secondary'}
-                              size="sm"
-                              disabled={syncingEps[episodeActionId(ep)]}
-                              onclick={() => toggleEpisodeMonitor(ep)}
-                            >
-                              {#if syncingEps[episodeActionId(ep)]}
-                                <LoaderCircle size={14} class="animate-spin" />
-                              {:else}
-                                <Eye size={14} />
-                              {/if}
-                              {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
-                            </Button>
-                          {/if}
-                        </td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-
-              <div class="space-y-3 p-4 md:hidden">
-                {#each group.episodes as ep}
-                  {@const typeBadge = episodeTypeBadge(ep.type)}
-                  {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
-                  <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div class="space-y-2">
-                        <div class="text-sm font-medium text-muted-foreground">{episodeLabel(ep)}</div>
-                        <h3 class="text-sm font-semibold leading-5 text-foreground">{ep.title || '-'}</h3>
-                      </div>
-                      <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
-                    </div>
-
-                    <div class="mt-4 flex items-center justify-between gap-3">
-                      {#if episodeActionId(ep)}
-                        <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
-                        <Button
-                          variant={episodeMonitored(ep) ? 'default' : 'secondary'}
-                          size="sm"
-                          disabled={syncingEps[episodeActionId(ep)]}
-                          onclick={() => toggleEpisodeMonitor(ep)}
-                        >
-                          {#if syncingEps[episodeActionId(ep)]}
-                            <LoaderCircle size={14} class="animate-spin" />
-                          {:else}
-                            <Eye size={14} />
-                          {/if}
-                          {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
-                        </Button>
+        <div class="flex items-end justify-between gap-4 space-y-0 p-6">
+          <div class="space-y-3">
+            <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
+            {#if subtitle}
+              <p class="max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
+            {/if}
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <Popover.Root bind:open={showDeleteModal}>
+              <Popover.Trigger>
+                <Button variant="destructive" disabled={deleting}>
+                  <Trash2 size={16} />
+                  Remove
+                </Button>
+              </Popover.Trigger>
+              <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
+                <div class="flex items-center gap-3">
+                  <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
+                  <div class="ml-auto flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      class="rounded-full"
+                      disabled={deleting}
+                      aria-label="Cancel removal"
+                      onclick={() => (showDeleteModal = false)}
+                    >
+                      <X size={14} />
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="icon-sm"
+                      class="rounded-full"
+                      disabled={deleting}
+                      aria-label="Confirm removal"
+                      onclick={handleDelete}
+                    >
+                      {#if deleting}
+                        <LoaderCircle size={16} class="animate-spin" />
                       {:else}
-                        <span class="text-sm text-muted-foreground">Episode monitoring unavailable.</span>
+                        <Check size={14} />
                       {/if}
-                    </div>
+                    </Button>
                   </div>
-                {/each}
-              </div>
-            </details>
-          {/each}
-        </section>
+                </div>
+              </Popover.Content>
+            </Popover.Root>
+            <Button variant="default" onclick={handleSave} disabled={saving || !rulesDirty}>
+              {#if saving}
+                <LoaderCircle size={16} class="animate-spin" />
+              {:else}
+                <Save size={16} />
+              {/if}
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
       {/if}
+    </Box>
+
+    <!-- Overview -->
+    <section class="space-y-4">
+      <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/60">
+        <div class="flex items-center justify-between gap-3">
+          <div class="space-y-1">
+            <h2 class="text-base font-semibold text-foreground">Tracking rules</h2>
+            <p class="text-sm text-muted-foreground">Choose which episode types should remain monitored for this anime.</p>
+          </div>
+          {#if rulesDirty}
+            <span class="rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Unsaved changes</span>
+          {/if}
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-3">
+              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-medium text-foreground">Anime canon</div>
+                    <div class="mt-1 text-sm text-muted-foreground">Original anime-only canon episodes.</div>
+                  </div>
+                  <Switch bind:checked={trackAnimeCanon} />
+                </div>
+              </div>
+
+              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-medium text-foreground">Mixed canon</div>
+                    <div class="mt-1 text-sm text-muted-foreground">Episodes that blend canon and filler material.</div>
+                  </div>
+                  <Switch bind:checked={trackMixed} />
+                </div>
+              </div>
+
+              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-medium text-foreground">Filler</div>
+                    <div class="mt-1 text-sm text-muted-foreground">Pure filler episodes for this mapping.</div>
+                  </div>
+                  <Switch bind:checked={trackFiller} />
+                </div>
+              </div>
+            </div>
+          </Box>
+
+      <!-- Watermark / start tracking -->
+      <Box class="space-y-3 rounded-2xl border border-border/80 bg-popover/60 p-5">
+        <div class="space-y-1">
+          <h2 class="text-base font-semibold text-foreground">Start tracking from</h2>
+          <p class="text-sm text-muted-foreground">{watermarkTooltip}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <label for="marker-value" class="sr-only">Start tracking after episode</label>
+          <NumberInput
+            id="marker-value"
+            min="0"
+            max={markerUpperBound}
+            step="1"
+            bind:value={markerValue}
+            defaultValue={0}
+            disabled={watermarkAutoPressed}
+            className="flex-1"
+          />
+          <Tooltip.Provider delayDuration={120}>
+            <Tooltip.Root>
+              <Tooltip.Trigger>
+                <Toggle
+                  bind:pressed={watermarkAutoPressed}
+                  size="default"
+                  class="cursor-pointer"
+                  aria-label="Toggle automatic start from Sonarr"
+                >
+                  <Bot size={16} />
+                </Toggle>
+              </Tooltip.Trigger>
+              <Tooltip.Content side="bottom" align="center" sideOffset={10}>
+                {watermarkTooltip}
+              </Tooltip.Content>
+            </Tooltip.Root>
+          </Tooltip.Provider>
+        </div>
+      </Box>
+
+      <!-- Episode breakdown -->
+      <Box class="rounded-2xl border border-border/80 bg-popover/60 p-5">
+        <div class="space-y-3">
+          <h2 class="text-base font-semibold text-foreground">Episode breakdown</h2>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {#each breakdownItems as item}
+              <div class="rounded-xl border border-border/80 bg-popover/70 p-3 text-center">
+                <div class="text-2xl font-bold tabular-nums {item.tone}">{epStats[item.key]}</div>
+                <div class="mt-1 text-xs text-muted-foreground">{item.label}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </Box>
+    </section>
+
+    <!-- Episodes -->
+    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <button type="button" class={filterButtonClasses('all', 'base')} onclick={() => toggleTypeFilter('all')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">All episodes</div>
+        <div class="mt-2 text-2xl font-semibold text-foreground">{epStats.total}</div>
+      </button>
+      <button type="button" class={filterButtonClasses('canon', 'blue')} onclick={() => toggleTypeFilter('canon')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Manga</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.canon}</div>
+      </button>
+      <button type="button" class={filterButtonClasses('anime_canon', 'violet')} onclick={() => toggleTypeFilter('anime_canon')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Anime</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.animeCanon}</div>
+      </button>
+      <button type="button" class={filterButtonClasses('mixed_canon', 'amber')} onclick={() => toggleTypeFilter('mixed_canon')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Mixed</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.mixed}</div>
+      </button>
+      <button type="button" class={filterButtonClasses('filler', 'rose')} onclick={() => toggleTypeFilter('filler')}>
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-current/70">Filler</div>
+        <div class="mt-2 text-2xl font-semibold">{epStats.filler}</div>
+      </button>
+    </section>
+
+    {#if episodes.length === 0}
+      <Box class="rounded-2xl border border-border/80 bg-popover/60 p-8 text-center">
+        <h2 class="text-lg font-semibold text-foreground">No episodes yet</h2>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">Mizu has not synced episode details for this anime yet.</p>
+      </Box>
+    {:else}
+      <section class="space-y-4">
+        {#each groupedBySeason as group, index}
+          <details class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60" open={index === 0}>
+            <summary class="cursor-pointer list-none border-b border-border/80 px-5 py-4 marker:hidden">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="text-base font-semibold text-foreground">{seasonLabel(group.season)}</h2>
+                <Badge variant="secondary">{group.episodes.length} episodes</Badge>
+              </div>
+            </summary>
+
+            <div class="hidden overflow-x-auto md:block">
+              <table class="min-w-full border-collapse text-left text-sm">
+                <thead class="border-b border-border/80 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                  <tr>
+                    <th class="px-5 py-3 font-medium">#</th>
+                    <th class="px-5 py-3 font-medium">Title</th>
+                    <th class="px-5 py-3 font-medium">Type</th>
+                    <th class="px-5 py-3 font-medium">Monitored</th>
+                    <th class="px-5 py-3 font-medium text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each group.episodes as ep}
+                    {@const typeBadge = episodeTypeBadge(ep.type)}
+                    {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
+                    <tr class="border-b border-border/80 last:border-b-0">
+                      <td class="px-5 py-4 font-medium text-muted-foreground">{displayEpisodeNumber(ep)}</td>
+                      <td class="px-5 py-4 text-foreground">{ep.title || '-'}</td>
+                      <td class="px-5 py-4">
+                        <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
+                      </td>
+                      <td class="px-5 py-4">
+                        {#if episodeActionId(ep)}
+                          <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
+                        {:else}
+                          <span class="text-sm text-muted-foreground">Unavailable</span>
+                        {/if}
+                      </td>
+                      <td class="px-5 py-4 text-right">
+                        {#if episodeActionId(ep)}
+                          <Button
+                            variant={episodeMonitored(ep) ? 'default' : 'secondary'}
+                            size="sm"
+                            disabled={syncingEps[episodeActionId(ep)]}
+                            onclick={() => toggleEpisodeMonitor(ep)}
+                          >
+                            {#if syncingEps[episodeActionId(ep)]}
+                              <LoaderCircle size={14} class="animate-spin" />
+                            {:else}
+                              <Eye size={14} />
+                            {/if}
+                            {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
+                          </Button>
+                        {/if}
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="space-y-3 p-4 md:hidden">
+              {#each group.episodes as ep}
+                {@const typeBadge = episodeTypeBadge(ep.type)}
+                {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
+                <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="space-y-2">
+                      <div class="text-sm font-medium text-muted-foreground">{episodeLabel(ep)}</div>
+                      <h3 class="text-sm font-semibold leading-5 text-foreground">{ep.title || '-'}</h3>
+                    </div>
+                    <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
+                  </div>
+
+                  <div class="mt-4 flex items-center justify-between gap-3">
+                    {#if episodeActionId(ep)}
+                      <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
+                      <Button
+                        variant={episodeMonitored(ep) ? 'default' : 'secondary'}
+                        size="sm"
+                        disabled={syncingEps[episodeActionId(ep)]}
+                        onclick={() => toggleEpisodeMonitor(ep)}
+                      >
+                        {#if syncingEps[episodeActionId(ep)]}
+                          <LoaderCircle size={14} class="animate-spin" />
+                        {:else}
+                          <Eye size={14} />
+                        {/if}
+                        {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
+                      </Button>
+                    {:else}
+                      <span class="text-sm text-muted-foreground">Episode monitoring unavailable.</span>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </details>
+        {/each}
+      </section>
     {/if}
   </div>
 {/if}
