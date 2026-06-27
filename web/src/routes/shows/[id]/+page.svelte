@@ -10,8 +10,9 @@
   import * as Tooltip from '$lib/components/ui/tooltip/index.js';
   import Box from '$lib/components/Box.svelte';
   import NumberInput from '../../../components/NumberInput.svelte';
-  import { addNotification } from '../../../lib/stores.js';
+  import { addNotification, shows as showsStore, settings as settingsStore } from '../../../lib/stores.js';
   import { deleteShow, getAniListArtwork, getEpisodes, getSettings, getShows, getSonarrSeries, setEpisodeMonitor, updateShow } from '../../../lib/api.js';
+  import { get } from 'svelte/store';
   import { episodeTypeBadge, monitorStateBadge } from '../../../lib/fox.js';
   import { resolveSonarrImageUrl } from '../../../lib/sonarr-images.js';
   import { Bot, Check, Eye, LoaderCircle, Save, Trash2, Waves, X } from 'lucide-svelte';
@@ -112,15 +113,24 @@
   async function loadShow() {
     loading = true;
     try {
-      const [appSettings, allShows, allSeries, episodesResult] = await Promise.all([
-        getSettings(),
-        getShows(),
-        getSonarrSeries(),
+      // Use cached stores from Shows page when available
+      let cachedShows = get(showsStore);
+      let cachedSettings = get(settingsStore);
+      const hasCachedShows = cachedShows?.length > 0;
+      const hasCachedSettings = cachedSettings?.sonarr_url !== undefined;
+
+      // Only fetch shows/settings if not in store, fetch episodes + series in parallel
+      const [showsResult, settingsResult, episodesResult] = await Promise.all([
+        hasCachedShows ? Promise.resolve(cachedShows) : getShows(),
+        hasCachedSettings ? Promise.resolve(cachedSettings) : getSettings(),
         getEpisodes(showId),
       ]);
-      const artworkResult = appSettings?.enable_anilist_artwork ? await getAniListArtwork(showId).catch(() => null) : null;
 
-      show = (allShows || []).find((item) => String(item.id) === String(showId));
+      const appSettings = settingsResult || cachedSettings || {};
+      if (!hasCachedSettings && settingsResult) settingsStore.set(settingsResult);
+      if (!hasCachedShows && showsResult) showsStore.set(showsResult);
+
+      show = (showsResult || cachedShows || []).find((item) => String(item.id) === String(showId));
       if (!show) {
         addNotification('Anime not found', 'error');
         goto('/shows');
@@ -128,8 +138,18 @@
       }
 
       sonarrBaseUrl = appSettings?.sonarr_url || '';
-      series = (allSeries || []).find((item) => item.id === show.sonarr_series_id) || null;
+
+      // Fetch artwork in parallel with series if needed (series is only for backdrop)
+      const artworkResult = appSettings?.enable_anilist_artwork ? await getAniListArtwork(showId).catch(() => null) : null;
       artwork = artworkResult?.banner_image || artworkResult?.poster_image ? artworkResult : null;
+
+      // Only fetch the backdrop from series if we don't have artwork already
+      if (!artwork) {
+        getSonarrSeries().then((allSeries) => {
+          series = (allSeries || []).find((item) => item.id === show.sonarr_series_id) || null;
+        }).catch(() => {});
+      }
+
       episodes = episodesResult || [];
       trackFiller = actionToTracked(show.filler_action, false);
       trackMixed = actionToTracked(show.mixed_action, true);
