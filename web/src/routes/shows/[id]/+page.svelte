@@ -380,7 +380,7 @@
             <Toggle
               bind:pressed={watermarkAutoPressed}
               size="default"
-              class="h-11 min-w-11 cursor-pointer"
+              class="cursor-pointer"
               aria-label="Toggle automatic start from Sonarr"
             >
               <Bot size={16} />
@@ -433,7 +433,7 @@
         <div class="relative">
           <img src={activeBackdropUrl} alt={show.sonarr_title} class="h-48 w-full object-cover opacity-65 sm:h-56" />
           <div class="absolute inset-0 bg-gradient-to-t from-popover via-popover/70 to-popover/10"></div>
-          <div class="absolute inset-x-0 top-0 flex items-start justify-between gap-4 p-5">
+          <div class="absolute inset-x-0 top-0 flex items-start justify-end gap-4 p-5">
             {@render headerActions()}
           </div>
           <div class="absolute inset-x-0 bottom-0 p-5">
