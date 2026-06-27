@@ -45,19 +45,6 @@
   const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
   const trackedToAction = (tracked) => (tracked ? 'monitor' : 'unmonitor');
 
-  function briefOverview(copy) {
-    const normalized = (copy || '').replace(/\s+/g, ' ').trim();
-    if (!normalized) return '';
-    if (normalized.length <= 170) return normalized;
-
-    const sentenceBreak = normalized.match(/^(.{0,170}[.!?])(?:\s|$)/);
-    if (sentenceBreak?.[1]) return sentenceBreak[1].trim();
-
-    const truncated = normalized.slice(0, 167);
-    const safeBoundary = truncated.lastIndexOf(' ');
-    return `${(safeBoundary > 96 ? truncated.slice(0, safeBoundary) : truncated).trim()}...`;
-  }
-
   let showId = $derived($page.params.id);
   let pageTitle = $derived(show ? `Mizu - ${show.sonarr_title}` : 'Mizu - Anime');
   let rulesDirty = $derived(!!show && (
@@ -99,8 +86,6 @@
     ? episodes.reduce((highest, ep) => Math.max(highest, displayEpisodeNumber(ep)), 0)
     : undefined);
   let activeBackdropUrl = $derived(artwork?.banner_image || artwork?.poster_image || backdropUrl(series));
-  let fullSubtitle = $derived(series?.overview || '');
-  let subtitle = $derived(briefOverview(fullSubtitle));
   let watermarkMode = $derived(watermarkAutoPressed ? WATERMARK_AUTO : WATERMARK_MANUAL);
   let watermarkTooltip = $derived(watermarkAutoPressed
     ? 'Using Sonarr progress as the start point.'
@@ -331,7 +316,7 @@
             <Toggle
               bind:pressed={watermarkAutoPressed}
               size="default"
-              class="cursor-pointer"
+              class="h-8 w-8 cursor-pointer px-0 disabled:bg-muted disabled:text-muted-foreground"
               aria-label="Toggle automatic start from Sonarr"
             >
               <Bot size={16} />
@@ -436,9 +421,6 @@
           <div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5">
             <div class="min-w-0">
               <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
-              {#if subtitle}
-                <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground" title={fullSubtitle}>{subtitle}</p>
-              {/if}
             </div>
             {@render headerActions()}
           </div>
@@ -447,9 +429,6 @@
         <div class="flex items-end justify-between gap-4 space-y-0 p-6">
           <div class="space-y-3">
             <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
-            {#if subtitle}
-              <p class="max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
-            {/if}
           </div>
           {@render headerActions()}
         </div>
