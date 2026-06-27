@@ -14,40 +14,51 @@
 	theme={mode.current}
 	class="toaster group"
 	style="--normal-bg: var(--color-popover); --normal-text: var(--color-popover-foreground); --normal-border: var(--color-border);"
+	toastOptions={{
+		success: {
+			style: {
+				'--normal-bg': 'color-mix(in oklch, var(--color-success) 12%, var(--color-popover))',
+				'--normal-text': 'var(--color-success)',
+				'--normal-border': 'color-mix(in oklch, var(--color-success) 30%, var(--color-border))',
+			},
+		},
+		error: {
+			style: {
+				'--normal-bg': 'color-mix(in oklch, var(--color-destructive) 12%, var(--color-popover))',
+				'--normal-text': 'var(--color-destructive)',
+				'--normal-border': 'color-mix(in oklch, var(--color-destructive) 30%, var(--color-border))',
+			},
+		},
+		warning: {
+			style: {
+				'--normal-bg': 'color-mix(in oklch, var(--color-warning) 12%, var(--color-popover))',
+				'--normal-text': 'var(--color-warning)',
+				'--normal-border': 'color-mix(in oklch, var(--color-warning) 30%, var(--color-border))',
+			},
+		},
+		info: {
+			style: {
+				'--normal-bg': 'color-mix(in oklch, var(--color-info) 12%, var(--color-popover))',
+				'--normal-text': 'var(--color-info)',
+				'--normal-border': 'color-mix(in oklch, var(--color-info) 30%, var(--color-border))',
+			},
+		},
+	}}
 	{...restProps}
 >
 	{#snippet loadingIcon()}
-		<Loader2Icon class="size-4 animate-spin text-muted-foreground" />
+		<Loader2Icon class="size-4 animate-spin" />
 	{/snippet}
 	{#snippet successIcon()}
-		<CircleCheckIcon class="size-4 text-success" />
+		<CircleCheckIcon class="size-4" />
 	{/snippet}
 	{#snippet errorIcon()}
-		<CircleXIcon class="size-4 text-destructive" />
+		<CircleXIcon class="size-4" />
 	{/snippet}
 	{#snippet infoIcon()}
-		<InfoIcon class="size-4 text-info" />
+		<InfoIcon class="size-4" />
 	{/snippet}
 	{#snippet warningIcon()}
-		<TriangleAlertIcon class="size-4 text-warning" />
+		<TriangleAlertIcon class="size-4" />
 	{/snippet}
 </Sonner>
-
-<style>
-	:global([data-sonner-toast][data-type='success']) {
-		border-left: 3px solid var(--color-success) !important;
-		background: color-mix(in oklch, var(--color-success) 8%, var(--color-popover)) !important;
-	}
-	:global([data-sonner-toast][data-type='error']) {
-		border-left: 3px solid var(--color-destructive) !important;
-		background: color-mix(in oklch, var(--color-destructive) 8%, var(--color-popover)) !important;
-	}
-	:global([data-sonner-toast][data-type='warning']) {
-		border-left: 3px solid var(--color-warning) !important;
-		background: color-mix(in oklch, var(--color-warning) 8%, var(--color-popover)) !important;
-	}
-	:global([data-sonner-toast][data-type='info']) {
-		border-left: 3px solid var(--color-info) !important;
-		background: color-mix(in oklch, var(--color-info) 8%, var(--color-popover)) !important;
-	}
-</style>
