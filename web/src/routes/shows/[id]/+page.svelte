@@ -314,35 +314,38 @@
 </svelte:head>
 
 {#snippet headerActions()}
-  <div class="flex shrink-0 items-center gap-2">
-    <Tooltip.Provider delayDuration={120}>
-      <Tooltip.Root>
-        <Tooltip.Trigger>
-          <Toggle
-            bind:pressed={watermarkAutoPressed}
-            size="default"
-            class="cursor-pointer"
-            aria-label="Toggle automatic start from Sonarr"
-          >
-            <Bot size={16} />
-          </Toggle>
-        </Tooltip.Trigger>
-        <Tooltip.Content side="bottom" align="center" sideOffset={10}>
-          {watermarkTooltip}
-        </Tooltip.Content>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-    <label for="marker-value" class="sr-only">Start tracking after episode</label>
-    <NumberInput
-      id="marker-value"
-      min="0"
-      max={markerUpperBound}
-      step="1"
-      bind:value={markerValue}
-      defaultValue={0}
-      disabled={watermarkAutoPressed}
-      className="w-24"
-    />
+  <div class="flex shrink-0 flex-col items-end gap-2">
+    <div class="flex items-center gap-2">
+      <Tooltip.Provider delayDuration={120}>
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <Toggle
+              bind:pressed={watermarkAutoPressed}
+              size="default"
+              class="cursor-pointer"
+              aria-label="Toggle automatic start from Sonarr"
+            >
+              <Bot size={16} />
+            </Toggle>
+          </Tooltip.Trigger>
+          <Tooltip.Content side="bottom" align="center" sideOffset={10}>
+            {watermarkTooltip}
+          </Tooltip.Content>
+        </Tooltip.Root>
+      </Tooltip.Provider>
+      <label for="marker-value" class="sr-only">Start tracking after episode</label>
+      <NumberInput
+        id="marker-value"
+        min="0"
+        max={markerUpperBound}
+        step="1"
+        bind:value={markerValue}
+        defaultValue={0}
+        disabled={watermarkAutoPressed}
+        className="w-24"
+      />
+    </div>
+    <div class="flex items-center gap-2">
     <Popover.Root bind:open={showDeleteModal}>
       <Popover.Trigger>
         <Button variant="destructive" disabled={deleting}>
@@ -390,6 +393,7 @@
       {/if}
       {saving ? 'Saving...' : 'Save'}
     </Button>
+    </div>
   </div>
 {/snippet}
 
