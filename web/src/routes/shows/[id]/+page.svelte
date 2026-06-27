@@ -325,6 +325,36 @@
 {#snippet headerActions()}
   <div class="flex shrink-0 flex-col items-end gap-2">
     <div class="flex items-center gap-2">
+      <Tooltip.Provider delayDuration={120}>
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <Toggle
+              bind:pressed={watermarkAutoPressed}
+              size="default"
+              class="cursor-pointer"
+              aria-label="Toggle automatic start from Sonarr"
+            >
+              <Bot size={16} />
+            </Toggle>
+          </Tooltip.Trigger>
+          <Tooltip.Content side="bottom" align="center" sideOffset={10}>
+            {watermarkTooltip}
+          </Tooltip.Content>
+        </Tooltip.Root>
+      </Tooltip.Provider>
+      <label for="marker-value" class="sr-only">Start tracking after episode</label>
+      <NumberInput
+        id="marker-value"
+        min="0"
+        max={markerUpperBound}
+        step="1"
+        bind:value={markerValue}
+        defaultValue={0}
+        disabled={watermarkAutoPressed}
+        className="w-24"
+      />
+    </div>
+    <div class="flex items-center gap-2">
     <Popover.Root bind:open={showDeleteModal}>
       <Popover.Trigger>
         <Button variant="destructive" disabled={deleting}>
@@ -373,36 +403,6 @@
       {saving ? 'Saving...' : 'Save'}
     </Button>
     </div>
-    <div class="flex items-center gap-2">
-      <Tooltip.Provider delayDuration={120}>
-        <Tooltip.Root>
-          <Tooltip.Trigger>
-            <Toggle
-              bind:pressed={watermarkAutoPressed}
-              size="default"
-              class="cursor-pointer"
-              aria-label="Toggle automatic start from Sonarr"
-            >
-              <Bot size={16} />
-            </Toggle>
-          </Tooltip.Trigger>
-          <Tooltip.Content side="bottom" align="center" sideOffset={10}>
-            {watermarkTooltip}
-          </Tooltip.Content>
-        </Tooltip.Root>
-      </Tooltip.Provider>
-      <label for="marker-value" class="sr-only">Start tracking after episode</label>
-      <NumberInput
-        id="marker-value"
-        min="0"
-        max={markerUpperBound}
-        step="1"
-        bind:value={markerValue}
-        defaultValue={0}
-        disabled={watermarkAutoPressed}
-        className="w-24"
-      />
-    </div>
   </div>
 {/snippet}
 
@@ -433,20 +433,18 @@
         <div class="relative">
           <img src={activeBackdropUrl} alt={show.sonarr_title} class="h-48 w-full object-cover opacity-65 sm:h-56" />
           <div class="absolute inset-0 bg-gradient-to-t from-popover via-popover/70 to-popover/10"></div>
-          <div class="absolute inset-x-0 top-0 flex items-start justify-end gap-4 p-5">
-            {@render headerActions()}
-          </div>
-          <div class="absolute inset-x-0 bottom-0 p-5">
+          <div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5">
             <div class="min-w-0">
               <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
               {#if subtitle}
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground" title={fullSubtitle}>{subtitle}</p>
               {/if}
             </div>
+            {@render headerActions()}
           </div>
         </div>
       {:else}
-        <div class="flex items-start justify-between gap-4 space-y-0 p-6">
+        <div class="flex items-end justify-between gap-4 space-y-0 p-6">
           <div class="space-y-3">
             <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
             {#if subtitle}
