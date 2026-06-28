@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { autoAnimateAction as autoAnimate } from '../../../lib/autoAnimate.js';
+  import { fly, slide } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { Badge } from '$lib/components/ui/badge/index.js';
@@ -16,7 +16,7 @@
   import { get } from 'svelte/store';
   import { episodeTypeBadge, monitorStateBadge } from '../../../lib/fox.js';
   import { resolveSonarrImageUrl } from '../../../lib/sonarr-images.js';
-  import { Bot, Check, Eye, LoaderCircle, Save, Trash2, Waves, X } from 'lucide-svelte';
+  import { Bot, Check, ChevronRight, Eye, LoaderCircle, Save, Trash2, Waves, X } from 'lucide-svelte';
 
   const WATERMARK_AUTO = 'auto';
   const WATERMARK_MANUAL = 'manual';
@@ -31,6 +31,7 @@
   let artwork = $state(null);
   let sonarrBaseUrl = $state('');
   let episodes = $state([]);
+  let openSeasons = $state(new Set([0]));
   let trackFiller = $state(false);
   let trackMixed = $state(true);
   let trackAnimeCanon = $state(true);
@@ -327,7 +328,7 @@
               <Bot size={16} />
             </Toggle>
           </Tooltip.Trigger>
-          <Tooltip.Content side="top" align="center" sideOffset={10} class="data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-[state=instant-open]:animate-in data-[state=instant-open]:fade-in-0 data-[state=instant-open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
+          <Tooltip.Content side="top" align="center" sideOffset={10} class="tooltip-animated">
             {watermarkTooltip}
           </Tooltip.Content>
         </Tooltip.Root>
@@ -352,7 +353,7 @@
           Remove
         </Button>
       </Popover.Trigger>
-      <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
+      <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
         <div class="flex items-center gap-3">
           <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
           <div class="ml-auto flex items-center gap-2">
@@ -514,102 +515,120 @@
     {:else}
       <section class="space-y-4">
         {#each groupedBySeason as group, index}
-          <details class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60" open={index === 0}>
-            <summary class="cursor-pointer list-none px-5 py-4 marker:hidden open:border-b open:border-border/80">
-              <div class="flex flex-wrap items-center gap-3">
-                <h2 class="text-base font-semibold text-foreground">{seasonLabel(group.season)}</h2>
-                <Badge variant="secondary">{group.episodes.length} episodes</Badge>
-              </div>
-            </summary>
+          {@const isOpen = openSeasons.has(index)}
+          <div class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60">
+            <button
+              type="button"
+              class="flex w-full cursor-pointer list-none items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40 {isOpen ? 'border-b border-border/80' : ''}"
+              onclick={() => {
+                const next = new Set(openSeasons);
+                if (next.has(index)) next.delete(index);
+                else next.add(index);
+                openSeasons = next;
+              }}
+              aria-expanded={isOpen}
+            >
+              <ChevronRight size={18} class="shrink-0 text-muted-foreground transition-transform duration-200 {isOpen ? 'rotate-90' : ''}" />
+              <h2 class="text-base font-semibold text-foreground">{seasonLabel(group.season)}</h2>
+              <Badge variant="secondary">{group.episodes.length} episodes</Badge>
+            </button>
 
-            <div class="hidden overflow-x-auto md:block">
-              <table class="min-w-full border-collapse text-left text-sm">
-                <thead class="border-b border-border/80 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                  <tr>
-                    <th class="px-5 py-3 font-medium">#</th>
-                    <th class="px-5 py-3 font-medium">Title</th>
-                    <th class="px-5 py-3 font-medium">Type</th>
-                    <th class="px-5 py-3 font-medium">Monitored</th>
-                    <th class="px-5 py-3 font-medium text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody use:autoAnimate>
-                  {#each group.episodes as ep}
-                    {@const typeBadge = episodeTypeBadge(ep.type)}
-                    {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
-                    <tr class="border-b border-border/80 last:border-b-0">
-                      <td class="px-5 py-4 font-medium text-muted-foreground">{displayEpisodeNumber(ep)}</td>
-                      <td class="px-5 py-4 text-foreground">{ep.title || '-'}</td>
-                      <td class="px-5 py-4">
-                        <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
-                      </td>
-                      <td class="px-5 py-4">
-                        {#if episodeActionId(ep)}
-                          <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
-                        {:else}
-                          <span class="text-sm text-muted-foreground">Unavailable</span>
-                        {/if}
-                      </td>
-                      <td class="px-5 py-4 text-right">
-                        {#if episodeActionId(ep)}
-                          <Button
-                            variant={episodeMonitored(ep) ? 'default' : 'secondary'}
-                            size="sm"
-                            disabled={syncingEps[episodeActionId(ep)]}
-                            onclick={() => toggleEpisodeMonitor(ep)}
-                          >
-                            {#if syncingEps[episodeActionId(ep)]}
-                              <LoaderCircle size={14} class="animate-spin" />
-                            {:else}
-                              <Eye size={14} />
-                            {/if}
-                            {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
-                          </Button>
-                        {/if}
-                      </td>
+            {#if isOpen}
+              <div class="hidden overflow-x-auto md:block" transition:slide={{ duration: 200 }}>
+                <table class="min-w-full border-collapse text-left text-sm">
+                  <thead class="border-b border-border/80 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                    <tr>
+                      <th class="px-5 py-3 font-medium">#</th>
+                      <th class="px-5 py-3 font-medium">Title</th>
+                      <th class="px-5 py-3 font-medium">Type</th>
+                      <th class="px-5 py-3 font-medium">Monitored</th>
+                      <th class="px-5 py-3 font-medium text-right">Action</th>
                     </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-
-            <div class="space-y-3 p-4 md:hidden" use:autoAnimate>
-              {#each group.episodes as ep}
-                {@const typeBadge = episodeTypeBadge(ep.type)}
-                {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
-                <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
-                  <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div class="space-y-2">
-                      <div class="text-sm font-medium text-muted-foreground">{episodeLabel(ep)}</div>
-                      <h3 class="text-sm font-semibold leading-5 text-foreground">{ep.title || '-'}</h3>
-                    </div>
-                    <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
-                  </div>
-
-                  <div class="mt-4 flex items-center justify-between gap-3">
-                    {#if episodeActionId(ep)}
-                      <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
-                      <Button
-                        variant={episodeMonitored(ep) ? 'default' : 'secondary'}
-                        size="sm"
-                        disabled={syncingEps[episodeActionId(ep)]}
-                        onclick={() => toggleEpisodeMonitor(ep)}
+                  </thead>
+                  <tbody>
+                    {#each group.episodes as ep, epIndex}
+                      {@const typeBadge = episodeTypeBadge(ep.type)}
+                      {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
+                      <tr
+                        class="border-b border-border/80 last:border-b-0"
+                        in:fly={{ y: 8, duration: 200, delay: epIndex * 20 }}
                       >
-                        {#if syncingEps[episodeActionId(ep)]}
-                          <LoaderCircle size={14} class="animate-spin" />
-                        {:else}
-                          <Eye size={14} />
-                        {/if}
-                        {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
-                      </Button>
-                    {:else}
-                      <span class="text-sm text-muted-foreground">Episode monitoring unavailable.</span>
-                    {/if}
+                        <td class="px-5 py-4 font-medium text-muted-foreground">{displayEpisodeNumber(ep)}</td>
+                        <td class="px-5 py-4 text-foreground">{ep.title || '-'}</td>
+                        <td class="px-5 py-4">
+                          <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
+                        </td>
+                        <td class="px-5 py-4">
+                          {#if episodeActionId(ep)}
+                            <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
+                          {:else}
+                            <span class="text-sm text-muted-foreground">Unavailable</span>
+                          {/if}
+                        </td>
+                        <td class="px-5 py-4 text-right">
+                          {#if episodeActionId(ep)}
+                            <Button
+                              variant={episodeMonitored(ep) ? 'default' : 'secondary'}
+                              size="sm"
+                              disabled={syncingEps[episodeActionId(ep)]}
+                              onclick={() => toggleEpisodeMonitor(ep)}
+                            >
+                              {#if syncingEps[episodeActionId(ep)]}
+                                <LoaderCircle size={14} class="animate-spin" />
+                              {:else}
+                                <Eye size={14} />
+                              {/if}
+                              {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
+                            </Button>
+                          {/if}
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="space-y-3 p-4 md:hidden" transition:slide={{ duration: 200 }}>
+                {#each group.episodes as ep, epIndex}
+                  {@const typeBadge = episodeTypeBadge(ep.type)}
+                  {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
+                  <div
+                    class="rounded-xl border border-border/80 bg-popover/70 p-4"
+                    in:fly={{ y: 8, duration: 200, delay: epIndex * 20 }}
+                  >
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div class="space-y-2">
+                        <div class="text-sm font-medium text-muted-foreground">{episodeLabel(ep)}</div>
+                        <h3 class="text-sm font-semibold leading-5 text-foreground">{ep.title || '-'}</h3>
+                      </div>
+                      <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
+                    </div>
+
+                    <div class="mt-4 flex items-center justify-between gap-3">
+                      {#if episodeActionId(ep)}
+                        <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
+                        <Button
+                          variant={episodeMonitored(ep) ? 'default' : 'secondary'}
+                          size="sm"
+                          disabled={syncingEps[episodeActionId(ep)]}
+                          onclick={() => toggleEpisodeMonitor(ep)}
+                        >
+                          {#if syncingEps[episodeActionId(ep)]}
+                            <LoaderCircle size={14} class="animate-spin" />
+                          {:else}
+                            <Eye size={14} />
+                          {/if}
+                          {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
+                        </Button>
+                      {:else}
+                        <span class="text-sm text-muted-foreground">Episode monitoring unavailable.</span>
+                      {/if}
+                    </div>
                   </div>
-                </div>
-              {/each}
-            </div>
-          </details>
+                {/each}
+              </div>
+            {/if}
+          </div>
         {/each}
       </section>
     {/if}

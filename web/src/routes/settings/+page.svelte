@@ -10,7 +10,7 @@
   import Box from '$lib/components/Box.svelte';
   import { settings, addNotification } from '../../lib/stores.js';
   import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.js';
-  import { Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
+  import { Check, Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
 
   let loading = true;
   let saving = false;
@@ -249,17 +249,26 @@
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold text-foreground">Connection</h2>
             <Badge variant="secondary">Required</Badge>
-            {#if testResult}
-              <Badge variant={testResult.success ? 'success' : 'destructive'}>{testResult.message}</Badge>
-            {/if}
           </div>
-          <Button variant="secondary" onclick={handleTestConnection} disabled={testing || !sonarrUrl || !urlValid}>
+          <Button
+            variant={testResult?.success ? 'default' : testResult && !testResult.success ? 'destructive' : 'secondary'}
+            onclick={handleTestConnection}
+            disabled={testing || !sonarrUrl || !urlValid}
+            class={testResult?.success ? 'bg-success text-success-foreground hover:bg-success/80' : ''}
+          >
             {#if testing}
               <LoaderCircle size={16} class="animate-spin" />
+              Testing...
+            {:else if testResult?.success}
+              <Check size={16} />
+              Connected
+            {:else if testResult}
+              <Plug size={16} />
+              Retry connection
             {:else}
               <Plug size={16} />
+              Test connection
             {/if}
-            {testing ? 'Testing...' : 'Test connection'}
           </Button>
         </div>
 
