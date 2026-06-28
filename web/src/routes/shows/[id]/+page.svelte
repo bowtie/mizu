@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { autoAnimateAction as autoAnimate } from '../../../lib/autoAnimate.js';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { Badge } from '$lib/components/ui/badge/index.js';
@@ -22,6 +23,7 @@
 
   let loading = $state(true);
   let saving = $state(false);
+  let savedFlash = $state(false);
   let deleting = $state(false);
   let showDeleteModal = $state(false);
   let show = $state(null);
@@ -177,6 +179,8 @@
       }
       await updateShow(showId, payload);
       addNotification(`Saved tracking rules for ${show?.sonarr_title || 'anime'}`, 'success');
+      savedFlash = true;
+      setTimeout(() => (savedFlash = false), 1500);
       await loadShow();
     } catch (err) {
       addNotification('Failed to save anime: ' + err.message, 'error');
@@ -323,7 +327,7 @@
               <Bot size={16} />
             </Toggle>
           </Tooltip.Trigger>
-          <Tooltip.Content side="top" align="center" sideOffset={10}>
+          <Tooltip.Content side="top" align="center" sideOffset={10} class="data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-[state=instant-open]:animate-in data-[state=instant-open]:fade-in-0 data-[state=instant-open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
             {watermarkTooltip}
           </Tooltip.Content>
         </Tooltip.Root>
@@ -348,7 +352,7 @@
           Remove
         </Button>
       </Popover.Trigger>
-      <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
+      <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
         <div class="flex items-center gap-3">
           <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
           <div class="ml-auto flex items-center gap-2">
@@ -380,13 +384,15 @@
         </div>
       </Popover.Content>
     </Popover.Root>
-    <Button variant="default" onclick={handleSave} disabled={saving || !rulesDirty}>
+    <Button variant={savedFlash ? 'default' : 'default'} onclick={handleSave} disabled={saving || !rulesDirty} class={savedFlash ? 'animate-in zoom-in-125 duration-300' : ''}>
       {#if saving}
         <LoaderCircle size={16} class="animate-spin" />
+      {:else if savedFlash}
+        <Check size={16} />
       {:else}
         <Save size={16} />
       {/if}
-      {saving ? 'Saving...' : 'Save'}
+      {saving ? 'Saving...' : savedFlash ? 'Saved' : 'Save'}
     </Button>
     </div>
   </div>
@@ -489,9 +495,9 @@
         {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !btn.active}
         <button
           type="button"
-          class="rounded-2xl border p-4 text-left transition-all {btn.active
-            ? btn.activeClass
-            : 'border-border bg-secondary text-foreground hover:border-primary/50'} {dimmed ? 'opacity-40' : ''}"
+          class="rounded-2xl border p-4 text-left transition-all duration-200 {btn.active
+            ? btn.activeClass + ' scale-105'
+            : 'border-border bg-secondary text-foreground hover:border-primary/50 hover:scale-102'} {dimmed ? 'opacity-40' : ''}"
           onclick={() => toggleTypeFilter(btn.type)}
         >
           <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">{btn.label}</div>
@@ -527,7 +533,7 @@
                     <th class="px-5 py-3 font-medium text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody use:autoAnimate>
                   {#each group.episodes as ep}
                     {@const typeBadge = episodeTypeBadge(ep.type)}
                     {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
@@ -567,7 +573,7 @@
               </table>
             </div>
 
-            <div class="space-y-3 p-4 md:hidden">
+            <div class="space-y-3 p-4 md:hidden" use:autoAnimate>
               {#each group.episodes as ep}
                 {@const typeBadge = episodeTypeBadge(ep.type)}
                 {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}

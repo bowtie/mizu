@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+page.svelte"), "utf8");
 
 test("shows page uses a local centered add modal overlay instead of a shared modal component", () => {
-  assert.match(showsSvelte, /import\s+\{\s*fade,\s*scale\s*\}\s+from\s+'svelte\/transition'/);
+  assert.match(showsSvelte, /import\s+\{\s*fade,\s*scale,\s*fly\s*\}\s+from\s+'svelte\/transition'/);
   assert.match(showsSvelte, /show-add-modal-shell/);
   assert.match(showsSvelte, /show-add-modal-panel/);
   assert.match(showsSvelte, /show-add-modal-close/);

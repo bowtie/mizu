@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
   import { slide } from 'svelte/transition';
+  import { autoAnimateAction as autoAnimate } from '../../lib/autoAnimate.js';
   import { Badge } from '$lib/components/ui/badge/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
   import { Input } from '$lib/components/ui/input/index.js';
@@ -208,7 +209,7 @@
         <p class="text-sm text-muted-foreground">Try adjusting your filters or search query.</p>
       </Box>
     {:else}
-      <section class="space-y-4">
+      <section class="space-y-4" use:autoAnimate>
         {#each filteredLogs as log (log.id)}
           {@const runBadge = runStatusBadge(log.status)}
           <Box class="rounded-2xl border border-border/80 bg-popover/60 p-5">

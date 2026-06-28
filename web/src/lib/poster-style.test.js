@@ -9,7 +9,7 @@ const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+
 test("poster image keeps utility transition classes", () => {
   assert.match(
     showsSvelte,
-    /poster-image[\s\S]*opacity-0 transition-all duration-500 ease-in-out group-hover:scale-105/,
+    /poster-image[\s\S]*opacity-0 transition-transform duration-500 ease-out group-hover:scale-110/,
   );
 });
 

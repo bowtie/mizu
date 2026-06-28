@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
-  import { fade, scale } from 'svelte/transition';
+  import { fade, scale, fly } from 'svelte/transition';
+  import { autoAnimateAction as autoAnimate } from '../../lib/autoAnimate.js';
   import { goto } from '$app/navigation';
   import { Badge } from '$lib/components/ui/badge/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
@@ -766,7 +767,7 @@
       </div>
     </Box>
   {:else}
-    <section class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+    <section class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4" use:autoAnimate>
       {#each filteredShows as show}
         {@const syncBadge = syncStateBadge(show.enabled)}
         <button

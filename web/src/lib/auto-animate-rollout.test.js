@@ -16,12 +16,12 @@ test("frontend dependencies include AutoAnimate", () => {
   assert.equal(packageJson.dependencies["@formkit/auto-animate"], "^0.9.0");
 });
 
-test("shows page does not wire AutoAnimate into the poster grid or modal body", () => {
-  assert.doesNotMatch(
+test("shows page wires AutoAnimate into the poster grid", () => {
+  assert.match(
     showsSvelte,
-    /import\s+\{\s*autoAnimate\s*\}\s+from\s+'@formkit\/auto-animate'/,
+    /import\s+\{\s*autoAnimateAction as autoAnimate\s*\}\s+from\s+'\.\.\/\.\.\/lib\/autoAnimate\.js'/,
   );
-  assert.doesNotMatch(showsSvelte, /use:autoAnimate/);
+  assert.match(showsSvelte, /use:autoAnimate/);
 });
 
 test("activity page uses slide transitions for expanded detail region", () => {
@@ -32,5 +32,5 @@ test("activity page uses slide transitions for expanded detail region", () => {
     /Open details to inspect which anime changed during this run\./,
   );
   assert.doesNotMatch(activitySvelte, /border-t border-base-800\/80 pt-4/);
-  assert.doesNotMatch(activitySvelte, /use:autoAnimate/);
+  assert.match(activitySvelte, /use:autoAnimate/);
 });
