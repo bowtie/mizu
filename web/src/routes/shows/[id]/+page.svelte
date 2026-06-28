@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { fly, slide } from 'svelte/transition';
+  import { slide } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { Badge } from '$lib/components/ui/badge/index.js';
@@ -498,7 +498,7 @@
           type="button"
           class="rounded-2xl border p-4 text-left transition-all duration-200 {btn.active
             ? btn.activeClass + ' scale-105'
-            : 'border-border bg-secondary text-foreground hover:border-primary/50 hover:scale-102'} {dimmed ? 'opacity-40' : ''}"
+            : 'border-border bg-secondary text-foreground hover:border-primary/50 hover:scale-[1.02]'} {dimmed ? 'opacity-40' : ''}"
           onclick={() => toggleTypeFilter(btn.type)}
         >
           <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">{btn.label}</div>
@@ -546,13 +546,10 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {#each group.episodes as ep, epIndex}
+                    {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
                       {@const typeBadge = episodeTypeBadge(ep.type)}
                       {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
-                      <tr
-                        class="border-b border-border/80 last:border-b-0"
-                        in:fly={{ y: 8, duration: 200, delay: epIndex * 20 }}
-                      >
+                      <tr class="border-b border-border/80 last:border-b-0">
                         <td class="px-5 py-4 font-medium text-muted-foreground">{displayEpisodeNumber(ep)}</td>
                         <td class="px-5 py-4 text-foreground">{ep.title || '-'}</td>
                         <td class="px-5 py-4">
@@ -589,13 +586,10 @@
               </div>
 
               <div class="space-y-3 p-4 md:hidden" transition:slide={{ duration: 200 }}>
-                {#each group.episodes as ep, epIndex}
+                {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
                   {@const typeBadge = episodeTypeBadge(ep.type)}
                   {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
-                  <div
-                    class="rounded-xl border border-border/80 bg-popover/70 p-4"
-                    in:fly={{ y: 8, duration: 200, delay: epIndex * 20 }}
-                  >
+                  <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
                     <div class="flex flex-wrap items-start justify-between gap-3">
                       <div class="space-y-2">
                         <div class="text-sm font-medium text-muted-foreground">{episodeLabel(ep)}</div>
