@@ -316,7 +316,8 @@
             <Toggle
               bind:pressed={watermarkAutoPressed}
               size="default"
-              class="h-8 w-8 cursor-pointer bg-secondary px-0 data-[state=off]:bg-secondary data-[state=off]:text-muted-foreground"
+              variant="outline"
+              class="h-8 w-8 cursor-pointer px-0"
               aria-label="Toggle automatic start from Sonarr"
             >
               <Bot size={16} />
