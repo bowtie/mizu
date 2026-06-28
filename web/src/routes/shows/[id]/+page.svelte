@@ -323,7 +323,7 @@
               <Bot size={16} />
             </Toggle>
           </Tooltip.Trigger>
-          <Tooltip.Content side="bottom" align="center" sideOffset={10}>
+          <Tooltip.Content side="top" align="center" sideOffset={10}>
             {watermarkTooltip}
           </Tooltip.Content>
         </Tooltip.Root>
