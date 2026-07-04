@@ -1,23 +1,25 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { slide } from 'svelte/transition';
+  import { AnimatePresence, motion } from '@humanspeak/svelte-motion';
   import { Badge } from '$lib/components/ui/badge/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
-  import { Checkbox } from '$lib/components/ui/checkbox/index.js';
   import { Input } from '$lib/components/ui/input/index.js';
   import { Label } from '$lib/components/ui/label/index.js';
   import { Switch } from '$lib/components/ui/switch/index.js';
-  import * as Select from '$lib/components/ui/select/index.js';
+  import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
   import Box from '$lib/components/Box.svelte';
   import { settings, addNotification } from '../../lib/stores.js';
   import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.js';
-  import { Check, Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
+  import { AlertTriangle, Check, Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
 
   let loading = true;
   let saving = false;
   let testing = false;
   let refreshingCache = false;
   let revealingKey = false;
-  let testResult = null;
+  let testPhase = 'idle';
+  let testErrorMessage = '';
 
   let sonarrUrl = '';
   let sonarrApiKey = '';
@@ -99,9 +101,50 @@
 
   $: urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  let prefersReducedMotion = false;
+  onMount(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    prefersReducedMotion = mq.matches;
+    const handler = (e) => (prefersReducedMotion = e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  });
+  const slideIn = (duration = 200) =>
+    prefersReducedMotion ? { duration: 0 } : { duration };
+
+  let resetTimer = null;
+  function scheduleReset(delay = 1800) {
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => {
+      testPhase = 'idle';
+      testErrorMessage = '';
+    }, delay);
+  }
+  function clearReset() {
+    clearTimeout(resetTimer);
+    resetTimer = null;
+  }
+  onDestroy(() => clearTimeout(resetTimer));
+
+  function clearTestResult() {
+    clearReset();
+    if (testPhase === 'success' || testPhase === 'error') {
+      testPhase = 'idle';
+      testErrorMessage = '';
+    }
+  }
+
   function handleApiKeyInput(event) {
     apiKeyDirty = true;
     sonarrApiKey = event.currentTarget.value;
+    clearTestResult();
+  }
+
+  function handleUrlInput(event) {
+    sonarrUrl = event.currentTarget.value;
+    clearTestResult();
   }
 
   async function toggleApiKeyVisibility() {
@@ -164,26 +207,44 @@
 
   async function handleTestConnection() {
     if (!sonarrUrl) {
-      addNotification('Please enter a Sonarr URL first', 'warning');
+      testErrorMessage = 'Enter a Sonarr URL first';
+      testPhase = 'error';
       return;
     }
     if (!urlValid) {
-      addNotification('URL must start with http:// or https://', 'warning');
+      testErrorMessage = 'URL must start with http:// or https://';
+      testPhase = 'error';
       return;
     }
+
     testing = true;
-    testResult = null;
+    testErrorMessage = '';
+    clearReset();
+    testPhase = 'connecting';
+
+    const startTime = Date.now();
+    const minDelay = 1100;
+
     try {
       const apiKey = await resolveApiKeyForTest();
       const result = await testSonarrConnection(sonarrUrl, apiKey);
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDelay) await sleep(minDelay - elapsed);
+
       if (!result?.success) {
         throw new Error(result?.error || 'Connection failed');
       }
-      testResult = { success: true, message: 'Connection successful' };
-      addNotification('Sonarr connection test passed', 'success', 6000);
+
+      testPhase = 'success';
+      scheduleReset(2000);
     } catch (err) {
-      testResult = { success: false, message: err.message };
-      addNotification('Sonarr connection test failed: ' + err.message, 'error');
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDelay) await sleep(minDelay - elapsed);
+
+      testErrorMessage = err.message;
+      testPhase = 'error';
+      scheduleReset(4000);
     }
     testing = false;
   }
@@ -228,7 +289,7 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-center">
       <LoaderCircle size={30} class="animate-spin text-primary" />
       <div class="space-y-1">
         <h2 class="text-base font-semibold text-foreground">Loading settings</h2>
@@ -244,38 +305,92 @@
       {/if}
 
       <!-- Connection section (critical) -->
-      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60 p-5">
+      <Box class="space-y-5 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold text-foreground">Connection</h2>
             <Badge variant="secondary">Required</Badge>
           </div>
           <Button
-            variant={testResult?.success ? 'default' : testResult && !testResult.success ? 'destructive' : 'secondary'}
+            variant={testPhase === 'success' ? 'default' : testPhase === 'error' ? 'destructive' : 'secondary'}
             onclick={handleTestConnection}
-            disabled={testing || !sonarrUrl || !urlValid}
-            class={testResult?.success ? 'bg-success text-success-foreground hover:bg-success/80' : ''}
+            disabled={testing || testPhase === 'success' || !sonarrUrl || !urlValid}
+            aria-busy={testing}
+            data-state={testPhase}
+            class="relative {testPhase === 'success' ? 'bg-success text-success-foreground hover:bg-success/80 disabled:opacity-100' : ''}"
           >
-            {#if testing}
-              <LoaderCircle size={16} class="animate-spin" />
-              Testing...
-            {:else if testResult?.success}
-              <Check size={16} />
-              Connected
-            {:else if testResult}
-              <Plug size={16} />
+            <!-- Invisible widest label reserves stable width -->
+            <span class="invisible flex items-center gap-2" aria-hidden="true">
+              <span class="size-4"></span>
               Retry connection
-            {:else}
-              <Plug size={16} />
-              Test connection
-            {/if}
+            </span>
+            <!-- Content: AnimatePresence mode="wait" = exit completes, then enter starts -->
+            <span class="absolute inset-0 flex items-center justify-center gap-2">
+              <AnimatePresence mode="wait" initial={false}>
+                {#if testPhase === 'connecting'}
+                  <motion.span
+                    key="connecting"
+                    class="flex items-center gap-2"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <LoaderCircle size={16} class="animate-spin" />
+                    Testing
+                  </motion.span>
+                {:else if testPhase === 'success'}
+                  <motion.span
+                    key="success"
+                    class="flex items-center gap-2"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <Check size={16} />
+                    Connected
+                  </motion.span>
+                {:else if testPhase === 'error'}
+                  <motion.span
+                    key="error"
+                    class="flex items-center gap-2"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <AlertTriangle size={16} />
+                    Retry connection
+                  </motion.span>
+                {:else}
+                  <motion.span
+                    key="idle"
+                    class="flex items-center gap-2"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <Plug size={16} />
+                    Test connection
+                  </motion.span>
+                {/if}
+              </AnimatePresence>
+            </span>
           </Button>
         </div>
+
+        {#if testPhase === 'error' && testErrorMessage}
+          <p class="text-sm text-destructive" transition:slide={slideIn(200)}>
+            {testErrorMessage}
+          </p>
+        {/if}
 
         <div class="space-y-4">
           <div class="space-y-2">
             <Label for="sonarr-url">Sonarr URL</Label>
-            <Input id="sonarr-url" type="text" placeholder="http://localhost:8989" bind:value={sonarrUrl} class="h-11 w-full" />
+            <Input id="sonarr-url" type="text" placeholder="http://localhost:8989" value={sonarrUrl} oninput={handleUrlInput} class="w-full" />
             {#if sonarrUrl && !urlValid}
               <p class="text-sm text-destructive">URL must start with http:// or https://</p>
             {/if}
@@ -285,14 +400,30 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
               <Label for="sonarr-key">API key</Label>
               {#if hasSavedApiKey || apiKeyDirty}
-                <Button type="button" variant="ghost" size="sm" onclick={toggleApiKeyVisibility} disabled={revealingKey}>
-                  {#if apiKeyVisible}
-                    <EyeOff size={16} />
-                    Hide
-                  {:else}
+                <Button type="button" variant="ghost" size="sm" onclick={toggleApiKeyVisibility} disabled={revealingKey} class="relative">
+                  <span class="invisible flex items-center gap-1.5" aria-hidden="true">
                     <Eye size={16} />
-                    {revealingKey ? 'Loading...' : 'View'}
-                  {/if}
+                    View
+                  </span>
+                  <span class="absolute inset-0 flex items-center justify-center">
+                    <AnimatePresence mode="wait" initial={false}>
+                      {#if apiKeyVisible}
+                        <motion.span key="hide" class="flex items-center gap-1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                          <EyeOff size={16} />
+                          Hide
+                        </motion.span>
+                      {:else if revealingKey}
+                        <motion.span key="loading" class="flex items-center gap-1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                          <LoaderCircle size={16} class="animate-spin" />
+                        </motion.span>
+                      {:else}
+                        <motion.span key="view" class="flex items-center gap-1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                          <Eye size={16} />
+                          View
+                        </motion.span>
+                      {/if}
+                    </AnimatePresence>
+                  </span>
                 </Button>
               {/if}
             </div>
@@ -303,65 +434,53 @@
               bind:value={sonarrApiKey}
               placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
               oninput={handleApiKeyInput}
-              class="h-11 w-full"
+              class="w-full"
             />
           </div>
         </div>
       </Box>
 
       <!-- Sync section -->
-      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60 p-5">
+      <Box class="space-y-5 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold text-foreground">Sync</h2>
             <Badge variant="secondary">{cacheCount} cached</Badge>
+            {#if cacheRefreshedAt}
+              <span class="text-xs text-muted-foreground">{formatCacheTime(cacheRefreshedAt)}</span>
+            {/if}
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">Last refreshed: {formatCacheTime(cacheRefreshedAt)}</Badge>
-            <Button variant="secondary" onclick={handleRefreshCache} disabled={refreshingCache}>
-              {#if refreshingCache}
-                <LoaderCircle size={16} class="animate-spin" />
-              {:else}
-                <RefreshCw size={16} />
-              {/if}
-              {refreshingCache ? 'Refreshing...' : 'Refresh'}
-            </Button>
-          </div>
+          <Button variant="secondary" onclick={handleRefreshCache} disabled={refreshingCache}>
+            {#if refreshingCache}
+              <LoaderCircle size={16} class="animate-spin" />
+            {:else}
+              <RefreshCw size={16} />
+            {/if}
+            {refreshingCache ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </div>
 
         <div class="space-y-4">
           <div class="space-y-2">
-            <Label for="sync-interval">Sync interval</Label>
-            <Select.Root type="single" bind:value={syncInterval}>
-              <Select.Trigger id="sync-interval" class="w-full">
-                {#if syncInterval}
-                  {@const selected = syncIntervalOptions.find(i => i.value === syncInterval)}
-                  {selected?.label || 'Choose an interval'}
-                {:else}
-                  <span class="text-muted-foreground">Choose an interval</span>
-                {/if}
-              </Select.Trigger>
-              <Select.Content>
-                {#each syncIntervalOptions as item}
-                  <Select.Item value={item.value} label={item.label} />
-                {/each}
-              </Select.Content>
-            </Select.Root>
-            <p class="text-sm text-muted-foreground">How often Mizu checks for episode changes and updates Sonarr.</p>
+            <Label>Sync interval</Label>
+            <ToggleGroup.Root type="single" bind:value={syncInterval} class="flex w-full gap-1.5">
+              {#each syncIntervalOptions as item}
+                <ToggleGroup.Item value={item.value} class="flex-1">
+                  {item.value}
+                </ToggleGroup.Item>
+              {/each}
+            </ToggleGroup.Root>
           </div>
 
-          <label class="flex items-center gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
-            <Checkbox bind:checked={enableAniListArtwork} />
-            <div class="space-y-1">
-              <div class="text-sm font-medium text-foreground">AniList artwork</div>
-              <div class="text-sm text-muted-foreground">Use AniList banners and posters instead of Sonarr images only.</div>
-            </div>
-          </label>
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
+            <div class="text-sm font-medium text-foreground">AniList artwork</div>
+            <Switch bind:checked={enableAniListArtwork} />
+          </div>
         </div>
       </Box>
 
       <!-- Defaults section -->
-      <Box class="space-y-5 rounded-2xl border border-border/80 bg-popover/60 p-5">
+      <Box class="space-y-5 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-lg font-semibold text-foreground">Defaults</h2>
           <Badge variant="secondary">New anime</Badge>
@@ -369,7 +488,7 @@
         <p class="text-sm leading-6 text-muted-foreground">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
 
         <div class="grid gap-3 md:grid-cols-3">
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
             <div>
               <div class="text-sm font-medium text-foreground">Anime canon</div>
               <div class="mt-0.5 text-xs text-muted-foreground">Original anime episodes</div>
@@ -377,7 +496,7 @@
             <Switch bind:checked={trackAnimeCanonDefault} />
           </div>
 
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
             <div>
               <div class="text-sm font-medium text-foreground">Mixed canon</div>
               <div class="mt-0.5 text-xs text-muted-foreground">Canon + filler blend</div>
@@ -385,7 +504,7 @@
             <Switch bind:checked={trackMixedDefault} />
           </div>
 
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
             <div>
               <div class="text-sm font-medium text-foreground">Filler</div>
               <div class="mt-0.5 text-xs text-muted-foreground">Pure filler episodes</div>

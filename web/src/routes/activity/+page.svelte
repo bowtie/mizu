@@ -159,15 +159,15 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-center">
       <LoaderCircle size={30} class="animate-spin text-primary" />
       <div class="space-y-1">
         <h2 class="text-base font-semibold text-foreground">Loading activity</h2>
-        <p class="text-sm text-muted-foreground">Surfacing recent sync history.</p>
+        <p class="text-sm text-muted-foreground">Loading sync history.</p>
       </div>
     </Box>
   {:else if logs.length === 0}
-    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 px-6 text-center">
+    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] px-6 text-center">
       <span class="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
         <History size={24} />
       </span>
@@ -187,9 +187,9 @@
         {#each statusFilters as filter}
           <button
             type="button"
-            class="rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors {statusFilter === filter.value
+            class="rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors {statusFilter === filter.value
               ? filter.activeClass
-              : 'border-border/80 bg-popover/60 text-muted-foreground hover:text-foreground'}"
+              : 'border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-muted-foreground hover:text-foreground'}"
             onclick={() => (statusFilter = filter.value)}
           >
             {filter.label}
@@ -197,14 +197,14 @@
         {/each}
       </div>
       <div class="relative sm:w-64">
-        <Search size={16} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Search size={16} class="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground" />
         <Input bind:value={searchQuery} placeholder="Search logs..." class="pl-9" />
       </div>
     </section>
 
     <!-- Log list -->
     {#if filteredLogs.length === 0}
-      <Box class="flex min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-border/80 bg-popover/60 text-center">
+      <Box class="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-center">
         <p class="text-sm font-medium text-foreground">No matching logs</p>
         <p class="text-sm text-muted-foreground">Try adjusting your filters or search query.</p>
       </Box>
@@ -212,7 +212,7 @@
       <section class="space-y-4" use:autoAnimate>
         {#each filteredLogs as log (log.id)}
           {@const runBadge = runStatusBadge(log.status)}
-          <Box class="rounded-2xl border border-border/80 bg-popover/60 p-5">
+          <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
             <div class="space-y-4">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-3">
@@ -248,7 +248,7 @@
                     <div class="space-y-3">
                       {#each log.items as item}
                         {@const itemBadge = itemStatusBadge(item.status)}
-                        <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+                        <div class="rounded-xl border border-border bg-popover/75 backdrop-blur-md p-4">
                           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div class="space-y-2">
                               <h3 class="text-sm font-semibold text-foreground">{item.sonarr_title}</h3>

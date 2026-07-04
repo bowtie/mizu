@@ -41,11 +41,11 @@
   }
 </script>
 
-<header class="sticky top-4 z-40 hidden px-4 md:block">
-  <div class="mx-auto flex max-w-6xl flex-col rounded-2xl border border-border bg-popover/80 px-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-xl">
-    <div class="flex min-h-16 items-center justify-between gap-4 py-3">
+<header class="sticky top-5 z-40 hidden px-4 md:block">
+  <div class="nav-glass">
+    <div class="flex min-h-12 items-center justify-between gap-4 py-2">
       <a href="/" class="flex min-w-0 items-center gap-3" aria-label="Mizu home">
-        <span class="flex size-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+        <span class="flex size-8 items-center justify-center rounded-lg text-foreground">
           <Waves class="size-[18px]" />
         </span>
         <strong class="block truncate text-sm font-semibold tracking-tight text-foreground">Mizu</strong>
@@ -71,7 +71,7 @@
           <Tooltip.Trigger>
             <Badge
               variant={sonarrConnected ? 'success' : 'destructive'}
-              class="size-10 shrink-0 cursor-help justify-center rounded-xl px-0"
+              class="size-9 shrink-0 cursor-help justify-center rounded-lg px-0"
               aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
             >
               <RadioTower class="size-4" />
@@ -88,20 +88,36 @@
 
 <div class="fixed inset-x-0 bottom-4 z-40 px-4 md:hidden">
   <nav
-    class="mx-auto flex max-w-sm items-center gap-2 rounded-2xl border border-border bg-popover/80 p-2 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-xl"
+    class="nav-glass mx-auto max-w-sm p-2"
     aria-label="Primary mobile"
   >
-    {#each navItems as item}
-      {@const Icon = item.icon}
-      <Button
-        href={item.path}
-        variant={isActive(item.path, currentPath) ? 'secondary' : 'ghost'}
-        class="min-w-0 flex-1 justify-center rounded-xl border-transparent whitespace-nowrap"
-        aria-current={isActive(item.path, currentPath) ? 'page' : undefined}
-      >
-        <Icon class="size-4" />
-        {item.label}
-      </Button>
-    {/each}
+    <div class="flex items-center gap-2">
+      {#each navItems as item}
+        {@const Icon = item.icon}
+        <Button
+          href={item.path}
+          variant={isActive(item.path, currentPath) ? 'secondary' : 'ghost'}
+          class="min-w-0 flex-1 justify-center rounded-lg border-transparent whitespace-nowrap"
+          aria-current={isActive(item.path, currentPath) ? 'page' : undefined}
+        >
+          <Icon class="size-4" />
+          {item.label}
+        </Button>
+      {/each}
+    </div>
   </nav>
 </div>
+
+<style>
+  .nav-glass {
+    max-width: 72rem;
+    margin: 0 auto;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(32px) saturate(1.35);
+    -webkit-backdrop-filter: blur(32px) saturate(1.35);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22), inset 0 0.5px rgba(255, 255, 255, 0.08);
+    padding: 0 14px;
+  }
+</style>

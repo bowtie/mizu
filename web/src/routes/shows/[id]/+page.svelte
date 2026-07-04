@@ -252,11 +252,11 @@
   }
 
   let filterButtons = $derived([
-    { type: 'all', label: 'All episodes', count: epStats.total, active: isTypeFilterActive('all'), activeClass: 'border-primary bg-primary text-primary-foreground' },
-    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), activeClass: 'border-primary bg-primary text-primary-foreground' },
-    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), activeClass: 'border-info bg-info text-info-foreground' },
-    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), activeClass: 'border-warning bg-warning text-warning-foreground' },
-    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), activeClass: 'border-destructive bg-destructive text-destructive-foreground' },
+    { type: 'all', label: 'All episodes', count: epStats.total, active: isTypeFilterActive('all'), activeClass: 'border-border bg-secondary text-foreground' },
+    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), activeClass: 'border-primary/40 bg-primary/15 text-primary' },
+    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), activeClass: 'border-info/40 bg-info/15 text-info' },
+    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), activeClass: 'border-warning/40 bg-warning/15 text-warning' },
+    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), activeClass: 'border-destructive/40 bg-destructive/15 text-destructive' },
   ]);
 
   function isSpecialSeasonNumber(num) {
@@ -353,7 +353,7 @@
           Remove
         </Button>
       </Popover.Trigger>
-      <Popover.Content side="bottom" align="end" class="rounded-[1.35rem] border-border/80 bg-card/98 px-4 py-3 text-foreground shadow-xl">
+      <Popover.Content side="bottom" align="end" class="rounded-xl border-border bg-card/98 px-4 py-3 text-foreground shadow-xl">
         <div class="flex items-center gap-3">
           <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
           <div class="ml-auto flex items-center gap-2">
@@ -400,7 +400,7 @@
 {/snippet}
 
 {#if loading}
-  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
+  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-center">
     <LoaderCircle size={30} class="animate-spin text-primary" />
     <div class="space-y-1">
       <h2 class="text-base font-semibold text-foreground">Loading anime details</h2>
@@ -408,7 +408,7 @@
     </div>
   </Box>
 {:else if !show}
-  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 px-6 text-center">
+  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] px-6 text-center">
     <span class="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
       <Waves size={24} />
     </span>
@@ -421,7 +421,7 @@
 {:else}
   <div class="space-y-6">
     <!-- Backdrop hero with Save + Remove actions -->
-    <Box class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60 p-0">
+    <Box class="overflow-hidden rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-0">
       {#if activeBackdropUrl}
         <div class="relative">
           <img src={activeBackdropUrl} alt={show.sonarr_title} class="h-48 w-full object-cover opacity-65 sm:h-56" />
@@ -445,19 +445,19 @@
 
     <!-- Overview -->
     <section class="space-y-4">
-      <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/60 p-5">
+      <Box class="space-y-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
         <div class="flex items-center justify-between gap-3">
           <div class="space-y-1">
             <h2 class="text-base font-semibold text-foreground">Tracking rules</h2>
             <p class="text-sm text-muted-foreground">Choose which episode types should remain monitored for this anime.</p>
           </div>
           {#if rulesDirty}
-            <span class="rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Unsaved changes</span>
+            <span class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Unsaved changes</span>
           {/if}
         </div>
 
         <div class="grid gap-3 md:grid-cols-3">
-              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+              <div class="rounded-xl border border-border bg-popover/75 backdrop-blur-md p-4">
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <div class="text-sm font-medium text-foreground">Anime canon</div>
@@ -467,7 +467,7 @@
                 </div>
               </div>
 
-              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+              <div class="rounded-xl border border-border bg-popover/75 backdrop-blur-md p-4">
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <div class="text-sm font-medium text-foreground">Mixed canon</div>
@@ -477,7 +477,7 @@
                 </div>
               </div>
 
-              <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+              <div class="rounded-xl border border-border bg-popover/75 backdrop-blur-md p-4">
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <div class="text-sm font-medium text-foreground">Filler</div>
@@ -496,9 +496,9 @@
         {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !btn.active}
         <button
           type="button"
-          class="rounded-2xl border p-4 text-left transition-all duration-200 {btn.active
-            ? btn.activeClass + ' scale-105'
-            : 'border-border bg-secondary text-foreground hover:border-primary/50 hover:scale-[1.02]'} {dimmed ? 'opacity-40' : ''}"
+          class="rounded-xl border p-4 text-left transition-colors duration-200 {btn.active
+            ? btn.activeClass
+            : 'border-border bg-card text-foreground hover:border-primary/50 hover:bg-muted'} {dimmed ? 'opacity-40' : ''}"
           onclick={() => toggleTypeFilter(btn.type)}
         >
           <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">{btn.label}</div>
@@ -508,7 +508,7 @@
     </section>
 
     {#if episodes.length === 0}
-      <Box class="rounded-2xl border border-border/80 bg-popover/60 p-8 text-center">
+      <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-8 text-center">
         <h2 class="text-lg font-semibold text-foreground">No episodes yet</h2>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">Mizu has not synced episode details for this anime yet.</p>
       </Box>
@@ -516,10 +516,10 @@
       <section class="space-y-4">
         {#each groupedBySeason as group, index}
           {@const isOpen = openSeasons.has(index)}
-          <div class="overflow-hidden rounded-2xl border border-border/80 bg-popover/60">
+          <div class="overflow-hidden rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)]">
             <button
               type="button"
-              class="flex w-full cursor-pointer list-none items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40 {isOpen ? 'border-b border-border/80' : ''}"
+              class="flex w-full cursor-pointer list-none items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40 {isOpen ? 'border-b border-border' : ''}"
               onclick={() => {
                 const next = new Set(openSeasons);
                 if (next.has(index)) next.delete(index);
@@ -536,7 +536,7 @@
             {#if isOpen}
               <div class="hidden overflow-x-auto md:block" transition:slide={{ duration: 200 }}>
                 <table class="min-w-full border-collapse text-left text-sm">
-                  <thead class="border-b border-border/80 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                  <thead class="border-b border-border text-xs uppercase tracking-[0.12em] text-muted-foreground">
                     <tr>
                       <th class="px-5 py-3 font-medium">#</th>
                       <th class="px-5 py-3 font-medium">Title</th>
@@ -549,7 +549,7 @@
                     {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
                       {@const typeBadge = episodeTypeBadge(ep.type)}
                       {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
-                      <tr class="border-b border-border/80 last:border-b-0">
+                      <tr class="border-b border-border last:border-b-0">
                         <td class="px-5 py-4 font-medium text-muted-foreground">{displayEpisodeNumber(ep)}</td>
                         <td class="px-5 py-4 text-foreground">{ep.title || '-'}</td>
                         <td class="px-5 py-4">
@@ -589,7 +589,7 @@
                 {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
                   {@const typeBadge = episodeTypeBadge(ep.type)}
                   {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
-                  <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+                  <div class="rounded-xl border border-border bg-popover/75 backdrop-blur-md p-4">
                     <div class="flex flex-wrap items-start justify-between gap-3">
                       <div class="space-y-2">
                         <div class="text-sm font-medium text-muted-foreground">{episodeLabel(ep)}</div>

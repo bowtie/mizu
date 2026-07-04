@@ -691,10 +691,11 @@
   <title>Mizu - Anime</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-8">
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Anime</h1>
+      <p class="mt-1 text-sm text-muted-foreground">Tracked series, sync status, and filler mapping.</p>
     </div>
     <Button onclick={openAddModal}>
       <Plus size={18} />
@@ -704,7 +705,7 @@
 
   <section class="flex flex-col gap-3 sm:flex-row sm:items-center">
     <div class="relative flex-1">
-      <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-primary">
+      <span class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-4 text-primary">
         <Search size={20} />
       </span>
       <Input
@@ -735,15 +736,15 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-center">
       <LoaderCircle size={30} class="animate-spin text-primary" />
       <div class="space-y-1">
         <h2 class="text-base font-semibold text-foreground">Loading anime</h2>
-        <p class="text-sm text-muted-foreground">Pulling current mappings and Sonarr state.</p>
+        <p class="text-sm text-muted-foreground">Loading mappings and Sonarr state.</p>
       </div>
     </Box>
   {:else if filteredShows.length === 0 && ($shows || []).length === 0}
-    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 px-6 text-center">
+    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] px-6 text-center">
       <span class="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/30 text-primary">
         <Waves size={24} />
       </span>
@@ -757,8 +758,8 @@
       </Button>
     </Box>
   {:else if filteredShows.length === 0}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-border/80 bg-popover/60 px-6 text-center">
-      <span class="flex size-12 items-center justify-center rounded-xl border border-border/80 bg-card/70 text-muted-foreground">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] px-6 text-center">
+      <span class="flex size-12 items-center justify-center rounded-xl border border-border bg-card/70 text-muted-foreground">
         <CircleAlert size={24} />
       </span>
       <div class="space-y-1">
@@ -776,9 +777,9 @@
           onclick={() => openShow(show.id)}
           aria-label={`Open ${show.sonarr_title}`}
         >
-          <Box class="h-full rounded-2xl border border-border/80 bg-popover/60 p-3 transition-all duration-300 ease-out group-hover:border-primary/40 group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)] group-focus-visible:border-primary/40">
+          <Box class="h-full rounded-xl border border-border bg-popover/75 backdrop-blur-md p-3 transition-all duration-300 ease-out group-hover:border-primary/40 group-hover:shadow-[0_8px_30px_rgba(0,0,0,0.4),0_2px_8px_rgba(0,0,0,0.3)] group-focus-visible:border-primary/40">
             <div
-              class="poster-frame relative aspect-[2/3] overflow-hidden rounded-xl border border-border/80 bg-card/80"
+              class="poster-frame relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-card/80"
               data-poster-state={show.poster ? POSTER_LOADING : POSTER_FAILED}
               use:observePosterFrame={show}
             >
@@ -836,13 +837,13 @@
 
 {#if showAddModal}
   <div
-    class="show-add-modal-shell fixed inset-0 z-50 grid place-items-center bg-background/80 p-3 sm:p-6"
+    class="show-add-modal-shell fixed inset-0 z-50 grid place-items-center bg-background/60 p-3 sm:p-6"
     role="presentation"
     onclick={handleAddModalBackdropClick}
     transition:fade={{ duration: 180 }}
   >
     <section
-      class="show-add-modal-panel relative grid max-h-[calc(100vh-1.5rem)] w-full max-w-3xl gap-6 overflow-hidden rounded-2xl border border-border bg-popover p-6 shadow-[0_24px_80px_rgba(0,0,0,0.5)] sm:max-h-[calc(100vh-3rem)] sm:p-7"
+      class="show-add-modal-panel relative grid max-h-[calc(100vh-1.5rem)] w-full max-w-3xl gap-6 overflow-hidden rounded-xl border border-border bg-popover p-6 shadow-[0_16px_50px_rgba(0,0,0,0.5),0_4px_12px_rgba(0,0,0,0.3)] sm:max-h-[calc(100vh-3rem)] sm:p-7"
       role="dialog"
       aria-modal="true"
       aria-labelledby="show-add-modal-title"
@@ -851,7 +852,7 @@
     >
       <button
         type="button"
-        class="show-add-modal-close absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/80 bg-card/80 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        class="show-add-modal-close absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card/80 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         onclick={closeAddModal}
         aria-label="Close add anime modal"
       >
@@ -859,7 +860,7 @@
       </button>
 
       <div class="space-y-7">
-        <div class="space-y-3 border-b border-border/80 pb-5 pr-12">
+        <div class="space-y-3 border-b border-border pb-5 pr-12">
           <h2 id="show-add-modal-title" class="text-xl font-semibold tracking-tight text-foreground">Add anime</h2>
           <!-- Step indicator -->
           <div class="flex items-center gap-1.5">
@@ -909,7 +910,7 @@
               <p class="text-sm text-muted-foreground">Loading available Sonarr anime.</p>
             </div>
           {:else if allSeries.length === 0}
-            <Box class="rounded-2xl border border-border/80 bg-popover/60 p-6 text-center">
+            <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
               <h3 class="text-base font-semibold text-foreground">No anime found in Sonarr</h3>
               <p class="mt-2 text-sm leading-6 text-muted-foreground">Sonarr returned no anime series for this library.</p>
             </Box>
@@ -918,7 +919,7 @@
               <div class="space-y-2">
                 <Label for="show-add-series-search">Search</Label>
                 <div class="relative">
-                  <div class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
+                  <div class="pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center text-muted-foreground">
                     <Search size={16} />
                   </div>
                   <Input
@@ -932,7 +933,7 @@
               </div>
 
               {#if filteredSeriesLibrary.length === 0}
-                <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/60 p-6 text-center">
+                <Box class="space-y-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
                   <h3 class="text-base font-semibold text-foreground">No anime match that search</h3>
                   <p class="mt-2 text-sm leading-6 text-muted-foreground">Try a different title, year, or jump into the cached AFL list and add it from there.</p>
                   <div class="flex justify-center">
@@ -963,7 +964,7 @@
                         aria-pressed={isSelected}
                       >
                         <div
-                          class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-md border border-border bg-card sm:w-11"
+                          class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-lg border border-border bg-card sm:w-11"
                           data-poster-state={seriesPoster ? POSTER_LOADING : POSTER_FAILED}
                           use:observePosterFrame={series}
                         >
@@ -1044,7 +1045,7 @@
                 <p class="text-sm text-muted-foreground">Loading cached AnimeFillerList titles.</p>
               </div>
             {:else if fallbackAflResults.length === 0}
-              <Box class="rounded-2xl border border-border/80 bg-popover/60 p-6 text-center">
+              <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
                 <h3 class="text-base font-semibold text-foreground">No cached AFL titles found</h3>
                 <p class="mt-2 text-sm leading-6 text-muted-foreground">Try another filter or refresh the AFL cache in Settings if this anime is new.</p>
               </Box>
@@ -1103,7 +1104,7 @@
                 <p class="text-sm text-muted-foreground">Looking up Sonarr candidates.</p>
               </div>
             {:else if sonarrLookupResults.length === 0}
-              <Box class="rounded-2xl border border-border/80 bg-popover/60 p-6 text-center">
+              <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
                 <h3 class="text-base font-semibold text-foreground">No Sonarr results found</h3>
                 <p class="mt-2 text-sm leading-6 text-muted-foreground">Try another title variation for {selectedFallbackAfl?.title} and search again.</p>
               </Box>
@@ -1119,7 +1120,7 @@
                       onclick={() => (selectedSonarrLookup = result)}
                     >
                       <div
-                        class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-md border border-border bg-card sm:w-11"
+                        class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-lg border border-border bg-card sm:w-11"
                         data-poster-state={lookupPoster ? POSTER_LOADING : POSTER_FAILED}
                         use:observePosterFrame={result}
                       >
@@ -1172,7 +1173,7 @@
               </ScrollArea>
             {/if}
 
-            <Box class="grid gap-3 rounded-2xl border border-border/80 bg-popover/70 p-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
+            <Box class="grid gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
               <div class="space-y-2">
                 <Label for="fallback-quality-profile">Quality profile</Label>
                 <div class="max-w-xs">
@@ -1194,7 +1195,7 @@
                 </div>
               </div>
 
-              <label class="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-popover/70 px-4 py-3">
+              <label class="flex items-center justify-between gap-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md px-4 py-3">
                 <div class="text-sm font-medium text-foreground">Season folder</div>
                 <Checkbox bind:checked={fallbackSeasonFolder} />
               </label>
@@ -1207,7 +1208,7 @@
             </Box>
           </div>
         {:else if addStep === ADD_STEP_UNSAFE_MATCH}
-          <Box class="space-y-4 rounded-2xl border border-warning/20 bg-warning/10 p-5">
+          <Box class="space-y-4 rounded-xl border border-warning/20 bg-warning/10 p-5">
             <div class="flex items-start gap-3">
               <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-warning">
                 <CircleAlert size={16} />
@@ -1221,13 +1222,13 @@
               </div>
             </div>
 
-            <div class="rounded-xl border border-border/80 bg-popover/70 p-4">
+            <div class="rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
               <div class="text-sm font-semibold text-foreground">{matchTitle(selectedAfl)}</div>
               <div class="mt-1 text-sm text-muted-foreground">{matchSlug(selectedAfl)}</div>
             </div>
           </Box>
         {:else if addStep === ADD_STEP_POST_ADD}
-          <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/70 p-5">
+          <Box class="space-y-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-5">
             <div class="flex items-start gap-3">
               <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/40 text-primary">
                 <CircleCheckBig size={16} />
@@ -1249,7 +1250,7 @@
           </Box>
         {:else}
           {#if manualSearchVisible}
-            <div class="space-y-3 rounded-2xl border border-border/80 bg-popover/60 p-4">
+            <div class="space-y-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-4">
               <div class="space-y-1">
                 <Label for="afl-search">Manual search</Label>
                 <p class="text-sm text-muted-foreground">Automatic matching was not strong enough, so you can search the cached AnimeFillerList titles directly.</p>
@@ -1280,12 +1281,12 @@
               <p class="text-sm text-muted-foreground">Looking for strong cached AnimeFillerList matches.</p>
             </div>
           {:else if displayedMatches.length === 0}
-            <Box class="rounded-2xl border border-border/80 bg-popover/60 p-6 text-center">
+            <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
               <h3 class="text-base font-semibold text-foreground">No matches found</h3>
               <p class="mt-2 text-sm leading-6 text-muted-foreground">Refresh the AnimeFillerList cache in Settings if this anime is new, then try again.</p>
             </Box>
           {:else if selectedAfl && isCompactMatchSelection(selectedAfl)}
-            <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/70 p-5">
+            <Box class="space-y-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-5">
               <div class="space-y-2">
                 <div class="text-sm font-semibold text-foreground">{matchTitle(selectedAfl)}</div>
                 <div class="flex flex-wrap gap-2">
@@ -1331,14 +1332,14 @@
           {/if}
 
           {#if selectedAfl}
-            <Box class="space-y-4 rounded-2xl border border-border/80 bg-popover/70 p-4">
+            <Box class="space-y-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
               <div class="space-y-1">
                 <h3 class="text-base font-semibold text-foreground">Default tracking rules</h3>
                 <p class="text-sm text-muted-foreground">Set the initial monitoring rules for this mapping before it is created.</p>
               </div>
 
               <div class="grid gap-3 md:grid-cols-3">
-                <label class="flex items-start gap-3 rounded-xl border border-border/80 bg-popover/70 p-4">
+                <label class="flex items-start gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
                   <Checkbox bind:checked={addTrackAnimeCanon} />
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-foreground">Anime canon</div>
@@ -1346,7 +1347,7 @@
                   </div>
                 </label>
 
-                <label class="flex items-start gap-3 rounded-xl border border-border/80 bg-popover/70 p-4">
+                <label class="flex items-start gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
                   <Checkbox bind:checked={addTrackMixed} />
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-foreground">Mixed canon</div>
@@ -1354,7 +1355,7 @@
                   </div>
                 </label>
 
-                <label class="flex items-start gap-3 rounded-xl border border-border/80 bg-popover/70 p-4">
+                <label class="flex items-start gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
                   <Checkbox bind:checked={addTrackFiller} />
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-foreground">Filler</div>
@@ -1386,7 +1387,7 @@
           {/if}
         {/if}
 
-        <div class="flex flex-col-reverse gap-3 border-t border-border/80 pt-5 sm:flex-row sm:justify-between">
+        <div class="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-between">
           <div class="flex flex-col-reverse gap-3 sm:flex-row">
             {#if addStep !== ADD_STEP_POST_ADD}
               <Button variant="secondary" onclick={closeAddModal}>Cancel</Button>

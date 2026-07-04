@@ -86,7 +86,7 @@
   onDestroy(clearHold);
 </script>
 
-<div class={`flex w-full max-w-44 items-center rounded-2xl border border-primary/20 bg-secondary/40 text-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25 ${disabled ? 'opacity-60' : ''} ${className}`.trim()}>
+<div class={`flex w-full max-w-44 items-center rounded-xl border border-primary/20 bg-secondary/40 text-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25 ${disabled ? 'opacity-60' : ''} ${className}`.trim()}>
   <button
     type="button"
     class="flex h-8 w-8 items-center justify-center rounded-l-2xl text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"

@@ -1,0 +1,17 @@
+feat: add DarkVeil background, glassmorphism navbar, and UI polish
+
+- Integrate Svelte Bits DarkVeil CPPN shader as the animated background
+  (hueShift=30, speed=1) with reduced-motion fallback
+- Restyle navbar with glassmorphism: blur(32px) saturate(1.35),
+  near-transparent bg, subtle white border, inner highlight shadow
+- Apply glass treatment to Input and Select Trigger components
+- Add GlassSurface component (Svelte Bits) for future use
+- Make body background transparent so the fixed canvas shows through
+- Add toggle-group UI component, NumberInput, and various background
+  component experiments (Aurora, Mesh, Perlin, etc.)
+- Refine settings page Sync card with ToggleGroup for interval selection
+- Polish button, badge, box, popover, and select component styling
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
