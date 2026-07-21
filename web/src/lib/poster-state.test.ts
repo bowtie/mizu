@@ -12,7 +12,7 @@ import {
   POSTER_LOADING,
   resolvePosterElementState,
   shouldShowPoster,
-} from "./poster-state.js";
+} from "./poster-state.ts";
 
 test("createPosterStateMap seeds loading for shows with poster URLs and failed for shows without posters", () => {
   const shows = [

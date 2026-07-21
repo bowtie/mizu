@@ -21,3 +21,9 @@ web/dist/
 web/.svelte-kit/
 web/build/
 
+# Root-level dev artifacts
+/node_modules/
+/build-*.txt
+/check-*.txt
+REDESIGN_PROMPT.md
+

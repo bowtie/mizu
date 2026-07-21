@@ -1,24 +1,24 @@
-<script>
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
   import { AnimatePresence, motion } from '@humanspeak/svelte-motion';
-  import { Badge } from '$lib/components/ui/badge/index.js';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import { Input } from '$lib/components/ui/input/index.js';
-  import { Label } from '$lib/components/ui/label/index.js';
-  import { Switch } from '$lib/components/ui/switch/index.js';
-  import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
+  import { Badge } from '$lib/components/ui/badge/index.ts';
+  import { Button } from '$lib/components/ui/button/index.ts';
+  import { Input } from '$lib/components/ui/input/index.ts';
+  import { Label } from '$lib/components/ui/label/index.ts';
+  import { Switch } from '$lib/components/ui/switch/index.ts';
   import Box from '$lib/components/Box.svelte';
-  import { settings, addNotification } from '../../lib/stores.js';
-  import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.js';
-  import { AlertTriangle, Check, Eye, EyeOff, LoaderCircle, Plug, RefreshCw, Save } from 'lucide-svelte';
+  import { settings, addNotification } from '../../lib/stores.ts';
+  import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.ts';
+  import type { Settings, StoredApiKeyResponse } from '$lib/types.ts';
+  import { AlertTriangle, Check, Eye, EyeOff, LoaderCircle, Minus, Plug, Plus, RefreshCw, Save } from 'lucide-svelte';
 
   let loading = true;
   let saving = false;
   let testing = false;
   let refreshingCache = false;
   let revealingKey = false;
-  let testPhase = 'idle';
+  let testPhase: 'idle' | 'connecting' | 'success' | 'error' = 'idle';
   let testErrorMessage = '';
 
   let sonarrUrl = '';
@@ -32,22 +32,52 @@
   let trackFillerDefault = false;
   let trackMixedDefault = true;
   let trackAnimeCanonDefault = true;
-  let cacheRefreshedAt = null;
+  let cacheRefreshedAt: string | null = null;
   let cacheCount = 0;
 
-  // Pristine snapshots for dirty tracking
-  let pristine = {};
+  interface PristineSnapshot {
+    sonarrUrl: string;
+    sonarrApiKey: string;
+    apiKeyDirty: boolean;
+    syncInterval: string;
+    enableAniListArtwork: boolean;
+    trackFillerDefault: boolean;
+    trackMixedDefault: boolean;
+    trackAnimeCanonDefault: boolean;
+  }
 
-  const syncIntervalOptions = [
-    { value: '1h', label: 'Every 1 hour' },
-    { value: '3h', label: 'Every 3 hours' },
-    { value: '6h', label: 'Every 6 hours' },
-    { value: '12h', label: 'Every 12 hours' },
-    { value: '24h', label: 'Every 24 hours' },
+  let pristine: PristineSnapshot = {
+    sonarrUrl: '',
+    sonarrApiKey: '',
+    apiKeyDirty: false,
+    syncInterval: '6h',
+    enableAniListArtwork: false,
+    trackFillerDefault: false,
+    trackMixedDefault: true,
+    trackAnimeCanonDefault: true,
+  };
+
+  interface SyncIntervalOption {
+    value: string;
+    label: string;
+  }
+
+  const syncIntervalOptions: SyncIntervalOption[] = [
+    { value: '1h', label: '1 hour' },
+    { value: '3h', label: '3 hours' },
+    { value: '6h', label: '6 hours' },
+    { value: '12h', label: '12 hours' },
+    { value: '24h', label: '24 hours' },
   ];
 
-  const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
-  const trackedToAction = (tracked) => (tracked ? 'monitor' : 'unmonitor');
+  $: syncIntervalIndex = syncIntervalOptions.findIndex((o) => o.value === syncInterval);
+  function stepSyncInterval(dir: number) {
+    const next = Math.min(Math.max(syncIntervalIndex + dir, 0), syncIntervalOptions.length - 1);
+    syncInterval = syncIntervalOptions[next].value;
+  }
+
+  const actionToTracked = (action: string | undefined, fallback = true): boolean => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
+  const trackedToAction = (tracked: boolean): string => (tracked ? 'monitor' : 'unmonitor');
 
   onMount(async () => {
     await loadSettings();
@@ -83,7 +113,7 @@
           trackAnimeCanonDefault,
         };
       }
-    } catch (err) {
+    } catch (err: any) {
       addNotification('Failed to load settings: ' + err.message, 'error');
     }
     loading = false;
@@ -101,32 +131,32 @@
 
   $: urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
   let prefersReducedMotion = false;
   onMount(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     prefersReducedMotion = mq.matches;
-    const handler = (e) => (prefersReducedMotion = e.matches);
+    const handler = (e: MediaQueryListEvent) => (prefersReducedMotion = e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   });
-  const slideIn = (duration = 200) =>
+  const slideIn = (duration = 200): { duration: number } =>
     prefersReducedMotion ? { duration: 0 } : { duration };
 
-  let resetTimer = null;
+  let resetTimer: ReturnType<typeof setTimeout> | null = null;
   function scheduleReset(delay = 1800) {
-    clearTimeout(resetTimer);
+    clearTimeout(resetTimer as unknown as number);
     resetTimer = setTimeout(() => {
       testPhase = 'idle';
       testErrorMessage = '';
     }, delay);
   }
   function clearReset() {
-    clearTimeout(resetTimer);
+    clearTimeout(resetTimer as unknown as number);
     resetTimer = null;
   }
-  onDestroy(() => clearTimeout(resetTimer));
+  onDestroy(() => clearTimeout(resetTimer as unknown as number));
 
   function clearTestResult() {
     clearReset();
@@ -136,14 +166,16 @@
     }
   }
 
-  function handleApiKeyInput(event) {
+  function handleApiKeyInput(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
     apiKeyDirty = true;
-    sonarrApiKey = event.currentTarget.value;
+    sonarrApiKey = input.value;
     clearTestResult();
   }
 
-  function handleUrlInput(event) {
-    sonarrUrl = event.currentTarget.value;
+  function handleUrlInput(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    sonarrUrl = input.value;
     clearTestResult();
   }
 
@@ -161,7 +193,7 @@
       try {
         const data = await getStoredSonarrApiKey();
         sonarrApiKey = data.sonarr_api_key || '';
-      } catch (err) {
+      } catch (err: any) {
         addNotification('Failed to reveal saved API key: ' + err.message, 'error');
         revealingKey = false;
         return;
@@ -172,7 +204,7 @@
     apiKeyVisible = true;
   }
 
-  async function resolveApiKeyForTest() {
+  async function resolveApiKeyForTest(): Promise<string> {
     if (apiKeyDirty || apiKeyVisible || !hasSavedApiKey) {
       return sonarrApiKey;
     }
@@ -183,7 +215,7 @@
   async function handleSave() {
     saving = true;
     try {
-      const payload = {
+      const payload: Partial<Settings> = {
         sonarr_url: sonarrUrl,
         default_filler_action: trackedToAction(trackFillerDefault),
         default_mixed_canon_action: trackedToAction(trackMixedDefault),
@@ -199,7 +231,7 @@
       await updateSettings(payload);
       addNotification('Settings saved', 'success');
       await loadSettings();
-    } catch (err) {
+    } catch (err: any) {
       addNotification('Failed to save settings: ' + err.message, 'error');
     }
     saving = false;
@@ -238,7 +270,7 @@
 
       testPhase = 'success';
       scheduleReset(2000);
-    } catch (err) {
+    } catch (err: any) {
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
 
@@ -255,13 +287,13 @@
       await refreshAflCache();
       addNotification('AFL show list refreshed', 'success', 6000);
       await loadSettings();
-    } catch (err) {
+    } catch (err: any) {
       addNotification('Failed to refresh AFL cache: ' + err.message, 'error');
     }
     refreshingCache = false;
   }
 
-  function formatCacheTime(value) {
+  function formatCacheTime(value: string | null | undefined): string {
     if (!value) return 'Never refreshed';
     return new Date(value).toLocaleString();
   }
@@ -289,7 +321,7 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl glass-card text-center">
       <LoaderCircle size={30} class="animate-spin text-primary" />
       <div class="space-y-1">
         <h2 class="text-base font-semibold text-foreground">Loading settings</h2>
@@ -305,7 +337,7 @@
       {/if}
 
       <!-- Connection section (critical) -->
-      <Box class="space-y-5 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
+      <Box class="space-y-5 rounded-xl glass-card p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold text-foreground">Connection</h2>
@@ -441,7 +473,7 @@
       </Box>
 
       <!-- Sync section -->
-      <Box class="space-y-5 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
+      <Box class="space-y-5 rounded-xl glass-card p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold text-foreground">Sync</h2>
@@ -460,27 +492,49 @@
           </Button>
         </div>
 
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <Label>Sync interval</Label>
-            <ToggleGroup.Root type="single" bind:value={syncInterval} class="flex w-full gap-1.5">
-              {#each syncIntervalOptions as item}
-                <ToggleGroup.Item value={item.value} class="flex-1">
-                  {item.value}
-                </ToggleGroup.Item>
-              {/each}
-            </ToggleGroup.Root>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="flex items-center justify-between gap-3 rounded-xl glass-card px-4 py-3">
+            <div>
+              <div class="text-sm font-medium text-foreground">Sync interval</div>
+              <div class="text-sm text-muted-foreground">How often Mizu checks for episode changes and updates Sonarr.</div>
+            </div>
+            <div class="flex shrink-0 items-center rounded-lg border border-primary/20 bg-secondary/40 text-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25">
+              <button
+                type="button"
+                class="flex h-8 w-8 items-center justify-center rounded-l-lg text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                onclick={() => stepSyncInterval(-1)}
+                disabled={syncIntervalIndex <= 0}
+                aria-label="Decrease sync interval"
+              >
+                <Minus size={16} />
+              </button>
+              <div class="h-8 min-w-[5rem] flex items-center justify-center px-2 text-center text-sm font-semibold text-foreground">
+                {syncIntervalOptions[syncIntervalIndex].label}
+              </div>
+              <button
+                type="button"
+                class="flex h-8 w-8 items-center justify-center rounded-r-lg text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                onclick={() => stepSyncInterval(1)}
+                disabled={syncIntervalIndex >= syncIntervalOptions.length - 1}
+                aria-label="Increase sync interval"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
           </div>
 
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
-            <div class="text-sm font-medium text-foreground">AniList artwork</div>
+          <div class="flex items-center justify-between gap-3 rounded-xl glass-card px-4 py-3">
+            <div>
+              <div class="text-sm font-medium text-foreground">AniList artwork</div>
+              <div class="text-sm text-muted-foreground">Use AniList banners and posters instead of Sonarr images only.</div>
+            </div>
             <Switch bind:checked={enableAniListArtwork} />
           </div>
         </div>
       </Box>
 
       <!-- Defaults section -->
-      <Box class="space-y-5 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-5">
+      <Box class="space-y-5 rounded-xl glass-card p-5">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-lg font-semibold text-foreground">Defaults</h2>
           <Badge variant="secondary">New anime</Badge>
@@ -488,7 +542,7 @@
         <p class="text-sm leading-6 text-muted-foreground">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
 
         <div class="grid gap-3 md:grid-cols-3">
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl glass-card px-4 py-3">
             <div>
               <div class="text-sm font-medium text-foreground">Anime canon</div>
               <div class="mt-0.5 text-xs text-muted-foreground">Original anime episodes</div>
@@ -496,7 +550,7 @@
             <Switch bind:checked={trackAnimeCanonDefault} />
           </div>
 
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl glass-card px-4 py-3">
             <div>
               <div class="text-sm font-medium text-foreground">Mixed canon</div>
               <div class="mt-0.5 text-xs text-muted-foreground">Canon + filler blend</div>
@@ -504,7 +558,7 @@
             <Switch bind:checked={trackMixedDefault} />
           </div>
 
-          <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl glass-card px-4 py-3">
             <div>
               <div class="text-sm font-medium text-foreground">Filler</div>
               <div class="mt-0.5 text-xs text-muted-foreground">Pure filler episodes</div>

@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const showsSvelte = readFileSync(resolve(import.meta.dirname, "../routes/shows/+page.svelte"), "utf8");
-const apiJs = readFileSync(resolve(import.meta.dirname, "./api.js"), "utf8");
-const storesJs = readFileSync(resolve(import.meta.dirname, "./stores.js"), "utf8");
+const apiJs = readFileSync(resolve(import.meta.dirname, "./api.ts"), "utf8");
+const storesJs = readFileSync(resolve(import.meta.dirname, "./stores.ts"), "utf8");
 const settingsSvelte = readFileSync(
   resolve(import.meta.dirname, "../routes/settings/+page.svelte"),
   "utf8",

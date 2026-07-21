@@ -59,7 +59,6 @@
 
   onMount(() => {
     const uniforms: ShaderMountUniforms = {
-      u_image: '',
       u_colorFront: getShaderColorFromString(colorFront),
       u_colorBack: getShaderColorFromString(colorBack),
       u_contrast: contrast,
@@ -73,7 +72,7 @@
       u_fade: fade,
       u_drops: drops,
       u_seed: seed,
-      ...getShaderNoiseTexture(),
+      u_image: getShaderNoiseTexture() ?? undefined,
       u_scale: scale,
       u_rotation: rotation,
       u_fit: ShaderFitOptions.cover,

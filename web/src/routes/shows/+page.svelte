@@ -1,17 +1,19 @@
-<script>
+<script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import type { ActionReturn } from 'svelte/action';
   import { fade, scale, fly } from 'svelte/transition';
-  import { autoAnimateAction as autoAnimate } from '../../lib/autoAnimate.js';
+  import { autoAnimateAction as autoAnimate } from '../../lib/autoAnimate.ts';
   import { goto } from '$app/navigation';
-  import { Badge } from '$lib/components/ui/badge/index.js';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import { Checkbox } from '$lib/components/ui/checkbox/index.js';
-  import { Input } from '$lib/components/ui/input/index.js';
-  import { Label } from '$lib/components/ui/label/index.js';
-  import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-  import * as Select from '$lib/components/ui/select/index.js';
+  import type { AFLMatch, MappingCreate, SelectOption, Settings, Show, SonarrAddOptions, SonarrAddPayload, SonarrImage, SonarrSeries } from '$lib/types.ts';
+  import { Badge, type BadgeVariant } from '$lib/components/ui/badge/index.ts';
+  import { Button } from '$lib/components/ui/button/index.ts';
+  import { Checkbox } from '$lib/components/ui/checkbox/index.ts';
+  import { Input } from '$lib/components/ui/input/index.ts';
+  import { Label } from '$lib/components/ui/label/index.ts';
+  import { ScrollArea } from '$lib/components/ui/scroll-area/index.ts';
+  import * as Select from '$lib/components/ui/select/index.ts';
   import Box from '$lib/components/Box.svelte';
-  import { shows, settings, addNotification } from '../../lib/stores.js';
+  import { shows, settings, addNotification } from '../../lib/stores.ts';
   import {
     addSonarrSeries,
     getShows,
@@ -23,96 +25,120 @@
     searchAFL,
     confirmMatch,
     getSettings,
-  } from '../../lib/api.js';
-  import { episodeTypeBadge, syncStateBadge } from '../../lib/fox.js';
+  } from '../../lib/api.ts';
+  import { episodeTypeBadge, syncStateBadge } from '../../lib/fox.ts';
   import {
     createPosterMonogram,
     POSTER_FAILED,
     POSTER_LOADING,
     resolvePosterElementState,
-  } from '../../lib/poster-state.js';
-  import { resolveSonarrImageUrl } from '../../lib/sonarr-images.js';
+  } from '../../lib/poster-state.ts';
+  import { resolveSonarrImageUrl } from '../../lib/sonarr-images.ts';
   import { Check, CircleAlert, CircleCheckBig, LoaderCircle, Plus, Search, Waves, X } from 'lucide-svelte';
 
-  const START_FROM_BEGINNING = 'from_beginning';
-  const START_FROM_CURRENT = 'from_current_progress';
-  const ADD_STEP_SERIES = 'series';
-  const ADD_STEP_FALLBACK_AFL = 'fallback_afl';
-  const ADD_STEP_FALLBACK_SONARR = 'fallback_sonarr';
-  const ADD_STEP_MATCH = 'match';
-  const ADD_STEP_UNSAFE_MATCH = 'unsafe_match';
-  const ADD_STEP_POST_ADD = 'post_add';
+  const START_FROM_BEGINNING: string = 'from_beginning';
+  const START_FROM_CURRENT: string = 'from_current_progress';
+  const ADD_STEP_SERIES: string = 'series';
+  const ADD_STEP_FALLBACK_AFL: string = 'fallback_afl';
+  const ADD_STEP_FALLBACK_SONARR: string = 'fallback_sonarr';
+  const ADD_STEP_MATCH: string = 'match';
+  const ADD_STEP_UNSAFE_MATCH: string = 'unsafe_match';
+  const ADD_STEP_POST_ADD: string = 'post_add';
 
-  let loading = true;
-  let filter = '';
-  let sortBy = 'title';
+  interface AddOutcome {
+    title: string;
+    type: string;
+    mappingId?: string | number | null;
+  }
 
-  let allSeries = [];
-  let addSeriesLibrary = [];
-  let seriesById = {};
+  interface PosterItem {
+    poster?: string;
+    [key: string]: unknown;
+  }
 
-  let showAddModal = false;
-  let addStep = ADD_STEP_SERIES;
-  let sonarrLoading = false;
-  let seriesQuery = '';
-  let selectedSonarr = null;
-  let suggestedMatches = [];
-  let displayedMatches = [];
-  let matchLoading = false;
-  let manualQuery = '';
-  let manualSearching = false;
-  let manualSearchVisible = false;
-  let selectedAfl = null;
-  let confirming = false;
-  let addTrackFiller = false;
-  let addTrackMixed = true;
-  let addTrackAnimeCanon = true;
-  let addStartMode = START_FROM_CURRENT;
-  let fallbackAflQuery = '';
-  let cachedAflShows = [];
-  let fallbackAflResults = [];
-  let fallbackAflLoading = false;
-  let selectedFallbackAfl = null;
-  let fallbackFilterTimeout = null;
-  let sonarrLookupQuery = '';
-  let sonarrLookupResults = [];
-  let sonarrLookupLoading = false;
-  let selectedSonarrLookup = null;
-  let sonarrAdding = false;
-  let sonarrRootFolderOptions = [];
-  let sonarrQualityProfileOptions = [];
-  let sonarrAddOptionsError = '';
-  let fallbackQualityProfileId = '';
-  let fallbackSeasonFolder = true;
-  let addOutcome = null;
+  interface WizardStep {
+    key: string;
+    label: string;
+  }
 
-  const startModeOptions = [
+  let loading: boolean = true;
+  let filter: string = '';
+  let sortBy: string = 'title';
+
+  let allSeries: SonarrSeries[] = [];
+  let addSeriesLibrary: SonarrSeries[] = [];
+  let seriesById: Record<string | number, SonarrSeries> = {};
+
+  let showAddModal: boolean = false;
+  let addStep: string = ADD_STEP_SERIES;
+  let sonarrLoading: boolean = false;
+  let seriesQuery: string = '';
+  let selectedSonarr: SonarrSeries | null = null;
+  let suggestedMatches: AFLMatch[] = [];
+  let displayedMatches: AFLMatch[] = [];
+  let matchLoading: boolean = false;
+  let manualQuery: string = '';
+  let manualSearching: boolean = false;
+  let manualSearchVisible: boolean = false;
+  let selectedAfl: AFLMatch | null = null;
+  let confirming: boolean = false;
+  let addTrackFiller: boolean = false;
+  let addTrackMixed: boolean = true;
+  let addTrackAnimeCanon: boolean = true;
+  let addStartMode: string = START_FROM_CURRENT;
+  let fallbackAflQuery: string = '';
+  let cachedAflShows: AFLMatch[] = [];
+  let fallbackAflResults: AFLMatch[] = [];
+  let fallbackAflLoading: boolean = false;
+  let selectedFallbackAfl: AFLMatch | null = null;
+  let fallbackFilterTimeout: ReturnType<typeof setTimeout> | null = null;
+  let sonarrLookupQuery: string = '';
+  let sonarrLookupResults: SonarrSeries[] = [];
+  let sonarrLookupLoading: boolean = false;
+  let selectedSonarrLookup: SonarrSeries | null = null;
+  let sonarrAdding: boolean = false;
+  let sonarrRootFolderOptions: SelectOption[] = [];
+  let sonarrQualityProfileOptions: SelectOption[] = [];
+  let sonarrAddOptionsError: string = '';
+  let fallbackQualityProfileId: string = '';
+  let fallbackSeasonFolder: boolean = true;
+  let addOutcome: AddOutcome | null = null;
+
+  let activeWizardSteps: WizardStep[] = [];
+  let currentStepIndex: number = -1;
+  let mappedShows: Show[] = [];
+  let filteredShows: Show[] = [];
+  let availableSeries: SonarrSeries[] = [];
+  let mappedSeriesIds: Set<number> = new Set();
+  let filteredSeriesLibrary: SonarrSeries[] = [];
+
+  const startModeOptions: SelectOption[] = [
     { value: START_FROM_CURRENT, label: 'Current progress' },
     { value: START_FROM_BEGINNING, label: 'Episode 1' },
   ];
-  const sortOptions = [
+  const sortOptions: SelectOption[] = [
     { value: 'title', label: 'Title (A-Z)' },
     { value: 'title_desc', label: 'Title (Z-A)' },
     { value: 'watermark', label: 'Latest progress' },
   ];
-  const wizardSteps = [
+  const wizardSteps: WizardStep[] = [
     { key: ADD_STEP_SERIES, label: 'Select' },
     { key: ADD_STEP_MATCH, label: 'Match' },
     { key: ADD_STEP_UNSAFE_MATCH, label: 'Confirm' },
     { key: ADD_STEP_POST_ADD, label: 'Done' },
   ];
-  const wizardFallbackSteps = [
+  const wizardFallbackSteps: WizardStep[] = [
     { key: ADD_STEP_FALLBACK_AFL, label: 'AFL Search' },
     { key: ADD_STEP_FALLBACK_SONARR, label: 'Add to Sonarr' },
     { key: ADD_STEP_MATCH, label: 'Match' },
   ];
   $: activeWizardSteps = [ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep) ? wizardFallbackSteps : wizardSteps;
-  $: currentStepIndex = activeWizardSteps.findIndex((s) => s.key === addStep);
-  const modalSelectContentProps = { class: 'z-[70] p-1' };
-  const actionToTracked = (action, fallback = true) => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
-  const trackedToAction = (tracked) => (tracked ? 'monitor' : 'unmonitor');
+  $: currentStepIndex = activeWizardSteps.findIndex((s: WizardStep) => s.key === addStep);
+  const modalSelectContentProps: Record<string, unknown> = { class: 'z-[70] p-1' };
+  const actionToTracked = (action: string | undefined, fallback: boolean = true): boolean => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
+  const trackedToAction = (tracked: boolean): string => (tracked ? 'monitor' : 'unmonitor');
 
-  $: mappedShows = ($shows || []).map((show) => {
+  $: mappedShows = ($shows || []).map((show: Show) => {
     const series = seriesById[show.sonarr_series_id] || null;
     return {
       ...show,
@@ -121,12 +147,12 @@
   });
 
   $: filteredShows = mappedShows
-    .filter((show) => {
+    .filter((show: Show) => {
       if (!filter) return true;
-      const query = filter.toLowerCase();
+      const query: string = filter.toLowerCase();
       return (show.sonarr_title || '').toLowerCase().includes(query) || (show.afl_title || show.afl_slug || '').toLowerCase().includes(query);
     })
-    .sort((a, b) => {
+    .sort((a: Show, b: Show) => {
       if (sortBy === 'title') return (a.sonarr_title || '').localeCompare(b.sonarr_title || '');
       if (sortBy === 'title_desc') return (b.sonarr_title || '').localeCompare(a.sonarr_title || '');
       if (sortBy === 'watermark') return (b.sync_watermark || 0) - (a.sync_watermark || 0);
@@ -134,21 +160,21 @@
     });
 
   $: availableSeries = allSeries
-    .filter((series) => !new Set(($shows || []).map((show) => show.sonarr_series_id)).has(series.id))
-    .sort((a, b) => a.title.localeCompare(b.title));
+    .filter((series: SonarrSeries) => !new Set(($shows || []).map((show: Show) => show.sonarr_series_id)).has(series.id))
+    .sort((a: SonarrSeries, b: SonarrSeries) => a.title.localeCompare(b.title));
 
-  $: mappedSeriesIds = new Set(($shows || []).map((show) => show.sonarr_series_id));
+  $: mappedSeriesIds = new Set(($shows || []).map((show: Show) => show.sonarr_series_id));
 
   $: filteredSeriesLibrary = addSeriesLibrary
-    .filter((series) => {
-    const query = seriesQuery.trim().toLowerCase();
+    .filter((series: SonarrSeries) => {
+    const query: string = seriesQuery.trim().toLowerCase();
     if (!query) return true;
     return (
       (series.title || '').toLowerCase().includes(query) ||
       String(series.year || '').includes(query)
     );
     })
-    .sort((a, b) => {
+    .sort((a: SonarrSeries, b: SonarrSeries) => {
       const aMapped = mappedSeriesIds.has(a.id) ? 1 : 0;
       const bMapped = mappedSeriesIds.has(b.id) ? 1 : 0;
       if (aMapped !== bMapped) return aMapped - bMapped;
@@ -168,41 +194,41 @@
     }
   });
 
-  async function loadLanding() {
+  async function loadLanding(): Promise<void> {
     loading = true;
     try {
-      const [showsRes, seriesRes, settingsRes] = await Promise.allSettled([getShows(), getSonarrSeries(), getSettings()]);
-      const nextShows = showsRes.status === 'fulfilled' ? (showsRes.value || []) : [];
+      const [showsRes, seriesRes, settingsRes]: [PromiseSettledResult<Show[]>, PromiseSettledResult<SonarrSeries[]>, PromiseSettledResult<Settings>] = await Promise.allSettled([getShows(), getSonarrSeries(), getSettings()]);
+      const nextShows: Show[] = showsRes.status === 'fulfilled' ? (showsRes.value || []) : [];
       shows.set(nextShows);
       allSeries = seriesRes.status === 'fulfilled' ? (seriesRes.value || []) : [];
-      seriesById = Object.fromEntries(allSeries.map((series) => [series.id, series]));
+      seriesById = Object.fromEntries(allSeries.map((series: SonarrSeries) => [series.id, series]));
       if (settingsRes.status === 'fulfilled') {
-        settings.set(settingsRes.value || {});
+        settings.set(settingsRes.value ?? $settings);
       }
-    } catch (err) {
+    } catch (err: any) {
       addNotification('Failed to load Mizu anime: ' + err.message, 'error');
     }
     loading = false;
   }
 
-  function posterUrl(series) {
+  function posterUrl(series: SonarrSeries | null | undefined): string {
     if (!series?.images?.length) return '';
-    const preferred = series.images.find((image) => image.coverType === 'poster') || series.images.find((image) => image.coverType === 'fanart') || series.images[0];
+    const preferred: SonarrImage | undefined = series.images.find((image: SonarrImage) => image.coverType === 'poster') || series.images.find((image: SonarrImage) => image.coverType === 'fanart') || series.images[0];
     if (!preferred) return '';
     return resolveSonarrImageUrl(preferred, $settings?.sonarr_url || '');
   }
 
-  function markerChip(show) {
+  function markerChip(show: Show): string {
     return show.sync_watermark > 0 ? `#${show.sync_watermark}` : '#0';
   }
 
-  function setPosterFrameState(node, state) {
+  function setPosterFrameState(node: HTMLElement, state: string): void {
     node.dataset.posterState = state;
   }
 
-  function observePosterFrame(node, show) {
-    let currentShow = show;
-    let currentImage = null;
+  function observePosterFrame(node: HTMLElement, show?: PosterItem): ActionReturn<PosterItem | undefined> {
+    let currentShow: PosterItem | undefined = show;
+    let currentImage: HTMLImageElement | null = null;
 
     const syncState = () => {
       setPosterFrameState(node, resolvePosterElementState({
@@ -236,7 +262,7 @@
     bindImage();
 
     return {
-      update(nextShow) {
+      update(nextShow: PosterItem | undefined) {
         currentShow = nextShow;
         bindImage();
       },
@@ -248,51 +274,51 @@
     };
   }
 
-  function openShow(showId) {
+  function openShow(showId: string | number): void {
     goto(`/shows/${showId}`);
   }
 
-  async function refreshSettings() {
+  async function refreshSettings(): Promise<void> {
     try {
-      const current = await getSettings();
-      settings.set(current || {});
-    } catch (err) {
+      const current: Settings = await getSettings();
+      settings.set(current);
+    } catch (err: any) {
       addNotification('Failed to load settings: ' + err.message, 'error');
     }
   }
 
-  function resetAddRuleDefaults(current = $settings || {}) {
+  function resetAddRuleDefaults(current: Settings = $settings): void {
     addTrackFiller = actionToTracked(current.default_filler_action, false);
     addTrackMixed = actionToTracked(current.default_mixed_canon_action, true);
     addTrackAnimeCanon = actionToTracked(current.default_anime_canon_action, true);
     addStartMode = START_FROM_CURRENT;
   }
 
-  async function loadSonarrAddOptions() {
+  async function loadSonarrAddOptions(): Promise<void> {
     sonarrAddOptionsError = '';
     try {
-      const data = await getSonarrAddOptions();
-      sonarrRootFolderOptions = (data.root_folders || []).map((folder) => ({
+      const data: SonarrAddOptions = await getSonarrAddOptions();
+      sonarrRootFolderOptions = (data.root_folders || []).map((folder: { path: string }) => ({
         value: folder.path,
         label: folder.path,
       }));
-      sonarrQualityProfileOptions = (data.quality_profiles || []).map((profile) => ({
+      sonarrQualityProfileOptions = (data.quality_profiles || []).map((profile: { id: number; name: string }) => ({
         value: String(profile.id),
         label: profile.name,
       }));
       if (!fallbackQualityProfileId) {
         fallbackQualityProfileId = preferredAnimeQualityProfileId();
       }
-    } catch (err) {
+    } catch (err: any) {
       sonarrAddOptionsError = err.message;
     }
   }
 
-  async function refreshAddSeriesLibrary() {
+  async function refreshAddSeriesLibrary(): Promise<void> {
     addSeriesLibrary = (await getSonarrSeries(true)) || [];
   }
 
-  function resetFallbackFlow() {
+  function resetFallbackFlow(): void {
     fallbackAflQuery = '';
     fallbackAflResults = cachedAflShows;
     selectedFallbackAfl = null;
@@ -305,7 +331,7 @@
     selectedAfl = null;
   }
 
-  async function openAddModal() {
+  async function openAddModal(): Promise<void> {
     addStep = ADD_STEP_SERIES;
     seriesQuery = '';
     selectedSonarr = null;
@@ -318,54 +344,54 @@
     showAddModal = true;
 
     await Promise.all([refreshSettings(), loadSonarrAddOptions()]);
-    resetAddRuleDefaults($settings || {});
+    resetAddRuleDefaults($settings);
 
     sonarrLoading = true;
     try {
-      const [fullSeries, modalSeries] = await Promise.all([
+      const [fullSeries, modalSeries]: [SonarrSeries[], SonarrSeries[]] = await Promise.all([
         allSeries.length ? Promise.resolve(allSeries) : getSonarrSeries(),
         getSonarrSeries(true),
       ]);
       allSeries = fullSeries || [];
       addSeriesLibrary = modalSeries || [];
-      seriesById = Object.fromEntries(allSeries.map((series) => [series.id, series]));
-    } catch (err) {
+      seriesById = Object.fromEntries(allSeries.map((series: SonarrSeries) => [series.id, series]));
+    } catch (err: any) {
       addNotification('Failed to load Sonarr series: ' + err.message, 'error');
     }
     sonarrLoading = false;
   }
 
-  function closeAddModal() {
+  function closeAddModal(): void {
     showAddModal = false;
   }
 
-  function handleAddModalBackdropClick(event) {
+  function handleAddModalBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) {
       closeAddModal();
     }
   }
 
-  function handleWindowKeydown(event) {
+  function handleWindowKeydown(event: KeyboardEvent): void {
     if (showAddModal && event.key === 'Escape') {
       closeAddModal();
     }
   }
 
-  function openExistingMapping(seriesId) {
-    const mapped = ($shows || []).find((show) => show.sonarr_series_id === seriesId);
+  function openExistingMapping(seriesId: string | number): void {
+    const mapped = ($shows || []).find((show: Show) => show.sonarr_series_id === seriesId);
     if (!mapped) return;
     closeAddModal();
     openShow(mapped.id);
   }
 
-  async function goToMatchStep() {
+  async function goToMatchStep(): Promise<void> {
     if (!selectedSonarr) return;
     addStep = ADD_STEP_MATCH;
     manualQuery = selectedSonarr.title || '';
     await loadSuggestedMatches();
   }
 
-  async function loadSuggestedMatches() {
+  async function loadSuggestedMatches(): Promise<void> {
     if (!selectedSonarr) return;
     matchLoading = true;
     selectedAfl = null;
@@ -373,14 +399,14 @@
       suggestedMatches = await suggestAFL(selectedSonarr.id);
       displayedMatches = suggestedMatches;
       manualSearchVisible = suggestedMatches.length === 0 || !!selectedSonarr.manualMatchPending;
-      const bestMatch = suggestedMatches[0];
+      const bestMatch: AFLMatch | undefined = suggestedMatches[0];
       if (bestMatch && isCompactMatchSelection(bestMatch)) {
         selectedAfl = bestMatch;
       }
       if (manualSearchVisible && selectedSonarr.manualMatchPending && manualQuery.trim()) {
         displayedMatches = await searchAFL(manualQuery.trim(), selectedSonarr.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       suggestedMatches = [];
       displayedMatches = [];
       manualSearchVisible = true;
@@ -389,24 +415,24 @@
     matchLoading = false;
   }
 
-  async function handleManualSearch() {
+  async function handleManualSearch(): Promise<void> {
     if (!selectedSonarr || !manualSearchVisible) return;
     manualSearching = true;
     selectedAfl = null;
     try {
       displayedMatches = await searchAFL(manualQuery.trim(), selectedSonarr.id);
-    } catch (err) {
+    } catch (err: any) {
       displayedMatches = [];
       addNotification('AFL search failed: ' + err.message, 'error');
     }
     manualSearching = false;
   }
 
-  async function handleConfirmMatch() {
+  async function handleConfirmMatch(): Promise<void> {
     if (!selectedSonarr || !selectedAfl) return;
     confirming = true;
     try {
-      const created = await confirmMatch({
+      const created: Show = await confirmMatch({
         sonarr_series_id: selectedSonarr.id,
         sonarr_title: selectedSonarr.title,
         afl_slug: selectedAfl.afl_show?.slug || selectedAfl.slug,
@@ -424,35 +450,35 @@
       };
       await loadLanding();
       addStep = ADD_STEP_POST_ADD;
-    } catch (err) {
+    } catch (err: any) {
       addNotification('Failed to sync anime: ' + err.message, 'error');
     } finally {
       confirming = false;
     }
   }
 
-  function isUnsafeMatch(match) {
+  function isUnsafeMatch(match: AFLMatch): boolean {
     return !!match && match.confidence == null;
   }
 
-  function shouldAutoCreateMappingAfterSonarrAdd(match) {
+  function shouldAutoCreateMappingAfterSonarrAdd(match: AFLMatch): boolean {
     return !!match && !isUnsafeMatch(match) && match.method === 'exact' && (match.confidence ?? 0) >= 1;
   }
 
-  function isCompactMatchSelection(match) {
+  function isCompactMatchSelection(match: AFLMatch): boolean {
     if (!match || isUnsafeMatch(match)) return false;
     return match.method === 'exact' || match.method === 'normalized' || (match.confidence ?? 0) >= 0.95;
   }
 
-  function preferredAnimeRootFolder() {
-    const counts = new Map();
+  function preferredAnimeRootFolder(): string {
+    const counts: Map<string, number> = new Map();
     let bestPath = '';
     let bestCount = 0;
 
     for (const series of allSeries) {
-      const path = (series?.rootFolderPath || '').trim();
+      const path: string = (series?.rootFolderPath || '').trim();
       if (!path) continue;
-      const nextCount = (counts.get(path) || 0) + 1;
+      const nextCount: number = (counts.get(path) || 0) + 1;
       counts.set(path, nextCount);
       if (nextCount > bestCount) {
         bestCount = nextCount;
@@ -463,16 +489,16 @@
     return bestPath || sonarrRootFolderOptions[0]?.value || '';
   }
 
-  function preferredAnimeQualityProfileId() {
-    const counts = new Map();
+  function preferredAnimeQualityProfileId(): string {
+    const counts: Map<string, number> = new Map();
     let bestValue = '';
     let bestCount = 0;
 
     for (const series of allSeries) {
-      const value = Number(series?.qualityProfileId || 0);
+      const value: number = Number(series?.qualityProfileId || 0);
       if (!value) continue;
-      const key = String(value);
-      const nextCount = (counts.get(key) || 0) + 1;
+      const key: string = String(value);
+      const nextCount: number = (counts.get(key) || 0) + 1;
       counts.set(key, nextCount);
       if (nextCount > bestCount) {
         bestCount = nextCount;
@@ -483,14 +509,14 @@
     return bestValue || sonarrQualityProfileOptions[0]?.value || '';
   }
 
-  function ensureFallbackAddDefaults() {
+  function ensureFallbackAddDefaults(): void {
     if (!fallbackQualityProfileId) {
       fallbackQualityProfileId = preferredAnimeQualityProfileId();
     }
     fallbackSeasonFolder = fallbackSeasonFolder ?? true;
   }
 
-  function buildSonarrAddPayload(series) {
+  function buildSonarrAddPayload(series: SonarrSeries): SonarrAddPayload {
     return {
       series: {
         ...series,
@@ -504,15 +530,15 @@
     };
   }
 
-  function filterFallbackAflResults(query = fallbackAflQuery) {
+  function filterFallbackAflResults(query: string = fallbackAflQuery): void {
     const normalized = (query || '').trim().toLowerCase();
     if (!normalized) {
       fallbackAflResults = cachedAflShows;
       return;
     }
 
-    const tokens = normalized.split(/\s+/).filter(Boolean);
-    fallbackAflResults = cachedAflShows.filter((show) => {
+    const tokens: string[] = normalized.split(/\s+/).filter(Boolean);
+    fallbackAflResults = cachedAflShows.filter((show: AFLMatch) => {
       const title = (show.title || '').toLowerCase();
       if (!title) return false;
       if (title.includes(normalized)) return true;
@@ -520,7 +546,7 @@
     });
   }
 
-  function scheduleFallbackAflFilter() {
+  function scheduleFallbackAflFilter(): void {
     if (fallbackFilterTimeout) {
       clearTimeout(fallbackFilterTimeout);
     }
@@ -529,7 +555,7 @@
     }, 120);
   }
 
-  async function ensureCachedAflShowsLoaded() {
+  async function ensureCachedAflShowsLoaded(): Promise<void> {
     if (cachedAflShows.length > 0) {
       fallbackAflResults = cachedAflShows;
       return;
@@ -540,7 +566,7 @@
     try {
       cachedAflShows = await searchAFL('');
       fallbackAflResults = cachedAflShows;
-    } catch (err) {
+    } catch (err: any) {
       cachedAflShows = [];
       fallbackAflResults = [];
       addNotification('AFL cache load failed: ' + err.message, 'error');
@@ -549,7 +575,7 @@
     }
   }
 
-  async function goToFallbackAflStep(prefill = '') {
+  async function goToFallbackAflStep(prefill: string = ''): Promise<void> {
     addStep = ADD_STEP_FALLBACK_AFL;
     resetFallbackFlow();
     fallbackAflQuery = prefill;
@@ -557,20 +583,20 @@
     filterFallbackAflResults(prefill);
   }
 
-  async function loadSonarrLookupResults() {
+  async function loadSonarrLookupResults(): Promise<void> {
     if (!sonarrLookupQuery.trim()) return;
     sonarrLookupLoading = true;
     selectedSonarrLookup = null;
     try {
       sonarrLookupResults = await lookupSonarrSeries(sonarrLookupQuery.trim());
-    } catch (err) {
+    } catch (err: any) {
       sonarrLookupResults = [];
       addNotification('Sonarr lookup failed: ' + err.message, 'error');
     }
     sonarrLookupLoading = false;
   }
 
-  async function goToFallbackSonarrStep() {
+  async function goToFallbackSonarrStep(): Promise<void> {
     if (!selectedFallbackAfl) return;
     sonarrLookupQuery = selectedFallbackAfl.title || '';
     ensureFallbackAddDefaults();
@@ -578,12 +604,12 @@
     await loadSonarrLookupResults();
   }
 
-  function upsertSeriesLocally(series) {
-    allSeries = [...allSeries.filter((item) => item.id !== series.id), series].sort((a, b) => a.title.localeCompare(b.title));
-    seriesById = Object.fromEntries(allSeries.map((item) => [item.id, item]));
+  function upsertSeriesLocally(series: SonarrSeries): void {
+    allSeries = [...allSeries.filter((item: SonarrSeries) => item.id !== series.id), series].sort((a: SonarrSeries, b: SonarrSeries) => a.title.localeCompare(b.title));
+    seriesById = Object.fromEntries(allSeries.map((item: SonarrSeries) => [item.id, item]));
   }
 
-  async function handleKeepSonarrOnly() {
+  async function handleKeepSonarrOnly(): Promise<void> {
     if (!selectedSonarr?.id) return;
     try {
       await markManualMatchPending(selectedSonarr.id);
@@ -594,27 +620,28 @@
       };
       selectedSonarr = { ...selectedSonarr, manualMatchPending: true };
       addStep = ADD_STEP_POST_ADD;
-    } catch (err) {
+    } catch (err: any) {
       addNotification('Failed to persist manual match reminder: ' + err.message, 'error');
     }
   }
 
-  async function handleAddSelectedSonarrLookup() {
+  async function handleAddSelectedSonarrLookup(): Promise<void> {
     ensureFallbackAddDefaults();
     if (!selectedFallbackAfl || !selectedSonarrLookup) return;
+    const fallbackAflSlug = selectedFallbackAfl.slug;
     sonarrAdding = true;
     try {
-      const created = await addSonarrSeries(buildSonarrAddPayload(selectedSonarrLookup));
+      const created: SonarrSeries = await addSonarrSeries(buildSonarrAddPayload(selectedSonarrLookup));
       upsertSeriesLocally(created);
       selectedSonarr = created;
       manualQuery = selectedFallbackAfl.title || created.title || '';
 
-      const results = await searchAFL(manualQuery.trim(), created.id);
+      const results: AFLMatch[] = await searchAFL(manualQuery.trim(), created.id);
       suggestedMatches = results;
       displayedMatches = results;
       manualSearchVisible = results.length === 0 || !!created.manualMatchPending;
-      const chosenResult = results.find((item) => matchSlug(item) === selectedFallbackAfl.slug);
-      if (shouldAutoCreateMappingAfterSonarrAdd(chosenResult)) {
+      const chosenResult: AFLMatch | undefined = results.find((item: AFLMatch) => matchSlug(item) === fallbackAflSlug);
+      if (chosenResult && shouldAutoCreateMappingAfterSonarrAdd(chosenResult)) {
         selectedAfl = chosenResult;
         await handleConfirmMatch();
         return;
@@ -633,18 +660,18 @@
       }
 
       await handleKeepSonarrOnly();
-    } catch (err) {
+    } catch (err: any) {
       addNotification('Failed to add anime to Sonarr: ' + err.message, 'error');
     } finally {
       sonarrAdding = false;
     }
   }
 
-  async function handleConfirmUnsafeOverride() {
+  async function handleConfirmUnsafeOverride(): Promise<void> {
     await handleConfirmMatch();
   }
 
-  async function handlePrimaryMatchAction() {
+  async function handlePrimaryMatchAction(): Promise<void> {
     if (!selectedAfl) return;
     if (isUnsafeMatch(selectedAfl)) {
       addStep = ADD_STEP_UNSAFE_MATCH;
@@ -653,7 +680,7 @@
     await handleConfirmMatch();
   }
 
-  function returnToSeriesStep(prefill = '') {
+  function returnToSeriesStep(prefill: string = ''): void {
     addStep = ADD_STEP_SERIES;
     addOutcome = null;
     selectedAfl = null;
@@ -666,19 +693,19 @@
     }
   }
 
-  function matchTitle(match) {
+  function matchTitle(match: AFLMatch | null | undefined): string {
     return match?.afl_show?.title || match?.title || '';
   }
 
-  function matchSlug(match) {
+  function matchSlug(match: AFLMatch | null | undefined): string {
     return match?.afl_show?.slug || match?.slug || '';
   }
 
-  function optionState(checked) {
+  function optionState(checked: boolean): string {
     return checked ? 'Included' : 'Skipped';
   }
 
-  function optionTone(checked, variant) {
+  function optionTone(checked: boolean, variant: BadgeVariant): BadgeVariant {
     return checked ? variant : 'secondary';
   }
 
@@ -736,7 +763,7 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl glass-card text-center">
       <LoaderCircle size={30} class="animate-spin text-primary" />
       <div class="space-y-1">
         <h2 class="text-base font-semibold text-foreground">Loading anime</h2>
@@ -744,7 +771,7 @@
       </div>
     </Box>
   {:else if filteredShows.length === 0 && ($shows || []).length === 0}
-    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] px-6 text-center">
+    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl glass-card px-6 text-center">
       <span class="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/30 text-primary">
         <Waves size={24} />
       </span>
@@ -758,7 +785,7 @@
       </Button>
     </Box>
   {:else if filteredShows.length === 0}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] px-6 text-center">
+    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl glass-card px-6 text-center">
       <span class="flex size-12 items-center justify-center rounded-xl border border-border bg-card/70 text-muted-foreground">
         <CircleAlert size={24} />
       </span>
@@ -777,7 +804,7 @@
           onclick={() => openShow(show.id)}
           aria-label={`Open ${show.sonarr_title}`}
         >
-          <Box class="h-full rounded-xl border border-border bg-popover/75 backdrop-blur-md p-3 transition-all duration-300 ease-out group-hover:border-primary/40 group-hover:shadow-[0_8px_30px_rgba(0,0,0,0.4),0_2px_8px_rgba(0,0,0,0.3)] group-focus-visible:border-primary/40">
+          <Box class="h-full rounded-xl glass-card p-3 transition-all duration-300 ease-out group-hover:border-primary/40 group-hover:shadow-[0_8px_30px_rgba(0,0,0,0.4),0_2px_8px_rgba(0,0,0,0.3)] group-focus-visible:border-primary/40">
             <div
               class="poster-frame relative aspect-[2/3] overflow-hidden rounded-xl border border-border bg-card/80"
               data-poster-state={show.poster ? POSTER_LOADING : POSTER_FAILED}
@@ -842,17 +869,19 @@
     onclick={handleAddModalBackdropClick}
     transition:fade={{ duration: 180 }}
   >
-    <section
-      class="show-add-modal-panel relative grid max-h-[calc(100vh-1.5rem)] w-full max-w-3xl gap-6 overflow-hidden rounded-xl border border-border bg-popover p-6 shadow-[0_16px_50px_rgba(0,0,0,0.5),0_4px_12px_rgba(0,0,0,0.3)] sm:max-h-[calc(100vh-3rem)] sm:p-7"
+    <div
+      class="show-add-modal-panel relative grid max-h-[calc(100vh-1.5rem)] w-full max-w-3xl gap-6 overflow-hidden rounded-xl glass-menu p-6 shadow-[0_16px_50px_rgba(0,0,0,0.5),0_4px_12px_rgba(0,0,0,0.3)] sm:max-h-[calc(100vh-3rem)] sm:p-7"
       role="dialog"
       aria-modal="true"
       aria-labelledby="show-add-modal-title"
+      tabindex="-1"
       onclick={(event) => event.stopPropagation()}
+      onkeydown={(event) => event.stopPropagation()}
       transition:scale={{ duration: 220, start: 0.96 }}
     >
       <button
         type="button"
-        class="show-add-modal-close absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card/80 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        class="show-add-modal-close absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.05] text-muted-foreground transition-colors hover:bg-white/[0.1] hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         onclick={closeAddModal}
         aria-label="Close add anime modal"
       >
@@ -910,7 +939,7 @@
               <p class="text-sm text-muted-foreground">Loading available Sonarr anime.</p>
             </div>
           {:else if allSeries.length === 0}
-            <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
+            <Box class="rounded-xl glass-card p-6 text-center">
               <h3 class="text-base font-semibold text-foreground">No anime found in Sonarr</h3>
               <p class="mt-2 text-sm leading-6 text-muted-foreground">Sonarr returned no anime series for this library.</p>
             </Box>
@@ -933,7 +962,7 @@
               </div>
 
               {#if filteredSeriesLibrary.length === 0}
-                <Box class="space-y-4 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
+                <Box class="space-y-4 rounded-xl glass-card p-6 text-center">
                   <h3 class="text-base font-semibold text-foreground">No anime match that search</h3>
                   <p class="mt-2 text-sm leading-6 text-muted-foreground">Try a different title, year, or jump into the cached AFL list and add it from there.</p>
                   <div class="flex justify-center">
@@ -1045,7 +1074,7 @@
                 <p class="text-sm text-muted-foreground">Loading cached AnimeFillerList titles.</p>
               </div>
             {:else if fallbackAflResults.length === 0}
-              <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
+              <Box class="rounded-xl glass-card p-6 text-center">
                 <h3 class="text-base font-semibold text-foreground">No cached AFL titles found</h3>
                 <p class="mt-2 text-sm leading-6 text-muted-foreground">Try another filter or refresh the AFL cache in Settings if this anime is new.</p>
               </Box>
@@ -1104,7 +1133,7 @@
                 <p class="text-sm text-muted-foreground">Looking up Sonarr candidates.</p>
               </div>
             {:else if sonarrLookupResults.length === 0}
-              <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
+              <Box class="rounded-xl glass-card p-6 text-center">
                 <h3 class="text-base font-semibold text-foreground">No Sonarr results found</h3>
                 <p class="mt-2 text-sm leading-6 text-muted-foreground">Try another title variation for {selectedFallbackAfl?.title} and search again.</p>
               </Box>
@@ -1173,7 +1202,7 @@
               </ScrollArea>
             {/if}
 
-            <Box class="grid gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
+            <Box class="grid gap-3 rounded-xl glass-card p-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
               <div class="space-y-2">
                 <Label for="fallback-quality-profile">Quality profile</Label>
                 <div class="max-w-xs">
@@ -1195,7 +1224,7 @@
                 </div>
               </div>
 
-              <label class="flex items-center justify-between gap-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md px-4 py-3">
+              <label class="flex items-center justify-between gap-4 rounded-xl glass-card px-4 py-3">
                 <div class="text-sm font-medium text-foreground">Season folder</div>
                 <Checkbox bind:checked={fallbackSeasonFolder} />
               </label>
@@ -1222,13 +1251,13 @@
               </div>
             </div>
 
-            <div class="rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
+            <div class="rounded-xl glass-card p-4">
               <div class="text-sm font-semibold text-foreground">{matchTitle(selectedAfl)}</div>
               <div class="mt-1 text-sm text-muted-foreground">{matchSlug(selectedAfl)}</div>
             </div>
           </Box>
         {:else if addStep === ADD_STEP_POST_ADD}
-          <Box class="space-y-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-5">
+          <Box class="space-y-4 rounded-xl glass-card p-5">
             <div class="flex items-start gap-3">
               <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/40 text-primary">
                 <CircleCheckBig size={16} />
@@ -1250,7 +1279,7 @@
           </Box>
         {:else}
           {#if manualSearchVisible}
-            <div class="space-y-3 rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-4">
+            <div class="space-y-3 rounded-xl glass-card p-4">
               <div class="space-y-1">
                 <Label for="afl-search">Manual search</Label>
                 <p class="text-sm text-muted-foreground">Automatic matching was not strong enough, so you can search the cached AnimeFillerList titles directly.</p>
@@ -1281,12 +1310,12 @@
               <p class="text-sm text-muted-foreground">Looking for strong cached AnimeFillerList matches.</p>
             </div>
           {:else if displayedMatches.length === 0}
-            <Box class="rounded-xl border border-border bg-popover/75 backdrop-blur-md shadow-[0_2px_12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.2)] p-6 text-center">
+            <Box class="rounded-xl glass-card p-6 text-center">
               <h3 class="text-base font-semibold text-foreground">No matches found</h3>
               <p class="mt-2 text-sm leading-6 text-muted-foreground">Refresh the AnimeFillerList cache in Settings if this anime is new, then try again.</p>
             </Box>
           {:else if selectedAfl && isCompactMatchSelection(selectedAfl)}
-            <Box class="space-y-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-5">
+            <Box class="space-y-4 rounded-xl glass-card p-5">
               <div class="space-y-2">
                 <div class="text-sm font-semibold text-foreground">{matchTitle(selectedAfl)}</div>
                 <div class="flex flex-wrap gap-2">
@@ -1332,14 +1361,14 @@
           {/if}
 
           {#if selectedAfl}
-            <Box class="space-y-4 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
+            <Box class="space-y-4 rounded-xl glass-card p-4">
               <div class="space-y-1">
                 <h3 class="text-base font-semibold text-foreground">Default tracking rules</h3>
                 <p class="text-sm text-muted-foreground">Set the initial monitoring rules for this mapping before it is created.</p>
               </div>
 
               <div class="grid gap-3 md:grid-cols-3">
-                <label class="flex items-start gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
+                <label class="flex items-start gap-3 rounded-xl glass-card p-4">
                   <Checkbox bind:checked={addTrackAnimeCanon} />
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-foreground">Anime canon</div>
@@ -1347,7 +1376,7 @@
                   </div>
                 </label>
 
-                <label class="flex items-start gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
+                <label class="flex items-start gap-3 rounded-xl glass-card p-4">
                   <Checkbox bind:checked={addTrackMixed} />
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-foreground">Mixed canon</div>
@@ -1355,7 +1384,7 @@
                   </div>
                 </label>
 
-                <label class="flex items-start gap-3 rounded-xl border border-border bg-popover/80 backdrop-blur-md p-4">
+                <label class="flex items-start gap-3 rounded-xl glass-card p-4">
                   <Checkbox bind:checked={addTrackFiller} />
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-foreground">Filler</div>
@@ -1472,6 +1501,6 @@
           </div>
         </div>
       </div>
-    </section>
+    </div>
   </div>
 {/if}

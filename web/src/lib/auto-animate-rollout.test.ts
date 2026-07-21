@@ -19,7 +19,7 @@ test("frontend dependencies include AutoAnimate", () => {
 test("shows page wires AutoAnimate into the poster grid", () => {
   assert.match(
     showsSvelte,
-    /import\s+\{\s*autoAnimateAction as autoAnimate\s*\}\s+from\s+'\.\.\/\.\.\/lib\/autoAnimate\.js'/,
+    /import\s+\{\s*autoAnimateAction as autoAnimate\s*\}\s+from\s+'\.\.\/\.\.\/lib\/autoAnimate\.ts'/,
   );
   assert.match(showsSvelte, /use:autoAnimate/);
 });

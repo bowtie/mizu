@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { Badge } from '$lib/components/ui/badge/index.js';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import * as Tooltip from '$lib/components/ui/tooltip/index.js';
-  import { getStatus } from '../lib/api.js';
+  import { Badge } from '$lib/components/ui/badge/index.ts';
+  import { Button } from '$lib/components/ui/button/index.ts';
+  import * as Tooltip from '$lib/components/ui/tooltip/index.ts';
+  import { getStatus } from '../lib/api.ts';
   import History from '@lucide/svelte/icons/history';
   import RadioTower from '@lucide/svelte/icons/radio-tower';
   import SettingsIcon from '@lucide/svelte/icons/settings';
@@ -54,11 +54,12 @@
       <nav class="hidden items-center gap-1 md:flex" aria-label="Primary">
         {#each navItems as item}
           {@const Icon = item.icon}
+          {@const active = isActive(item.path, currentPath)}
           <Button
             href={item.path}
-            variant={isActive(item.path, currentPath) ? 'secondary' : 'ghost'}
-            class="rounded-lg border-transparent"
-            aria-current={isActive(item.path, currentPath) ? 'page' : undefined}
+            variant={active ? 'ghost' : 'ghost'}
+            class="rounded-lg border-transparent {active ? 'bg-white/[0.08] text-foreground hover:bg-white/[0.12]' : ''}"
+            aria-current={active ? 'page' : undefined}
           >
             <Icon class="size-4" />
             {item.label}
@@ -94,11 +95,12 @@
     <div class="flex items-center gap-2">
       {#each navItems as item}
         {@const Icon = item.icon}
+        {@const active = isActive(item.path, currentPath)}
         <Button
           href={item.path}
-          variant={isActive(item.path, currentPath) ? 'secondary' : 'ghost'}
-          class="min-w-0 flex-1 justify-center rounded-lg border-transparent whitespace-nowrap"
-          aria-current={isActive(item.path, currentPath) ? 'page' : undefined}
+          variant="ghost"
+          class="min-w-0 flex-1 justify-center rounded-lg border-transparent whitespace-nowrap {active ? 'bg-white/[0.08] text-foreground hover:bg-white/[0.12]' : ''}"
+          aria-current={active ? 'page' : undefined}
         >
           <Icon class="size-4" />
           {item.label}

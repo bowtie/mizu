@@ -1,6 +1,17 @@
-<script>
+<script lang="ts">
   import { onDestroy } from 'svelte';
   import { Minus, Plus } from 'lucide-svelte';
+
+  interface Props {
+    id?: string;
+    value?: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    defaultValue?: number;
+    disabled?: boolean;
+    className?: string;
+  }
 
   let {
     id = undefined,
@@ -11,20 +22,20 @@
     defaultValue = 0,
     disabled = false,
     className = '',
-  } = $props();
+  }: Props = $props();
 
   const HOLD_DELAY_MS = 325;
   const HOLD_INTERVAL_MS = 85;
 
-  let holdTimeout = null;
-  let holdInterval = null;
+  let holdTimeout: ReturnType<typeof setTimeout> | null = null;
+  let holdInterval: ReturnType<typeof setInterval> | null = null;
 
-  function asNumber(nextValue, fallback = 0) {
+  function asNumber(nextValue: string | number, fallback = 0): number {
     const numeric = Number(nextValue);
     return Number.isNaN(numeric) ? fallback : numeric;
   }
 
-  function clamp(nextValue) {
+  function clamp(nextValue: string | number, fallback = 0): number {
     const numeric = Number(nextValue);
     const minValue = asNumber(min, 0);
     const maxValue = asNumber(max, Number.POSITIVE_INFINITY);
@@ -32,15 +43,15 @@
     return Math.min(Math.max(numeric, minValue), maxValue);
   }
 
-  function fallbackValue() {
+  function fallbackValue(): number {
     return clamp(defaultValue);
   }
 
-  function updateValue(nextValue) {
+  function updateValue(nextValue: string | number): void {
     value = clamp(nextValue);
   }
 
-  function handleInput(event) {
+  function handleInput(event: Event & { currentTarget: HTMLInputElement }): void {
     const raw = event.currentTarget.value;
     if (raw === '') {
       value = fallbackValue();
@@ -50,16 +61,16 @@
     updateValue(raw);
   }
 
-  function adjust(diff) {
+  function adjust(diff: number): void {
     if (disabled) return;
     updateValue(asNumber(value, 0) + asNumber(diff, 1));
   }
 
-  function handleBlur() {
+  function handleBlur(): void {
     value = clamp(value);
   }
 
-  function clearHold() {
+  function clearHold(): void {
     if (holdTimeout) {
       clearTimeout(holdTimeout);
       holdTimeout = null;
@@ -71,7 +82,7 @@
     }
   }
 
-  function startHold(diff) {
+  function startHold(diff: number): void {
     if (disabled) return;
 
     adjust(diff);
@@ -86,10 +97,10 @@
   onDestroy(clearHold);
 </script>
 
-<div class={`flex w-full max-w-44 items-center rounded-xl border border-primary/20 bg-secondary/40 text-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25 ${disabled ? 'opacity-60' : ''} ${className}`.trim()}>
+<div class={`flex w-full max-w-44 items-center rounded-lg border border-primary/20 bg-secondary/40 text-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25 ${disabled ? 'opacity-60' : ''} ${className}`.trim()}>
   <button
     type="button"
-    class="flex h-8 w-8 items-center justify-center rounded-l-2xl text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+    class="flex h-8 w-8 items-center justify-center rounded-l-lg text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
     onclick={(event) => event.preventDefault()}
     onpointerdown={() => startHold(-step)}
     onpointerup={clearHold}
@@ -119,7 +130,7 @@
 
   <button
     type="button"
-    class="flex h-8 w-8 items-center justify-center rounded-r-2xl text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+    class="flex h-8 w-8 items-center justify-center rounded-r-lg text-muted-foreground transition hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
     onclick={(event) => event.preventDefault()}
     onpointerdown={() => startHold(step)}
     onpointerup={clearHold}

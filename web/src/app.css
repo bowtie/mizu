@@ -75,11 +75,11 @@
   --popover-foreground: oklch(0.96 0.005 250);
   --primary: oklch(0.58 0.18 250);              /* #0466c8 bright blue */
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.26 0.04 258);            /* #002855 dark navy */
+  --secondary: oklch(0.26 0.04 258 / 60%);      /* #002855 dark navy, translucent */
   --secondary-foreground: oklch(0.96 0.005 250);
-  --muted: oklch(0.30 0.04 258);                /* visibly lighter than card for hover */
+  --muted: oklch(0.45 0.04 258 / 45%);          /* translucent hover wash */
   --muted-foreground: oklch(0.78 0.015 250);    /* light slate, still readable */
-  --accent: oklch(0.30 0.04 258);               /* matches muted, visible hover lift */
+  --accent: oklch(0.45 0.04 258 / 45%);         /* translucent hover wash */
   --accent-foreground: oklch(0.96 0.005 250);
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
@@ -291,7 +291,21 @@ svg.lucide {
 
 /* shadcn-svelte / bits-ui custom variants and utilities */
 .glass-input {
+  box-shadow: inset 0 0.5px rgba(255, 255, 255, 0.08);
+}
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(32px) saturate(1.35);
+  -webkit-backdrop-filter: blur(32px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22), inset 0 0.5px rgba(255, 255, 255, 0.08);
+}
+.glass-menu {
+  background: rgba(20, 20, 25, 0.55);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 0.5px rgba(255, 255, 255, 0.08);
 }
 
 @custom-variant data-open {

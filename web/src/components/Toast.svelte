@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { toast } from 'svelte-sonner';
-  import { Toaster } from '$lib/components/ui/sonner/index.js';
-  import { notifications, removeNotification } from '../lib/stores.js';
+  import { Toaster } from '$lib/components/ui/sonner/index.ts';
+  import { notifications, removeNotification } from '../lib/stores.ts';
 
-  const displayed = new Map<number>();
+  const displayed = new Map<number, number>();
 
   function showToast(type: string, message: string, id: number, duration: number) {
     const toastId = `${id}`;
