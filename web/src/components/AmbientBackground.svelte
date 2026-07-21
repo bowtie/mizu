@@ -1,10 +1,11 @@
 <script>
   /**
-   * Cinema-style ambient light blobs — 2-3 large, blurred, slow-moving
-   * colored circles at low opacity. Adds atmosphere without competing
-   * with content. Recommended by the Cinema Mobile style guide.
+   * Soft ambient light behind the glass system — a few large, heavily
+   * blurred color fields drifting slowly at low opacity. Retuned to the
+   * Mizu Arc palette: deep indigo base, aqua/teal light. This is the
+   * only ambient motion in the app; it must stay subtle.
    */
-  let { dim = 0.3 } = $props();
+  let { dim = 0.25 } = $props();
 </script>
 
 <div class="ambient-bg" aria-hidden="true">
@@ -26,35 +27,35 @@
   .ambient-bg__blob {
     position: absolute;
     border-radius: 50%;
-    filter: blur(80px);
+    filter: blur(110px);
     will-change: transform;
   }
   .ambient-bg__blob--1 {
-    width: 50vw;
-    height: 50vw;
-    top: -10%;
-    left: -10%;
-    background: #3b82f6;
-    opacity: 0.15;
-    animation: drift-1 25s ease-in-out infinite;
+    width: 55vw;
+    height: 55vw;
+    top: -18%;
+    left: -12%;
+    background: oklch(0.5 0.13 250);
+    opacity: 0.16;
+    animation: drift-1 52s ease-in-out infinite;
   }
   .ambient-bg__blob--2 {
-    width: 45vw;
-    height: 45vw;
-    bottom: -15%;
-    right: -10%;
-    background: #1e3a5f;
-    opacity: 0.2;
-    animation: drift-2 30s ease-in-out infinite;
+    width: 48vw;
+    height: 48vw;
+    bottom: -20%;
+    right: -12%;
+    background: oklch(0.42 0.12 255);
+    opacity: 0.15;
+    animation: drift-2 64s ease-in-out infinite;
   }
   .ambient-bg__blob--3 {
-    width: 35vw;
-    height: 35vw;
-    top: 40%;
-    left: 50%;
-    background: #2563eb;
+    width: 38vw;
+    height: 38vw;
+    top: 42%;
+    left: 52%;
+    background: oklch(0.46 0.12 245);
     opacity: 0.08;
-    animation: drift-3 35s ease-in-out infinite;
+    animation: drift-3 76s ease-in-out infinite;
   }
   .ambient-bg__dim {
     position: absolute;
@@ -65,17 +66,17 @@
 
   @keyframes drift-1 {
     0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(15vw, 10vh) scale(1.1); }
-    66% { transform: translate(5vw, 20vh) scale(0.9); }
+    33% { transform: translate(10vw, 8vh) scale(1.08); }
+    66% { transform: translate(4vw, 14vh) scale(0.94); }
   }
   @keyframes drift-2 {
     0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(-10vw, -15vh) scale(0.95); }
-    66% { transform: translate(-20vw, -5vh) scale(1.15); }
+    33% { transform: translate(-8vw, -10vh) scale(0.96); }
+    66% { transform: translate(-14vw, -4vh) scale(1.1); }
   }
   @keyframes drift-3 {
     0%, 100% { transform: translate(-50%, -50%) scale(1); }
-    50% { transform: translate(-30%, -60%) scale(1.2); }
+    50% { transform: translate(-38%, -58%) scale(1.14); }
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -3,13 +3,11 @@
   import { slide } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { Badge } from '$lib/components/ui/badge/index.ts';
   import { Button } from '$lib/components/ui/button/index.ts';
   import { Switch } from '$lib/components/ui/switch/index.ts';
   import { Toggle } from '$lib/components/ui/toggle/index.ts';
   import * as Popover from '$lib/components/ui/popover/index.ts';
   import * as Tooltip from '$lib/components/ui/tooltip/index.ts';
-  import Box from '$lib/components/Box.svelte';
   import NumberInput from '../../../components/NumberInput.svelte';
   import { addNotification, shows as showsStore, settings as settingsStore } from '../../../lib/stores.ts';
   import { deleteShow, getAniListArtwork, getEpisodes, getSettings, getShows, getSonarrSeries, setEpisodeMonitor, updateShow } from '../../../lib/api.ts';
@@ -17,7 +15,7 @@
   import { get } from 'svelte/store';
   import { episodeTypeBadge, monitorStateBadge } from '../../../lib/fox.ts';
   import { resolveSonarrImageUrl } from '../../../lib/sonarr-images.ts';
-  import { Bot, Check, ChevronRight, Eye, LoaderCircle, Save, Trash2, Waves, X } from 'lucide-svelte';
+  import { Bot, Check, LoaderCircle, Save, Trash2, X } from 'lucide-svelte';
 
   const WATERMARK_AUTO = 'auto';
   const WATERMARK_MANUAL = 'manual';
@@ -90,7 +88,6 @@
   let markerUpperBound: number | undefined = $derived(episodes.length > 0
     ? episodes.reduce((highest: number, ep: Episode) => Math.max(highest, displayEpisodeNumber(ep)), 0)
     : undefined);
-  let activeBackdropUrl: string = $derived(artwork?.banner_image || artwork?.poster_image || backdropUrl(series));
   let watermarkMode = $derived(watermarkAutoPressed ? WATERMARK_AUTO : WATERMARK_MANUAL);
   let watermarkTooltip = $derived(watermarkAutoPressed
     ? 'Using Sonarr progress as the start point.'
@@ -255,11 +252,11 @@
   }
 
   let filterButtons = $derived([
-    { type: 'all', label: 'All episodes', count: epStats.total, active: isTypeFilterActive('all'), activeClass: 'border-white/[0.2] bg-white/[0.1] text-foreground', hoverClass: 'hover:border-white/[0.3] hover:bg-white/[0.15] hover:text-foreground' },
-    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), activeClass: 'border-primary/40 bg-primary/20 text-primary', hoverClass: 'hover:border-primary/60 hover:bg-primary/30 hover:text-primary' },
-    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), activeClass: 'border-info/40 bg-info/20 text-info', hoverClass: 'hover:border-info/60 hover:bg-info/30 hover:text-info' },
-    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), activeClass: 'border-warning/40 bg-warning/20 text-warning', hoverClass: 'hover:border-warning/60 hover:bg-warning/30 hover:text-warning' },
-    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), activeClass: 'border-destructive/40 bg-destructive/20 text-destructive', hoverClass: 'hover:border-destructive/60 hover:bg-destructive/30 hover:text-destructive' },
+    { type: 'all', label: 'All', count: epStats.total, active: isTypeFilterActive('all'), color: '#dee2e6' },
+    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), color: '#74c0fc' },
+    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), color: '#66d9e8' },
+    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), color: '#ffa94d' },
+    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), color: '#ffa8a8' },
   ]);
 
   function isSpecialSeasonNumber(num: number | undefined) {
@@ -309,6 +306,22 @@
     const upperBound = sourceEpisodes.reduce((highest: number, ep: Episode) => Math.max(highest, displayEpisodeNumber(ep)), 0);
     return Math.min(normalized, upperBound);
   }
+
+  function tagClassForType(type: string | undefined | null) {
+    switch (type) {
+      case 'canon':
+        return 'tag-canon';
+      case 'anime_canon':
+        return 'tag-anime';
+      case 'mixed_canon':
+      case 'mixed':
+        return 'tag-mixed';
+      case 'filler':
+        return 'tag-filler';
+      default:
+        return 'text-muted-foreground';
+    }
+  }
 </script>
 
 <svelte:head>
@@ -316,8 +329,8 @@
 </svelte:head>
 
 {#snippet headerActions()}
-  <div class="flex shrink-0 flex-col items-end gap-2">
-    <div class="flex items-center gap-2">
+  <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+    <div class="flex items-center gap-1.5">
       <Tooltip.Provider delayDuration={120}>
         <Tooltip.Root>
           <Tooltip.Trigger>
@@ -325,10 +338,10 @@
               bind:pressed={watermarkAutoPressed}
               size="default"
               variant="outline"
-              class="h-8 w-8 cursor-pointer px-0"
+              class="h-8 w-8 cursor-pointer rounded-lg px-0"
               aria-label="Toggle automatic start from Sonarr"
             >
-              <Bot size={16} />
+              <Bot size={15} />
             </Toggle>
           </Tooltip.Trigger>
           <Tooltip.Content side="top" align="center" sideOffset={10} class="tooltip-animated">
@@ -336,9 +349,9 @@
           </Tooltip.Content>
         </Tooltip.Root>
       </Tooltip.Provider>
-      <label for="marker-value" class="sr-only">Start tracking after episode</label>
+      <label for="marker-value-header" class="sr-only">Start tracking after episode</label>
       <NumberInput
-        id="marker-value"
+        id="marker-value-header"
         min={0}
         max={markerUpperBound}
         step={1}
@@ -348,15 +361,16 @@
         className="w-24"
       />
     </div>
-    <div class="flex items-center gap-2">
+    <span class="hidden h-6 w-px shrink-0 bg-rule sm:block" aria-hidden="true"></span>
+    <div class="flex items-center gap-1.5">
     <Popover.Root bind:open={showDeleteModal}>
       <Popover.Trigger>
-        <Button variant="destructive" disabled={deleting}>
-          <Trash2 size={16} />
+        <Button variant="outline" size="sm" disabled={deleting} class="text-destructive hover:text-destructive">
+          <Trash2 size={14} />
           Remove
         </Button>
       </Popover.Trigger>
-      <Popover.Content side="bottom" align="end" class="rounded-xl px-4 py-3 text-foreground">
+      <Popover.Content side="bottom" align="end" class="rounded-lg px-4 py-3 text-foreground">
         <div class="flex items-center gap-3">
           <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
           <div class="ml-auto flex items-center gap-2">
@@ -388,13 +402,13 @@
         </div>
       </Popover.Content>
     </Popover.Root>
-    <Button variant={savedFlash ? 'default' : 'default'} onclick={handleSave} disabled={saving || !rulesDirty} class={savedFlash ? 'animate-in zoom-in-125 duration-300' : ''}>
+    <Button variant="default" size="sm" onclick={handleSave} disabled={saving || !rulesDirty} class={savedFlash ? 'animate-in zoom-in-125 duration-300' : ''}>
       {#if saving}
-        <LoaderCircle size={16} class="animate-spin" />
+        <LoaderCircle size={14} class="animate-spin" />
       {:else if savedFlash}
-        <Check size={16} />
+        <Check size={14} />
       {:else}
-        <Save size={16} />
+        <Save size={14} />
       {/if}
       {saving ? 'Saving...' : savedFlash ? 'Saved' : 'Save'}
     </Button>
@@ -403,124 +417,111 @@
 {/snippet}
 
 {#if loading}
-  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl glass-card text-center">
-    <LoaderCircle size={30} class="animate-spin text-primary" />
-    <div class="space-y-1">
-      <h2 class="text-base font-semibold text-foreground">Loading anime details</h2>
-      <p class="text-sm text-muted-foreground">Pulling mapping rules, episode data, and artwork.</p>
-    </div>
-  </Box>
+  <div class="glass-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 rounded-lg text-center">
+    <LoaderCircle size={22} class="animate-spin text-primary" />
+    <p class="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Loading anime details</p>
+  </div>
 {:else if !show}
-  <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl glass-card px-6 text-center">
-    <span class="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-      <Waves size={24} />
-    </span>
-    <div class="space-y-1">
-      <h2 class="text-lg font-semibold text-foreground">Anime not found</h2>
-      <p class="text-sm leading-6 text-muted-foreground">The requested sync entry could not be found.</p>
-    </div>
-    <Button href="/shows" variant="default">Back to anime</Button>
-  </Box>
+  <div class="glass-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 rounded-lg px-6 text-center">
+    <h2 class="text-base font-semibold text-foreground">Anime not found</h2>
+    <p class="text-sm text-muted-foreground">The requested sync entry could not be found.</p>
+    <Button href="/shows" variant="default" size="sm">Back to anime</Button>
+  </div>
 {:else}
   <div class="space-y-6">
-    <!-- Backdrop hero with Save + Remove actions -->
-    <Box class="overflow-hidden rounded-xl glass-card p-0">
-      {#if activeBackdropUrl}
-        <div class="relative">
-          <img src={activeBackdropUrl} alt={show.sonarr_title} class="h-48 w-full object-cover opacity-65 sm:h-56" />
-          <div class="absolute inset-0 bg-gradient-to-t from-popover via-popover/70 to-popover/10"></div>
-          <div class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5">
-            <div class="min-w-0">
-              <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
-            </div>
-            {@render headerActions()}
-          </div>
-        </div>
-      {:else}
-        <div class="flex items-end justify-between gap-4 space-y-0 p-6">
-          <div class="space-y-3">
-            <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{show.sonarr_title}</h1>
-          </div>
-          {@render headerActions()}
+    <!-- Hero banner head -->
+    <header class="relative overflow-hidden rounded-lg border border-rule">
+      {#if backdropUrl(series)}
+        <div class="absolute inset-0 z-0" aria-hidden="true">
+          <img
+            src={backdropUrl(series)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            class="h-full w-full object-cover opacity-[0.35]"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/30"></div>
         </div>
       {/if}
-    </Box>
+      <div class="relative z-10 flex flex-wrap items-end justify-between gap-4 px-5 py-6 sm:px-7 sm:py-8">
+        <div class="min-w-0 space-y-1.5">
+          <nav class="font-mono text-[11px] text-[#868e96]">
+            <a href="/shows" class="transition-colors hover:text-muted-foreground">library</a>
+            <span> / {show.afl_slug || show.sonarr_title}</span>
+          </nav>
+          <h1 class="text-2xl font-bold tracking-tight text-foreground">{show.sonarr_title}</h1>
+          <p class="text-sm text-muted-foreground">{episodes.length} episodes &middot; from ep {show.sync_watermark}</p>
+        </div>
+        {@render headerActions()}
+      </div>
+    </header>
 
-    <!-- Overview -->
+    <!-- Tracking rules -->
     <section class="space-y-4">
-      <Box class="space-y-4 rounded-xl glass-card p-5">
-        <div class="flex items-center justify-between gap-3">
-          <div class="space-y-1">
-            <h2 class="text-base font-semibold text-foreground">Tracking rules</h2>
-            <p class="text-sm text-muted-foreground">Choose which episode types should remain monitored for this anime.</p>
+      <div class="flex items-center gap-3">
+        <div class="rule-label flex-1"><span>Tracking rules</span></div>
+        {#if rulesDirty}
+          <span class="rounded-[5px] border border-[#ffa94d]/30 bg-[#ffa94d]/10 px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.1em] text-[#ffa94d]">Unsaved changes</span>
+        {/if}
+      </div>
+
+      <div class="grid gap-3 md:grid-cols-3">
+        <div class="glass-surface flex items-center justify-between gap-3 rounded-lg px-4 py-3">
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-foreground">Anime canon</div>
+            <div class="mt-0.5 text-xs text-muted-foreground">Original anime-only canon episodes.</div>
           </div>
-          {#if rulesDirty}
-            <span class="rounded-xl border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Unsaved changes</span>
-          {/if}
+          <Switch bind:checked={trackAnimeCanon} />
         </div>
 
-        <div class="grid gap-3 md:grid-cols-3">
-              <div class="rounded-xl glass-card p-4">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium text-foreground">Anime canon</div>
-                    <div class="mt-1 text-sm text-muted-foreground">Original anime-only canon episodes.</div>
-                  </div>
-                  <Switch bind:checked={trackAnimeCanon} />
-                </div>
-              </div>
+        <div class="glass-surface flex items-center justify-between gap-3 rounded-lg px-4 py-3">
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-foreground">Mixed canon</div>
+            <div class="mt-0.5 text-xs text-muted-foreground">Episodes that blend canon and filler material.</div>
+          </div>
+          <Switch bind:checked={trackMixed} />
+        </div>
 
-              <div class="rounded-xl glass-card p-4">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium text-foreground">Mixed canon</div>
-                    <div class="mt-1 text-sm text-muted-foreground">Episodes that blend canon and filler material.</div>
-                  </div>
-                  <Switch bind:checked={trackMixed} />
-                </div>
-              </div>
-
-              <div class="rounded-xl glass-card p-4">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium text-foreground">Filler</div>
-                    <div class="mt-1 text-sm text-muted-foreground">Pure filler episodes for this mapping.</div>
-                  </div>
-                  <Switch bind:checked={trackFiller} />
-                </div>
-              </div>
-            </div>
-          </Box>
+        <div class="glass-surface flex items-center justify-between gap-3 rounded-lg px-4 py-3">
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-foreground">Filler</div>
+            <div class="mt-0.5 text-xs text-muted-foreground">Pure filler episodes for this mapping.</div>
+          </div>
+          <Switch bind:checked={trackFiller} />
+        </div>
+      </div>
     </section>
 
-    <!-- Episodes -->
-    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <!-- Type filter stats -->
+    <section class="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-5">
       {#each filterButtons as btn (btn.type)}
         {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !btn.active}
         <button
           type="button"
-          class={`rounded-xl border p-4 text-left backdrop-blur-md saturate-150 transition-colors duration-200 ${btn.active ? `${btn.activeClass} ${btn.hoverClass}` : `border-white/[0.08] bg-white/[0.03] text-foreground ${btn.hoverClass}`} ${dimmed ? 'opacity-40' : ''}`}
+          class={`flex cursor-pointer items-center justify-between gap-2 bg-card px-4 py-2.5 text-left transition-colors duration-150 ${btn.active ? '' : 'text-muted-foreground hover:text-foreground'} ${dimmed ? 'opacity-40' : ''}`}
+          style:color={btn.active ? btn.color : undefined}
+          style:border-bottom={btn.active ? `2px solid ${btn.color}` : '2px solid transparent'}
           onclick={() => toggleTypeFilter(btn.type)}
         >
-          <div class="text-xs font-medium uppercase tracking-[0.12em] opacity-70">{btn.label}</div>
-          <div class="mt-2 text-2xl font-semibold">{btn.count}</div>
+          <span class="font-mono text-[10px] uppercase tracking-[0.12em]">{btn.label}</span>
+          <span class="font-mono text-sm font-medium tabular-nums">{btn.count}</span>
         </button>
       {/each}
     </section>
 
     {#if episodes.length === 0}
-      <Box class="rounded-xl glass-card p-8 text-center">
-        <h2 class="text-lg font-semibold text-foreground">No episodes yet</h2>
-        <p class="mt-2 text-sm leading-6 text-muted-foreground">Mizu has not synced episode details for this anime yet.</p>
-      </Box>
+      <div class="glass-surface flex min-h-56 flex-col items-center justify-center gap-2 rounded-lg p-8 text-center">
+        <h2 class="text-base font-semibold text-foreground">No episodes yet</h2>
+        <p class="text-sm text-muted-foreground">Mizu has not synced episode details for this anime yet.</p>
+      </div>
     {:else}
-      <section class="space-y-4">
+      <section class="space-y-5">
         {#each groupedBySeason as group, index}
           {@const isOpen = openSeasons.has(index)}
-          <div class="overflow-hidden rounded-xl glass-card">
+          <div>
             <button
               type="button"
-              class="flex w-full cursor-pointer list-none items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40 {isOpen ? 'border-b border-border' : ''}"
+              class="rule-label w-full cursor-pointer select-none"
               onclick={() => {
                 const next = new Set(openSeasons);
                 if (next.has(index)) next.delete(index);
@@ -529,96 +530,36 @@
               }}
               aria-expanded={isOpen}
             >
-              <ChevronRight size={18} class="shrink-0 text-muted-foreground transition-transform duration-200 {isOpen ? 'rotate-90' : ''}" />
-              <h2 class="text-base font-semibold text-foreground">{seasonLabel(group.season)}</h2>
-              <Badge variant="secondary">{group.episodes.length} episodes</Badge>
+              <span>{seasonLabel(group.season)} &middot; {group.episodes.length} eps</span>
             </button>
 
             {#if isOpen}
-              <div class="hidden overflow-x-auto md:block" transition:slide={{ duration: 200 }}>
-                <table class="min-w-full border-collapse text-left text-sm">
-                  <thead class="border-b border-border text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                    <tr>
-                      <th class="px-5 py-3 font-medium">#</th>
-                      <th class="px-5 py-3 font-medium">Title</th>
-                      <th class="px-5 py-3 font-medium">Type</th>
-                      <th class="px-5 py-3 font-medium">Monitored</th>
-                      <th class="px-5 py-3 font-medium text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
-                      {@const typeBadge = episodeTypeBadge(ep.type)}
-                      {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
-                      <tr class="border-b border-border last:border-b-0">
-                        <td class="px-5 py-4 font-medium text-muted-foreground">{displayEpisodeNumber(ep)}</td>
-                        <td class="px-5 py-4 text-foreground">{ep.title || '-'}</td>
-                        <td class="px-5 py-4">
-                          <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
-                        </td>
-                        <td class="px-5 py-4">
-                          {#if episodeActionId(ep)}
-                            <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
-                          {:else}
-                            <span class="text-sm text-muted-foreground">Unavailable</span>
-                          {/if}
-                        </td>
-                        <td class="px-5 py-4 text-right">
-                          {#if episodeActionId(ep)}
-                            <Button
-                              variant={episodeMonitored(ep) ? 'default' : 'secondary'}
-                              size="sm"
-                              disabled={syncingEps[episodeActionId(ep)]}
-                              onclick={() => toggleEpisodeMonitor(ep)}
-                            >
-                              {#if syncingEps[episodeActionId(ep)]}
-                                <LoaderCircle size={14} class="animate-spin" />
-                              {:else}
-                                <Eye size={14} />
-                              {/if}
-                              {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
-                            </Button>
-                          {/if}
-                        </td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-
-              <div class="space-y-3 p-4 md:hidden" transition:slide={{ duration: 200 }}>
+              <div transition:slide={{ duration: 200 }}>
                 {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
                   {@const typeBadge = episodeTypeBadge(ep.type)}
-                  {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep))}
-                  <div class="rounded-xl glass-card p-4">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div class="space-y-2">
-                        <div class="text-sm font-medium text-muted-foreground">{episodeLabel(ep)}</div>
-                        <h3 class="text-sm font-semibold leading-5 text-foreground">{ep.title || '-'}</h3>
-                      </div>
-                      <Badge variant={typeBadge.variant}>{typeBadge.label}</Badge>
-                    </div>
-
-                    <div class="mt-4 flex items-center justify-between gap-3">
-                      {#if episodeActionId(ep)}
-                        <Badge variant={monitoredBadge.variant}>{monitoredBadge.label}</Badge>
-                        <Button
-                          variant={episodeMonitored(ep) ? 'default' : 'secondary'}
-                          size="sm"
-                          disabled={syncingEps[episodeActionId(ep)]}
-                          onclick={() => toggleEpisodeMonitor(ep)}
-                        >
-                          {#if syncingEps[episodeActionId(ep)]}
-                            <LoaderCircle size={14} class="animate-spin" />
-                          {:else}
-                            <Eye size={14} />
-                          {/if}
-                          {episodeMonitored(ep) ? 'Monitored' : 'Monitor'}
-                        </Button>
-                      {:else}
-                        <span class="text-sm text-muted-foreground">Episode monitoring unavailable.</span>
-                      {/if}
-                    </div>
+                  {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
+                  <div class="flex items-center gap-3 border-b border-[#10141b] py-2.5 transition-colors last:border-b-0 hover:bg-white/[0.02]">
+                    <span class="w-8 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{displayEpisodeNumber(ep)}</span>
+                    <span class="min-w-0 flex-1 truncate text-sm text-foreground">{ep.title || '-'}</span>
+                    <span class="tag shrink-0 {tagClassForType(ep.type)}">{typeBadge.label}</span>
+                    {#if episodeActionId(ep)}
+                      <button
+                        type="button"
+                        class="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-rule px-3 py-1 font-mono text-[11px] transition-colors {episodeMonitored(ep) ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}"
+                        disabled={syncingEps[episodeActionId(ep)]}
+                        onclick={() => toggleEpisodeMonitor(ep)}
+                        title={monitoredBadge.label}
+                      >
+                        {#if syncingEps[episodeActionId(ep)]}
+                          <LoaderCircle size={12} class="animate-spin" />
+                        {:else}
+                          <span class="size-1.5 rounded-full {episodeMonitored(ep) ? 'bg-[#12b886]' : 'bg-transparent ring-1 ring-[#868e96] ring-inset'}"></span>
+                        {/if}
+                        {episodeMonitored(ep) ? 'watch' : 'skip'}
+                      </button>
+                    {:else}
+                      <span class="shrink-0 text-xs text-muted-foreground">Unavailable</span>
+                    {/if}
                   </div>
                 {/each}
               </div>

@@ -2,10 +2,8 @@
   import { onDestroy, onMount } from 'svelte';
   import { slide } from 'svelte/transition';
   import { autoAnimateAction as autoAnimate } from '../../lib/autoAnimate.ts';
-  import { Badge } from '$lib/components/ui/badge/index.ts';
   import { Button } from '$lib/components/ui/button/index.ts';
   import { Input } from '$lib/components/ui/input/index.ts';
-  import Box from '$lib/components/Box.svelte';
   import { addNotification } from '../../lib/stores.ts';
   import { getSyncLogs, triggerSync } from '../../lib/api.ts';
   import type { SyncLog, SyncLogItem } from '$lib/types.ts';
@@ -14,30 +12,41 @@
 
   const PAGE_SIZE = 8;
 
-  let loading = true;
-  let logs: SyncLog[] = [];
-  let syncing = false;
-  let loadingMore = false;
-  let hasMore = false;
-  let nextOffset = 0;
-  let expandedId: string | number | null = null;
-  let statusFilter = 'all';
-  let searchQuery = '';
+  let loading = $state(true);
+  let logs = $state<SyncLog[]>([]);
+  let syncing = $state(false);
+  let loadingMore = $state(false);
+  let hasMore = $state(false);
+  let nextOffset = $state(0);
+  let expandedId = $state<string | number | null>(null);
+  let statusFilter = $state('all');
+  let searchQuery = $state('');
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
   interface StatusFilter {
     value: string;
     label: string;
-    activeClass: string;
-    hoverClass: string;
   }
 
   const statusFilters: StatusFilter[] = [
-    { value: 'all', label: 'All', activeClass: 'border-primary/40 bg-primary/20 text-primary', hoverClass: 'hover:border-primary/60 hover:bg-primary/30 hover:text-primary' },
-    { value: 'success', label: 'Success', activeClass: 'border-success/40 bg-success/20 text-success', hoverClass: 'hover:border-success/60 hover:bg-success/30 hover:text-success' },
-    { value: 'partial', label: 'Partial', activeClass: 'border-warning/40 bg-warning/20 text-warning', hoverClass: 'hover:border-warning/60 hover:bg-warning/30 hover:text-warning' },
-    { value: 'failed', label: 'Failed', activeClass: 'border-destructive/40 bg-destructive/20 text-destructive', hoverClass: 'hover:border-destructive/60 hover:bg-destructive/30 hover:text-destructive' },
+    { value: 'all', label: 'All' },
+    { value: 'success', label: 'Success' },
+    { value: 'partial', label: 'Partial' },
+    { value: 'failed', label: 'Failed' },
   ];
+
+  let filteredLogs = $derived(
+    logs.filter((log: SyncLog) => {
+      if (statusFilter !== 'all' && log.status !== statusFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const summary = humanSummary(log).toLowerCase();
+        const itemTitles = (log.items || []).map((i: SyncLogItem) => (i.sonarr_title || '').toLowerCase()).join(' ');
+        if (!summary.includes(q) && !itemTitles.includes(q) && !(log.errors || '').toLowerCase().includes(q)) return false;
+      }
+      return true;
+    })
+  );
 
   onMount(async () => {
     await loadActivity(true);
@@ -135,27 +144,68 @@
     return !!(log.items?.length || log.errors);
   }
 
-  $: filteredLogs = logs.filter((log: SyncLog) => {
-    if (statusFilter !== 'all' && log.status !== statusFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const summary = humanSummary(log).toLowerCase();
-      const itemTitles = (log.items || []).map((i: SyncLogItem) => (i.sonarr_title || '').toLowerCase()).join(' ');
-      if (!summary.includes(q) && !itemTitles.includes(q) && !(log.errors || '').toLowerCase().includes(q)) return false;
+  function runStatusChipClass(status: string | undefined): string {
+    switch (status) {
+      case 'success':
+        return 'bg-[rgba(18,184,134,.12)] text-[#63e6be]';
+      case 'partial':
+        return 'bg-[rgba(253,126,20,.12)] text-[#ffa94d]';
+      case 'failed':
+        return 'bg-[rgba(224,49,49,.12)] text-[#ffa8a8]';
+      case 'running':
+        return 'bg-white/[0.06] text-[#adb5bd] animate-pulse';
+      default:
+        return 'bg-white/[0.06] text-[#adb5bd]';
     }
-    return true;
-  });
+  }
+
+  function itemStatusTagClass(status: string | undefined): string {
+    switch (status) {
+      case 'success':
+        return 'tag-canon';
+      case 'failed':
+        return 'tag-filler';
+      default:
+        return 'tag-anime';
+    }
+  }
+
+  function statusFilterActiveClass(value: string): string {
+    switch (value) {
+      case 'success':
+        return 'bg-[rgba(18,184,134,.18)] text-[#63e6be]';
+      case 'partial':
+        return 'bg-[rgba(253,126,20,.18)] text-[#ffa94d]';
+      case 'failed':
+        return 'bg-[rgba(224,49,49,.18)] text-[#ffa8a8]';
+      default:
+        return 'bg-accent text-foreground';
+    }
+  }
+
+  function statusFilterIdleClass(value: string): string {
+    switch (value) {
+      case 'success':
+        return 'text-[#63e6be]/70 hover:text-[#63e6be] hover:bg-[rgba(18,184,134,.1)]';
+      case 'partial':
+        return 'text-[#ffa94d]/70 hover:text-[#ffa94d] hover:bg-[rgba(253,126,20,.1)]';
+      case 'failed':
+        return 'text-[#ffa8a8]/70 hover:text-[#ffa8a8] hover:bg-[rgba(224,49,49,.1)]';
+      default:
+        return 'text-muted-foreground hover:text-foreground hover:bg-accent';
+    }
+  }
 </script>
 
 <svelte:head>
   <title>Mizu - Activity</title>
 </svelte:head>
 
-<div class="space-y-8">
+<div class="space-y-6">
   <!-- Header -->
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Activity</h1>
+      <h1 class="text-2xl font-bold tracking-tight text-foreground">Activity</h1>
       <p class="mt-1 text-sm text-muted-foreground">Sync history and per-anime change logs.</p>
     </div>
     <Button variant="default" onclick={handleSync} disabled={syncing}>
@@ -169,35 +219,35 @@
   </section>
 
   {#if loading}
-    <Box class="flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl glass-card text-center">
-      <LoaderCircle size={30} class="animate-spin text-primary" />
+    <div class="glass-surface flex min-h-56 flex-col items-center justify-center gap-4 rounded-lg text-center">
+      <LoaderCircle size={28} class="animate-spin text-primary" />
       <div class="space-y-1">
-        <h2 class="text-base font-semibold text-foreground">Loading activity</h2>
+        <h2 class="text-sm font-semibold text-foreground">Loading activity</h2>
         <p class="text-sm text-muted-foreground">Loading sync history.</p>
       </div>
-    </Box>
+    </div>
   {:else if logs.length === 0}
-    <Box class="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl glass-card px-6 text-center">
-      <span class="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-        <History size={24} />
+    <div class="glass-surface flex min-h-72 flex-col items-center justify-center gap-4 rounded-lg px-6 text-center">
+      <span class="flex size-11 items-center justify-center rounded-full border border-rule text-muted-foreground">
+        <History size={22} />
       </span>
       <div class="space-y-1">
-        <h2 class="text-lg font-semibold text-foreground">No sync activity yet</h2>
+        <h2 class="text-base font-semibold text-foreground">No sync activity yet</h2>
         <p class="max-w-md text-sm leading-6 text-muted-foreground">Run a sync to start building the activity history for your anime library.</p>
       </div>
       <Button variant="default" onclick={handleSync} disabled={syncing}>
         <RefreshCw size={16} />
         Sync now
       </Button>
-    </Box>
+    </div>
   {:else}
-    <!-- Filters bar -->
+    <!-- Filters bar: segmented mono control + ledger search field -->
     <section class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div class="flex flex-wrap gap-1.5">
-        {#each statusFilters as filter}
+      <div class="inline-flex w-full items-center overflow-hidden rounded-lg border border-rule sm:w-auto" role="group" aria-label="Filter by status">
+        {#each statusFilters as filter, i}
           <button
             type="button"
-            class={`rounded-xl border px-3 py-1.5 text-sm font-medium backdrop-blur-md saturate-150 transition-colors duration-200 ${statusFilter === filter.value ? `${filter.activeClass} ${filter.hoverClass}` : `border-white/[0.08] bg-white/[0.03] text-muted-foreground ${filter.hoverClass}`}`}
+            class={`flex h-10 flex-1 items-center justify-center px-4 font-mono text-xs uppercase tracking-[0.08em] transition-colors duration-150 sm:flex-none ${i > 0 ? 'border-l border-rule' : ''} ${statusFilter === filter.value ? statusFilterActiveClass(filter.value) : statusFilterIdleClass(filter.value)}`}
             onclick={() => (statusFilter = filter.value)}
           >
             {filter.label}
@@ -205,102 +255,113 @@
         {/each}
       </div>
       <div class="relative sm:w-64">
-        <Search size={16} class="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground" />
-        <Input bind:value={searchQuery} placeholder="Search logs..." class="pl-9" />
+        <Search size={15} class="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground" />
+        <Input bind:value={searchQuery} placeholder="Search logs..." class="rounded-lg pl-9 font-mono text-xs" />
       </div>
     </section>
 
-    <!-- Log list -->
+    <div class="rule-label"><span>Recent runs</span></div>
+
+    <!-- Log list: ledger bands -->
     {#if filteredLogs.length === 0}
-      <Box class="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl glass-card text-center">
+      <div class="glass-surface flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg text-center">
         <p class="text-sm font-medium text-foreground">No matching logs</p>
         <p class="text-sm text-muted-foreground">Try adjusting your filters or search query.</p>
-      </Box>
+      </div>
     {:else}
-      <section class="space-y-4" use:autoAnimate>
+      <section use:autoAnimate>
         {#each filteredLogs as log (log.id)}
           {@const runBadge = runStatusBadge(log.status)}
-          <Box class="rounded-xl glass-card p-5">
-            <div class="space-y-4">
-              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div class="space-y-3">
-                  <div class="flex flex-wrap gap-2">
-                    <Badge variant={runBadge.variant}>{runBadge.label}</Badge>
-                    <Badge variant="secondary">{formatTrigger(log.trigger)}</Badge>
-                    <Badge variant="secondary">{formatDuration(log.started_at, log.completed_at)}</Badge>
-                  </div>
-
-                  <div class="space-y-1">
-                    <h2 class="text-base font-semibold text-foreground">{humanSummary(log)}</h2>
-                    <p class="text-sm text-muted-foreground">{formatTime(log.started_at)}</p>
-                  </div>
+          <div class="border-b border-[#10141b] py-3.5">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0 space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class={`rounded-[5px] px-1.5 py-[2px] font-mono text-[10px] uppercase tracking-[0.1em] ${runStatusChipClass(log.status)}`}>{runBadge.label}</span>
+                  <h2 class="text-[13px] font-medium text-foreground">{humanSummary(log)}</h2>
                 </div>
-
-                {#if hasDetails(log)}
-                  <Button variant="ghost" onclick={() => toggleExpand(log.id)} data-current={expandedId === log.id ? 'true' : undefined}>
-                    Details
-                    <ChevronDown size={16} class={expandedId === log.id ? 'rotate-180' : ''} />
-                  </Button>
-                {/if}
+                <p class="font-mono text-[10px] text-[#868e96]">
+                  {formatTrigger(log.trigger)}
+                  <span aria-hidden="true"> &middot; </span>
+                  <span class="tabular-nums">{formatDuration(log.started_at, log.completed_at)}</span>
+                  <span aria-hidden="true"> &middot; </span>
+                  {formatTime(log.started_at)}
+                </p>
               </div>
 
-              {#if log.errors}
-                <div class="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  This run completed with errors that need attention.
-                </div>
-              {/if}
-
-              {#if expandedId === log.id && hasDetails(log)}
-                <div class="space-y-4 pt-1" transition:slide={{ duration: 220 }}>
-                  {#if log.items?.length}
-                    <div class="space-y-3">
-                      {#each log.items as item}
-                        {@const itemBadge = itemStatusBadge(item.status)}
-                        <div class="rounded-xl glass-card p-4">
-                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div class="space-y-2">
-                              <h3 class="text-sm font-semibold text-foreground">{item.sonarr_title}</h3>
-                              <p class="text-sm leading-6 text-muted-foreground">{detailLine(item)}</p>
-                            </div>
-                            <Badge variant={itemBadge.variant}>{itemBadge.label}</Badge>
-                          </div>
-
-                          {#if item.error}
-                            <div class="mt-3 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                              <TriangleAlert size={16} class="mt-0.5 shrink-0" />
-                              <span>{item.error}</span>
-                            </div>
-                          {/if}
-                        </div>
-                      {/each}
-                    </div>
-                  {/if}
-
-                  {#if log.errors}
-                    <div class="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-                      <div class="mb-2 flex items-center gap-2 font-medium">
-                        <TriangleAlert size={16} />
-                        Run errors
-                      </div>
-                      {log.errors}
-                    </div>
-                  {/if}
-                </div>
+              {#if hasDetails(log)}
+                <button
+                  type="button"
+                  class="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-primary transition-colors hover:text-primary/80"
+                  onclick={() => toggleExpand(log.id)}
+                  aria-expanded={expandedId === log.id}
+                >
+                  Details
+                  <ChevronDown size={12} class={`transition-transform duration-200 ${expandedId === log.id ? 'rotate-180' : ''}`} />
+                </button>
               {/if}
             </div>
-          </Box>
+
+            {#if log.errors}
+              <div class="mt-2 rounded-lg border border-[rgba(224,49,49,.25)] bg-[rgba(224,49,49,.08)] px-3 py-2 text-[13px] leading-5 text-[#ffa8a8]">
+                This run completed with errors that need attention.
+              </div>
+            {/if}
+
+            {#if expandedId === log.id && hasDetails(log)}
+              <div class="mt-3 space-y-2" transition:slide={{ duration: 220 }}>
+                {#if log.items?.length}
+                  <div class="space-y-2">
+                    {#each log.items as item}
+                      {@const itemBadge = itemStatusBadge(item.status)}
+                      <div class="glass-inset rounded-lg p-3">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div class="space-y-0.5">
+                            <h3 class="text-sm font-semibold text-foreground">{item.sonarr_title}</h3>
+                            <p class="text-[13px] leading-5 text-muted-foreground">{detailLine(item)}</p>
+                          </div>
+                          <span class={`tag ${itemStatusTagClass(item.status)} shrink-0`}>{itemBadge.label}</span>
+                        </div>
+
+                        {#if item.error}
+                          <div class="mt-2 flex items-start gap-2 rounded-lg border border-[rgba(224,49,49,.25)] bg-[rgba(224,49,49,.08)] px-3 py-2 text-[13px] leading-5 text-[#ffa8a8]">
+                            <TriangleAlert size={14} class="mt-0.5 shrink-0" />
+                            <span>{item.error}</span>
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+
+                {#if log.errors}
+                  <div class="rounded-lg border border-[rgba(224,49,49,.25)] bg-[rgba(224,49,49,.08)] p-3 text-[13px] leading-5 text-[#ffa8a8]">
+                    <div class="mb-1.5 flex items-center gap-2 font-medium">
+                      <TriangleAlert size={14} />
+                      Run errors
+                    </div>
+                    {log.errors}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
         {/each}
       </section>
     {/if}
 
     {#if hasMore}
       <div class="flex justify-center">
-        <Button variant="secondary" onclick={() => loadActivity(false)} disabled={loadingMore}>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-rule bg-card px-4 py-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          onclick={() => loadActivity(false)}
+          disabled={loadingMore}
+        >
           {#if loadingMore}
-            <LoaderCircle size={16} class="animate-spin" />
+            <LoaderCircle size={14} class="animate-spin" />
           {/if}
           {loadingMore ? 'Loading...' : 'Load more'}
-        </Button>
+        </button>
       </div>
     {/if}
   {/if}

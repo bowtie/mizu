@@ -88,7 +88,19 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 					status = "degraded"
 				}
 			}
-			writeJSON(w, http.StatusOK, map[string]interface{}{"status": status, "version": version})
+			payload := map[string]interface{}{"status": status, "version": version}
+			if latest, err := db.GetLatestSyncLog(r.Context()); err == nil {
+				payload["last_sync_at"] = latest.CompletedAt
+				interval := scheduler.Interval()
+				if interval > 0 {
+					next := latest.CompletedAt.Add(interval)
+					if next.Before(time.Now()) {
+						next = time.Now().Add(interval)
+					}
+					payload["next_sync_at"] = next
+				}
+			}
+			writeJSON(w, http.StatusOK, payload)
 		})
 
 		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {

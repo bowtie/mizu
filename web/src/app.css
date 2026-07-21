@@ -1,13 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@fontsource-variable/inter";
+@import "@fontsource-variable/geist-mono";
 @custom-variant dark (&:is(.dark *));
 @source "./";
 @plugin "tailwindcss-animate";
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
 
-/* shadcn-svelte theme tokens — Mizu water theme: cool light surfaces + ocean blue accent */
+/* shadcn-svelte theme tokens — Mizu Arc glass: deep water base, aqua light accent */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -39,8 +40,8 @@
   --radius-ui-lg: calc(var(--radius) + 0.25rem);
   --radius-ui-sm: calc(var(--radius) - 0.25rem);
 
-  --font-sans: 'Inter Variable', sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -63,91 +64,71 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Mizu glass system — Arc browser language, dark only.
+ * One material at four elevations:
+ *   glass-surface  cards/panes floating on the backdrop
+ *   glass-raised   nav, sticky chrome, filter strips (one step brighter)
+ *   glass-overlay  menus/popovers/tooltips/modals (deep tint for contrast)
+ *   glass-inset    wells sunk into a surface (search bars, steppers)
+ * Shape rule: panes rounded-2xl, controls rounded-xl, small chips full.
+ */
 :root {
-  /* Dark navy slate theme. Deep navy backgrounds, bright blue accent,
-     slate greys for text/muted. Linear-style dark.
-     coolors.co/palette/0466c8-0353a4-023e7d-002855-001845-001233-33415c-5c677d-7d8597-979dac */
-  --background: oklch(0.16 0.04 260);           /* #001233 near-black navy */
-  --foreground: oklch(0.96 0.005 250);          /* near-white, cool tint */
-  --card: oklch(0.20 0.045 260);                /* #001845 elevated navy */
-  --card-foreground: oklch(0.96 0.005 250);
-  --popover: oklch(0.20 0.045 260);
-  --popover-foreground: oklch(0.96 0.005 250);
-  --primary: oklch(0.58 0.18 250);              /* #0466c8 bright blue */
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.26 0.04 258 / 60%);      /* #002855 dark navy, translucent */
-  --secondary-foreground: oklch(0.96 0.005 250);
-  --muted: oklch(0.45 0.04 258 / 45%);          /* translucent hover wash */
-  --muted-foreground: oklch(0.78 0.015 250);    /* light slate, still readable */
-  --accent: oklch(0.45 0.04 258 / 45%);         /* translucent hover wash */
-  --accent-foreground: oklch(0.96 0.005 250);
-  --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.62 0.14 165);
-  --success-foreground: oklch(0.98 0 0);
-  --warning: oklch(0.75 0.15 70);
-  --warning-foreground: oklch(0.16 0.04 260);
-  --info: oklch(0.50 0.14 250);                 /* #0353a4 medium blue */
-  --info-foreground: oklch(0.98 0 0);
-  --border: oklch(0.35 0.03 255 / 40%);         /* #33415c dark slate */
-  --input: oklch(0.35 0.03 255 / 60%);
-  --ring: oklch(0.58 0.18 250);                 /* #0466c8 bright blue */
-  --radius: 0.75rem;
-  --chart-1: oklch(0.58 0.18 250);              /* #0466c8 */
-  --chart-2: oklch(0.50 0.14 250);              /* #0353a4 */
-  --chart-3: oklch(0.42 0.10 255);              /* #023e7d */
-  --chart-4: oklch(0.32 0.06 258);              /* #002855 */
-  --chart-5: oklch(0.55 0.025 250);             /* #7d8597 */
-  --sidebar: oklch(0.18 0.042 260);             /* #001845 */
-  --sidebar-foreground: oklch(0.96 0.005 250);
-  --sidebar-primary: oklch(0.58 0.18 250);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.30 0.04 258);
-  --sidebar-accent-foreground: oklch(0.96 0.005 250);
-  --sidebar-border: oklch(0.35 0.03 255 / 35%);
-  --sidebar-ring: oklch(0.58 0.18 250);
-}
+  /* Mizu — neutral near-black base + Open Color accents/text. */
+  --background: #0b0e13;        /* near-black */
+  --foreground: #dee2e6;        /* OC gray 3 */
+  --card: #10141b;              /* raised band */
+  --card-foreground: #dee2e6;   /* OC gray 3 */
+  --popover: #131820;           /* overlay */
+  --popover-foreground: #dee2e6;/* OC gray 3 */
+  --primary: #4dabf7;           /* OC blue 4 */
+  --primary-foreground: #0b0e13;
+  --secondary: #1a2230;         /* raised control */
+  --secondary-foreground: #dee2e6;
+  --muted: #0e1218;             /* slightly below bg */
+  --muted-foreground: #adb5bd;  /* OC gray 5 */
+  --accent: #1c2531;            /* hover wash */
+  --accent-foreground: #dee2e6;
+  --destructive: #e03131;       /* OC red 8 */
+  --destructive-foreground: #fff5f5; /* OC red 0 */
+  --success: #12b886;           /* OC teal 6 */
+  --success-foreground: #e6fcf5;/* OC teal 0 */
+  --warning: #fd7e14;           /* OC orange 6 */
+  --warning-foreground: #fff4e6;/* OC orange 0 */
+  --info: #1971c2;              /* OC blue 8 */
+  --info-foreground: #e7f5ff;   /* OC blue 0 */
+  --border: #1c232e;            /* neutral hairline */
+  --input: #1c232e;
+  --ring: #4dabf7;              /* OC blue 4 */
+  --radius: 0.5rem;
+  --chart-1: #4dabf7;           /* OC blue 4 */
+  --chart-2: #1971c2;           /* OC blue 8 */
+  --chart-3: #0c8599;           /* OC cyan 8 */
+  --chart-4: #fd7e14;           /* OC orange 6 */
+  --chart-5: #adb5bd;           /* OC gray 5 */
+  --sidebar: #10141b;
+  --sidebar-foreground: #dee2e6;
+  --sidebar-primary: #4dabf7;
+  --sidebar-primary-foreground: #0b0e13;
+  --sidebar-accent: #1c2531;
+  --sidebar-accent-foreground: #dee2e6;
+  --sidebar-border: #1c232e;
+  --sidebar-ring: #4dabf7;
 
-/* Light mode kept for future toggle — pale slate surfaces, same bright blue accent. */
-.light {
-  --background: oklch(0.97 0.005 250);          /* near-white, cool */
-  --foreground: oklch(0.20 0.04 260);           /* #001233 deep navy */
-  --card: oklch(0.99 0.003 250);
-  --card-foreground: oklch(0.20 0.04 260);
-  --popover: oklch(0.99 0.003 250);
-  --popover-foreground: oklch(0.20 0.04 260);
-  --primary: oklch(0.50 0.14 250);              /* #0353a4 */
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.94 0.008 250);
-  --secondary-foreground: oklch(0.20 0.04 260);
-  --muted: oklch(0.95 0.006 250);
-  --muted-foreground: oklch(0.50 0.025 250);    /* #7d8597 */
-  --accent: oklch(0.93 0.01 250);
-  --accent-foreground: oklch(0.20 0.04 260);
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.62 0.14 165);
-  --success-foreground: oklch(0.98 0 0);
-  --warning: oklch(0.75 0.15 70);
-  --warning-foreground: oklch(0.20 0.04 260);
-  --info: oklch(0.50 0.14 250);
-  --info-foreground: oklch(0.98 0 0);
-  --border: oklch(0.88 0.01 250 / 55%);
-  --input: oklch(0.88 0.01 250 / 75%);
-  --ring: oklch(0.50 0.14 250);
-  --chart-1: oklch(0.58 0.18 250);
-  --chart-2: oklch(0.50 0.14 250);
-  --chart-3: oklch(0.42 0.10 255);
-  --chart-4: oklch(0.55 0.025 250);
-  --chart-5: oklch(0.70 0.02 250);
-  --sidebar: oklch(0.96 0.006 250);
-  --sidebar-foreground: oklch(0.20 0.04 260);
-  --sidebar-primary: oklch(0.50 0.14 250);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.93 0.01 250);
-  --sidebar-accent-foreground: oklch(0.20 0.04 260);
-  --sidebar-border: oklch(0.88 0.01 250 / 45%);
-  --sidebar-ring: oklch(0.50 0.14 250);
+  /* Ledger surface tokens */
+  --ink-faint: #868e96;         /* OC gray 6 */
+  --rule: #1c232e;              /* neutral hairline */
+  --rule-soft: #10141b;
+  --surface-1: #10141b;
+  --surface-2: #131820;
+  --surface-inset: #080b10;     /* sunken well */
+  --surface-border: #1c232e;
+  --surface-shadow: 0 16px 40px -18px rgb(0 0 0 / 70%);
+  /* type colors (OC shade 8/9 for fills, shade 3 for text on dark) */
+  --type-canon: #1971c2;        /* OC blue 8 */
+  --type-anime: #0c8599;        /* OC cyan 8 */
+  --type-mixed: #e8590c;        /* OC orange 8 */
+  --type-filler: #c92a2a;       /* OC red 9 */
 }
 
 html,
@@ -174,12 +155,7 @@ h5,
 h6 {
   font-family: var(--font-sans);
   font-weight: 600;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
+  letter-spacing: -0.015em;
 }
 a {
   color: inherit;
@@ -192,14 +168,97 @@ img {
   display: block;
   max-width: 100%;
 }
+
+/* Ledger surfaces — flat ink + hairline borders. Class names kept from the
+   glass pass so route markup didn't churn; they now mean plain raised bands. */
+.glass-surface,
+.glass-raised,
+.glass-overlay,
+.glass-inset {
+  border: 1px solid var(--surface-border);
+}
+.glass-surface {
+  background: var(--surface-1);
+}
+.glass-raised {
+  background: var(--surface-1);
+  box-shadow: var(--surface-shadow);
+}
+.glass-overlay {
+  background: var(--surface-2);
+  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 75%);
+}
+.glass-inset {
+  background: var(--surface-inset);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 45%);
+}
+
+/* Label-in-rule section divider — the ledger signature.
+   Use: <div class="rule-label"><span>Label</span></div> */
+.rule-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.rule-label > span {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.rule-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+/* Type tag — colored left-edge bar + mono label (color = meaning). */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+}
+.tag::before {
+  content: "";
+  width: 3px;
+  height: 0.875rem;
+  border-radius: 2px;
+  background: currentColor;
+}
+.tag-canon { color: #74c0fc; }   /* OC blue 3 */
+.tag-anime { color: #66d9e8; }   /* OC cyan 3 */
+.tag-mixed { color: #ffa94d; }   /* OC orange 3 */
+.tag-filler { color: #ffa8a8; }  /* OC red 3 */
+
+/* Status lamp. */
+.lamp {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 15%, transparent);
+}
+.lamp-warn { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 15%, transparent); }
+.lamp-err { background: var(--destructive); box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 15%, transparent); }
+
+/* Navbar status cluster divider. */
+.sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 0.875rem;
+  background: var(--rule);
+}
+
+/* Poster frames: gradient well + monogram behind the artwork */
 .poster-skeleton {
   z-index: 0;
   transition: opacity 180ms ease;
-  background: linear-gradient(
-    180deg,
-    oklch(0.25 0.04 258) 0%,
-    oklch(0.20 0.045 260) 100%
-  );
+  background: linear-gradient(180deg, oklch(0.24 0.03 235) 0%, oklch(0.19 0.028 240) 100%);
 }
 .poster-skeleton__shine {
   position: absolute;
@@ -213,7 +272,7 @@ img {
     ),
     radial-gradient(
       circle at top left,
-      color-mix(in oklab, var(--primary) 10%, transparent) 0%,
+      color-mix(in oklab, var(--primary) 12%, transparent) 0%,
       transparent 55%
     );
 }
@@ -229,6 +288,7 @@ img {
   display: none;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(180deg, oklch(0.23 0.03 235) 0%, oklch(0.185 0.028 240) 100%);
 }
 .poster-frame[data-poster-state="loaded"] .poster-image {
   opacity: 1;
@@ -243,17 +303,29 @@ img {
 }
 svg.lucide {
   vector-effect: non-scaling-stroke;
-  stroke-width: 2.1;
+  stroke-width: 2;
 }
 
 /* Tooltip + popover animations */
 @keyframes tooltip-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 @keyframes tooltip-out {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(0.95); }
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
 }
 .tooltip-animated[data-state="delayed-open"],
 .tooltip-animated[data-state="instant-open"] {
@@ -263,12 +335,24 @@ svg.lucide {
   animation: tooltip-out 100ms ease-in;
 }
 @keyframes popover-in {
-  from { opacity: 0; transform: scale(0.95) translateY(4px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 @keyframes popover-out {
-  from { opacity: 1; transform: scale(1) translateY(0); }
-  to { opacity: 0; transform: scale(0.95) translateY(4px); }
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
 }
 [data-slot="popover-content"][data-state="open"] {
   animation: popover-in 180ms ease-out;
@@ -278,95 +362,82 @@ svg.lucide {
 }
 
 @layer base {
-	* {
-		@apply border-border outline-ring/50;
+  * {
+    @apply border-border outline-ring/50;
   }
-	body {
-		@apply text-foreground;
+  body {
+    @apply text-foreground;
   }
-	html {
-		@apply font-sans;
+  html {
+    @apply font-sans;
   }
-}
-
-/* shadcn-svelte / bits-ui custom variants and utilities */
-.glass-input {
-  box-shadow: inset 0 0.5px rgba(255, 255, 255, 0.08);
-}
-.glass-card {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(32px) saturate(1.35);
-  -webkit-backdrop-filter: blur(32px) saturate(1.35);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22), inset 0 0.5px rgba(255, 255, 255, 0.08);
-}
-.glass-menu {
-  background: rgba(20, 20, 25, 0.55);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 0.5px rgba(255, 255, 255, 0.08);
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
 }
 
 @custom-variant data-open {
-	&:where([data-state="open"]),
-	&:where([data-open]:not([data-open="false"])) {
-		@slot;
-	}
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
 }
 
 @custom-variant data-closed {
-	&:where([data-state="closed"]),
-	&:where([data-closed]:not([data-closed="false"])) {
-		@slot;
-	}
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
 }
 
 @custom-variant data-checked {
-	&:where([data-state="checked"]),
-	&:where([data-checked]:not([data-checked="false"])) {
-		@slot;
-	}
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
 }
 
 @custom-variant data-unchecked {
-	&:where([data-state="unchecked"]),
-	&:where([data-unchecked]:not([data-unchecked="false"])) {
-		@slot;
-	}
+  &:where([data-state="unchecked"]),
+  &:where([data-unchecked]:not([data-unchecked="false"])) {
+    @slot;
+  }
 }
 
 @custom-variant data-disabled {
-	&:where([data-disabled="true"]),
-	&:where([data-disabled]:not([data-disabled="false"])) {
-		@slot;
-	}
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
 }
 
 @custom-variant data-active {
-	&:where([data-state="active"]),
-	&:where([data-active]:not([data-active="false"])) {
-		@slot;
-	}
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
 }
 
 @custom-variant data-horizontal {
-	&:where([data-orientation="horizontal"]) {
-		@slot;
-	}
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
 }
 
 @custom-variant data-vertical {
-	&:where([data-orientation="vertical"]) {
-		@slot;
-	}
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
 }
 
 @utility no-scrollbar {
-	-ms-overflow-style: none;
-	scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 
-	&::-webkit-scrollbar {
-		display: none;
-	}
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }

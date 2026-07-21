@@ -178,6 +178,9 @@ export interface StoredApiKeyResponse {
 
 export interface StatusResponse {
   status: string;
+  version?: string;
+  last_sync_at?: string;
+  next_sync_at?: string;
 }
 
 export interface VersionResponse {

@@ -455,6 +455,21 @@ func (db *DB) ReplaceSyncLogItems(ctx context.Context, logID int64, items []mode
 	return tx.Commit()
 }
 
+// GetLatestSyncLog returns the most recent completed sync log, or sql.ErrNoRows if none.
+func (db *DB) GetLatestSyncLog(ctx context.Context) (models.SyncLog, error) {
+	var log models.SyncLog
+	row := db.conn.QueryRowContext(ctx, `
+		SELECT id, started_at, completed_at, status, shows_processed,
+		       episodes_updated, errors, trigger_type
+		FROM sync_logs WHERE completed_at IS NOT NULL
+		ORDER BY started_at DESC LIMIT 1`)
+	err := row.Scan(
+		&log.ID, &log.StartedAt, &log.CompletedAt, &log.Status,
+		&log.ShowsProcessed, &log.EpisodesUpdated, &log.Errors, &log.Trigger,
+	)
+	return log, err
+}
+
 func (db *DB) GetSyncLogsPage(ctx context.Context, limit, offset int) (models.SyncLogPage, error) {
 	if limit <= 0 {
 		limit = 20

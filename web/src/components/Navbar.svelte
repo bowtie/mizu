@@ -1,33 +1,34 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { Badge } from '$lib/components/ui/badge/index.ts';
-  import { Button } from '$lib/components/ui/button/index.ts';
-  import * as Tooltip from '$lib/components/ui/tooltip/index.ts';
   import { getStatus } from '../lib/api.ts';
-  import History from '@lucide/svelte/icons/history';
-  import RadioTower from '@lucide/svelte/icons/radio-tower';
-  import SettingsIcon from '@lucide/svelte/icons/settings';
-  import Tv from '@lucide/svelte/icons/tv';
   import Waves from '@lucide/svelte/icons/waves';
 
   const navItems = [
-    { path: '/shows', label: 'Anime', icon: Tv },
-    { path: '/activity', label: 'Activity', icon: History },
-    { path: '/settings', label: 'Settings', icon: SettingsIcon },
+    { path: '/shows', label: 'Library' },
+    { path: '/activity', label: 'Activity' },
+    { path: '/settings', label: 'Settings' },
   ];
 
-  let sonarrConnected = false;
-  $: sonarrStatusLabel = sonarrConnected ? 'Sonarr connection is healthy.' : 'Sonarr is offline or unreachable.';
-  $: currentPath = $page.url.pathname;
+  let sonarrConnected = $state(false);
+  let lastSyncAt = $state<string | null>(null);
+  let nextSyncAt = $state<string | null>(null);
+  let now = $state(Date.now());
+  const currentPath = $derived($page.url.pathname);
 
-  onMount(async () => {
-    try {
-      const status = await getStatus();
-      sonarrConnected = status?.status === 'ok';
-    } catch {
-      sonarrConnected = false;
-    }
+  onMount(() => {
+    (async () => {
+      try {
+        const status = await getStatus();
+        sonarrConnected = status?.status === 'ok';
+        lastSyncAt = status?.last_sync_at ?? null;
+        nextSyncAt = status?.next_sync_at ?? null;
+      } catch {
+        sonarrConnected = false;
+      }
+    })();
+    const interval = setInterval(() => (now = Date.now()), 30000);
+    return () => clearInterval(interval);
   });
 
   function isActive(itemPath: string, path: string) {
@@ -39,87 +40,68 @@
     }
     return path === itemPath;
   }
+
+  function relativeFromNow(iso: string | null, currentNow: number): string {
+    if (!iso) return '';
+    const target = new Date(iso).getTime();
+    const diff = target - currentNow;
+    const abs = Math.abs(diff);
+    const mins = Math.round(abs / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.round(hours / 24);
+    return `${days}d`;
+  }
+
+  let lastSyncLabel = $derived(lastSyncAt ? relativeFromNow(lastSyncAt, now) : '');
+  let nextSyncLabel = $derived(nextSyncAt ? relativeFromNow(nextSyncAt, now) : '');
 </script>
 
-<header class="sticky top-5 z-40 hidden px-4 md:block">
-  <div class="nav-glass">
-    <div class="flex min-h-12 items-center justify-between gap-4 py-2">
-      <a href="/" class="flex min-w-0 items-center gap-3" aria-label="Mizu home">
-        <span class="flex size-8 items-center justify-center rounded-lg text-foreground">
-          <Waves class="size-[18px]" />
+<header class="sticky top-0 z-40 border-b border-rule bg-background/90 backdrop-blur-sm">
+  <div class="flex h-[52px] items-center gap-5 px-5">
+    <a href="/" class="flex items-center gap-2.5" aria-label="Mizu home">
+      <span class="flex size-6 items-center justify-center rounded-md border border-rule font-mono text-[13px] text-primary">
+        <Waves class="size-3.5" />
+      </span>
+      <strong class="text-sm font-semibold tracking-tight text-foreground">Mizu</strong>
+    </a>
+
+    <nav class="flex h-full items-center gap-0.5" aria-label="Primary">
+      {#each navItems as item}
+        {@const active = isActive(item.path, currentPath)}
+        <a
+          href={item.path}
+          class="flex h-full items-center border-b-2 px-3.5 text-[13px] font-medium transition-colors -mb-px {active
+            ? 'border-primary text-foreground'
+            : 'border-transparent text-muted-foreground hover:text-foreground'}"
+          aria-current={active ? 'page' : undefined}
+        >
+          {item.label}
+        </a>
+      {/each}
+    </nav>
+
+    <div class="ml-auto flex items-center font-mono text-[11px] text-muted-foreground">
+      <span class="flex items-center gap-2">
+        <span class="lamp {sonarrConnected ? '' : 'lamp-err'}"></span>
+        Sonarr <b class="font-medium text-foreground">{sonarrConnected ? 'connected' : 'offline'}</b>
+      </span>
+      {#if lastSyncLabel}
+        <span class="sep"></span>
+        <span class="hidden items-center gap-1.5 sm:flex">
+          last sync
+          <b class="font-medium text-foreground tabular-nums">{lastSyncLabel}</b>
         </span>
-        <strong class="block truncate text-sm font-semibold tracking-tight text-foreground">Mizu</strong>
-      </a>
-
-      <nav class="hidden items-center gap-1 md:flex" aria-label="Primary">
-        {#each navItems as item}
-          {@const Icon = item.icon}
-          {@const active = isActive(item.path, currentPath)}
-          <Button
-            href={item.path}
-            variant={active ? 'ghost' : 'ghost'}
-            class="rounded-lg border-transparent {active ? 'bg-white/[0.08] text-foreground hover:bg-white/[0.12]' : ''}"
-            aria-current={active ? 'page' : undefined}
-          >
-            <Icon class="size-4" />
-            {item.label}
-          </Button>
-        {/each}
-      </nav>
-
-      <Tooltip.Provider delayDuration={120}>
-        <Tooltip.Root>
-          <Tooltip.Trigger>
-            <Badge
-              variant={sonarrConnected ? 'success' : 'destructive'}
-              class="size-9 shrink-0 cursor-help justify-center rounded-lg px-0"
-              aria-label={sonarrConnected ? 'Sonarr online' : 'Sonarr offline'}
-            >
-              <RadioTower class="size-4" />
-            </Badge>
-          </Tooltip.Trigger>
-          <Tooltip.Content side="bottom" align="center" sideOffset={10}>
-            {sonarrStatusLabel}
-          </Tooltip.Content>
-        </Tooltip.Root>
-      </Tooltip.Provider>
+      {/if}
+      {#if nextSyncLabel}
+        <span class="sep"></span>
+        <span class="hidden items-center gap-1.5 sm:flex">
+          next
+          <b class="font-medium text-foreground tabular-nums">{nextSyncLabel}</b>
+        </span>
+      {/if}
     </div>
   </div>
 </header>
-
-<div class="fixed inset-x-0 bottom-4 z-40 px-4 md:hidden">
-  <nav
-    class="nav-glass mx-auto max-w-sm p-2"
-    aria-label="Primary mobile"
-  >
-    <div class="flex items-center gap-2">
-      {#each navItems as item}
-        {@const Icon = item.icon}
-        {@const active = isActive(item.path, currentPath)}
-        <Button
-          href={item.path}
-          variant="ghost"
-          class="min-w-0 flex-1 justify-center rounded-lg border-transparent whitespace-nowrap {active ? 'bg-white/[0.08] text-foreground hover:bg-white/[0.12]' : ''}"
-          aria-current={active ? 'page' : undefined}
-        >
-          <Icon class="size-4" />
-          {item.label}
-        </Button>
-      {/each}
-    </div>
-  </nav>
-</div>
-
-<style>
-  .nav-glass {
-    max-width: 72rem;
-    margin: 0 auto;
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(32px) saturate(1.35);
-    -webkit-backdrop-filter: blur(32px) saturate(1.35);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22), inset 0 0.5px rgba(255, 255, 255, 0.08);
-    padding: 0 14px;
-  }
-</style>

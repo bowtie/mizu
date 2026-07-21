@@ -16,34 +16,35 @@
 <SonnerComponent
 	theme={mode.current}
 	class="toaster group"
-	style="--normal-bg: var(--color-popover); --normal-text: var(--color-popover-foreground); --normal-border: var(--color-border);"
+	style="--normal-bg: var(--glass-overlay-bg); --normal-text: var(--color-popover-foreground); --normal-border: var(--glass-border); --border-radius: var(--radius-2xl);"
 	toastOptions={{
+		class: 'glass-overlay !rounded-2xl',
 		success: {
 			style: {
-				'--normal-bg': 'color-mix(in oklch, var(--color-success) 12%, var(--color-popover))',
+				'--normal-bg': 'color-mix(in oklch, var(--color-success) 10%, var(--glass-overlay-bg))',
 				'--normal-text': 'var(--color-success)',
-				'--normal-border': 'color-mix(in oklch, var(--color-success) 30%, var(--color-border))',
+				'--normal-border': 'color-mix(in oklch, var(--color-success) 28%, var(--glass-border))',
 			},
 		},
 		error: {
 			style: {
-				'--normal-bg': 'color-mix(in oklch, var(--color-destructive) 12%, var(--color-popover))',
+				'--normal-bg': 'color-mix(in oklch, var(--color-destructive) 10%, var(--glass-overlay-bg))',
 				'--normal-text': 'var(--color-destructive)',
-				'--normal-border': 'color-mix(in oklch, var(--color-destructive) 30%, var(--color-border))',
+				'--normal-border': 'color-mix(in oklch, var(--color-destructive) 28%, var(--glass-border))',
 			},
 		},
 		warning: {
 			style: {
-				'--normal-bg': 'color-mix(in oklch, var(--color-warning) 12%, var(--color-popover))',
+				'--normal-bg': 'color-mix(in oklch, var(--color-warning) 10%, var(--glass-overlay-bg))',
 				'--normal-text': 'var(--color-warning)',
-				'--normal-border': 'color-mix(in oklch, var(--color-warning) 30%, var(--color-border))',
+				'--normal-border': 'color-mix(in oklch, var(--color-warning) 28%, var(--glass-border))',
 			},
 		},
 		info: {
 			style: {
-				'--normal-bg': 'color-mix(in oklch, var(--color-info) 12%, var(--color-popover))',
+				'--normal-bg': 'color-mix(in oklch, var(--color-info) 10%, var(--glass-overlay-bg))',
 				'--normal-text': 'var(--color-info)',
-				'--normal-border': 'color-mix(in oklch, var(--color-info) 30%, var(--color-border))',
+				'--normal-border': 'color-mix(in oklch, var(--color-info) 28%, var(--glass-border))',
 			},
 		},
 	}}
