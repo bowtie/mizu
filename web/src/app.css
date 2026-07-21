@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist-mono";
+@import "@skeletonlabs/skeleton";
+@import "@skeletonlabs/skeleton-svelte";
+@import "@skeletonlabs/skeleton/themes/terminus";
 @custom-variant dark (&:is(.dark *));
 @source "./";
 @plugin "tailwindcss-animate";
@@ -74,61 +77,61 @@
  * Shape rule: panes rounded-2xl, controls rounded-xl, small chips full.
  */
 :root {
-  /* Mizu — neutral near-black base + Open Color accents/text. */
-  --background: #0b0e13;        /* near-black */
-  --foreground: #dee2e6;        /* OC gray 3 */
-  --card: #10141b;              /* raised band */
-  --card-foreground: #dee2e6;   /* OC gray 3 */
-  --popover: #131820;           /* overlay */
-  --popover-foreground: #dee2e6;/* OC gray 3 */
-  --primary: #4dabf7;           /* OC blue 4 */
-  --primary-foreground: #0b0e13;
-  --secondary: #1a2230;         /* raised control */
-  --secondary-foreground: #dee2e6;
-  --muted: #0e1218;             /* slightly below bg */
-  --muted-foreground: #adb5bd;  /* OC gray 5 */
-  --accent: #1c2531;            /* hover wash */
-  --accent-foreground: #dee2e6;
-  --destructive: #e03131;       /* OC red 8 */
-  --destructive-foreground: #fff5f5; /* OC red 0 */
-  --success: #12b886;           /* OC teal 6 */
-  --success-foreground: #e6fcf5;/* OC teal 0 */
-  --warning: #fd7e14;           /* OC orange 6 */
-  --warning-foreground: #fff4e6;/* OC orange 0 */
-  --info: #1971c2;              /* OC blue 8 */
-  --info-foreground: #e7f5ff;   /* OC blue 0 */
-  --border: #1c232e;            /* neutral hairline */
-  --input: #1c232e;
-  --ring: #4dabf7;              /* OC blue 4 */
-  --radius: 0.5rem;
-  --chart-1: #4dabf7;           /* OC blue 4 */
-  --chart-2: #1971c2;           /* OC blue 8 */
-  --chart-3: #0c8599;           /* OC cyan 8 */
-  --chart-4: #fd7e14;           /* OC orange 6 */
-  --chart-5: #adb5bd;           /* OC gray 5 */
-  --sidebar: #10141b;
-  --sidebar-foreground: #dee2e6;
-  --sidebar-primary: #4dabf7;
-  --sidebar-primary-foreground: #0b0e13;
-  --sidebar-accent: #1c2531;
-  --sidebar-accent-foreground: #dee2e6;
-  --sidebar-border: #1c232e;
-  --sidebar-ring: #4dabf7;
+  /* Map shadcn-svelte tokens to Skeleton theme variables. */
+  --background: var(--color-surface-950);
+  --foreground: var(--color-surface-50);
+  --card: var(--color-surface-900);
+  --card-foreground: var(--color-surface-50);
+  --popover: var(--color-surface-800);
+  --popover-foreground: var(--color-surface-50);
+  --primary: var(--color-primary-500);
+  --primary-foreground: var(--color-primary-contrast-500);
+  --secondary: var(--color-secondary-500);
+  --secondary-foreground: var(--color-secondary-contrast-500);
+  --muted: var(--color-surface-900);
+  --muted-foreground: var(--color-surface-400);
+  --accent: var(--color-surface-800);
+  --accent-foreground: var(--color-surface-50);
+  --destructive: var(--color-error-500);
+  --destructive-foreground: var(--color-error-contrast-500);
+  --success: var(--color-success-500);
+  --success-foreground: var(--color-success-contrast-500);
+  --warning: var(--color-warning-500);
+  --warning-foreground: var(--color-warning-contrast-500);
+  --info: var(--color-primary-500);
+  --info-foreground: var(--color-primary-contrast-500);
+  --border: var(--color-surface-800);
+  --input: var(--color-surface-800);
+  --ring: var(--color-primary-500);
+  --radius: 0.375rem;
+  --chart-1: var(--color-primary-500);
+  --chart-2: var(--color-secondary-500);
+  --chart-3: var(--color-tertiary-500);
+  --chart-4: var(--color-warning-500);
+  --chart-5: var(--color-surface-400);
+  --sidebar: var(--color-surface-900);
+  --sidebar-foreground: var(--color-surface-50);
+  --sidebar-primary: var(--color-primary-500);
+  --sidebar-primary-foreground: var(--color-primary-contrast-500);
+  --sidebar-accent: var(--color-surface-800);
+  --sidebar-accent-foreground: var(--color-surface-50);
+  --sidebar-border: var(--color-surface-800);
+  --sidebar-ring: var(--color-primary-500);
 
   /* Ledger surface tokens */
-  --ink-faint: #868e96;         /* OC gray 6 */
-  --rule: #1c232e;              /* neutral hairline */
-  --rule-soft: #10141b;
-  --surface-1: #10141b;
-  --surface-2: #131820;
-  --surface-inset: #080b10;     /* sunken well */
-  --surface-border: #1c232e;
+  --ink-faint: var(--color-surface-500);
+  --rule: var(--color-surface-800);
+  --rule-soft: var(--color-surface-900);
+  --surface-1: var(--color-surface-900);
+  --surface-2: var(--color-surface-800);
+  --surface-inset: var(--color-surface-950);
+  --surface-border: var(--color-surface-800);
   --surface-shadow: 0 16px 40px -18px rgb(0 0 0 / 70%);
-  /* type colors (OC shade 8/9 for fills, shade 3 for text on dark) */
-  --type-canon: #1971c2;        /* OC blue 8 */
-  --type-anime: #0c8599;        /* OC cyan 8 */
-  --type-mixed: #e8590c;        /* OC orange 8 */
-  --type-filler: #c92a2a;       /* OC red 9 */
+  /* type colors */
+  --type-canon: var(--color-primary-500);
+  --type-anime: var(--color-secondary-500);
+  --type-mixed: var(--color-warning-500);
+  --type-filler: var(--color-error-500);
 }
 
 html,
