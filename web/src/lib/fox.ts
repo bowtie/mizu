@@ -1,18 +1,15 @@
-import type { BadgeVariant } from './components/ui/badge/index.ts';
-
 export interface BadgeMeta {
   label: string;
-  variant: BadgeVariant;
 }
 
 export const episodeTypeMeta: Record<string, BadgeMeta> = {
-  canon: { label: 'Manga', variant: 'default' },
-  mixed_canon: { label: 'Mixed', variant: 'warning' },
-  mixed: { label: 'Mixed', variant: 'warning' },
-  anime_canon: { label: 'Anime', variant: 'info' },
-  filler: { label: 'Filler', variant: 'destructive' },
-  special: { label: 'Special', variant: 'secondary' },
-  unknown: { label: 'Unknown', variant: 'secondary' },
+  canon: { label: 'Manga' },
+  mixed_canon: { label: 'Mixed' },
+  mixed: { label: 'Mixed' },
+  anime_canon: { label: 'Anime' },
+  filler: { label: 'Filler' },
+  special: { label: 'Special' },
+  unknown: { label: 'Unknown' },
 };
 
 export function episodeTypeBadge(type: string | undefined | null): BadgeMeta {
@@ -22,33 +19,33 @@ export function episodeTypeBadge(type: string | undefined | null): BadgeMeta {
 export function runStatusBadge(status: string | undefined | null): BadgeMeta {
   switch (status) {
     case 'success':
-      return { label: 'Success', variant: 'success' };
+      return { label: 'Success' };
     case 'partial':
-      return { label: 'Partial', variant: 'warning' };
+      return { label: 'Partial' };
     case 'failed':
-      return { label: 'Failed', variant: 'destructive' };
+      return { label: 'Failed' };
     case 'running':
-      return { label: 'Running', variant: 'info' };
+      return { label: 'Running' };
     default:
-      return { label: status || 'Unknown', variant: 'secondary' };
+      return { label: status || 'Unknown' };
   }
 }
 
 export function itemStatusBadge(status: string | undefined | null): BadgeMeta {
   switch (status) {
     case 'success':
-      return { label: 'Success', variant: 'success' };
+      return { label: 'Success' };
     case 'failed':
-      return { label: 'Failed', variant: 'destructive' };
+      return { label: 'Failed' };
     default:
-      return { label: status || 'Info', variant: 'secondary' };
+      return { label: status || 'Info' };
   }
 }
 
 export function syncStateBadge(enabled: boolean): BadgeMeta {
   return enabled
-    ? { label: 'Syncing', variant: 'success' }
-    : { label: 'Paused', variant: 'secondary' };
+    ? { label: 'Syncing' }
+    : { label: 'Paused' };
 }
 
 export function monitorStateBadge(
@@ -57,6 +54,6 @@ export function monitorStateBadge(
   noLabel: string = 'Unmonitored',
 ): BadgeMeta {
   return monitored
-    ? { label: yesLabel, variant: 'success' }
-    : { label: noLabel, variant: 'secondary' };
+    ? { label: yesLabel }
+    : { label: noLabel };
 }

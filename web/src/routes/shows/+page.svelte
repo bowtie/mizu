@@ -713,8 +713,8 @@
 
 <div class="space-y-6">
   <section class="flex flex-wrap items-end gap-x-4 gap-y-3">
-    <div class="space-y-1">
-      <h1 class="text-2xl font-bold tracking-tight text-surface-50">Anime</h1>
+    <div class="space-y-1.5">
+      <h1 class="text-3xl font-bold tracking-tight text-surface-50">Anime</h1>
       <p class="text-sm text-surface-400">
         {#if !loading}
           <span class="font-mono tabular-nums text-surface-50">{($shows || []).length}</span> tracked ·
@@ -731,21 +731,21 @@
   </section>
 
   <!-- Search + sort strip -->
-  <section class="card flex flex-col overflow-hidden sm:flex-row sm:items-stretch">
+  <section class="flex flex-col gap-2 sm:flex-row sm:items-center">
     <div class="relative min-w-0 flex-1">
       <span class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3.5 text-surface-400">
         <Search size={16} />
       </span>
       <input
         type="text"
-        placeholder="Search anime"
+        placeholder="Search anime by title or slug"
         bind:value={filter}
-        class="input field-base h-10 w-full rounded-none border-0 bg-transparent pl-10 shadow-none focus-visible:border-transparent focus-visible:ring-0"
+        class="input field-base h-11 w-full rounded-lg pl-10 font-mono text-sm shadow-none"
         aria-label="Search anime"
       />
     </div>
-    <div class="border-t border-surface-800 sm:w-48 sm:border-l sm:border-t-0">
-      <select bind:value={sortBy} class="select field-base h-10 w-full rounded-none border-0 bg-transparent font-mono text-xs shadow-none focus-visible:border-transparent focus-visible:ring-0">
+    <div class="sm:w-52">
+      <select bind:value={sortBy} class="select field-base h-11 w-full rounded-lg font-mono text-xs shadow-none">
         {#each sortOptions as item}
           <option value={item.value}>{item.label}</option>
         {/each}
@@ -787,14 +787,14 @@
     </div>
   {:else}
     <div class="rule-label"><span>Tracked</span></div>
-    <section class="card overflow-hidden" use:autoAnimate>
+    <section class="overflow-hidden rounded-lg" use:autoAnimate>
       {#each filteredShows as show}
         {@const series = seriesById[show.sonarr_series_id]}
         {@const episodeCount = series?.statistics?.episodeCount}
         {@const banner = bannerUrl(show, series)}
         <a
           href={`/shows/${show.id}`}
-          class="group relative flex h-16 items-center gap-3.5 overflow-hidden border-b border-surface-800 px-4 transition-colors last:border-b-0 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-500 sm:gap-4 sm:px-5"
+          class="group relative flex h-16 items-center gap-3.5 overflow-hidden border-b border-surface-800/60 px-4 transition-colors last:border-b-0 hover:bg-surface-800/30 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-500 sm:gap-4 sm:px-5"
           onclick={(event) => {
             event.preventDefault();
             openShow(show.id);
@@ -808,15 +808,15 @@
                 alt=""
                 loading="lazy"
                 decoding="async"
-                class="h-full w-full object-cover opacity-[0.18] transition-all duration-500 ease-out group-hover:scale-105 group-hover:opacity-[0.28]"
+                class="h-full w-full object-cover opacity-[0.35] transition-all duration-500 ease-out group-hover:scale-105 group-hover:opacity-[0.45]"
               />
-              <div class="absolute inset-0 bg-gradient-to-r from-surface-900 via-surface-900/85 to-surface-900/40"></div>
+              <div class="absolute inset-0 bg-gradient-to-r from-surface-950 via-surface-950/70 to-surface-950/20"></div>
             </div>
           {/if}
 
           <div class="relative z-10 min-w-0 flex-1">
             <h2 class="line-clamp-1 text-sm font-semibold text-surface-50">{show.sonarr_title}</h2>
-            <p class="mt-0.5 font-mono text-[11px] tabular-nums text-surface-500">{markerChip(show)}</p>
+            <p class="mt-0.5 font-mono text-[11px] tabular-nums text-surface-300">{markerChip(show)}</p>
           </div>
 
           <span class={`badge badge-sm font-mono text-[10px] uppercase tracking-[0.08em] ${show.enabled ? 'preset-filled-success-500' : 'preset-tonal-surface'}`}>

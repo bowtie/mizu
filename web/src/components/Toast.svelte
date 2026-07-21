@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { toast } from 'svelte-sonner';
-  import { Toaster } from '$lib/components/ui/sonner/index.ts';
+  import { toast, Toaster } from 'svelte-sonner';
   import { notifications, removeNotification } from '../lib/stores.ts';
 
   const displayed = new Map<number, number>();
@@ -49,4 +48,12 @@
   });
 </script>
 
-<Toaster />
+<Toaster
+  theme="dark"
+  class="toaster group"
+  style="--normal-bg: var(--surface-2); --normal-text: var(--color-surface-50); --normal-border: var(--surface-border); --border-radius: var(--radius-2xl);"
+  toastOptions={{
+    class: 'glass-overlay !rounded-2xl',
+  }}
+  richColors
+/>

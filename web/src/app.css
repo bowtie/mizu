@@ -7,65 +7,10 @@
 @import "@skeletonlabs/skeleton/themes/wintry";
 @custom-variant dark (&:is(.dark *));
 @source "./";
-@plugin "tailwindcss-animate";
-@plugin "@tailwindcss/forms";
-@plugin "@tailwindcss/typography";
 
-/* Bridge: expose shadcn-svelte tokens as Tailwind utilities, sourced from Skeleton's theme.
-   Skeleton's theme (data-theme="wintry") defines --color-surface-*, --color-primary-*, etc.
-   :root below maps those into shadcn variable names; @theme inline exposes those as utilities
-   like bg-background, text-foreground, border-border — so existing shadcn-svelte components
-   and unmigrated pages keep working without modification. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-info: var(--info);
-  --color-info-foreground: var(--info-foreground);
-
   --font-sans: "Inter Variable", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /*
@@ -90,47 +35,6 @@
   --color-surface-800: oklch(34% 0.04 264);
   --color-surface-700: oklch(40% 0.04 264);
 
-  /* Map shadcn-svelte tokens to Skeleton theme variables (compat for unmigrated pages). */
-  --background: var(--color-surface-950);
-  --foreground: var(--color-surface-50);
-  --card: var(--color-surface-900);
-  --card-foreground: var(--color-surface-50);
-  --popover: var(--color-surface-800);
-  --popover-foreground: var(--color-surface-50);
-  --primary: var(--color-primary-500);
-  --primary-foreground: var(--color-primary-contrast-500);
-  --secondary: var(--color-secondary-500);
-  --secondary-foreground: var(--color-secondary-contrast-500);
-  --muted: var(--color-surface-900);
-  --muted-foreground: var(--color-surface-400);
-  --accent: var(--color-surface-800);
-  --accent-foreground: var(--color-surface-50);
-  --destructive: var(--color-error-500);
-  --destructive-foreground: var(--color-error-contrast-500);
-  --success: var(--color-success-500);
-  --success-foreground: var(--color-success-contrast-500);
-  --warning: var(--color-warning-500);
-  --warning-foreground: var(--color-warning-contrast-500);
-  --info: var(--color-primary-500);
-  --info-foreground: var(--color-primary-contrast-500);
-  --border: var(--color-surface-800);
-  --input: var(--color-surface-800);
-  --ring: var(--color-primary-500);
-  --radius: 0.375rem;
-  --chart-1: var(--color-primary-500);
-  --chart-2: var(--color-secondary-500);
-  --chart-3: var(--color-tertiary-500);
-  --chart-4: var(--color-warning-500);
-  --chart-5: var(--color-surface-400);
-  --sidebar: var(--color-surface-900);
-  --sidebar-foreground: var(--color-surface-50);
-  --sidebar-primary: var(--color-primary-500);
-  --sidebar-primary-foreground: var(--color-primary-contrast-500);
-  --sidebar-accent: var(--color-surface-800);
-  --sidebar-accent-foreground: var(--color-surface-50);
-  --sidebar-border: var(--color-surface-800);
-  --sidebar-ring: var(--color-primary-500);
-
   /* Ledger surface tokens */
   --ink-faint: var(--color-surface-500);
   --rule: var(--color-surface-800);
@@ -154,12 +58,12 @@ body,
 }
 html {
   color-scheme: dark;
-  background: var(--background);
+  background: var(--color-surface-950);
 }
 body {
   margin: 0;
   background: transparent;
-  color: var(--foreground);
+  color: var(--color-surface-50);
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
 }
@@ -178,11 +82,15 @@ a {
   text-decoration: none;
 }
 ::selection {
-  background: color-mix(in oklab, var(--primary) 32%, transparent);
+  background: color-mix(in oklab, var(--color-primary-500) 32%, transparent);
 }
 img {
   display: block;
   max-width: 100%;
+}
+svg.lucide {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 2;
 }
 
 /* Ledger surfaces — flat ink + hairline borders. Class names kept from the
@@ -256,11 +164,11 @@ img {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 15%, transparent);
+  background: var(--color-success-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success-500) 15%, transparent);
 }
-.lamp-warn { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 15%, transparent); }
-.lamp-err { background: var(--destructive); box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 15%, transparent); }
+.lamp-warn { background: var(--color-warning-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warning-500) 15%, transparent); }
+.lamp-err { background: var(--color-error-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error-500) 15%, transparent); }
 
 /* Navbar status cluster divider. */
 .sep {
@@ -284,11 +192,11 @@ img {
     linear-gradient(
       180deg,
       transparent 0%,
-      color-mix(in oklab, var(--foreground) 4%, transparent) 100%
+      color-mix(in oklab, var(--color-surface-50) 4%, transparent) 100%
     ),
     radial-gradient(
       circle at top left,
-      color-mix(in oklab, var(--primary) 12%, transparent) 0%,
+      color-mix(in oklab, var(--color-primary-500) 12%, transparent) 0%,
       transparent 55%
     );
 }
@@ -317,136 +225,12 @@ img {
 .poster-frame[data-poster-state="failed"] .poster-fallback {
   display: flex;
 }
-svg.lucide {
-  vector-effect: non-scaling-stroke;
-  stroke-width: 2;
-}
 
-/* Tooltip + popover animations */
-@keyframes tooltip-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-@keyframes tooltip-out {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-}
-.tooltip-animated[data-state="delayed-open"],
-.tooltip-animated[data-state="instant-open"] {
-  animation: tooltip-in 150ms ease-out;
-}
-.tooltip-animated[data-state="closed"] {
-  animation: tooltip-out 100ms ease-in;
-}
-@keyframes popover-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-@keyframes popover-out {
-  from {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.95) translateY(4px);
-  }
-}
-[data-slot="popover-content"][data-state="open"] {
-  animation: popover-in 180ms ease-out;
-}
-[data-slot="popover-content"][data-state="closed"] {
-  animation: popover-out 120ms ease-in;
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
-  button,
-  input,
-  select,
-  textarea {
-    font: inherit;
-  }
-}
-
-@custom-variant data-open {
-  &:where([data-state="open"]),
-  &:where([data-open]:not([data-open="false"])) {
-    @slot;
-  }
-}
-
-@custom-variant data-closed {
-  &:where([data-state="closed"]),
-  &:where([data-closed]:not([data-closed="false"])) {
-    @slot;
-  }
-}
-
-@custom-variant data-checked {
-  &:where([data-state="checked"]),
-  &:where([data-checked]:not([data-checked="false"])) {
-    @slot;
-  }
-}
-
-@custom-variant data-unchecked {
-  &:where([data-state="unchecked"]),
-  &:where([data-unchecked]:not([data-unchecked="false"])) {
-    @slot;
-  }
-}
-
-@custom-variant data-disabled {
-  &:where([data-disabled="true"]),
-  &:where([data-disabled]:not([data-disabled="false"])) {
-    @slot;
-  }
-}
-
-@custom-variant data-active {
-  &:where([data-state="active"]),
-  &:where([data-active]:not([data-active="false"])) {
-    @slot;
-  }
-}
-
-@custom-variant data-horizontal {
-  &:where([data-orientation="horizontal"]) {
-    @slot;
-  }
-}
-
-@custom-variant data-vertical {
-  &:where([data-orientation="vertical"]) {
-    @slot;
-  }
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 @utility no-scrollbar {

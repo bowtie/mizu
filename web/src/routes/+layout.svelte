@@ -8,7 +8,7 @@
   let { children } = $props();
 </script>
 
-<div class="isolate min-h-[100dvh] bg-background text-foreground" data-sveltekit-preload-data="hover">
+<div class="isolate min-h-[100dvh] bg-surface-950 text-surface-50" data-sveltekit-preload-data="hover">
   <Navbar />
   <main class="min-h-[100dvh]">
     <div class="mx-auto w-full max-w-[1080px] px-6 pb-20 pt-6">
