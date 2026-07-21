@@ -2,9 +2,6 @@
   import { onMount, onDestroy } from 'svelte';
   import { fade, slide } from 'svelte/transition';
   import { AnimatePresence, motion } from '@humanspeak/svelte-motion';
-  import { Button } from '$lib/components/ui/button/index.ts';
-  import { Input } from '$lib/components/ui/input/index.ts';
-  import { Switch } from '$lib/components/ui/switch/index.ts';
   import { settings, addNotification } from '../../lib/stores.ts';
   import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.ts';
   import type { Settings, StoredApiKeyResponse } from '$lib/types.ts';
@@ -309,9 +306,9 @@
     </div>
     <div class="flex items-center gap-3">
       {#if settingsDirty}
-        <span class="badge preset-filled-warning-500 badge-sm font-mono text-[10px] uppercase tracking-wider">Unsaved changes</span>
+        <span class="badge preset-filled-warning-500 font-mono text-[10px] uppercase tracking-wider">Unsaved changes</span>
       {/if}
-      <button class="btn btn-sm preset-filled-primary-500" onclick={handleSave} disabled={saving || !settingsDirty}>
+      <button class="btn btn-base preset-filled-primary-500" onclick={handleSave} disabled={saving || !settingsDirty}>
         {#if saving}
           <LoaderCircle size={16} class="animate-spin" />
         {:else}
@@ -349,7 +346,7 @@
             <input
               id="sonarr-url"
               type="text"
-              class="input input-sm w-64 shrink-0 font-mono text-[13px]"
+              class="input field-base w-64 shrink-0 font-mono text-[13px]"
               placeholder="http://localhost:8989"
               value={sonarrUrl}
               oninput={handleUrlInput}
@@ -366,7 +363,7 @@
               <input
                 id="sonarr-key"
                 type={apiKeyVisible ? 'text' : 'password'}
-                class="input input-sm w-64 font-mono text-[13px] {hasSavedApiKey || apiKeyDirty ? 'pr-10' : ''}"
+                class="input field-base w-64 font-mono text-[13px] {hasSavedApiKey || apiKeyDirty ? 'pr-10' : ''}"
                 bind:value={sonarrApiKey}
                 placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
                 oninput={handleApiKeyInput}
@@ -415,7 +412,7 @@
               {/if}
             </div>
             <button
-              class="btn btn-sm shrink-0 {testPhase === 'success' ? 'preset-filled-success-500' : testPhase === 'error' ? 'preset-filled-error-500' : 'preset-tonal'}"
+              class="btn btn-base shrink-0 {testPhase === 'success' ? 'preset-filled-success-500' : testPhase === 'error' ? 'preset-filled-error-500' : 'preset-tonal'}"
               onclick={handleTestConnection}
               disabled={testing || testPhase === 'success' || !sonarrUrl || !urlValid}
               aria-busy={testing}
@@ -449,22 +446,22 @@
               <div class="text-[13px] font-medium text-surface-50">Sync interval</div>
               <p class="mt-0.5 text-xs text-surface-400">How often Mizu checks for episode changes and updates Sonarr.</p>
             </div>
-            <div class="join shrink-0">
+            <div class="flex shrink-0 items-center rounded-lg border border-surface-800">
               <button
                 type="button"
-                class="btn btn-sm join-item preset-tonal"
+                class="flex size-9 items-center justify-center rounded-l-lg text-surface-300 transition hover:bg-surface-800 hover:text-surface-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-surface-300"
                 onclick={() => stepSyncInterval(-1)}
                 disabled={syncIntervalIndex <= 0}
                 aria-label="Decrease sync interval"
               >
                 <Minus size={16} />
               </button>
-              <div class="join-item flex h-8 min-w-[5rem] items-center justify-center border-y border-surface-800 bg-surface-950 px-3 text-center font-mono text-xs tabular-nums text-surface-50">
+              <div class="flex h-9 min-w-[5rem] items-center justify-center border-x border-surface-800 px-3 text-center font-mono text-xs tabular-nums text-surface-50">
                 {syncIntervalOptions[syncIntervalIndex].label}
               </div>
               <button
                 type="button"
-                class="btn btn-sm join-item preset-tonal"
+                class="flex size-9 items-center justify-center rounded-r-lg text-surface-300 transition hover:bg-surface-800 hover:text-surface-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-surface-300"
                 onclick={() => stepSyncInterval(1)}
                 disabled={syncIntervalIndex >= syncIntervalOptions.length - 1}
                 aria-label="Increase sync interval"
@@ -480,7 +477,7 @@
               <div class="text-[13px] font-medium text-surface-50">AniList artwork</div>
               <p class="mt-0.5 text-xs text-surface-400">Use AniList banners and posters instead of Sonarr images only.</p>
             </div>
-            <input type="checkbox" class="checkbox preset-filled-primary-500 checkbox-sm" bind:checked={enableAniListArtwork} />
+            <input type="checkbox" class="checkbox" bind:checked={enableAniListArtwork} />
           </div>
 
           <!-- AFL cache -->
@@ -491,7 +488,7 @@
                 <span class="font-mono tabular-nums text-surface-50">{cacheCount}</span> shows cached, refreshed {formatCacheTime(cacheRefreshedAt)}.
               </p>
             </div>
-            <button class="btn btn-sm preset-tonal shrink-0" onclick={handleRefreshCache} disabled={refreshingCache}>
+            <button class="btn btn-base preset-tonal shrink-0" onclick={handleRefreshCache} disabled={refreshingCache}>
               {#if refreshingCache}
                 <LoaderCircle size={16} class="animate-spin" />
               {:else}
@@ -514,7 +511,7 @@
               <div class="text-[13px] font-medium text-surface-50">Anime canon</div>
               <p class="mt-0.5 text-xs text-surface-400">Original anime episodes</p>
             </div>
-            <input type="checkbox" class="checkbox preset-filled-primary-500 checkbox-sm" bind:checked={trackAnimeCanonDefault} />
+            <input type="checkbox" class="checkbox" bind:checked={trackAnimeCanonDefault} />
           </div>
 
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">
@@ -522,7 +519,7 @@
               <div class="text-[13px] font-medium text-surface-50">Mixed canon</div>
               <p class="mt-0.5 text-xs text-surface-400">Canon + filler blend</p>
             </div>
-            <input type="checkbox" class="checkbox preset-filled-primary-500 checkbox-sm" bind:checked={trackMixedDefault} />
+            <input type="checkbox" class="checkbox" bind:checked={trackMixedDefault} />
           </div>
 
           <div class="flex items-center gap-4 py-3.5">
@@ -530,7 +527,7 @@
               <div class="text-[13px] font-medium text-surface-50">Filler</div>
               <p class="mt-0.5 text-xs text-surface-400">Pure filler episodes</p>
             </div>
-            <input type="checkbox" class="checkbox preset-filled-primary-500 checkbox-sm" bind:checked={trackFillerDefault} />
+            <input type="checkbox" class="checkbox" bind:checked={trackFillerDefault} />
           </div>
         </div>
       </section>

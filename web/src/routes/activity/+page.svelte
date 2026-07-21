@@ -2,8 +2,6 @@
   import { onDestroy, onMount } from 'svelte';
   import { slide } from 'svelte/transition';
   import { autoAnimateAction as autoAnimate } from '../../lib/autoAnimate.ts';
-  import { Button } from '$lib/components/ui/button/index.ts';
-  import { Input } from '$lib/components/ui/input/index.ts';
   import { addNotification } from '../../lib/stores.ts';
   import { getSyncLogs, triggerSync } from '../../lib/api.ts';
   import type { SyncLog, SyncLogItem } from '$lib/types.ts';
@@ -147,52 +145,52 @@
   function runStatusChipClass(status: string | undefined): string {
     switch (status) {
       case 'success':
-        return 'bg-[rgba(18,184,134,.12)] text-[#63e6be]';
+        return 'preset-filled-success-500 text-surface-50';
       case 'partial':
-        return 'bg-[rgba(253,126,20,.12)] text-[#ffa94d]';
+        return 'preset-filled-warning-500 text-surface-50';
       case 'failed':
-        return 'bg-[rgba(224,49,49,.12)] text-[#ffa8a8]';
+        return 'preset-filled-error-500 text-surface-50';
       case 'running':
-        return 'bg-white/[0.06] text-[#adb5bd] animate-pulse';
+        return 'preset-tonal-surface-700 text-surface-200 animate-pulse';
       default:
-        return 'bg-white/[0.06] text-[#adb5bd]';
+        return 'preset-tonal-surface-700 text-surface-200';
     }
   }
 
   function itemStatusTagClass(status: string | undefined): string {
     switch (status) {
       case 'success':
-        return 'tag-canon';
+        return 'text-success-500';
       case 'failed':
-        return 'tag-filler';
+        return 'text-error-500';
       default:
-        return 'tag-anime';
+        return 'text-secondary-500';
     }
   }
 
   function statusFilterActiveClass(value: string): string {
     switch (value) {
       case 'success':
-        return 'bg-[rgba(18,184,134,.18)] text-[#63e6be]';
+        return 'preset-filled-success-500 text-surface-50';
       case 'partial':
-        return 'bg-[rgba(253,126,20,.18)] text-[#ffa94d]';
+        return 'preset-filled-warning-500 text-surface-50';
       case 'failed':
-        return 'bg-[rgba(224,49,49,.18)] text-[#ffa8a8]';
+        return 'preset-filled-error-500 text-surface-50';
       default:
-        return 'bg-accent text-foreground';
+        return 'preset-filled-surface-700 text-surface-50';
     }
   }
 
   function statusFilterIdleClass(value: string): string {
     switch (value) {
       case 'success':
-        return 'text-[#63e6be]/70 hover:text-[#63e6be] hover:bg-[rgba(18,184,134,.1)]';
+        return 'text-success-500/70 hover:text-success-500 hover:preset-tonal-success-500';
       case 'partial':
-        return 'text-[#ffa94d]/70 hover:text-[#ffa94d] hover:bg-[rgba(253,126,20,.1)]';
+        return 'text-warning-500/70 hover:text-warning-500 hover:preset-tonal-warning-500';
       case 'failed':
-        return 'text-[#ffa8a8]/70 hover:text-[#ffa8a8] hover:bg-[rgba(224,49,49,.1)]';
+        return 'text-error-500/70 hover:text-error-500 hover:preset-tonal-error-500';
       default:
-        return 'text-muted-foreground hover:text-foreground hover:bg-accent';
+        return 'text-surface-400 hover:text-surface-50 hover:bg-surface-800';
     }
   }
 </script>
@@ -205,49 +203,49 @@
   <!-- Header -->
   <section class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-foreground">Activity</h1>
-      <p class="mt-1 text-sm text-muted-foreground">Sync history and per-anime change logs.</p>
+      <h1 class="text-2xl font-bold tracking-tight text-surface-50">Activity</h1>
+      <p class="mt-1 text-sm text-surface-400">Sync history and per-anime change logs.</p>
     </div>
-    <Button variant="default" onclick={handleSync} disabled={syncing}>
+    <button class="btn btn-base preset-filled-primary-500" onclick={handleSync} disabled={syncing}>
       {#if syncing}
         <LoaderCircle size={16} class="animate-spin" />
       {:else}
         <RefreshCw size={16} />
       {/if}
       {syncing ? 'Syncing...' : 'Sync now'}
-    </Button>
+    </button>
   </section>
 
   {#if loading}
-    <div class="glass-surface flex min-h-56 flex-col items-center justify-center gap-4 rounded-lg text-center">
-      <LoaderCircle size={28} class="animate-spin text-primary" />
+    <div class="card preset-tonal-surface-900 flex min-h-56 flex-col items-center justify-center gap-4 text-center">
+      <LoaderCircle size={28} class="animate-spin text-primary-500" />
       <div class="space-y-1">
-        <h2 class="text-sm font-semibold text-foreground">Loading activity</h2>
-        <p class="text-sm text-muted-foreground">Loading sync history.</p>
+        <h2 class="text-sm font-semibold text-surface-50">Loading activity</h2>
+        <p class="text-sm text-surface-400">Loading sync history.</p>
       </div>
     </div>
   {:else if logs.length === 0}
-    <div class="glass-surface flex min-h-72 flex-col items-center justify-center gap-4 rounded-lg px-6 text-center">
-      <span class="flex size-11 items-center justify-center rounded-full border border-rule text-muted-foreground">
+    <div class="card preset-tonal-surface-900 flex min-h-72 flex-col items-center justify-center gap-4 px-6 text-center">
+      <span class="flex size-11 items-center justify-center rounded-full border border-surface-700 text-surface-400">
         <History size={22} />
       </span>
       <div class="space-y-1">
-        <h2 class="text-base font-semibold text-foreground">No sync activity yet</h2>
-        <p class="max-w-md text-sm leading-6 text-muted-foreground">Run a sync to start building the activity history for your anime library.</p>
+        <h2 class="text-base font-semibold text-surface-50">No sync activity yet</h2>
+        <p class="max-w-md text-sm leading-6 text-surface-400">Run a sync to start building the activity history for your anime library.</p>
       </div>
-      <Button variant="default" onclick={handleSync} disabled={syncing}>
+      <button class="btn btn-base preset-filled-primary-500" onclick={handleSync} disabled={syncing}>
         <RefreshCw size={16} />
         Sync now
-      </Button>
+      </button>
     </div>
   {:else}
-    <!-- Filters bar: segmented mono control + ledger search field -->
+    <!-- Filters bar: segmented mono control + search field -->
     <section class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div class="inline-flex w-full items-center overflow-hidden rounded-lg border border-rule sm:w-auto" role="group" aria-label="Filter by status">
+      <div class="inline-flex w-full items-center overflow-hidden rounded-lg border border-surface-800 sm:w-auto" role="group" aria-label="Filter by status">
         {#each statusFilters as filter, i}
           <button
             type="button"
-            class={`flex h-10 flex-1 items-center justify-center px-4 font-mono text-xs uppercase tracking-[0.08em] transition-colors duration-150 sm:flex-none ${i > 0 ? 'border-l border-rule' : ''} ${statusFilter === filter.value ? statusFilterActiveClass(filter.value) : statusFilterIdleClass(filter.value)}`}
+            class={`flex h-10 flex-1 items-center justify-center px-4 font-mono text-xs uppercase tracking-[0.08em] transition-colors duration-150 sm:flex-none ${i > 0 ? 'border-l border-surface-800' : ''} ${statusFilter === filter.value ? statusFilterActiveClass(filter.value) : statusFilterIdleClass(filter.value)}`}
             onclick={() => (statusFilter = filter.value)}
           >
             {filter.label}
@@ -255,31 +253,31 @@
         {/each}
       </div>
       <div class="relative sm:w-64">
-        <Search size={15} class="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground" />
-        <Input bind:value={searchQuery} placeholder="Search logs..." class="rounded-lg pl-9 font-mono text-xs" />
+        <Search size={15} class="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-surface-400" />
+        <input bind:value={searchQuery} placeholder="Search logs..." class="input field-base rounded-lg pl-9 font-mono text-xs" />
       </div>
     </section>
 
     <div class="rule-label"><span>Recent runs</span></div>
 
-    <!-- Log list: ledger bands -->
+    <!-- Log list -->
     {#if filteredLogs.length === 0}
-      <div class="glass-surface flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg text-center">
-        <p class="text-sm font-medium text-foreground">No matching logs</p>
-        <p class="text-sm text-muted-foreground">Try adjusting your filters or search query.</p>
+      <div class="card preset-tonal-surface-900 flex min-h-32 flex-col items-center justify-center gap-2 text-center">
+        <p class="text-sm font-medium text-surface-50">No matching logs</p>
+        <p class="text-sm text-surface-400">Try adjusting your filters or search query.</p>
       </div>
     {:else}
       <section use:autoAnimate>
         {#each filteredLogs as log (log.id)}
           {@const runBadge = runStatusBadge(log.status)}
-          <div class="border-b border-[#10141b] py-3.5">
+          <div class="border-b border-surface-800 py-3.5">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div class="min-w-0 space-y-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class={`rounded-[5px] px-1.5 py-[2px] font-mono text-[10px] uppercase tracking-[0.1em] ${runStatusChipClass(log.status)}`}>{runBadge.label}</span>
-                  <h2 class="text-[13px] font-medium text-foreground">{humanSummary(log)}</h2>
+                  <span class={`badge ${runStatusChipClass(log.status)} badge-sm font-mono text-[10px] uppercase tracking-[0.1em]`}>{runBadge.label}</span>
+                  <h2 class="text-[13px] font-medium text-surface-50">{humanSummary(log)}</h2>
                 </div>
-                <p class="font-mono text-[10px] text-[#868e96]">
+                <p class="font-mono text-[10px] text-surface-500">
                   {formatTrigger(log.trigger)}
                   <span aria-hidden="true"> &middot; </span>
                   <span class="tabular-nums">{formatDuration(log.started_at, log.completed_at)}</span>
@@ -291,7 +289,7 @@
               {#if hasDetails(log)}
                 <button
                   type="button"
-                  class="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-primary transition-colors hover:text-primary/80"
+                  class="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-primary-500 transition-colors hover:text-primary-400"
                   onclick={() => toggleExpand(log.id)}
                   aria-expanded={expandedId === log.id}
                 >
@@ -302,7 +300,7 @@
             </div>
 
             {#if log.errors}
-              <div class="mt-2 rounded-lg border border-[rgba(224,49,49,.25)] bg-[rgba(224,49,49,.08)] px-3 py-2 text-[13px] leading-5 text-[#ffa8a8]">
+              <div class="mt-2 card preset-filled-error-500 px-3 py-2 text-[13px] leading-5">
                 This run completed with errors that need attention.
               </div>
             {/if}
@@ -313,17 +311,17 @@
                   <div class="space-y-2">
                     {#each log.items as item}
                       {@const itemBadge = itemStatusBadge(item.status)}
-                      <div class="glass-inset rounded-lg p-3">
+                      <div class="rounded-lg border border-surface-800 bg-surface-950 p-3">
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div class="space-y-0.5">
-                            <h3 class="text-sm font-semibold text-foreground">{item.sonarr_title}</h3>
-                            <p class="text-[13px] leading-5 text-muted-foreground">{detailLine(item)}</p>
+                            <h3 class="text-sm font-semibold text-surface-50">{item.sonarr_title}</h3>
+                            <p class="text-[13px] leading-5 text-surface-400">{detailLine(item)}</p>
                           </div>
                           <span class={`tag ${itemStatusTagClass(item.status)} shrink-0`}>{itemBadge.label}</span>
                         </div>
 
                         {#if item.error}
-                          <div class="mt-2 flex items-start gap-2 rounded-lg border border-[rgba(224,49,49,.25)] bg-[rgba(224,49,49,.08)] px-3 py-2 text-[13px] leading-5 text-[#ffa8a8]">
+                          <div class="mt-2 flex items-start gap-2 card preset-filled-error-500 px-3 py-2 text-[13px] leading-5">
                             <TriangleAlert size={14} class="mt-0.5 shrink-0" />
                             <span>{item.error}</span>
                           </div>
@@ -334,7 +332,7 @@
                 {/if}
 
                 {#if log.errors}
-                  <div class="rounded-lg border border-[rgba(224,49,49,.25)] bg-[rgba(224,49,49,.08)] p-3 text-[13px] leading-5 text-[#ffa8a8]">
+                  <div class="card preset-filled-error-500 p-3 text-[13px] leading-5">
                     <div class="mb-1.5 flex items-center gap-2 font-medium">
                       <TriangleAlert size={14} />
                       Run errors
@@ -353,7 +351,7 @@
       <div class="flex justify-center">
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-lg border border-rule bg-card px-4 py-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          class="btn btn-base preset-tonal"
           onclick={() => loadActivity(false)}
           disabled={loadingMore}
         >

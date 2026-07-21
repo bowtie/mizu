@@ -1,13 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { slide } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { Button } from '$lib/components/ui/button/index.ts';
-  import { Switch } from '$lib/components/ui/switch/index.ts';
-  import { Toggle } from '$lib/components/ui/toggle/index.ts';
-  import * as Popover from '$lib/components/ui/popover/index.ts';
-  import * as Tooltip from '$lib/components/ui/tooltip/index.ts';
   import NumberInput from '../../../components/NumberInput.svelte';
   import { addNotification, shows as showsStore, settings as settingsStore } from '../../../lib/stores.ts';
   import { deleteShow, getAniListArtwork, getEpisodes, getSettings, getShows, getSonarrSeries, setEpisodeMonitor, updateShow } from '../../../lib/api.ts';
@@ -15,7 +9,8 @@
   import { get } from 'svelte/store';
   import { episodeTypeBadge, monitorStateBadge } from '../../../lib/fox.ts';
   import { resolveSonarrImageUrl } from '../../../lib/sonarr-images.ts';
-  import { Bot, Check, LoaderCircle, Save, Trash2, X } from 'lucide-svelte';
+  import { Switch } from '@skeletonlabs/skeleton-svelte';
+  import { Bot, Check, LoaderCircle, Save, Trash2 } from 'lucide-svelte';
 
   const WATERMARK_AUTO = 'auto';
   const WATERMARK_MANUAL = 'manual';
@@ -24,13 +19,12 @@
   let saving: boolean = $state(false);
   let savedFlash: boolean = $state(false);
   let deleting: boolean = $state(false);
-  let showDeleteModal: boolean = $state(false);
+  let deleteDialog: HTMLDialogElement | null = $state(null);
   let show = $state<Show | null>(null);
   let series = $state<SonarrSeries | null>(null);
   let artwork = $state<Artwork | null>(null);
   let sonarrBaseUrl: string = $state('');
   let episodes = $state<Episode[]>([]);
-  let openSeasons: Set<number> = $state(new Set([0]));
   let trackFiller: boolean = $state(false);
   let trackMixed: boolean = $state(true);
   let trackAnimeCanon: boolean = $state(true);
@@ -189,12 +183,20 @@
     saving = false;
   }
 
+  function openDeleteDialog() {
+    deleteDialog?.showModal();
+  }
+
+  function closeDeleteDialog() {
+    deleteDialog?.close();
+  }
+
   async function handleDelete() {
     deleting = true;
     try {
       await deleteShow(showId);
       addNotification(`Removed ${show?.sonarr_title || 'anime'} from Mizu`, 'success');
-      showDeleteModal = false;
+      closeDeleteDialog();
       goto('/shows');
     } catch (err: any) {
       addNotification('Failed to remove anime: ' + err.message, 'error');
@@ -252,11 +254,11 @@
   }
 
   let filterButtons = $derived([
-    { type: 'all', label: 'All', count: epStats.total, active: isTypeFilterActive('all'), color: '#dee2e6' },
-    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), color: '#74c0fc' },
-    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), color: '#66d9e8' },
-    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), color: '#ffa94d' },
-    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), color: '#ffa8a8' },
+    { type: 'all', label: 'All', count: epStats.total, active: isTypeFilterActive('all'), color: 'text-surface-200' },
+    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), color: 'text-primary-500' },
+    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), color: 'text-tertiary-500' },
+    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), color: 'text-warning-500' },
+    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), color: 'text-error-500' },
   ]);
 
   function isSpecialSeasonNumber(num: number | undefined) {
@@ -307,19 +309,19 @@
     return Math.min(normalized, upperBound);
   }
 
-  function tagClassForType(type: string | undefined | null) {
+  function badgePresetForType(type: string | undefined | null) {
     switch (type) {
       case 'canon':
-        return 'tag-canon';
+        return 'preset-filled-primary-500';
       case 'anime_canon':
-        return 'tag-anime';
+        return 'preset-filled-tertiary-500';
       case 'mixed_canon':
       case 'mixed':
-        return 'tag-mixed';
+        return 'preset-filled-warning-500';
       case 'filler':
-        return 'tag-filler';
+        return 'preset-filled-error-500';
       default:
-        return 'text-muted-foreground';
+        return 'preset-tonal-surface';
     }
   }
 </script>
@@ -331,24 +333,16 @@
 {#snippet headerActions()}
   <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
     <div class="flex items-center gap-1.5">
-      <Tooltip.Provider delayDuration={120}>
-        <Tooltip.Root>
-          <Tooltip.Trigger>
-            <Toggle
-              bind:pressed={watermarkAutoPressed}
-              size="default"
-              variant="outline"
-              class="h-8 w-8 cursor-pointer rounded-lg px-0"
-              aria-label="Toggle automatic start from Sonarr"
-            >
-              <Bot size={15} />
-            </Toggle>
-          </Tooltip.Trigger>
-          <Tooltip.Content side="top" align="center" sideOffset={10} class="tooltip-animated">
-            {watermarkTooltip}
-          </Tooltip.Content>
-        </Tooltip.Root>
-      </Tooltip.Provider>
+      <button
+        type="button"
+        class="btn-icon btn-icon-sm {watermarkAutoPressed ? 'preset-filled-primary-500' : 'preset-outlined'} cursor-pointer"
+        onclick={() => (watermarkAutoPressed = !watermarkAutoPressed)}
+        aria-label="Toggle automatic start from Sonarr"
+        aria-pressed={watermarkAutoPressed}
+        title={watermarkTooltip}
+      >
+        <Bot size={15} />
+      </button>
       <label for="marker-value-header" class="sr-only">Start tracking after episode</label>
       <NumberInput
         id="marker-value-header"
@@ -361,76 +355,72 @@
         className="w-24"
       />
     </div>
-    <span class="hidden h-6 w-px shrink-0 bg-rule sm:block" aria-hidden="true"></span>
+    <span class="vr hidden sm:block" aria-hidden="true"></span>
     <div class="flex items-center gap-1.5">
-    <Popover.Root bind:open={showDeleteModal}>
-      <Popover.Trigger>
-        <Button variant="outline" size="sm" disabled={deleting} class="text-destructive hover:text-destructive">
-          <Trash2 size={14} />
-          Remove
-        </Button>
-      </Popover.Trigger>
-      <Popover.Content side="bottom" align="end" class="rounded-lg px-4 py-3 text-foreground">
-        <div class="flex items-center gap-3">
-          <p class="pr-1 text-sm font-medium text-foreground">Remove {show?.sonarr_title || 'this anime'}?</p>
-          <div class="ml-auto flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              class="rounded-full"
-              disabled={deleting}
-              aria-label="Cancel removal"
-              onclick={() => (showDeleteModal = false)}
-            >
-              <X size={14} />
-            </Button>
-            <Button
-              variant="default"
-              size="icon-sm"
-              class="rounded-full"
-              disabled={deleting}
-              aria-label="Confirm removal"
-              onclick={handleDelete}
-            >
-              {#if deleting}
-                <LoaderCircle size={16} class="animate-spin" />
-              {:else}
-                <Check size={14} />
-              {/if}
-            </Button>
-          </div>
-        </div>
-      </Popover.Content>
-    </Popover.Root>
-    <Button variant="default" size="sm" onclick={handleSave} disabled={saving || !rulesDirty} class={savedFlash ? 'animate-in zoom-in-125 duration-300' : ''}>
-      {#if saving}
-        <LoaderCircle size={14} class="animate-spin" />
-      {:else if savedFlash}
-        <Check size={14} />
-      {:else}
-        <Save size={14} />
-      {/if}
-      {saving ? 'Saving...' : savedFlash ? 'Saved' : 'Save'}
-    </Button>
+      <button
+        type="button"
+        class="btn btn-sm preset-outlined-error-500 text-error-500"
+        disabled={deleting}
+        onclick={openDeleteDialog}
+      >
+        <Trash2 size={14} />
+        Remove
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm preset-filled-primary-500 {savedFlash ? 'animate-in zoom-in-125 duration-300' : ''}"
+        onclick={handleSave}
+        disabled={saving || !rulesDirty}
+      >
+        {#if saving}
+          <LoaderCircle size={14} class="animate-spin" />
+        {:else if savedFlash}
+          <Check size={14} />
+        {:else}
+          <Save size={14} />
+        {/if}
+        {saving ? 'Saving...' : savedFlash ? 'Saved' : 'Save'}
+      </button>
     </div>
   </div>
 {/snippet}
 
+<!-- Delete confirmation dialog -->
+<dialog bind:this={deleteDialog} class="dialog animate-dialog preset-filled-surface-100-900" aria-labelledby="delete-dialog-title">
+  <header>
+    <h2 id="delete-dialog-title" class="h3">Remove {show?.sonarr_title || 'this anime'}?</h2>
+  </header>
+  <article>
+    <p class="text-sm text-surface-400">This removes the mapping from Mizu. The series stays in Sonarr.</p>
+  </article>
+  <footer class="flex justify-end gap-2">
+    <button type="button" class="btn btn-sm preset-tonal" disabled={deleting} onclick={closeDeleteDialog}>Cancel</button>
+    <button type="button" class="btn btn-sm preset-filled-error-500" disabled={deleting} onclick={handleDelete}>
+      {#if deleting}
+        <LoaderCircle size={14} class="animate-spin" />
+      {:else}
+        <Trash2 size={14} />
+      {/if}
+      Remove
+    </button>
+  </footer>
+</dialog>
+
 {#if loading}
-  <div class="glass-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 rounded-lg text-center">
-    <LoaderCircle size={22} class="animate-spin text-primary" />
-    <p class="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Loading anime details</p>
+  <div class="card preset-tonal-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 text-center">
+    <LoaderCircle size={22} class="animate-spin text-primary-500" />
+    <p class="font-mono text-[11px] uppercase tracking-[0.12em] text-surface-400">Loading anime details</p>
   </div>
 {:else if !show}
-  <div class="glass-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 rounded-lg px-6 text-center">
-    <h2 class="text-base font-semibold text-foreground">Anime not found</h2>
-    <p class="text-sm text-muted-foreground">The requested sync entry could not be found.</p>
-    <Button href="/shows" variant="default" size="sm">Back to anime</Button>
+  <div class="card preset-tonal-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 px-6 text-center">
+    <h2 class="text-base font-semibold text-surface-50">Anime not found</h2>
+    <p class="text-sm text-surface-400">The requested sync entry could not be found.</p>
+    <a href="/shows" class="btn btn-sm preset-filled-primary-500">Back to anime</a>
   </div>
 {:else}
   <div class="space-y-6">
     <!-- Hero banner head -->
-    <header class="relative overflow-hidden rounded-lg border border-rule">
+    <header class="card preset-filled-surface-100-900 relative overflow-hidden">
       {#if backdropUrl(series)}
         <div class="absolute inset-0 z-0" aria-hidden="true">
           <img
@@ -440,17 +430,17 @@
             decoding="async"
             class="h-full w-full object-cover opacity-[0.35]"
           />
-          <div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/30"></div>
+          <div class="absolute inset-0 bg-gradient-to-t from-surface-950 via-surface-950/80 to-surface-950/30"></div>
         </div>
       {/if}
       <div class="relative z-10 flex flex-wrap items-end justify-between gap-4 px-5 py-6 sm:px-7 sm:py-8">
         <div class="min-w-0 space-y-1.5">
-          <nav class="font-mono text-[11px] text-[#868e96]">
-            <a href="/shows" class="transition-colors hover:text-muted-foreground">library</a>
+          <nav class="font-mono text-[11px] text-surface-500">
+            <a href="/shows" class="transition-colors hover:text-surface-300">library</a>
             <span> / {show.afl_slug || show.sonarr_title}</span>
           </nav>
-          <h1 class="text-2xl font-bold tracking-tight text-foreground">{show.sonarr_title}</h1>
-          <p class="text-sm text-muted-foreground">{episodes.length} episodes &middot; from ep {show.sync_watermark}</p>
+          <h1 class="text-2xl font-bold tracking-tight text-surface-50">{show.sonarr_title}</h1>
+          <p class="text-sm text-surface-400">{episodes.length} episodes &middot; from ep {show.sync_watermark}</p>
         </div>
         {@render headerActions()}
       </div>
@@ -459,46 +449,62 @@
     <!-- Tracking rules -->
     <section class="space-y-4">
       <div class="flex items-center gap-3">
-        <div class="rule-label flex-1"><span>Tracking rules</span></div>
+        <h2 class="h6 text-surface-200">Tracking rules</h2>
+        <hr class="hr flex-1" />
         {#if rulesDirty}
-          <span class="rounded-[5px] border border-[#ffa94d]/30 bg-[#ffa94d]/10 px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.1em] text-[#ffa94d]">Unsaved changes</span>
+          <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.1em] preset-filled-warning-500">Unsaved changes</span>
         {/if}
       </div>
 
       <div class="grid gap-3 md:grid-cols-3">
-        <div class="glass-surface flex items-center justify-between gap-3 rounded-lg px-4 py-3">
+        <div class="card preset-filled-surface-100-900 flex items-center justify-between gap-3 px-4 py-3">
           <div class="min-w-0">
-            <div class="text-sm font-medium text-foreground">Anime canon</div>
-            <div class="mt-0.5 text-xs text-muted-foreground">Original anime-only canon episodes.</div>
+            <div class="text-sm font-medium text-surface-50">Anime canon</div>
+            <div class="mt-0.5 text-xs text-surface-400">Original anime-only canon episodes.</div>
           </div>
-          <Switch bind:checked={trackAnimeCanon} />
+          <Switch checked={trackAnimeCanon} onCheckedChange={(d) => (trackAnimeCanon = d.checked)}>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Switch.HiddenInput />
+          </Switch>
         </div>
 
-        <div class="glass-surface flex items-center justify-between gap-3 rounded-lg px-4 py-3">
+        <div class="card preset-filled-surface-100-900 flex items-center justify-between gap-3 px-4 py-3">
           <div class="min-w-0">
-            <div class="text-sm font-medium text-foreground">Mixed canon</div>
-            <div class="mt-0.5 text-xs text-muted-foreground">Episodes that blend canon and filler material.</div>
+            <div class="text-sm font-medium text-surface-50">Mixed canon</div>
+            <div class="mt-0.5 text-xs text-surface-400">Episodes that blend canon and filler material.</div>
           </div>
-          <Switch bind:checked={trackMixed} />
+          <Switch checked={trackMixed} onCheckedChange={(d) => (trackMixed = d.checked)}>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Switch.HiddenInput />
+          </Switch>
         </div>
 
-        <div class="glass-surface flex items-center justify-between gap-3 rounded-lg px-4 py-3">
+        <div class="card preset-filled-surface-100-900 flex items-center justify-between gap-3 px-4 py-3">
           <div class="min-w-0">
-            <div class="text-sm font-medium text-foreground">Filler</div>
-            <div class="mt-0.5 text-xs text-muted-foreground">Pure filler episodes for this mapping.</div>
+            <div class="text-sm font-medium text-surface-50">Filler</div>
+            <div class="mt-0.5 text-xs text-surface-400">Pure filler episodes for this mapping.</div>
           </div>
-          <Switch bind:checked={trackFiller} />
+          <Switch checked={trackFiller} onCheckedChange={(d) => (trackFiller = d.checked)}>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Switch.HiddenInput />
+          </Switch>
         </div>
       </div>
     </section>
 
     <!-- Type filter stats -->
-    <section class="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-5">
+    <section class="card grid grid-cols-3 gap-px overflow-hidden sm:grid-cols-5" style="background: var(--color-surface-800);">
       {#each filterButtons as btn (btn.type)}
         {@const dimmed = btn.type !== 'all' && activeTypeFilters.length > 0 && !btn.active}
         <button
           type="button"
-          class={`flex cursor-pointer items-center justify-between gap-2 bg-card px-4 py-2.5 text-left transition-colors duration-150 ${btn.active ? '' : 'text-muted-foreground hover:text-foreground'} ${dimmed ? 'opacity-40' : ''}`}
+          class={`flex cursor-pointer items-center justify-between gap-2 bg-surface-900 px-4 py-2.5 text-left transition-colors duration-150 ${btn.active ? '' : 'text-surface-400 hover:text-surface-200'} ${dimmed ? 'opacity-40' : ''}`}
           style:color={btn.active ? btn.color : undefined}
           style:border-bottom={btn.active ? `2px solid ${btn.color}` : '2px solid transparent'}
           onclick={() => toggleTypeFilter(btn.type)}
@@ -510,61 +516,55 @@
     </section>
 
     {#if episodes.length === 0}
-      <div class="glass-surface flex min-h-56 flex-col items-center justify-center gap-2 rounded-lg p-8 text-center">
-        <h2 class="text-base font-semibold text-foreground">No episodes yet</h2>
-        <p class="text-sm text-muted-foreground">Mizu has not synced episode details for this anime yet.</p>
+      <div class="card preset-tonal-surface flex min-h-56 flex-col items-center justify-center gap-2 p-8 text-center">
+        <h2 class="text-base font-semibold text-surface-50">No episodes yet</h2>
+        <p class="text-sm text-surface-400">Mizu has not synced episode details for this anime yet.</p>
       </div>
     {:else}
-      <section class="space-y-5">
+      <section class="disclosure-group space-y-2">
         {#each groupedBySeason as group, index}
-          {@const isOpen = openSeasons.has(index)}
-          <div>
-            <button
-              type="button"
-              class="rule-label w-full cursor-pointer select-none"
-              onclick={() => {
-                const next = new Set(openSeasons);
-                if (next.has(index)) next.delete(index);
-                else next.add(index);
-                openSeasons = next;
-              }}
-              aria-expanded={isOpen}
-            >
-              <span>{seasonLabel(group.season)} &middot; {group.episodes.length} eps</span>
-            </button>
-
-            {#if isOpen}
-              <div transition:slide={{ duration: 200 }}>
-                {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
-                  {@const typeBadge = episodeTypeBadge(ep.type)}
-                  {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
-                  <div class="flex items-center gap-3 border-b border-[#10141b] py-2.5 transition-colors last:border-b-0 hover:bg-white/[0.02]">
-                    <span class="w-8 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{displayEpisodeNumber(ep)}</span>
-                    <span class="min-w-0 flex-1 truncate text-sm text-foreground">{ep.title || '-'}</span>
-                    <span class="tag shrink-0 {tagClassForType(ep.type)}">{typeBadge.label}</span>
-                    {#if episodeActionId(ep)}
-                      <button
-                        type="button"
-                        class="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-rule px-3 py-1 font-mono text-[11px] transition-colors {episodeMonitored(ep) ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}"
-                        disabled={syncingEps[episodeActionId(ep)]}
-                        onclick={() => toggleEpisodeMonitor(ep)}
-                        title={monitoredBadge.label}
-                      >
-                        {#if syncingEps[episodeActionId(ep)]}
-                          <LoaderCircle size={12} class="animate-spin" />
-                        {:else}
-                          <span class="size-1.5 rounded-full {episodeMonitored(ep) ? 'bg-[#12b886]' : 'bg-transparent ring-1 ring-[#868e96] ring-inset'}"></span>
-                        {/if}
-                        {episodeMonitored(ep) ? 'watch' : 'skip'}
-                      </button>
-                    {:else}
-                      <span class="shrink-0 text-xs text-muted-foreground">Unavailable</span>
-                    {/if}
-                  </div>
-                {/each}
+          <details class="disclosure" open={index === 0}>
+            <summary>{seasonLabel(group.season)} &middot; {group.episodes.length} eps</summary>
+            <div class="disclosure-content">
+              <div class="table-wrap">
+                <table class="table">
+                  <tbody class="[&>tr]:hover:preset-tonal-surface">
+                    {#each group.episodes as ep (ep.sonarr_episode_id || ep.episode_num)}
+                      {@const typeBadge = episodeTypeBadge(ep.type)}
+                      {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
+                      <tr>
+                        <td class="w-10 font-mono text-[11px] tabular-nums text-surface-400">{displayEpisodeNumber(ep)}</td>
+                        <td class="min-w-0 truncate text-sm text-surface-50">{ep.title || '-'}</td>
+                        <td class="w-28 text-right">
+                          <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.08em] {badgePresetForType(ep.type)}">{typeBadge.label}</span>
+                        </td>
+                        <td class="w-28 text-right">
+                          {#if episodeActionId(ep)}
+                            <button
+                              type="button"
+                              class="btn btn-xs {episodeMonitored(ep) ? 'preset-tonal-success' : 'preset-tonal'} cursor-pointer"
+                              disabled={syncingEps[episodeActionId(ep)]}
+                              onclick={() => toggleEpisodeMonitor(ep)}
+                              title={monitoredBadge.label}
+                            >
+                              {#if syncingEps[episodeActionId(ep)]}
+                                <LoaderCircle size={12} class="animate-spin" />
+                              {:else}
+                                <span class="badge-dot {episodeMonitored(ep) ? 'preset-filled-success-500' : 'preset-outlined-surface-500'}"></span>
+                              {/if}
+                              {episodeMonitored(ep) ? 'watch' : 'skip'}
+                            </button>
+                          {:else}
+                            <span class="text-xs text-surface-400">Unavailable</span>
+                          {/if}
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
               </div>
-            {/if}
-          </div>
+            </div>
+          </details>
         {/each}
       </section>
     {/if}
