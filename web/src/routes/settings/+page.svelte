@@ -306,7 +306,7 @@
     </div>
     <div class="flex items-center gap-3">
       {#if settingsDirty}
-        <span class="badge preset-filled-warning-500 font-mono text-[10px] uppercase tracking-wider">Unsaved changes</span>
+        <span class="badge preset-filled-warning-500 text-[10px] uppercase tracking-wider">Unsaved changes</span>
       {/if}
       <button class="btn btn-base preset-filled-primary-500" onclick={handleSave} disabled={saving || !settingsDirty}>
         {#if saving}
@@ -332,7 +332,7 @@
       <!-- Connection group -->
       <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
-          <h2 class="text-sm font-mono uppercase tracking-wider text-surface-400 mb-3">Connection</h2>
+          <h2 class="text-sm uppercase tracking-wider text-surface-400 mb-3">Connection</h2>
 
           <!-- Sonarr URL -->
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">
@@ -346,7 +346,7 @@
             <input
               id="sonarr-url"
               type="text"
-              class="input field-base w-64 shrink-0 font-mono text-[13px]"
+              class="input field-base w-64 shrink-0 text-[13px]"
               placeholder="http://localhost:8989"
               value={sonarrUrl}
               oninput={handleUrlInput}
@@ -363,7 +363,7 @@
               <input
                 id="sonarr-key"
                 type={apiKeyVisible ? 'text' : 'password'}
-                class="input field-base w-64 font-mono text-[13px] {hasSavedApiKey || apiKeyDirty ? 'pr-10' : ''}"
+                class="input field-base w-64 text-[13px] {hasSavedApiKey || apiKeyDirty ? 'pr-10' : ''}"
                 bind:value={sonarrApiKey}
                 placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
                 oninput={handleApiKeyInput}
@@ -438,7 +438,7 @@
       <!-- Sync group -->
       <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
-          <h2 class="text-sm font-mono uppercase tracking-wider text-surface-400 mb-3">Sync</h2>
+          <h2 class="text-sm uppercase tracking-wider text-surface-400 mb-3">Sync</h2>
 
           <!-- Sync interval stepper -->
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">
@@ -456,7 +456,7 @@
               >
                 <Minus size={16} />
               </button>
-              <div class="flex h-9 min-w-[5rem] items-center justify-center border-x border-surface-800 px-3 text-center font-mono text-xs tabular-nums text-surface-50">
+              <div class="flex h-9 min-w-[5rem] items-center justify-center border-x border-surface-800 px-3 text-center text-xs tabular-nums text-surface-50">
                 {syncIntervalOptions[syncIntervalIndex].label}
               </div>
               <button
@@ -485,7 +485,7 @@
             <div class="min-w-0 flex-1">
               <div class="text-[13px] font-medium text-surface-50">AFL cache</div>
               <p class="mt-0.5 text-xs text-surface-400">
-                <span class="font-mono tabular-nums text-surface-50">{cacheCount}</span> shows cached, refreshed {formatCacheTime(cacheRefreshedAt)}.
+                <span class="tabular-nums text-surface-50">{cacheCount}</span> shows cached, refreshed {formatCacheTime(cacheRefreshedAt)}.
               </p>
             </div>
             <button class="btn btn-base preset-tonal shrink-0" onclick={handleRefreshCache} disabled={refreshingCache}>
@@ -503,7 +503,7 @@
       <!-- Defaults group -->
       <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
-          <h2 class="text-sm font-mono uppercase tracking-wider text-surface-400 mb-3">Defaults</h2>
+          <h2 class="text-sm uppercase tracking-wider text-surface-400 mb-3">Defaults</h2>
           <p class="text-xs text-surface-400 mb-3">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
 
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">

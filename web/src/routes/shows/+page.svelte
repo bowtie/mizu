@@ -702,7 +702,7 @@
       <h1 class="text-2xl font-bold tracking-tight text-surface-50">Anime</h1>
       <p class="text-sm text-surface-400">
         {#if !loading}
-          <span class="font-mono tabular-nums text-surface-50">{($shows || []).length}</span> tracked ·
+          <span class="tabular-nums text-surface-50">{($shows || []).length}</span> tracked ·
         {/if}
         Tracked series, sync status, and filler mapping.
       </p>
@@ -725,7 +725,7 @@
         type="text"
         placeholder="Search anime by title or slug"
         bind:value={filter}
-        class="input field-base h-11 w-full rounded-lg pl-10 font-mono text-sm shadow-none"
+        class="input field-base h-11 w-full rounded-lg pl-10 text-sm shadow-none"
         aria-label="Search anime"
       />
     </div>
@@ -797,10 +797,10 @@
 
           <div class="relative z-10 min-w-0 flex-1">
             <h2 class="line-clamp-1 text-sm font-semibold text-surface-50">{show.sonarr_title}</h2>
-            <p class="mt-0.5 font-mono text-[11px] tabular-nums text-surface-300">{markerChip(show)}</p>
+            <p class="mt-0.5 text-[11px] tabular-nums text-surface-300">{markerChip(show)}</p>
           </div>
 
-          <span class={`badge badge-sm font-mono text-[10px] uppercase tracking-[0.08em] ${show.enabled ? 'preset-filled-success-500' : 'preset-tonal-surface'}`}>
+          <span class={`badge badge-sm text-[10px] uppercase tracking-[0.08em] ${show.enabled ? 'preset-filled-success-500' : 'preset-tonal-surface'}`}>
             {show.enabled ? 'Syncing' : 'Paused'}
           </span>
         </a>
@@ -826,7 +826,7 @@
     </div>
 
     <!-- Step progress -->
-    <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[10px] uppercase tracking-[0.1em]" aria-hidden="true">
+    <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] uppercase tracking-[0.1em]" aria-hidden="true">
       {#each activeWizardSteps as step, i}
         {@const isCurrent = step.key === addStep}
         {@const isPast = currentStepIndex > i}
@@ -953,7 +953,7 @@
 
                     <div class="min-w-0 flex-1 space-y-0.5">
                       <div class="line-clamp-1 text-sm font-medium text-surface-50">{series.title}</div>
-                      <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] tabular-nums text-surface-500">
+                      <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] tabular-nums text-surface-500">
                         <span>{series.year || 'Anime'}</span>
                         {#if series.statistics?.episodeCount}
                           <span aria-hidden="true">·</span>
@@ -970,9 +970,9 @@
                     </div>
 
                     {#if seriesMapped}
-                      <span class="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-surface-400">Open</span>
+                      <span class="shrink-0 text-[10px] uppercase tracking-[0.1em] text-surface-400">Open</span>
                     {:else if manualPending}
-                      <span class="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-warning-500">Match</span>
+                      <span class="shrink-0 text-[10px] uppercase tracking-[0.1em] text-warning-500">Match</span>
                     {:else if isSelected}
                       <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-500 text-primary-contrast-500">
                         <Check size={13} />
@@ -1111,7 +1111,7 @@
 
                   <div class="min-w-0 flex-1 space-y-0.5">
                     <div class="truncate text-sm font-medium text-surface-50">{result.title}</div>
-                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-surface-500">
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-surface-500">
                       <span>{result.year || 'Unknown year'}</span>
                       {#if result.network}
                         <span aria-hidden="true">·</span>
@@ -1179,7 +1179,7 @@
 
         <div class="card bg-surface-950 p-4">
           <div class="text-sm font-semibold text-surface-50">{matchTitle(selectedAfl)}</div>
-          <div class="mt-1 font-mono text-xs text-surface-400">{matchSlug(selectedAfl)}</div>
+          <div class="mt-1 text-xs text-surface-400">{matchSlug(selectedAfl)}</div>
         </div>
       </div>
     {:else if addStep === ADD_STEP_POST_ADD}
@@ -1246,8 +1246,8 @@
           <div class="space-y-2">
             <div class="text-sm font-semibold text-surface-50">{matchTitle(selectedAfl)}</div>
             <div class="flex flex-wrap gap-2">
-              <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.1em] preset-filled-primary-500">{Math.round((selectedAfl.confidence || 0) * 100)}% confidence</span>
-              <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.1em] preset-tonal-surface">{selectedAfl.method}</span>
+              <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-primary-500">{Math.round((selectedAfl.confidence || 0) * 100)}% confidence</span>
+              <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-tonal-surface">{selectedAfl.method}</span>
             </div>
             <p class="text-sm leading-6 text-surface-400">Looks like an exact cached AFL match, so this step is just a quick confirmation before Mizu creates the mapping.</p>
           </div>
@@ -1264,13 +1264,13 @@
               >
                 <div class="min-w-0 space-y-1">
                   <div class="truncate text-sm font-medium text-surface-50">{matchTitle(result)}</div>
-                  <div class="truncate font-mono text-xs text-surface-400">{matchSlug(result)}</div>
+                  <div class="truncate text-xs text-surface-400">{matchSlug(result)}</div>
                   <div class="flex flex-wrap gap-2">
                     {#if result.confidence != null}
-                      <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.1em] preset-filled-primary-500">{Math.round(result.confidence * 100)}% confidence</span>
-                      <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.1em] preset-tonal-surface">{result.method}</span>
+                      <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-primary-500">{Math.round(result.confidence * 100)}% confidence</span>
+                      <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-tonal-surface">{result.method}</span>
                     {:else}
-                      <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.1em] preset-filled-warning-500">Manual review</span>
+                      <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-warning-500">Manual review</span>
                     {/if}
                   </div>
                 </div>
@@ -1298,7 +1298,7 @@
             <div class="card flex items-start justify-between gap-3 bg-surface-950 p-4">
               <div class="space-y-1">
                 <div class="text-sm font-medium text-surface-50">Anime canon</div>
-                <span class="inline-block font-mono text-[10px] uppercase tracking-[0.1em] {addTrackAnimeCanon ? 'text-primary-500' : 'text-surface-500'}">{optionState(addTrackAnimeCanon)}</span>
+                <span class="inline-block text-[10px] uppercase tracking-[0.1em] {addTrackAnimeCanon ? 'text-primary-500' : 'text-surface-500'}">{optionState(addTrackAnimeCanon)}</span>
               </div>
               <Switch checked={addTrackAnimeCanon} onCheckedChange={(d) => (addTrackAnimeCanon = d.checked)}>
                 <Switch.Control>
@@ -1311,7 +1311,7 @@
             <div class="card flex items-start justify-between gap-3 bg-surface-950 p-4">
               <div class="space-y-1">
                 <div class="text-sm font-medium text-surface-50">Mixed canon</div>
-                <span class="inline-block font-mono text-[10px] uppercase tracking-[0.1em] {addTrackMixed ? 'text-warning-500' : 'text-surface-500'}">{optionState(addTrackMixed)}</span>
+                <span class="inline-block text-[10px] uppercase tracking-[0.1em] {addTrackMixed ? 'text-warning-500' : 'text-surface-500'}">{optionState(addTrackMixed)}</span>
               </div>
               <Switch checked={addTrackMixed} onCheckedChange={(d) => (addTrackMixed = d.checked)}>
                 <Switch.Control>
@@ -1324,7 +1324,7 @@
             <div class="card flex items-start justify-between gap-3 bg-surface-950 p-4">
               <div class="space-y-1">
                 <div class="text-sm font-medium text-surface-50">Filler</div>
-                <span class="inline-block font-mono text-[10px] uppercase tracking-[0.1em] {addTrackFiller ? 'text-error-500' : 'text-surface-500'}">{optionState(addTrackFiller)}</span>
+                <span class="inline-block text-[10px] uppercase tracking-[0.1em] {addTrackFiller ? 'text-error-500' : 'text-surface-500'}">{optionState(addTrackFiller)}</span>
               </div>
               <Switch checked={addTrackFiller} onCheckedChange={(d) => (addTrackFiller = d.checked)}>
                 <Switch.Control>

@@ -406,7 +406,7 @@
 {#if loading}
   <div class="card preset-tonal-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 text-center">
     <LoaderCircle size={22} class="animate-spin text-primary-500" />
-    <p class="font-mono text-[11px] uppercase tracking-[0.12em] text-surface-400">Loading anime details</p>
+    <p class="text-[11px] uppercase tracking-[0.12em] text-surface-400">Loading anime details</p>
   </div>
 {:else if !show}
   <div class="card preset-tonal-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 px-6 text-center">
@@ -432,7 +432,7 @@
       {/if}
       <div class="relative z-10 flex flex-wrap items-end justify-between gap-4 px-5 py-6 sm:px-7 sm:py-8">
         <div class="min-w-0 space-y-1.5">
-          <nav class="font-mono text-[11px] text-surface-500">
+          <nav class="text-[11px] text-surface-500">
             <a href="/shows" class="transition-colors hover:text-surface-300">library</a>
             <span> / {show.afl_slug || show.sonarr_title}</span>
           </nav>
@@ -449,7 +449,7 @@
         <h2 class="h6 text-surface-200">Tracking rules</h2>
         <hr class="hr flex-1" />
         {#if rulesDirty}
-          <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.1em] preset-filled-warning-500">Unsaved changes</span>
+          <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-warning-500">Unsaved changes</span>
         {/if}
       </div>
 
@@ -506,8 +506,8 @@
           style:border-bottom={btn.active ? `2px solid ${btn.color}` : '2px solid transparent'}
           onclick={() => toggleTypeFilter(btn.type)}
         >
-          <span class="font-mono text-[10px] uppercase tracking-[0.12em]">{btn.label}</span>
-          <span class="font-mono text-sm font-medium tabular-nums">{btn.count}</span>
+          <span class="text-[10px] uppercase tracking-[0.12em]">{btn.label}</span>
+          <span class="text-sm font-medium tabular-nums">{btn.count}</span>
         </button>
       {/each}
     </section>
@@ -530,10 +530,10 @@
                       {@const typeBadge = episodeTypeBadge(ep.type)}
                       {@const monitoredBadge = monitorStateBadge(episodeMonitored(ep), 'Yes', 'No')}
                       <tr>
-                        <td class="w-10 font-mono text-[11px] tabular-nums text-surface-400">{displayEpisodeNumber(ep)}</td>
+                        <td class="w-10 text-[11px] tabular-nums text-surface-400">{displayEpisodeNumber(ep)}</td>
                         <td class="min-w-0 truncate text-sm text-surface-50">{ep.title || '-'}</td>
                         <td class="w-28 text-right">
-                          <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.08em] {badgePresetForType(ep.type)}">{typeBadge.label}</span>
+                          <span class="badge badge-sm text-[10px] uppercase tracking-[0.08em] {badgePresetForType(ep.type)}">{typeBadge.label}</span>
                         </td>
                         <td class="w-28 text-right">
                           {#if episodeActionId(ep)}

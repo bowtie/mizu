@@ -61,7 +61,7 @@
 <header class="sticky top-0 z-40 border-b border-surface-800 bg-surface-950/90 backdrop-blur-sm">
   <div class="flex h-[52px] items-center gap-5 px-5">
     <a href="/" class="flex items-center gap-2.5" aria-label="Mizu home">
-      <span class="flex size-6 items-center justify-center rounded-md border border-surface-800 font-mono text-[15px] font-bold leading-none text-primary-500">
+      <span class="flex size-6 items-center justify-center rounded-md border border-surface-800 text-[15px] font-bold leading-none text-primary-500">
         ~
       </span>
       <strong class="text-sm font-semibold tracking-tight text-surface-50">Mizu</strong>
@@ -82,7 +82,7 @@
       {/each}
     </nav>
 
-    <div class="ml-auto flex items-center gap-2 font-mono text-[11px]">
+    <div class="ml-auto flex items-center gap-2 text-[11px]">
       <span class="chip {sonarrConnected ? 'preset-filled-success-500' : 'preset-filled-error-500'} chip-sm">
         <span class="size-1.5 rounded-full bg-current"></span>
         Sonarr {sonarrConnected ? 'connected' : 'offline'}

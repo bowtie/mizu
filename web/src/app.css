@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/figtree";
 @import "@skeletonlabs/skeleton";
 @import "@skeletonlabs/skeleton-svelte";
 @import "@skeletonlabs/skeleton/themes/wintry";
@@ -9,8 +8,8 @@
 @source "./";
 
 @theme inline {
-  --font-sans: "Inter Variable", sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Figtree Variable", sans-serif;
+  --font-mono: "Figtree Variable", sans-serif;
 }
 
 /*
@@ -20,8 +19,8 @@
  */
 :root {
   /* Fonts */
-  --font-sans: "Inter Variable", sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Figtree Variable", sans-serif;
+  --font-mono: "Figtree Variable", sans-serif;
 
   /* Override wintry surface scale for more contrast between rows and background.
      Original wintry: 950=18.5%, 900=25%, 800=31% — rows felt faded against bg.

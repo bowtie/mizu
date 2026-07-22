@@ -59,7 +59,7 @@
     type="button"
     onclick={toggle}
     onkeydown={handleKeydown}
-    class="input field-base flex h-11 w-full cursor-pointer items-center justify-between rounded-lg px-3 text-left font-mono text-xs shadow-none"
+    class="input field-base flex h-11 w-full cursor-pointer items-center justify-between rounded-lg px-3 text-left text-xs shadow-none"
     aria-haspopup="listbox"
     aria-expanded={open}
   >
@@ -79,7 +79,7 @@
           <button
             type="button"
             onclick={() => select(opt.value)}
-            class="flex w-full items-center rounded-md px-3 py-2 text-left font-mono text-xs transition-colors hover:bg-surface-800 {opt.value === value ? 'bg-surface-800 text-primary-500' : 'text-surface-200'}"
+            class="flex w-full items-center rounded-md px-3 py-2 text-left text-xs transition-colors hover:bg-surface-800 {opt.value === value ? 'bg-surface-800 text-primary-500' : 'text-surface-200'}"
             role="option"
             aria-selected={opt.value === value}
           >
