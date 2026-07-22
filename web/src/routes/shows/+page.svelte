@@ -25,7 +25,8 @@
     resolvePosterElementState,
   } from '../../lib/poster-state.ts';
   import { resolveSonarrImageUrl } from '../../lib/sonarr-images.ts';
-  import { Switch, Combobox, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
+  import { Switch } from '@skeletonlabs/skeleton-svelte';
+  import Select from '../../components/Select.svelte';
   import { Check, CircleAlert, CircleCheckBig, LoaderCircle, Plus, Search, Waves, X } from 'lucide-svelte';
 
   const START_FROM_BEGINNING: string = 'from_beginning';
@@ -107,24 +108,6 @@
     { value: 'watermark', label: 'Latest progress' },
   ];
 
-  const sortCollection = useListCollection({
-    items: sortOptions,
-    itemToString: (item: SelectOption) => item.label,
-    itemToValue: (item: SelectOption) => item.value,
-  });
-  const startModeCollection = useListCollection({
-    items: startModeOptions,
-    itemToString: (item: SelectOption) => item.label,
-    itemToValue: (item: SelectOption) => item.value,
-  });
-  let qualityProfileItems = $state<SelectOption[]>([]);
-  const qualityProfileCollection = $derived(
-    useListCollection({
-      items: qualityProfileItems,
-      itemToString: (item: SelectOption) => item.label,
-      itemToValue: (item: SelectOption) => item.value,
-    }),
-  );
   const wizardSteps: WizardStep[] = [
     { key: ADD_STEP_SERIES, label: 'Select' },
     { key: ADD_STEP_MATCH, label: 'Match' },
@@ -317,7 +300,6 @@
         value: String(profile.id),
         label: profile.name,
       }));
-      qualityProfileItems = sonarrQualityProfileOptions;
       if (!fallbackQualityProfileId) {
         fallbackQualityProfileId = preferredAnimeQualityProfileId();
       }
@@ -765,31 +747,7 @@
       />
     </div>
     <div class="sm:w-52">
-      <Combobox
-        collection={sortCollection}
-        value={[sortBy]}
-        onValueChange={(e) => (sortBy = e.value[0])}
-        readOnly
-        placeholder="Sort by"
-        class="w-full"
-      >
-        <Combobox.Control class="field-base h-11 rounded-lg font-mono text-xs">
-          <Combobox.Input />
-          <Combobox.Trigger />
-        </Combobox.Control>
-        <Portal>
-          <Combobox.Positioner>
-            <Combobox.Content>
-              {#each sortCollection.items as item (item.value)}
-                <Combobox.Item {item}>
-                  <Combobox.ItemText>{item.label}</Combobox.ItemText>
-                  <Combobox.ItemIndicator />
-                </Combobox.Item>
-              {/each}
-            </Combobox.Content>
-          </Combobox.Positioner>
-        </Portal>
-      </Combobox>
+      <Select options={sortOptions} bind:value={sortBy} placeholder="Sort by" />
     </div>
   </section>
 
@@ -1201,31 +1159,7 @@
           <div class="space-y-2">
             <label for="fallback-quality-profile" class="label label-text">Quality profile</label>
             <div class="max-w-xs">
-              <Combobox
-                collection={qualityProfileCollection}
-                value={[fallbackQualityProfileId]}
-                onValueChange={(e) => (fallbackQualityProfileId = e.value[0])}
-                readOnly
-                placeholder="Choose a quality profile"
-                class="w-full"
-              >
-                <Combobox.Control class="field-base w-full rounded-lg">
-                  <Combobox.Input />
-                  <Combobox.Trigger />
-                </Combobox.Control>
-                <Portal>
-                  <Combobox.Positioner>
-                    <Combobox.Content>
-                      {#each qualityProfileCollection.items as item (item.value)}
-                        <Combobox.Item {item}>
-                          <Combobox.ItemText>{item.label}</Combobox.ItemText>
-                          <Combobox.ItemIndicator />
-                        </Combobox.Item>
-                      {/each}
-                    </Combobox.Content>
-                  </Combobox.Positioner>
-                </Portal>
-              </Combobox>
+              <Select options={sonarrQualityProfileOptions} bind:value={fallbackQualityProfileId} placeholder="Choose a quality profile" />
             </div>
           </div>
 
@@ -1416,31 +1350,7 @@
 
           <div class="space-y-2">
             <label for="start-mode" class="label label-text">Start tracking from</label>
-            <Combobox
-              collection={startModeCollection}
-              value={[addStartMode]}
-              onValueChange={(e) => (addStartMode = e.value[0])}
-              readOnly
-              placeholder="Choose start point"
-              class="w-full"
-            >
-              <Combobox.Control class="field-base w-full rounded-lg">
-                <Combobox.Input />
-                <Combobox.Trigger />
-              </Combobox.Control>
-              <Portal>
-                <Combobox.Positioner>
-                  <Combobox.Content>
-                    {#each startModeCollection.items as item (item.value)}
-                      <Combobox.Item {item}>
-                        <Combobox.ItemText>{item.label}</Combobox.ItemText>
-                        <Combobox.ItemIndicator />
-                      </Combobox.Item>
-                    {/each}
-                  </Combobox.Content>
-                </Combobox.Positioner>
-              </Portal>
-            </Combobox>
+            <Select options={startModeOptions} bind:value={addStartMode} placeholder="Choose start point" />
             <p class="text-sm text-surface-400">Current progress uses Sonarr's latest monitored episode. Episode 1 starts from the beginning.</p>
           </div>
         </div>
