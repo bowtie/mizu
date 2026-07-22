@@ -258,7 +258,10 @@
       </div>
     </section>
 
-    <div class="rule-label"><span>Recent runs</span></div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-surface-500">Recent runs</span>
+      <span class="h-px flex-1 bg-surface-800"></span>
+    </div>
 
     <!-- Log list -->
     {#if filteredLogs.length === 0}

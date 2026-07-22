@@ -51,9 +51,9 @@
 <Toaster
   theme="dark"
   class="toaster group"
-  style="--normal-bg: var(--surface-2); --normal-text: var(--color-surface-50); --normal-border: var(--surface-border); --border-radius: var(--radius-2xl);"
+  style="--normal-bg: var(--color-surface-800); --normal-text: var(--color-surface-50); --normal-border: var(--color-surface-700); --border-radius: var(--radius-2xl);"
   toastOptions={{
-    class: 'glass-overlay !rounded-2xl',
+    class: 'border border-surface-700 bg-surface-800 !rounded-2xl shadow-xl',
   }}
   richColors
 />

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import type { ActionReturn } from 'svelte/action';
   import { autoAnimateAction as autoAnimate } from '../../lib/autoAnimate.ts';
   import { goto } from '$app/navigation';
   import type { AFLMatch, MappingCreate, SelectOption, Settings, Show, SonarrAddOptions, SonarrAddPayload, SonarrImage, SonarrSeries } from '$lib/types.ts';
@@ -17,15 +16,10 @@
     confirmMatch,
     getSettings,
   } from '../../lib/api.ts';
-  import {
-    createPosterMonogram,
-    POSTER_FAILED,
-    POSTER_LOADING,
-    resolvePosterElementState,
-  } from '../../lib/poster-state.ts';
   import { resolveSonarrImageUrl } from '../../lib/sonarr-images.ts';
   import { Switch } from '@skeletonlabs/skeleton-svelte';
   import Select from '../../components/Select.svelte';
+  import PosterFrame from '../../components/PosterFrame.svelte';
   import { Check, CircleAlert, CircleCheckBig, LoaderCircle, Plus, Search, Waves, X } from 'lucide-svelte';
 
   const START_FROM_BEGINNING: string = 'from_beginning';
@@ -213,58 +207,6 @@
 
   function markerChip(show: Show): string {
     return show.sync_watermark > 0 ? `#${show.sync_watermark}` : '#0';
-  }
-
-  function setPosterFrameState(node: HTMLElement, state: string): void {
-    node.dataset.posterState = state;
-  }
-
-  function observePosterFrame(node: HTMLElement, show?: PosterItem): ActionReturn<PosterItem | undefined> {
-    let currentShow: PosterItem | undefined = show;
-    let currentImage: HTMLImageElement | null = null;
-
-    const syncState = () => {
-      setPosterFrameState(node, resolvePosterElementState({
-        hasPoster: !!currentShow?.poster || !!currentImage?.getAttribute('src'),
-        complete: !!currentImage?.complete,
-        naturalWidth: currentImage?.naturalWidth || 0,
-      }));
-    };
-
-    const handleLoad = () => setPosterFrameState(node, 'loaded');
-    const handleError = () => setPosterFrameState(node, 'failed');
-
-    const bindImage = () => {
-      if (currentImage) {
-        currentImage.removeEventListener('load', handleLoad);
-        currentImage.removeEventListener('error', handleError);
-      }
-
-      currentImage = node.querySelector('img');
-
-      if (!currentImage) {
-        syncState();
-        return;
-      }
-
-      currentImage.addEventListener('load', handleLoad);
-      currentImage.addEventListener('error', handleError);
-      queueMicrotask(syncState);
-    };
-
-    bindImage();
-
-    return {
-      update(nextShow: PosterItem | undefined) {
-        currentShow = nextShow;
-        bindImage();
-      },
-      destroy() {
-        if (!currentImage) return;
-        currentImage.removeEventListener('load', handleLoad);
-        currentImage.removeEventListener('error', handleError);
-      },
-    };
   }
 
   function openShow(showId: string | number): void {
@@ -767,7 +709,10 @@
       </div>
     </div>
   {:else}
-    <div class="rule-label"><span>Tracked</span></div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-surface-500">Tracked</span>
+      <span class="h-px flex-1 bg-surface-800"></span>
+    </div>
     <section class="overflow-hidden rounded-lg" use:autoAnimate>
       {#each filteredShows as show}
         {@const series = seriesById[show.sonarr_series_id]}
@@ -925,31 +870,7 @@
                     }}
                     aria-pressed={isSelected}
                   >
-                    <div
-                      class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-[5px] border border-surface-700 bg-surface-800 sm:w-11"
-                      data-poster-state={seriesPoster ? POSTER_LOADING : POSTER_FAILED}
-                      use:observePosterFrame={series}
-                    >
-                      <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
-                        {#if seriesPoster}
-                          <div class="poster-skeleton absolute inset-0" aria-hidden="true">
-                            <div class="poster-skeleton__shine"></div>
-                          </div>
-                          <img
-                            src={seriesPoster}
-                            alt={series.title}
-                            width="160"
-                            height="240"
-                            loading="lazy"
-                            decoding="async"
-                            class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
-                          />
-                        {/if}
-                      </div>
-                      <div class="poster-fallback bg-surface-800 text-sm font-semibold tracking-tight text-surface-400">
-                        {createPosterMonogram(series.title)}
-                      </div>
-                    </div>
+                    <PosterFrame src={seriesPoster} alt={series.title} title={series.title} />
 
                     <div class="min-w-0 flex-1 space-y-0.5">
                       <div class="line-clamp-1 text-sm font-medium text-surface-50">{series.title}</div>
@@ -1083,31 +1004,7 @@
                   class="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors {isSelected ? 'bg-primary-500/10' : 'hover:bg-surface-800'}"
                   onclick={() => (selectedSonarrLookup = result)}
                 >
-                  <div
-                    class="poster-frame poster-thumb relative aspect-[2/3] w-10 shrink-0 overflow-hidden rounded-[5px] border border-surface-700 bg-surface-800 sm:w-11"
-                    data-poster-state={lookupPoster ? POSTER_LOADING : POSTER_FAILED}
-                    use:observePosterFrame={result}
-                  >
-                    <div class="relative aspect-[2/3] h-full w-full overflow-hidden">
-                      {#if lookupPoster}
-                        <div class="poster-skeleton absolute inset-0" aria-hidden="true">
-                          <div class="poster-skeleton__shine"></div>
-                        </div>
-                        <img
-                          src={lookupPoster}
-                          alt={result.title}
-                          width="160"
-                          height="240"
-                          loading="lazy"
-                          decoding="async"
-                          class="poster-image h-full w-full object-cover opacity-0 transition-all duration-500 ease-in-out"
-                        />
-                      {/if}
-                    </div>
-                    <div class="poster-fallback bg-surface-800 text-sm font-semibold tracking-tight text-surface-400">
-                      {createPosterMonogram(result.title)}
-                    </div>
-                  </div>
+                  <PosterFrame src={lookupPoster} alt={result.title} title={result.title} />
 
                   <div class="min-w-0 flex-1 space-y-0.5">
                     <div class="truncate text-sm font-medium text-surface-50">{result.title}</div>

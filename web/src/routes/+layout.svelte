@@ -8,9 +8,9 @@
   let { children } = $props();
 </script>
 
-<div class="isolate min-h-[100dvh] bg-surface-950 text-surface-50" data-sveltekit-preload-data="hover">
+<div class="isolate flex min-h-[100dvh] flex-col bg-surface-950 text-surface-50" data-sveltekit-preload-data="hover">
   <Navbar />
-  <main class="min-h-[100dvh]">
+  <main class="flex-1">
     <div class="mx-auto w-full max-w-[1080px] px-6 pb-20 pt-6">
       {#key $page.url.pathname}
         <div in:fade={{ duration: 200, delay: 50 }}>

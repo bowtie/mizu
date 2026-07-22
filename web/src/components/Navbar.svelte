@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { getStatus } from '../lib/api.ts';
+  import Wifi from '@lucide/svelte/icons/wifi';
+  import WifiOff from '@lucide/svelte/icons/wifi-off';
 
   const navItems = [
     { path: '/shows', label: 'Library' },
@@ -82,18 +84,22 @@
       {/each}
     </nav>
 
-    <div class="ml-auto flex items-center gap-2 text-[11px]">
-      <span class="chip {sonarrConnected ? 'preset-filled-success-500' : 'preset-filled-error-500'} chip-sm">
-        <span class="size-1.5 rounded-full bg-current"></span>
-        Sonarr {sonarrConnected ? 'connected' : 'offline'}
+    <div class="ml-auto flex items-center gap-2">
+      <span class="badge {sonarrConnected ? 'preset-filled-success-500' : 'preset-filled-error-500'}">
+        {#if sonarrConnected}
+          <Wifi class="fill-current stroke-0" />
+        {:else}
+          <WifiOff class="fill-current stroke-0" />
+        {/if}
+        <span>Sonarr {sonarrConnected ? 'connected' : 'offline'}</span>
       </span>
       {#if lastSyncLabel}
-        <span class="chip preset-outlined-surface-400-600 chip-sm hidden sm:inline-flex">
+        <span class="badge preset-outlined-surface-500 hidden sm:inline-flex">
           last sync <b class="font-semibold text-surface-50 tabular-nums">{lastSyncLabel}</b>
         </span>
       {/if}
       {#if nextSyncLabel}
-        <span class="chip preset-outlined-surface-400-600 chip-sm hidden sm:inline-flex">
+        <span class="badge preset-outlined-surface-500 hidden sm:inline-flex">
           next <b class="font-semibold text-surface-50 tabular-nums">{nextSyncLabel}</b>
         </span>
       {/if}
