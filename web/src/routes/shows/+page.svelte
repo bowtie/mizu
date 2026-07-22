@@ -25,7 +25,7 @@
     resolvePosterElementState,
   } from '../../lib/poster-state.ts';
   import { resolveSonarrImageUrl } from '../../lib/sonarr-images.ts';
-  import { Switch } from '@skeletonlabs/skeleton-svelte';
+  import { Switch, Combobox, Portal, useListCollection } from '@skeletonlabs/skeleton-svelte';
   import { Check, CircleAlert, CircleCheckBig, LoaderCircle, Plus, Search, Waves, X } from 'lucide-svelte';
 
   const START_FROM_BEGINNING: string = 'from_beginning';
@@ -53,49 +53,49 @@
     label: string;
   }
 
-  let loading: boolean = true;
-  let filter: string = '';
-  let sortBy: string = 'title';
+  let loading = $state(true);
+  let filter = $state('');
+  let sortBy = $state('title');
 
-  let allSeries: SonarrSeries[] = [];
-  let addSeriesLibrary: SonarrSeries[] = [];
-  let seriesById: Record<string | number, SonarrSeries> = {};
+  let allSeries = $state<SonarrSeries[]>([]);
+  let addSeriesLibrary = $state<SonarrSeries[]>([]);
+  let seriesById = $state<Record<string | number, SonarrSeries>>({});
 
-  let showAddModal: boolean = false;
-  let addDialog: HTMLDialogElement | null = null;
-  let addStep: string = ADD_STEP_SERIES;
-  let sonarrLoading: boolean = false;
-  let seriesQuery = '';
-  let selectedSonarr: SonarrSeries | null = null;
-  let suggestedMatches: AFLMatch[] = [];
-  let displayedMatches: AFLMatch[] = [];
-  let matchLoading: boolean = false;
-  let manualQuery: string = '';
-  let manualSearching: boolean = false;
-  let manualSearchVisible: boolean = false;
-  let selectedAfl: AFLMatch | null = null;
-  let confirming: boolean = false;
-  let addTrackFiller: boolean = false;
-  let addTrackMixed: boolean = true;
-  let addTrackAnimeCanon: boolean = true;
-  let addStartMode: string = START_FROM_CURRENT;
-  let fallbackAflQuery: string = '';
-  let cachedAflShows: AFLMatch[] = [];
-  let fallbackAflResults: AFLMatch[] = [];
-  let fallbackAflLoading: boolean = false;
-  let selectedFallbackAfl: AFLMatch | null = null;
-  let fallbackFilterTimeout: ReturnType<typeof setTimeout> | null = null;
-  let sonarrLookupQuery: string = '';
-  let sonarrLookupResults: SonarrSeries[] = [];
-  let sonarrLookupLoading: boolean = false;
-  let selectedSonarrLookup: SonarrSeries | null = null;
-  let sonarrAdding: boolean = false;
-  let sonarrRootFolderOptions: SelectOption[] = [];
-  let sonarrQualityProfileOptions: SelectOption[] = [];
-  let sonarrAddOptionsError: string = '';
-  let fallbackQualityProfileId: string = '';
-  let fallbackSeasonFolder: boolean = true;
-  let addOutcome: AddOutcome | null = null;
+  let showAddModal = $state(false);
+  let addDialog: HTMLDialogElement | null = $state(null);
+  let addStep = $state(ADD_STEP_SERIES);
+  let sonarrLoading = $state(false);
+  let seriesQuery = $state('');
+  let selectedSonarr = $state<SonarrSeries | null>(null);
+  let suggestedMatches = $state<AFLMatch[]>([]);
+  let displayedMatches = $state<AFLMatch[]>([]);
+  let matchLoading = $state(false);
+  let manualQuery = $state('');
+  let manualSearching = $state(false);
+  let manualSearchVisible = $state(false);
+  let selectedAfl = $state<AFLMatch | null>(null);
+  let confirming = $state(false);
+  let addTrackFiller = $state(false);
+  let addTrackMixed = $state(true);
+  let addTrackAnimeCanon = $state(true);
+  let addStartMode = $state(START_FROM_CURRENT);
+  let fallbackAflQuery = $state('');
+  let cachedAflShows = $state<AFLMatch[]>([]);
+  let fallbackAflResults = $state<AFLMatch[]>([]);
+  let fallbackAflLoading = $state(false);
+  let selectedFallbackAfl = $state<AFLMatch | null>(null);
+  let fallbackFilterTimeout: ReturnType<typeof setTimeout> | null = $state(null);
+  let sonarrLookupQuery = $state('');
+  let sonarrLookupResults = $state<SonarrSeries[]>([]);
+  let sonarrLookupLoading = $state(false);
+  let selectedSonarrLookup = $state<SonarrSeries | null>(null);
+  let sonarrAdding = $state(false);
+  let sonarrRootFolderOptions = $state<SelectOption[]>([]);
+  let sonarrQualityProfileOptions = $state<SelectOption[]>([]);
+  let sonarrAddOptionsError = $state('');
+  let fallbackQualityProfileId = $state('');
+  let fallbackSeasonFolder = $state(true);
+  let addOutcome = $state<AddOutcome | null>(null);
 
   const startModeOptions: SelectOption[] = [
     { value: START_FROM_CURRENT, label: 'Current progress' },
@@ -106,6 +106,25 @@
     { value: 'title_desc', label: 'Title (Z-A)' },
     { value: 'watermark', label: 'Latest progress' },
   ];
+
+  const sortCollection = useListCollection({
+    items: sortOptions,
+    itemToString: (item: SelectOption) => item.label,
+    itemToValue: (item: SelectOption) => item.value,
+  });
+  const startModeCollection = useListCollection({
+    items: startModeOptions,
+    itemToString: (item: SelectOption) => item.label,
+    itemToValue: (item: SelectOption) => item.value,
+  });
+  let qualityProfileItems = $state<SelectOption[]>([]);
+  const qualityProfileCollection = $derived(
+    useListCollection({
+      items: qualityProfileItems,
+      itemToString: (item: SelectOption) => item.label,
+      itemToValue: (item: SelectOption) => item.value,
+    }),
+  );
   const wizardSteps: WizardStep[] = [
     { key: ADD_STEP_SERIES, label: 'Select' },
     { key: ADD_STEP_MATCH, label: 'Match' },
@@ -117,20 +136,20 @@
     { key: ADD_STEP_FALLBACK_SONARR, label: 'Add to Sonarr' },
     { key: ADD_STEP_MATCH, label: 'Match' },
   ];
-  $: activeWizardSteps = [ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep) ? wizardFallbackSteps : wizardSteps;
-  $: currentStepIndex = activeWizardSteps.findIndex((s: WizardStep) => s.key === addStep);
+  const activeWizardSteps = $derived([ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep) ? wizardFallbackSteps : wizardSteps);
+  const currentStepIndex = $derived(activeWizardSteps.findIndex((s: WizardStep) => s.key === addStep));
   const actionToTracked = (action: string | undefined, fallback: boolean = true): boolean => (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
   const trackedToAction = (tracked: boolean): string => (tracked ? 'monitor' : 'unmonitor');
 
-  $: mappedShows = ($shows || []).map((show: Show) => {
+  const mappedShows = $derived(($shows || []).map((show: Show) => {
     const series = seriesById[show.sonarr_series_id] || null;
     return {
       ...show,
       poster: ($settings?.enable_anilist_artwork && show.anilist_poster_url) ? show.anilist_poster_url : posterUrl(series),
     };
-  });
+  }));
 
-  $: filteredShows = mappedShows
+  const filteredShows = $derived(mappedShows
     .filter((show: Show) => {
       if (!filter) return true;
       const query: string = filter.toLowerCase();
@@ -141,15 +160,15 @@
       if (sortBy === 'title_desc') return (b.sonarr_title || '').localeCompare(a.sonarr_title || '');
       if (sortBy === 'watermark') return (b.sync_watermark || 0) - (a.sync_watermark || 0);
       return 0;
-    });
+    }));
 
-  $: availableSeries = allSeries
+  const availableSeries = $derived(allSeries
     .filter((series: SonarrSeries) => !new Set(($shows || []).map((show: Show) => show.sonarr_series_id)).has(series.id))
-    .sort((a: SonarrSeries, b: SonarrSeries) => a.title.localeCompare(b.title));
+    .sort((a: SonarrSeries, b: SonarrSeries) => a.title.localeCompare(b.title)));
 
-  $: mappedSeriesIds = new Set(($shows || []).map((show: Show) => show.sonarr_series_id));
+  const mappedSeriesIds = $derived(new Set(($shows || []).map((show: Show) => show.sonarr_series_id)));
 
-  $: filteredSeriesLibrary = addSeriesLibrary
+  const filteredSeriesLibrary = $derived(addSeriesLibrary
     .filter((series: SonarrSeries) => {
     const query: string = seriesQuery.trim().toLowerCase();
     if (!query) return true;
@@ -163,7 +182,7 @@
       const bMapped = mappedSeriesIds.has(b.id) ? 1 : 0;
       if (aMapped !== bMapped) return aMapped - bMapped;
       return a.title.localeCompare(b.title);
-    });
+    }));
 
   onMount(async () => {
     await loadLanding();
@@ -298,6 +317,7 @@
         value: String(profile.id),
         label: profile.name,
       }));
+      qualityProfileItems = sonarrQualityProfileOptions;
       if (!fallbackQualityProfileId) {
         fallbackQualityProfileId = preferredAnimeQualityProfileId();
       }
@@ -745,11 +765,31 @@
       />
     </div>
     <div class="sm:w-52">
-      <select bind:value={sortBy} class="select field-base h-11 w-full rounded-lg font-mono text-xs shadow-none">
-        {#each sortOptions as item}
-          <option value={item.value}>{item.label}</option>
-        {/each}
-      </select>
+      <Combobox
+        collection={sortCollection}
+        value={[sortBy]}
+        onValueChange={(e) => (sortBy = e.value[0])}
+        readOnly
+        placeholder="Sort by"
+        class="w-full"
+      >
+        <Combobox.Control class="field-base h-11 rounded-lg font-mono text-xs">
+          <Combobox.Input />
+          <Combobox.Trigger />
+        </Combobox.Control>
+        <Portal>
+          <Combobox.Positioner>
+            <Combobox.Content>
+              {#each sortCollection.items as item (item.value)}
+                <Combobox.Item {item}>
+                  <Combobox.ItemText>{item.label}</Combobox.ItemText>
+                  <Combobox.ItemIndicator />
+                </Combobox.Item>
+              {/each}
+            </Combobox.Content>
+          </Combobox.Positioner>
+        </Portal>
+      </Combobox>
     </div>
   </section>
 
@@ -1161,12 +1201,31 @@
           <div class="space-y-2">
             <label for="fallback-quality-profile" class="label label-text">Quality profile</label>
             <div class="max-w-xs">
-              <select id="fallback-quality-profile" bind:value={fallbackQualityProfileId} class="select field-base w-full">
-                <option value="" disabled>Choose a quality profile</option>
-                {#each sonarrQualityProfileOptions as item}
-                  <option value={item.value}>{item.label}</option>
-                {/each}
-              </select>
+              <Combobox
+                collection={qualityProfileCollection}
+                value={[fallbackQualityProfileId]}
+                onValueChange={(e) => (fallbackQualityProfileId = e.value[0])}
+                readOnly
+                placeholder="Choose a quality profile"
+                class="w-full"
+              >
+                <Combobox.Control class="field-base w-full rounded-lg">
+                  <Combobox.Input />
+                  <Combobox.Trigger />
+                </Combobox.Control>
+                <Portal>
+                  <Combobox.Positioner>
+                    <Combobox.Content>
+                      {#each qualityProfileCollection.items as item (item.value)}
+                        <Combobox.Item {item}>
+                          <Combobox.ItemText>{item.label}</Combobox.ItemText>
+                          <Combobox.ItemIndicator />
+                        </Combobox.Item>
+                      {/each}
+                    </Combobox.Content>
+                  </Combobox.Positioner>
+                </Portal>
+              </Combobox>
             </div>
           </div>
 
@@ -1357,11 +1416,31 @@
 
           <div class="space-y-2">
             <label for="start-mode" class="label label-text">Start tracking from</label>
-            <select id="start-mode" bind:value={addStartMode} class="select field-base w-full">
-              {#each startModeOptions as item}
-                <option value={item.value}>{item.label}</option>
-              {/each}
-            </select>
+            <Combobox
+              collection={startModeCollection}
+              value={[addStartMode]}
+              onValueChange={(e) => (addStartMode = e.value[0])}
+              readOnly
+              placeholder="Choose start point"
+              class="w-full"
+            >
+              <Combobox.Control class="field-base w-full rounded-lg">
+                <Combobox.Input />
+                <Combobox.Trigger />
+              </Combobox.Control>
+              <Portal>
+                <Combobox.Positioner>
+                  <Combobox.Content>
+                    {#each startModeCollection.items as item (item.value)}
+                      <Combobox.Item {item}>
+                        <Combobox.ItemText>{item.label}</Combobox.ItemText>
+                        <Combobox.ItemIndicator />
+                      </Combobox.Item>
+                    {/each}
+                  </Combobox.Content>
+                </Combobox.Positioner>
+              </Portal>
+            </Combobox>
             <p class="text-sm text-surface-400">Current progress uses Sonarr's latest monitored episode. Episode 1 starts from the beginning.</p>
           </div>
         </div>
