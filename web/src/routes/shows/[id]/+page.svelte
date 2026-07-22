@@ -449,7 +449,7 @@
         <h2 class="h6 text-surface-200">Tracking rules</h2>
         <hr class="hr flex-1" />
         {#if rulesDirty}
-          <span class="badge badge-sm text-[10px] preset-filled-warning-500">Unsaved changes</span>
+          <span class="badge text-[10px] preset-filled-warning-500">Unsaved changes</span>
         {/if}
       </div>
 
@@ -533,7 +533,7 @@
                         <td class="w-10 text-[11px] tabular-nums text-surface-400">{displayEpisodeNumber(ep)}</td>
                         <td class="min-w-0 truncate text-sm text-surface-50">{ep.title || '-'}</td>
                         <td class="w-28 text-right">
-                          <span class="badge badge-sm text-[10px] {badgePresetForType(ep.type)}">{typeBadge.label}</span>
+                          <span class="badge text-[10px] {badgePresetForType(ep.type)}">{typeBadge.label}</span>
                         </td>
                         <td class="w-28 text-right">
                           {#if episodeActionId(ep)}

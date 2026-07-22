@@ -331,7 +331,7 @@
     <div class="space-y-6">
       <!-- Connection group -->
       <section class="card preset-tonal-surface border-surface-800">
-        <div class="card-body p-5 gap-0">
+        <div class="p-5 gap-0">
           <h2 class="text-sm text-surface-400 mb-3">Connection</h2>
 
           <!-- Sonarr URL -->
@@ -437,7 +437,7 @@
 
       <!-- Sync group -->
       <section class="card preset-tonal-surface border-surface-800">
-        <div class="card-body p-5 gap-0">
+        <div class="p-5 gap-0">
           <h2 class="text-sm text-surface-400 mb-3">Sync</h2>
 
           <!-- Sync interval stepper -->
@@ -502,7 +502,7 @@
 
       <!-- Defaults group -->
       <section class="card preset-tonal-surface border-surface-800">
-        <div class="card-body p-5 gap-0">
+        <div class="p-5 gap-0">
           <h2 class="text-sm text-surface-400 mb-3">Defaults</h2>
           <p class="text-xs text-surface-400 mb-3">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
 

@@ -245,7 +245,7 @@
         {#each statusFilters as filter, i}
           <button
             type="button"
-            class={`flex h-10 flex-1 items-center justify-center px-4 text-xs transition-colors duration-150 sm:flex-none ${i > 0 ? 'border-l border-surface-800' : ''} ${statusFilter === filter.value ? statusFilterActiveClass(filter.value) : statusFilterIdleClass(filter.value)}`}
+            class={`flex h-10 flex-1 items-center justify-center px-3 text-xs transition-colors duration-150 sm:flex-none ${i > 0 ? 'border-l border-surface-800' : ''} ${statusFilter === filter.value ? statusFilterActiveClass(filter.value) : statusFilterIdleClass(filter.value)}`}
             onclick={() => (statusFilter = filter.value)}
           >
             {filter.label}
@@ -277,7 +277,7 @@
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div class="min-w-0 space-y-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class={`badge ${runStatusChipClass(log.status)} badge-sm text-[10px]`}>{runBadge.label}</span>
+                  <span class={`badge ${runStatusChipClass(log.status)} text-[10px]`}>{runBadge.label}</span>
                   <h2 class="text-[13px] font-medium text-surface-50">{humanSummary(log)}</h2>
                 </div>
                 <p class="text-[10px] text-surface-500">
@@ -320,7 +320,7 @@
                             <h3 class="text-sm font-semibold text-surface-50">{item.sonarr_title}</h3>
                             <p class="text-[13px] leading-5 text-surface-400">{detailLine(item)}</p>
                           </div>
-                          <span class="badge badge-sm text-[10px] {itemStatusBadgeClass(item.status)} shrink-0">{itemBadge.label}</span>
+                          <span class="badge text-[10px] {itemStatusBadgeClass(item.status)} shrink-0">{itemBadge.label}</span>
                         </div>
 
                         {#if item.error}

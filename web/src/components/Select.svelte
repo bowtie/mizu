@@ -59,7 +59,7 @@
     type="button"
     onclick={toggle}
     onkeydown={handleKeydown}
-    class="input field-base flex h-11 w-full cursor-pointer items-center justify-between rounded-lg px-3 text-left text-xs shadow-none"
+    class="input field-base flex h-11 w-full cursor-pointer items-center justify-between rounded-lg px-3 text-left text-xs"
     aria-haspopup="listbox"
     aria-expanded={open}
   >

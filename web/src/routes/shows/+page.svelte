@@ -667,7 +667,7 @@
         type="text"
         placeholder="Search anime by title or slug"
         bind:value={filter}
-        class="input field-base h-11 w-full rounded-lg pl-10 text-sm shadow-none"
+        class="input field-base h-11 w-full rounded-lg pl-10 text-sm"
         aria-label="Search anime"
       />
     </div>
@@ -745,7 +745,7 @@
             <p class="mt-0.5 text-[11px] tabular-nums text-surface-300">{markerChip(show)}</p>
           </div>
 
-          <span class={`badge badge-sm text-[10px] ${show.enabled ? 'preset-filled-success-500' : 'preset-tonal-surface'}`}>
+          <span class={`badge text-[10px] ${show.enabled ? 'preset-filled-success-500' : 'preset-tonal-surface'}`}>
             {show.enabled ? 'Syncing' : 'Paused'}
           </span>
         </a>
@@ -1143,8 +1143,8 @@
           <div class="space-y-2">
             <div class="text-sm font-semibold text-surface-50">{matchTitle(selectedAfl)}</div>
             <div class="flex flex-wrap gap-2">
-              <span class="badge badge-sm text-[10px] preset-filled-primary-500">{Math.round((selectedAfl.confidence || 0) * 100)}% confidence</span>
-              <span class="badge badge-sm text-[10px] preset-tonal-surface">{selectedAfl.method}</span>
+              <span class="badge text-[10px] preset-filled-primary-500">{Math.round((selectedAfl.confidence || 0) * 100)}% confidence</span>
+              <span class="badge text-[10px] preset-tonal-surface">{selectedAfl.method}</span>
             </div>
             <p class="text-sm leading-6 text-surface-400">Looks like an exact cached AFL match, so this step is just a quick confirmation before Mizu creates the mapping.</p>
           </div>
@@ -1164,10 +1164,10 @@
                   <div class="truncate text-xs text-surface-400">{matchSlug(result)}</div>
                   <div class="flex flex-wrap gap-2">
                     {#if result.confidence != null}
-                      <span class="badge badge-sm text-[10px] preset-filled-primary-500">{Math.round(result.confidence * 100)}% confidence</span>
-                      <span class="badge badge-sm text-[10px] preset-tonal-surface">{result.method}</span>
+                      <span class="badge text-[10px] preset-filled-primary-500">{Math.round(result.confidence * 100)}% confidence</span>
+                      <span class="badge text-[10px] preset-tonal-surface">{result.method}</span>
                     {:else}
-                      <span class="badge badge-sm text-[10px] preset-filled-warning-500">Manual review</span>
+                      <span class="badge text-[10px] preset-filled-warning-500">Manual review</span>
                     {/if}
                   </div>
                 </div>
