@@ -406,7 +406,7 @@
 {#if loading}
   <div class="card preset-tonal-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 text-center">
     <LoaderCircle size={22} class="animate-spin text-primary-500" />
-    <p class="text-[11px] uppercase tracking-[0.12em] text-surface-400">Loading anime details</p>
+    <p class="text-[11px] text-surface-400">Loading anime details</p>
   </div>
 {:else if !show}
   <div class="card preset-tonal-surface flex min-h-[22rem] flex-col items-center justify-center gap-3 px-6 text-center">
@@ -449,7 +449,7 @@
         <h2 class="h6 text-surface-200">Tracking rules</h2>
         <hr class="hr flex-1" />
         {#if rulesDirty}
-          <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-warning-500">Unsaved changes</span>
+          <span class="badge badge-sm text-[10px] preset-filled-warning-500">Unsaved changes</span>
         {/if}
       </div>
 
@@ -506,7 +506,7 @@
           style:border-bottom={btn.active ? `2px solid ${btn.color}` : '2px solid transparent'}
           onclick={() => toggleTypeFilter(btn.type)}
         >
-          <span class="text-[10px] uppercase tracking-[0.12em]">{btn.label}</span>
+          <span class="text-[10px]">{btn.label}</span>
           <span class="text-sm font-medium tabular-nums">{btn.count}</span>
         </button>
       {/each}
@@ -533,7 +533,7 @@
                         <td class="w-10 text-[11px] tabular-nums text-surface-400">{displayEpisodeNumber(ep)}</td>
                         <td class="min-w-0 truncate text-sm text-surface-50">{ep.title || '-'}</td>
                         <td class="w-28 text-right">
-                          <span class="badge badge-sm text-[10px] uppercase tracking-[0.08em] {badgePresetForType(ep.type)}">{typeBadge.label}</span>
+                          <span class="badge badge-sm text-[10px] {badgePresetForType(ep.type)}">{typeBadge.label}</span>
                         </td>
                         <td class="w-28 text-right">
                           {#if episodeActionId(ep)}

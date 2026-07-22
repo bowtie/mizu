@@ -97,8 +97,6 @@ svg.lucide {
 .rule-label > span {
   font-family: var(--font-mono);
   font-size: 0.625rem;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
   color: var(--ink-faint);
   white-space: nowrap;
 }

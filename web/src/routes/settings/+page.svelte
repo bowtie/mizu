@@ -306,7 +306,7 @@
     </div>
     <div class="flex items-center gap-3">
       {#if settingsDirty}
-        <span class="badge preset-filled-warning-500 text-[10px] uppercase tracking-wider">Unsaved changes</span>
+        <span class="badge preset-filled-warning-500 text-[10px]">Unsaved changes</span>
       {/if}
       <button class="btn btn-base preset-filled-primary-500" onclick={handleSave} disabled={saving || !settingsDirty}>
         {#if saving}
@@ -332,7 +332,7 @@
       <!-- Connection group -->
       <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
-          <h2 class="text-sm uppercase tracking-wider text-surface-400 mb-3">Connection</h2>
+          <h2 class="text-sm text-surface-400 mb-3">Connection</h2>
 
           <!-- Sonarr URL -->
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">
@@ -438,7 +438,7 @@
       <!-- Sync group -->
       <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
-          <h2 class="text-sm uppercase tracking-wider text-surface-400 mb-3">Sync</h2>
+          <h2 class="text-sm text-surface-400 mb-3">Sync</h2>
 
           <!-- Sync interval stepper -->
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">
@@ -503,7 +503,7 @@
       <!-- Defaults group -->
       <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
-          <h2 class="text-sm uppercase tracking-wider text-surface-400 mb-3">Defaults</h2>
+          <h2 class="text-sm text-surface-400 mb-3">Defaults</h2>
           <p class="text-xs text-surface-400 mb-3">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
 
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">

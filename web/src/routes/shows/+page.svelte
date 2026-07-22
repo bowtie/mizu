@@ -800,7 +800,7 @@
             <p class="mt-0.5 text-[11px] tabular-nums text-surface-300">{markerChip(show)}</p>
           </div>
 
-          <span class={`badge badge-sm text-[10px] uppercase tracking-[0.08em] ${show.enabled ? 'preset-filled-success-500' : 'preset-tonal-surface'}`}>
+          <span class={`badge badge-sm text-[10px] ${show.enabled ? 'preset-filled-success-500' : 'preset-tonal-surface'}`}>
             {show.enabled ? 'Syncing' : 'Paused'}
           </span>
         </a>
@@ -826,7 +826,7 @@
     </div>
 
     <!-- Step progress -->
-    <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] uppercase tracking-[0.1em]" aria-hidden="true">
+    <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px]" aria-hidden="true">
       {#each activeWizardSteps as step, i}
         {@const isCurrent = step.key === addStep}
         {@const isPast = currentStepIndex > i}
@@ -970,9 +970,9 @@
                     </div>
 
                     {#if seriesMapped}
-                      <span class="shrink-0 text-[10px] uppercase tracking-[0.1em] text-surface-400">Open</span>
+                      <span class="shrink-0 text-[10px] text-surface-400">Open</span>
                     {:else if manualPending}
-                      <span class="shrink-0 text-[10px] uppercase tracking-[0.1em] text-warning-500">Match</span>
+                      <span class="shrink-0 text-[10px] text-warning-500">Match</span>
                     {:else if isSelected}
                       <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-500 text-primary-contrast-500">
                         <Check size={13} />
@@ -1246,8 +1246,8 @@
           <div class="space-y-2">
             <div class="text-sm font-semibold text-surface-50">{matchTitle(selectedAfl)}</div>
             <div class="flex flex-wrap gap-2">
-              <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-primary-500">{Math.round((selectedAfl.confidence || 0) * 100)}% confidence</span>
-              <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-tonal-surface">{selectedAfl.method}</span>
+              <span class="badge badge-sm text-[10px] preset-filled-primary-500">{Math.round((selectedAfl.confidence || 0) * 100)}% confidence</span>
+              <span class="badge badge-sm text-[10px] preset-tonal-surface">{selectedAfl.method}</span>
             </div>
             <p class="text-sm leading-6 text-surface-400">Looks like an exact cached AFL match, so this step is just a quick confirmation before Mizu creates the mapping.</p>
           </div>
@@ -1267,10 +1267,10 @@
                   <div class="truncate text-xs text-surface-400">{matchSlug(result)}</div>
                   <div class="flex flex-wrap gap-2">
                     {#if result.confidence != null}
-                      <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-primary-500">{Math.round(result.confidence * 100)}% confidence</span>
-                      <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-tonal-surface">{result.method}</span>
+                      <span class="badge badge-sm text-[10px] preset-filled-primary-500">{Math.round(result.confidence * 100)}% confidence</span>
+                      <span class="badge badge-sm text-[10px] preset-tonal-surface">{result.method}</span>
                     {:else}
-                      <span class="badge badge-sm text-[10px] uppercase tracking-[0.1em] preset-filled-warning-500">Manual review</span>
+                      <span class="badge badge-sm text-[10px] preset-filled-warning-500">Manual review</span>
                     {/if}
                   </div>
                 </div>
@@ -1298,7 +1298,7 @@
             <div class="card flex items-start justify-between gap-3 bg-surface-950 p-4">
               <div class="space-y-1">
                 <div class="text-sm font-medium text-surface-50">Anime canon</div>
-                <span class="inline-block text-[10px] uppercase tracking-[0.1em] {addTrackAnimeCanon ? 'text-primary-500' : 'text-surface-500'}">{optionState(addTrackAnimeCanon)}</span>
+                <span class="inline-block text-[10px] {addTrackAnimeCanon ? 'text-primary-500' : 'text-surface-500'}">{optionState(addTrackAnimeCanon)}</span>
               </div>
               <Switch checked={addTrackAnimeCanon} onCheckedChange={(d) => (addTrackAnimeCanon = d.checked)}>
                 <Switch.Control>
@@ -1311,7 +1311,7 @@
             <div class="card flex items-start justify-between gap-3 bg-surface-950 p-4">
               <div class="space-y-1">
                 <div class="text-sm font-medium text-surface-50">Mixed canon</div>
-                <span class="inline-block text-[10px] uppercase tracking-[0.1em] {addTrackMixed ? 'text-warning-500' : 'text-surface-500'}">{optionState(addTrackMixed)}</span>
+                <span class="inline-block text-[10px] {addTrackMixed ? 'text-warning-500' : 'text-surface-500'}">{optionState(addTrackMixed)}</span>
               </div>
               <Switch checked={addTrackMixed} onCheckedChange={(d) => (addTrackMixed = d.checked)}>
                 <Switch.Control>
@@ -1324,7 +1324,7 @@
             <div class="card flex items-start justify-between gap-3 bg-surface-950 p-4">
               <div class="space-y-1">
                 <div class="text-sm font-medium text-surface-50">Filler</div>
-                <span class="inline-block text-[10px] uppercase tracking-[0.1em] {addTrackFiller ? 'text-error-500' : 'text-surface-500'}">{optionState(addTrackFiller)}</span>
+                <span class="inline-block text-[10px] {addTrackFiller ? 'text-error-500' : 'text-surface-500'}">{optionState(addTrackFiller)}</span>
               </div>
               <Switch checked={addTrackFiller} onCheckedChange={(d) => (addTrackFiller = d.checked)}>
                 <Switch.Control>
