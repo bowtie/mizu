@@ -17,7 +17,6 @@
     confirmMatch,
     getSettings,
   } from '../../lib/api.ts';
-  import { episodeTypeBadge, syncStateBadge } from '../../lib/fox.ts';
   import {
     createPosterMonogram,
     POSTER_FAILED,
@@ -691,22 +690,6 @@
   function optionState(checked: boolean): string {
     return checked ? 'Included' : 'Skipped';
   }
-
-  function isActionTracked(action: string | undefined): boolean {
-    return action === 'monitor';
-  }
-
-  function showRulePips(show: Show): { key: string; label: string; tracked: boolean; color: string }[] {
-    return [
-      { key: 'canon', label: 'canon', tracked: isActionTracked(show.anime_canon_action), color: 'text-primary-500' },
-      { key: 'mixed', label: 'mixed', tracked: isActionTracked(show.mixed_action), color: 'text-warning-500' },
-      { key: 'filler', label: 'filler', tracked: isActionTracked(show.filler_action), color: 'text-error-500' },
-    ];
-  }
-
-  function showSyncLampClass(enabled: boolean): string {
-    return enabled ? 'lamp' : 'lamp lamp-warn';
-  }
 </script>
 
 <svelte:head>
@@ -716,7 +699,7 @@
 <div class="space-y-6">
   <section class="flex flex-wrap items-end gap-x-4 gap-y-3">
     <div class="space-y-1.5">
-      <h1 class="text-3xl font-bold tracking-tight text-surface-50">Anime</h1>
+      <h1 class="text-2xl font-bold tracking-tight text-surface-50">Anime</h1>
       <p class="text-sm text-surface-400">
         {#if !loading}
           <span class="font-mono tabular-nums text-surface-50">{($shows || []).length}</span> tracked ·
@@ -858,7 +841,6 @@
         </span>
       {/each}
     </div>
-    <hr class="hr" aria-hidden="true" />
 
     <p class="text-sm leading-6 text-surface-400">
       {#if addStep === ADD_STEP_SERIES}
@@ -1165,7 +1147,12 @@
 
           <label class="card flex items-center justify-between gap-4 bg-surface-950 px-4 py-3">
             <div class="text-sm font-medium text-surface-50">Season folder</div>
-            <input type="checkbox" class="checkbox" bind:checked={fallbackSeasonFolder} />
+            <Switch checked={fallbackSeasonFolder} onCheckedChange={(d) => (fallbackSeasonFolder = d.checked)}>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Switch.HiddenInput />
+            </Switch>
           </label>
 
           {#if sonarrAddOptionsError}

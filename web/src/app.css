@@ -14,13 +14,9 @@
 }
 
 /*
- * Mizu glass system — Arc browser language, dark only.
- * One material at four elevations:
- *   glass-surface  cards/panes floating on the backdrop
- *   glass-raised   nav, sticky chrome, filter strips (one step brighter)
- *   glass-overlay  menus/popovers/tooltips/modals (deep tint for contrast)
- *   glass-inset    wells sunk into a surface (search bars, steppers)
- * Shape rule: panes rounded-2xl, controls rounded-xl, small chips full.
+ * Mizu — Skeleton v5 (wintry) + custom ledger tokens.
+ * Flat ink surfaces, hairline rules, color = meaning.
+ * Poster frames keep their own gradient wells below.
  */
 :root {
   /* Fonts */
@@ -38,17 +34,8 @@
   /* Ledger surface tokens */
   --ink-faint: var(--color-surface-500);
   --rule: var(--color-surface-800);
-  --rule-soft: var(--color-surface-900);
-  --surface-1: var(--color-surface-900);
   --surface-2: var(--color-surface-800);
-  --surface-inset: var(--color-surface-950);
   --surface-border: var(--color-surface-800);
-  --surface-shadow: 0 16px 40px -18px rgb(0 0 0 / 70%);
-  /* type colors */
-  --type-canon: var(--color-primary-500);
-  --type-anime: var(--color-secondary-500);
-  --type-mixed: var(--color-warning-500);
-  --type-filler: var(--color-error-500);
 }
 
 html,
@@ -93,28 +80,12 @@ svg.lucide {
   stroke-width: 2;
 }
 
-/* Ledger surfaces — flat ink + hairline borders. Class names kept from the
-   glass pass so route markup didn't churn; they now mean plain raised bands. */
-.glass-surface,
-.glass-raised,
-.glass-overlay,
-.glass-inset {
-  border: 1px solid var(--surface-border);
-}
-.glass-surface {
-  background: var(--surface-1);
-}
-.glass-raised {
-  background: var(--surface-1);
-  box-shadow: var(--surface-shadow);
-}
+/* Ledger surfaces — flat ink + hairline borders. `.glass-overlay` is still
+   referenced by Toast.svelte; the other glass-* names were retired. */
 .glass-overlay {
+  border: 1px solid var(--surface-border);
   background: var(--surface-2);
   box-shadow: 0 24px 64px -16px rgb(0 0 0 / 75%);
-}
-.glass-inset {
-  background: var(--surface-inset);
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 45%);
 }
 
 /* Label-in-rule section divider — the ledger signature.
@@ -136,45 +107,6 @@ svg.lucide {
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--rule);
-}
-
-/* Type tag — colored left-edge bar + mono label (color = meaning). */
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-}
-.tag::before {
-  content: "";
-  width: 3px;
-  height: 0.875rem;
-  border-radius: 2px;
-  background: currentColor;
-}
-.tag-canon { color: #74c0fc; }   /* OC blue 3 */
-.tag-anime { color: #66d9e8; }   /* OC cyan 3 */
-.tag-mixed { color: #ffa94d; }   /* OC orange 3 */
-.tag-filler { color: #ffa8a8; }  /* OC red 3 */
-
-/* Status lamp. */
-.lamp {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-success-500);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success-500) 15%, transparent);
-}
-.lamp-warn { background: var(--color-warning-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warning-500) 15%, transparent); }
-.lamp-err { background: var(--color-error-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error-500) 15%, transparent); }
-
-/* Navbar status cluster divider. */
-.sep {
-  width: 1px;
-  height: 14px;
-  margin: 0 0.875rem;
   background: var(--rule);
 }
 
@@ -233,11 +165,3 @@ textarea {
   font: inherit;
 }
 
-@utility no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-}

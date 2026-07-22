@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { fade, slide } from 'svelte/transition';
-  import { AnimatePresence, motion } from '@humanspeak/svelte-motion';
+  import { Switch } from '@skeletonlabs/skeleton-svelte';
   import { settings, addNotification } from '../../lib/stores.ts';
   import { getSettings, getStoredSonarrApiKey, refreshAflCache, testSonarrConnection, updateSettings } from '../../lib/api.ts';
   import type { Settings, StoredApiKeyResponse } from '$lib/types.ts';
@@ -320,7 +320,7 @@
   </section>
 
   {#if loading}
-    <div class="card preset-tonal-surface-900 flex min-h-56 flex-col items-center justify-center gap-4 p-5 text-center">
+    <div class="card preset-tonal-surface flex min-h-56 flex-col items-center justify-center gap-4 p-5 text-center">
       <LoaderCircle size={30} class="animate-spin text-primary-500" />
       <div class="space-y-1">
         <h2 class="text-base font-semibold text-surface-50">Loading settings</h2>
@@ -330,7 +330,7 @@
   {:else}
     <div class="space-y-6">
       <!-- Connection group -->
-      <section class="card preset-tonal-surface-900 border-surface-800">
+      <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
           <h2 class="text-sm font-mono uppercase tracking-wider text-surface-400 mb-3">Connection</h2>
 
@@ -436,7 +436,7 @@
       </section>
 
       <!-- Sync group -->
-      <section class="card preset-tonal-surface-900 border-surface-800">
+      <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
           <h2 class="text-sm font-mono uppercase tracking-wider text-surface-400 mb-3">Sync</h2>
 
@@ -477,7 +477,7 @@
               <div class="text-[13px] font-medium text-surface-50">AniList artwork</div>
               <p class="mt-0.5 text-xs text-surface-400">Use AniList banners and posters instead of Sonarr images only.</p>
             </div>
-            <input type="checkbox" class="checkbox" bind:checked={enableAniListArtwork} />
+            <Switch checked={enableAniListArtwork} onCheckedChange={(d) => (enableAniListArtwork = d.checked)}><Switch.Control><Switch.Thumb /></Switch.Control><Switch.HiddenInput /></Switch>
           </div>
 
           <!-- AFL cache -->
@@ -501,7 +501,7 @@
       </section>
 
       <!-- Defaults group -->
-      <section class="card preset-tonal-surface-900 border-surface-800">
+      <section class="card preset-tonal-surface border-surface-800">
         <div class="card-body p-5 gap-0">
           <h2 class="text-sm font-mono uppercase tracking-wider text-surface-400 mb-3">Defaults</h2>
           <p class="text-xs text-surface-400 mb-3">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</p>
@@ -511,7 +511,7 @@
               <div class="text-[13px] font-medium text-surface-50">Anime canon</div>
               <p class="mt-0.5 text-xs text-surface-400">Original anime episodes</p>
             </div>
-            <input type="checkbox" class="checkbox" bind:checked={trackAnimeCanonDefault} />
+            <Switch checked={trackAnimeCanonDefault} onCheckedChange={(d) => (trackAnimeCanonDefault = d.checked)}><Switch.Control><Switch.Thumb /></Switch.Control><Switch.HiddenInput /></Switch>
           </div>
 
           <div class="flex items-center gap-4 border-b border-surface-800 py-3.5">
@@ -519,7 +519,7 @@
               <div class="text-[13px] font-medium text-surface-50">Mixed canon</div>
               <p class="mt-0.5 text-xs text-surface-400">Canon + filler blend</p>
             </div>
-            <input type="checkbox" class="checkbox" bind:checked={trackMixedDefault} />
+            <Switch checked={trackMixedDefault} onCheckedChange={(d) => (trackMixedDefault = d.checked)}><Switch.Control><Switch.Thumb /></Switch.Control><Switch.HiddenInput /></Switch>
           </div>
 
           <div class="flex items-center gap-4 py-3.5">
@@ -527,7 +527,7 @@
               <div class="text-[13px] font-medium text-surface-50">Filler</div>
               <p class="mt-0.5 text-xs text-surface-400">Pure filler episodes</p>
             </div>
-            <input type="checkbox" class="checkbox" bind:checked={trackFillerDefault} />
+            <Switch checked={trackFillerDefault} onCheckedChange={(d) => (trackFillerDefault = d.checked)}><Switch.Control><Switch.Thumb /></Switch.Control><Switch.HiddenInput /></Switch>
           </div>
         </div>
       </section>

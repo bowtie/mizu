@@ -151,20 +151,20 @@
       case 'failed':
         return 'preset-filled-error-500 text-surface-50';
       case 'running':
-        return 'preset-tonal-surface-700 text-surface-200 animate-pulse';
+        return 'preset-tonal-surface text-surface-200 animate-pulse';
       default:
-        return 'preset-tonal-surface-700 text-surface-200';
+        return 'preset-tonal-surface text-surface-200';
     }
   }
 
-  function itemStatusTagClass(status: string | undefined): string {
+  function itemStatusBadgeClass(status: string | undefined): string {
     switch (status) {
       case 'success':
-        return 'text-success-500';
+        return 'preset-tonal-success';
       case 'failed':
-        return 'text-error-500';
+        return 'preset-tonal-error';
       default:
-        return 'text-secondary-500';
+        return 'preset-tonal-secondary';
     }
   }
 
@@ -177,7 +177,7 @@
       case 'failed':
         return 'preset-filled-error-500 text-surface-50';
       default:
-        return 'preset-filled-surface-700 text-surface-50';
+        return 'preset-filled-surface-500 text-surface-50';
     }
   }
 
@@ -217,7 +217,7 @@
   </section>
 
   {#if loading}
-    <div class="card preset-tonal-surface-900 flex min-h-56 flex-col items-center justify-center gap-4 text-center">
+    <div class="card preset-tonal-surface flex min-h-56 flex-col items-center justify-center gap-4 text-center">
       <LoaderCircle size={28} class="animate-spin text-primary-500" />
       <div class="space-y-1">
         <h2 class="text-sm font-semibold text-surface-50">Loading activity</h2>
@@ -225,7 +225,7 @@
       </div>
     </div>
   {:else if logs.length === 0}
-    <div class="card preset-tonal-surface-900 flex min-h-72 flex-col items-center justify-center gap-4 px-6 text-center">
+    <div class="card preset-tonal-surface flex min-h-72 flex-col items-center justify-center gap-4 px-6 text-center">
       <span class="flex size-11 items-center justify-center rounded-full border border-surface-700 text-surface-400">
         <History size={22} />
       </span>
@@ -262,7 +262,7 @@
 
     <!-- Log list -->
     {#if filteredLogs.length === 0}
-      <div class="card preset-tonal-surface-900 flex min-h-32 flex-col items-center justify-center gap-2 text-center">
+      <div class="card preset-tonal-surface flex min-h-32 flex-col items-center justify-center gap-2 text-center">
         <p class="text-sm font-medium text-surface-50">No matching logs</p>
         <p class="text-sm text-surface-400">Try adjusting your filters or search query.</p>
       </div>
@@ -317,7 +317,7 @@
                             <h3 class="text-sm font-semibold text-surface-50">{item.sonarr_title}</h3>
                             <p class="text-[13px] leading-5 text-surface-400">{detailLine(item)}</p>
                           </div>
-                          <span class={`tag ${itemStatusTagClass(item.status)} shrink-0`}>{itemBadge.label}</span>
+                          <span class="badge badge-sm font-mono text-[10px] uppercase tracking-[0.08em] {itemStatusBadgeClass(item.status)} shrink-0">{itemBadge.label}</span>
                         </div>
 
                         {#if item.error}

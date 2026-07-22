@@ -211,20 +211,17 @@
       return;
     }
     syncingEps[sonarrEp.id] = true;
-    syncingEps = syncingEps;
     try {
       const nextState = !sonarrEp.monitored;
       await setEpisodeMonitor(showId, sonarrEp.id, nextState);
       if (ep.sonarr_episode_id) {
         ep.monitored = nextState;
-        episodes = episodes;
       }
       addNotification(`${episodeLabel(ep)} ${nextState ? 'now monitored' : 'now unmonitored'}`, 'success');
     } catch (err: any) {
       addNotification('Failed to update episode: ' + err.message, 'error');
     }
     delete syncingEps[sonarrEp.id];
-    syncingEps = syncingEps;
   }
 
   function backdropUrl(series: SonarrSeries | null | undefined) {
@@ -254,11 +251,11 @@
   }
 
   let filterButtons = $derived([
-    { type: 'all', label: 'All', count: epStats.total, active: isTypeFilterActive('all'), color: 'text-surface-200' },
-    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), color: 'text-primary-500' },
-    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), color: 'text-tertiary-500' },
-    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), color: 'text-warning-500' },
-    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), color: 'text-error-500' },
+    { type: 'all', label: 'All', count: epStats.total, active: isTypeFilterActive('all'), color: 'var(--color-surface-200)' },
+    { type: 'canon', label: 'Manga', count: epStats.canon, active: isTypeFilterActive('canon'), color: 'var(--color-primary-500)' },
+    { type: 'anime_canon', label: 'Anime', count: epStats.animeCanon, active: isTypeFilterActive('anime_canon'), color: 'var(--color-tertiary-500)' },
+    { type: 'mixed_canon', label: 'Mixed', count: epStats.mixed, active: isTypeFilterActive('mixed_canon'), color: 'var(--color-warning-500)' },
+    { type: 'filler', label: 'Filler', count: epStats.filler, active: isTypeFilterActive('filler'), color: 'var(--color-error-500)' },
   ]);
 
   function isSpecialSeasonNumber(num: number | undefined) {
@@ -550,7 +547,11 @@
                               {#if syncingEps[episodeActionId(ep)]}
                                 <LoaderCircle size={12} class="animate-spin" />
                               {:else}
-                                <span class="badge-dot {episodeMonitored(ep) ? 'preset-filled-success-500' : 'preset-outlined-surface-500'}"></span>
+                                <span
+                                  class="inline-block size-1.5 rounded-full {episodeMonitored(ep)
+                                    ? 'bg-success-500'
+                                    : 'border border-surface-500'}"
+                                ></span>
                               {/if}
                               {episodeMonitored(ep) ? 'watch' : 'skip'}
                             </button>
