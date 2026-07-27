@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"mizu/internal/config"
+	"mizu/internal/database"
 	"mizu/internal/models"
+	syncengine "mizu/internal/sync"
 )
 
 func TestHandleLookupSonarrSeriesKeepsStandardLookupResults(t *testing.T) {
@@ -25,13 +28,22 @@ func TestHandleLookupSonarrSeriesKeepsStandardLookupResults(t *testing.T) {
 	}))
 	defer sonarr.Close()
 
+	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+	defer db.Close()
+
+	cfg := &config.Config{
+		SonarrURL:    sonarr.URL,
+		SonarrAPIKey: "test-key",
+	}
+	engine := syncengine.New(cfg, db)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/sonarr/lookup?q=Ranma%201%2F2", nil)
 	rec := httptest.NewRecorder()
 
-	handleLookupSonarrSeries(&config.Config{
-		SonarrURL:    sonarr.URL,
-		SonarrAPIKey: "test-key",
-	})(rec, req)
+	handleLookupSonarrSeries(engine)(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("unexpected status %d: %s", rec.Code, rec.Body.String())

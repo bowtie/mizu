@@ -5,7 +5,6 @@ param(
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$backendScriptPath = Join-Path $root "scripts\dev-backend.ps1"
 
 function Write-DevLog {
     param(
@@ -18,8 +17,8 @@ function Write-DevLog {
 }
 
 function Start-FrontendProcess {
-    Start-Process -FilePath "npx" -ArgumentList @(
-        "vite"
+    Start-Process -FilePath "vp" -ArgumentList @(
+        "dev"
     ) -WorkingDirectory (Join-Path $root "web-astryx") -NoNewWindow -PassThru
 }
 
@@ -30,7 +29,8 @@ Write-Host "Backend:  http://localhost:8978" -ForegroundColor DarkGray
 Write-Host ""
 
 if ($SeparateWindows) {
-    $frontendScript = "Set-Location '$root\web-astryx'; npx vite"
+    $frontendScript = "Set-Location '$root\web-astryx'; vp dev"
+    $backendScript = "Set-Location '$root'; air"
 
     Start-Process -FilePath "powershell" -ArgumentList @(
         "-NoExit",
@@ -41,7 +41,7 @@ if ($SeparateWindows) {
     Start-Process -FilePath "powershell" -ArgumentList @(
         "-NoExit",
         "-ExecutionPolicy", "Bypass",
-        "-File", $backendScriptPath
+        "-Command", $backendScript
     ) -WorkingDirectory $root
 
     Write-Host "Mizu dev windows launched." -ForegroundColor Green
@@ -53,8 +53,10 @@ $frontendProcess = $null
 
 try {
     $frontendProcess = Start-FrontendProcess
-    Write-DevLog "mizu:web" "frontend started in this terminal; use Ctrl+C once to stop both processes" DarkGray
-    & $backendScriptPath
+    Write-DevLog "mizu:web" "frontend started; use Ctrl+C once to stop both processes" DarkGray
+
+    # Run air in the foreground — it handles Go file watching + rebuild + restart
+    & air
 }
 finally {
     if ($frontendProcess -and -not $frontendProcess.HasExited) {

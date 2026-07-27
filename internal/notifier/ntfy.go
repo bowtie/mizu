@@ -47,13 +47,6 @@ func (n *Notifier) Enabled() bool {
 	return n.serverURL != "" && n.topic != ""
 }
 
-// UpdateConfig updates the notifier's configuration dynamically.
-func (n *Notifier) UpdateConfig(serverURL, topic, token string) {
-	n.serverURL = serverURL
-	n.topic = topic
-	n.token = token
-}
-
 // SendSyncResult sends a formatted notification about a sync result.
 func (n *Notifier) SendSyncResult(ctx context.Context, result SyncResult) error {
 	if !n.Enabled() {
@@ -94,8 +87,7 @@ func (n *Notifier) send(ctx context.Context, title, body string, priority int, t
 		return fmt.Errorf("marshaling ntfy payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s", n.serverURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.serverURL, bytes.NewReader(jsonData))
 	if err != nil {
 		return fmt.Errorf("creating ntfy request: %w", err)
 	}

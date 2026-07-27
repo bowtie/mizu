@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"mizu/internal/anilist"
@@ -25,7 +27,8 @@ type Engine struct {
 	scraper  *scraper.Scraper
 	matcher  *matcherpkg.Matcher
 	notifier *notifier.Notifier
-	running  bool
+	running  atomic.Bool
+	mu       sync.RWMutex
 }
 
 type processSeriesResult struct {
@@ -33,6 +36,9 @@ type processSeriesResult struct {
 	EpisodesUpdated  int
 	MonitoredCount   int
 	UnmonitoredCount int
+	FillerFound      int
+	MixedCanonFound  int
+	AnimeCanonFound  int
 }
 
 func New(cfg *config.Config, db *database.DB) *Engine {
@@ -49,23 +55,57 @@ func New(cfg *config.Config, db *database.DB) *Engine {
 	return e
 }
 
-func (e *Engine) SonarrClient() *sonarr.Client       { return e.sonarr }
+func (e *Engine) SonarrClient() *sonarr.Client {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.sonarr
+}
 func (e *Engine) ScraperClient() *scraper.Scraper    { return e.scraper }
 func (e *Engine) MatcherClient() *matcherpkg.Matcher { return e.matcher }
 func (e *Engine) DB() *database.DB                   { return e.db }
-func (e *Engine) IsRunning() bool                    { return e.running }
+func (e *Engine) IsRunning() bool                    { return e.running.Load() }
+
+// sonarrClient returns the current Sonarr client under a read lock.
+func (e *Engine) sonarrClient() *sonarr.Client {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.sonarr
+}
+
+// notifierClient returns the current notifier under a read lock.
+func (e *Engine) notifierClient() *notifier.Notifier {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.notifier
+}
+
+// UpdateClients recreates the Sonarr and ntfy clients from the current config
+// values. This should be called after settings are updated at runtime.
+func (e *Engine) UpdateClients() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.sonarr = sonarr.New(e.cfg.SonarrURL, e.cfg.SonarrAPIKey, e.cfg.RequestTimeout)
+	if e.cfg.NtfyEnabled {
+		e.notifier = notifier.New(e.cfg.NtfyServerURL, e.cfg.NtfyTopic, e.cfg.NtfyToken)
+	} else {
+		e.notifier = nil
+	}
+}
 
 func (e *Engine) RunSync(ctx context.Context, trigger string) error {
-	if e.running {
+	if !e.running.CompareAndSwap(false, true) {
 		return fmt.Errorf("sync already in progress")
 	}
-	if e.cfg.SonarrAPIKey == "" {
+	e.cfg.RLock()
+	apiKey := e.cfg.SonarrAPIKey
+	e.cfg.RUnlock()
+	if apiKey == "" {
+		e.running.Store(false)
 		log.Warn().Msg("skipping sync: no Sonarr API key configured")
 		return fmt.Errorf("sonarr API key not configured")
 	}
 
-	e.running = true
-	defer func() { e.running = false }()
+	defer func() { e.running.Store(false) }()
 
 	log.Info().Str("trigger", trigger).Msg("starting sync cycle")
 	startTime := time.Now()
@@ -97,9 +137,14 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 	showsProcessed := 0
 	episodesUpdated := 0
 	var syncErrors []string
+	var totalFiller, totalMixedCanon, totalAnimeCanon int
 	runItems := make([]models.SyncLogItem, 0, len(enabledMappings))
 	for _, mapping := range enabledMappings {
-		series, err := e.sonarr.GetSeries(ctx, mapping.SonarrSeriesID)
+		if err := ctx.Err(); err != nil {
+			log.Info().Msg("sync cancelled mid-run, skipping remaining mappings")
+			break
+		}
+		series, err := e.sonarrClient().GetSeries(ctx, mapping.SonarrSeriesID)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to fetch Sonarr series %d (%s): %v", mapping.SonarrSeriesID, mapping.SonarrTitle, err)
 			log.Error().Err(err).Msg(errMsg)
@@ -132,6 +177,9 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		}
 		showsProcessed++
 		episodesUpdated += result.EpisodesUpdated
+		totalFiller += result.FillerFound
+		totalMixedCanon += result.MixedCanonFound
+		totalAnimeCanon += result.AnimeCanonFound
 		runItems = append(runItems, models.SyncLogItem{
 			MappingID:       mapping.ID,
 			SonarrTitle:     mapping.SonarrTitle,
@@ -154,16 +202,19 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 	e.completeSyncLog(ctx, logID, status, showsProcessed, episodesUpdated, errorsStr)
 
 	log.Info().Str("status", status).Int("shows", showsProcessed).Int("episodes_updated", episodesUpdated).Int("errors", len(syncErrors)).Msg("sync cycle complete")
-	if e.notifier != nil && e.notifier.Enabled() {
+	if n := e.notifierClient(); n != nil && n.Enabled() {
 		result := notifier.SyncResult{
 			Status:          status,
 			ShowsProcessed:  showsProcessed,
 			EpisodesUpdated: episodesUpdated,
+			FillerFound:     totalFiller,
+			MixedCanonFound: totalMixedCanon,
+			AnimeCanonFound: totalAnimeCanon,
 			Errors:          syncErrors,
 			Duration:        time.Since(startTime),
 			Trigger:         trigger,
 		}
-		if err := e.notifier.SendSyncResult(ctx, result); err != nil {
+		if err := n.SendSyncResult(ctx, result); err != nil {
 			log.Warn().Err(err).Msg("failed to send ntfy notification")
 		}
 	}
@@ -171,7 +222,15 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 }
 
 func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
-	if e.cfg.SonarrAPIKey == "" {
+	if !e.running.CompareAndSwap(false, true) {
+		return fmt.Errorf("sync already in progress")
+	}
+	defer func() { e.running.Store(false) }()
+
+	e.cfg.RLock()
+	apiKey := e.cfg.SonarrAPIKey
+	e.cfg.RUnlock()
+	if apiKey == "" {
 		return fmt.Errorf("sonarr API key not configured")
 	}
 
@@ -180,7 +239,7 @@ func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
 		return fmt.Errorf("mapping not found")
 	}
 
-	series, err := e.sonarr.GetSeries(ctx, mapping.SonarrSeriesID)
+	series, err := e.sonarrClient().GetSeries(ctx, mapping.SonarrSeriesID)
 	if err != nil {
 		return fmt.Errorf("fetching Sonarr series: %w", err)
 	}
@@ -195,7 +254,7 @@ func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
 }
 
 func (e *Engine) InitialWatermarkForSeries(ctx context.Context, seriesID int) (int, error) {
-	sonarrEpisodes, err := e.sonarr.GetEpisodes(ctx, seriesID)
+	sonarrEpisodes, err := e.sonarrClient().GetEpisodes(ctx, seriesID)
 	if err != nil {
 		return 0, fmt.Errorf("fetching Sonarr episodes: %w", err)
 	}
@@ -210,7 +269,7 @@ func (e *Engine) InitialWatermarkForStartMode(ctx context.Context, seriesID int,
 }
 
 func (e *Engine) SuggestMatches(ctx context.Context, seriesID int) (*models.SonarrSeries, []matcherpkg.MatchResult, error) {
-	series, err := e.sonarr.GetSeries(ctx, seriesID)
+	series, err := e.sonarrClient().GetSeries(ctx, seriesID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching Sonarr series: %w", err)
 	}
@@ -244,7 +303,7 @@ func (e *Engine) HydrateMapping(ctx context.Context, mappingID int64) (*models.S
 		return nil, fmt.Errorf("mapping not found")
 	}
 
-	series, err := e.sonarr.GetSeries(ctx, mapping.SonarrSeriesID)
+	series, err := e.sonarrClient().GetSeries(ctx, mapping.SonarrSeriesID)
 	if err != nil {
 		return nil, fmt.Errorf("fetching Sonarr series: %w", err)
 	}
@@ -272,19 +331,10 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 
-	aflPreferred := make(map[int]models.AFLEpisode, len(aflEpisodes))
-	aflByNumber := make(map[int][]models.AFLEpisode, len(aflEpisodes))
-	for _, ep := range aflEpisodes {
-		aflByNumber[ep.Number] = append(aflByNumber[ep.Number], ep)
-		if existing, ok := aflPreferred[ep.Number]; ok {
-			aflPreferred[ep.Number] = preferredAFLEpisode(existing, ep)
-			continue
-		}
-		aflPreferred[ep.Number] = ep
-	}
+	aflByNumber, aflPreferred := BuildAFLEpisodeLookup(aflEpisodes)
 	coverageMax := AFLCoverageMaxEpisodeNumber(aflEpisodes)
 
-	sonarrEpisodes, err := e.sonarr.GetEpisodes(ctx, series.ID)
+	sonarrEpisodes, err := e.sonarrClient().GetEpisodes(ctx, series.ID)
 	if err != nil {
 		return processSeriesResult{}, fmt.Errorf("fetching Sonarr episodes: %w", err)
 	}
@@ -301,7 +351,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 	result := processSeriesResult{}
 
 	for _, ep := range sonarrEpisodes {
-		aflNum, aflEpisode, found := selectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
+		aflNum, aflEpisode, found := SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
 		if !IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
 			continue
 		}
@@ -314,6 +364,15 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 			if aflEpisode.Title != "" {
 				title = aflEpisode.Title
 			}
+		}
+
+		switch epType {
+		case models.EpisodeFiller:
+			result.FillerFound++
+		case models.EpisodeMixedCanon:
+			result.MixedCanonFound++
+		case models.EpisodeAnimeCanon:
+			result.AnimeCanonFound++
 		}
 
 		if !isSpecialSeason(ep.SeasonNumber) {
@@ -354,7 +413,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 	}
 
 	if len(toUnmonitor) > 0 {
-		if err := e.sonarr.BulkSetEpisodesMonitored(ctx, toUnmonitor, false); err != nil {
+		if err := e.sonarrClient().BulkSetEpisodesMonitored(ctx, toUnmonitor, false); err != nil {
 			log.Error().Err(err).Str("series", series.Title).Int("count", len(toUnmonitor)).Msg("failed to unmonitor episodes")
 		} else {
 			result.UnmonitoredCount = len(toUnmonitor)
@@ -363,7 +422,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 	if len(toMonitor) > 0 {
-		if err := e.sonarr.BulkSetEpisodesMonitored(ctx, toMonitor, true); err != nil {
+		if err := e.sonarrClient().BulkSetEpisodesMonitored(ctx, toMonitor, true); err != nil {
 			log.Error().Err(err).Str("series", series.Title).Int("count", len(toMonitor)).Msg("failed to monitor episodes")
 		} else {
 			result.MonitoredCount = len(toMonitor)
@@ -372,8 +431,13 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 
-	if e.cfg.EnableAniListArtwork && mapping.AnilistPosterURL == "" {
-		if artwork, artErr := anilist.New(e.cfg.RequestTimeout).SearchArtwork(ctx, series); artErr == nil && artwork != nil {
+	e.cfg.RLock()
+	enableAnilist := e.cfg.EnableAniListArtwork
+	requestTimeout := e.cfg.RequestTimeout
+	e.cfg.RUnlock()
+
+	if enableAnilist && mapping.AnilistPosterURL == "" {
+		if artwork, artErr := anilist.New(requestTimeout).SearchArtwork(ctx, series); artErr == nil && artwork != nil {
 			if artErr := e.db.UpdateAnilistArtwork(ctx, mapping.ID, artwork.PosterImage, artwork.BannerImage); artErr != nil {
 				log.Warn().Err(artErr).Str("series", series.Title).Msg("failed to cache AniList artwork")
 			}
@@ -492,18 +556,6 @@ func SelectAFLEpisodeForSonarr(sonarrEp models.SonarrEpisode, aflByNumber map[in
 
 	matched, ok := aflPreferred[aflNum]
 	return aflNum, matched, ok
-}
-
-func buildAFLEpisodeLookup(aflEpisodes []models.AFLEpisode) (map[int][]models.AFLEpisode, map[int]models.AFLEpisode) {
-	return BuildAFLEpisodeLookup(aflEpisodes)
-}
-
-func selectAFLEpisodeForSonarr(sonarrEp models.SonarrEpisode, aflByNumber map[int][]models.AFLEpisode, aflPreferred map[int]models.AFLEpisode) (int, models.AFLEpisode, bool) {
-	return SelectAFLEpisodeForSonarr(sonarrEp, aflByNumber, aflPreferred)
-}
-
-func matchSpecialAFLEpisodeByTitle(title string, candidates []models.AFLEpisode) (models.AFLEpisode, bool) {
-	return matchAFLEpisodeByTitle(title, candidates)
 }
 
 func matchAFLEpisodeByTitleStrict(title string, candidates []models.AFLEpisode) (models.AFLEpisode, bool) {
@@ -755,6 +807,12 @@ func (e *Engine) autoMatch(ctx context.Context, series models.SonarrSeries, best
 		return nil, fmt.Errorf("computing initial watermark: %w", err)
 	}
 
+	e.cfg.RLock()
+	defaultFiller := e.cfg.DefaultFillerAction
+	defaultMixed := e.cfg.DefaultMixedCanonAction
+	defaultAnimeCanon := e.cfg.DefaultAnimeCanonAction
+	e.cfg.RUnlock()
+
 	mapping := &models.ShowMapping{
 		SonarrSeriesID:   series.ID,
 		SonarrTitle:      series.Title,
@@ -762,9 +820,9 @@ func (e *Engine) autoMatch(ctx context.Context, series models.SonarrSeries, best
 		AFLTitle:         bestMatch.AFLShow.Title,
 		AutoMatched:      true,
 		MatchConfidence:  bestMatch.Confidence,
-		FillerAction:     models.FillerAction(e.cfg.DefaultFillerAction),
-		MixedAction:      models.FillerAction(e.cfg.DefaultMixedCanonAction),
-		AnimeCanonAction: models.FillerAction(e.cfg.DefaultAnimeCanonAction),
+		FillerAction:     models.FillerAction(defaultFiller),
+		MixedAction:      models.FillerAction(defaultMixed),
+		AnimeCanonAction: models.FillerAction(defaultAnimeCanon),
 		Enabled:          true,
 		StartMode:        models.StartModeCurrentProgress,
 		SyncWatermark:    initialWatermark,

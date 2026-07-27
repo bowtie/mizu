@@ -2,6 +2,13 @@
   --stylex-injection: 0;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
 body {
   background: var(--color-background-body);
   color: var(--color-text-primary);
@@ -9,7 +16,9 @@ body {
 }
 
 .mizu-card {
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
   box-shadow: var(--shadow-low);
 }
 
@@ -23,7 +32,7 @@ body {
 }
 
 .mizu-card-img-wrap::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 45%);
@@ -208,7 +217,7 @@ body {
 }
 
 /* Episode input — use the adjacent +/- controls instead of native spinners */
-.astryx-number-input input[type='number'] {
+.astryx-number-input input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
 }
@@ -237,12 +246,12 @@ body {
   opacity: 1;
 }
 
-.show-actions-bar .astryx-number-input input[type='number'] {
+.show-actions-bar .astryx-number-input input[type="number"] {
   text-align: center;
 }
 
-.astryx-number-input input[type='number']::-webkit-inner-spin-button,
-.astryx-number-input input[type='number']::-webkit-outer-spin-button {
+.astryx-number-input input[type="number"]::-webkit-inner-spin-button,
+.astryx-number-input input[type="number"]::-webkit-outer-spin-button {
   appearance: none;
   margin: 0;
 }

@@ -268,54 +268,15 @@ func titleConfidence(m *matcherpkg.Matcher, seriesTitle, mediaTitle string) floa
 	if normSeries == normMedia {
 		return 0.96
 	}
-	if sharedTokenCount(normSeries, normMedia) == 0 {
+	if matcherpkg.SharedTokenCount(normSeries, normMedia) == 0 {
 		return 0
 	}
 
-	confidence := containmentScore(normSeries, normMedia)
+	confidence := matcherpkg.ContainmentScore(normSeries, normMedia)
 	if jw := matcherpkg.JaroWinkler(normSeries, normMedia); jw >= 0.9 && jw > confidence {
 		confidence = jw
 	}
 	return confidence
-}
-
-func containmentScore(a, b string) float64 {
-	if a == "" || b == "" {
-		return 0
-	}
-	if strings.Contains(a, b) {
-		return float64(len(b)) / float64(len(a)) * 0.9
-	}
-	if strings.Contains(b, a) {
-		return float64(len(a)) / float64(len(b)) * 0.9
-	}
-	return 0
-}
-
-func sharedTokenCount(a, b string) int {
-	seen := map[string]struct{}{}
-	for _, token := range strings.Fields(a) {
-		if len(token) < 2 {
-			continue
-		}
-		seen[token] = struct{}{}
-	}
-
-	shared := 0
-	used := map[string]struct{}{}
-	for _, token := range strings.Fields(b) {
-		if len(token) < 2 {
-			continue
-		}
-		if _, alreadyUsed := used[token]; alreadyUsed {
-			continue
-		}
-		if _, ok := seen[token]; ok {
-			shared++
-			used[token] = struct{}{}
-		}
-	}
-	return shared
 }
 
 func uniqueStrings(values ...string) []string {

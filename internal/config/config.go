@@ -2,54 +2,70 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
+	"sync"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Config holds all application configuration.
+// All values are loaded from SQLite (app_settings table) and overlaid
+// onto DefaultConfig() at startup. No YAML, no env vars.
+// The RWMutex protects fields from concurrent reads (HTTP handlers) and
+// writes (handleUpdateSettings). Callers must hold RLock before reading
+// and Lock before writing when running in a concurrent context.
 type Config struct {
+	mu sync.RWMutex
+
 	// Sonarr connection
-	SonarrURL    string `yaml:"sonarr_url"`
-	SonarrAPIKey string `yaml:"sonarr_api_key"`
+	SonarrURL    string
+	SonarrAPIKey string
 
 	// Scheduler
-	ScanInterval time.Duration `yaml:"scan_interval"`
+	ScanInterval time.Duration
 
 	// Server
-	ListenAddr string `yaml:"listen_addr"`
-	BaseURL    string `yaml:"base_url"`
+	ListenAddr string
+	BaseURL    string
 
 	// Database
-	DBPath string `yaml:"db_path"`
+	DBPath string
 
 	// Scraper
-	CacheTTL       time.Duration `yaml:"cache_ttl"`
-	RequestTimeout time.Duration `yaml:"request_timeout"`
-	RateLimitDelay time.Duration `yaml:"rate_limit_delay"`
+	CacheTTL       time.Duration
+	RequestTimeout time.Duration
+	RateLimitDelay time.Duration
 
 	// Defaults
-	DefaultFillerAction       FillerAction `yaml:"default_filler_action"`
-	DefaultMixedCanonAction   FillerAction `yaml:"default_mixed_canon_action"`
-	DefaultAnimeCanonAction   FillerAction `yaml:"default_anime_canon_action"`
-	EnableAniListArtwork      bool         `yaml:"enable_anilist_artwork"`
-	SonarrAddRootFolder       string       `yaml:"sonarr_add_root_folder"`
-	SonarrAddQualityProfileID int          `yaml:"sonarr_add_quality_profile_id"`
-	SonarrAddMonitorMode      string       `yaml:"sonarr_add_monitor_mode"`
-	SonarrAddSeasonFolder     bool         `yaml:"sonarr_add_season_folder"`
+	DefaultFillerAction       FillerAction
+	DefaultMixedCanonAction   FillerAction
+	DefaultAnimeCanonAction   FillerAction
+	EnableAniListArtwork      bool
+	SonarrAddRootFolder       string
+	SonarrAddQualityProfileID int
+	SonarrAddMonitorMode      string
+	SonarrAddSeasonFolder     bool
 
 	// Notifications
-	NtfyEnabled   bool   `yaml:"ntfy_enabled"`
-	NtfyServerURL string `yaml:"ntfy_server_url"`
-	NtfyTopic     string `yaml:"ntfy_topic"`
-	NtfyToken     string `yaml:"ntfy_token"`
+	NtfyEnabled   bool
+	NtfyServerURL string
+	NtfyTopic     string
+	NtfyToken     string
+
+	// Artwork
+	ArtworkDefaultSource string // "sonarr" (default), "anilist", "tmdb", "fanart", "kitsu"
+	TMDBAPIKey           string
+	FanartAPIKey         string
 
 	// Logging
-	LogLevel string `yaml:"log_level"`
+	LogLevel string
 }
+
+// RLock acquires a read lock on the config. Callers must call RUnlock when done.
+func (c *Config) RLock()   { c.mu.RLock() }
+func (c *Config) RUnlock() { c.mu.RUnlock() }
+
+// Lock acquires a write lock on the config. Callers must call Unlock when done.
+func (c *Config) Lock()   { c.mu.Lock() }
+func (c *Config) Unlock() { c.mu.Unlock() }
 
 // FillerAction defines what to do with filler episodes.
 type FillerAction string
@@ -57,18 +73,18 @@ type FillerAction string
 const (
 	ActionUnmonitor FillerAction = "unmonitor"
 	ActionMonitor   FillerAction = "monitor"
-	ActionSkip      FillerAction = "skip" // unmonitor + delete if exists
 )
 
 // DefaultConfig returns configuration with sensible defaults.
+// These are overridden by values stored in the SQLite app_settings table.
 func DefaultConfig() *Config {
 	return &Config{
 		SonarrURL:                 "http://localhost:8989",
 		SonarrAPIKey:              "",
 		ScanInterval:              6 * time.Hour,
-		ListenAddr:                ":8978",
+		ListenAddr:                "127.0.0.1:8978",
 		BaseURL:                   "/",
-		DBPath:                    "/config/mizu.db",
+		DBPath:                    "mizu.db",
 		CacheTTL:                  24 * time.Hour,
 		RequestTimeout:            30 * time.Second,
 		RateLimitDelay:            2 * time.Second,
@@ -84,111 +100,22 @@ func DefaultConfig() *Config {
 		NtfyServerURL:             "https://ntfy.sh",
 		NtfyTopic:                 "",
 		NtfyToken:                 "",
+		ArtworkDefaultSource:      "sonarr",
+		TMDBAPIKey:                "",
+		FanartAPIKey:              "",
 		LogLevel:                  "info",
 	}
 }
 
-// Load reads configuration from a YAML file, then overlays environment variables.
-// Environment variables take precedence over the YAML file.
-func Load(path string) (*Config, error) {
+// Load returns configuration with defaults applied.
+// Runtime values are overlaid from the SQLite database by the caller
+// (see applyRuntimeSettings in cmd/server/main.go).
+func Load() (*Config, error) {
 	cfg := DefaultConfig()
-
-	// Try loading YAML config file
-	if path != "" {
-		if err := cfg.loadYAML(path); err != nil {
-			// Only error if file was explicitly specified and doesn't exist
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("loading config file: %w", err)
-			}
-		}
-	}
-
-	// Overlay environment variables
-	cfg.loadEnv()
-
-	// Validate
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}
-
 	return cfg, nil
-}
-
-func (c *Config) loadYAML(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return yaml.Unmarshal(data, c)
-}
-
-func (c *Config) loadEnv() {
-	if v := os.Getenv("SONARR_URL"); v != "" {
-		c.SonarrURL = strings.TrimRight(v, "/")
-	}
-	if v := os.Getenv("SONARR_API_KEY"); v != "" {
-		c.SonarrAPIKey = v
-	}
-	if v := os.Getenv("SCAN_INTERVAL"); v != "" {
-		if d, err := parseDuration(v); err == nil {
-			c.ScanInterval = d
-		}
-	}
-	if v := os.Getenv("LISTEN_ADDR"); v != "" {
-		c.ListenAddr = v
-	}
-	if v := os.Getenv("BASE_URL"); v != "" {
-		c.BaseURL = v
-	}
-	if v := os.Getenv("DB_PATH"); v != "" {
-		c.DBPath = v
-	}
-	if v := os.Getenv("CACHE_TTL"); v != "" {
-		if d, err := parseDuration(v); err == nil {
-			c.CacheTTL = d
-		}
-	}
-	if v := os.Getenv("DEFAULT_FILLER_ACTION"); v != "" {
-		c.DefaultFillerAction = FillerAction(v)
-	}
-	if v := os.Getenv("DEFAULT_MIXED_CANON_ACTION"); v != "" {
-		c.DefaultMixedCanonAction = FillerAction(v)
-	}
-	if v := os.Getenv("DEFAULT_ANIME_CANON_ACTION"); v != "" {
-		c.DefaultAnimeCanonAction = FillerAction(v)
-	}
-	if v := os.Getenv("ENABLE_ANILIST_ARTWORK"); v != "" {
-		c.EnableAniListArtwork = strings.ToLower(v) == "true" || v == "1"
-	}
-	if v := os.Getenv("SONARR_ADD_ROOT_FOLDER"); v != "" {
-		c.SonarrAddRootFolder = v
-	}
-	if v := os.Getenv("SONARR_ADD_QUALITY_PROFILE_ID"); v != "" {
-		if id, err := strconv.Atoi(v); err == nil {
-			c.SonarrAddQualityProfileID = id
-		}
-	}
-	if v := os.Getenv("SONARR_ADD_MONITOR_MODE"); v != "" {
-		c.SonarrAddMonitorMode = v
-	}
-	if v := os.Getenv("SONARR_ADD_SEASON_FOLDER"); v != "" {
-		c.SonarrAddSeasonFolder = strings.ToLower(v) == "true" || v == "1"
-	}
-	if v := os.Getenv("NTFY_ENABLED"); v != "" {
-		c.NtfyEnabled = strings.ToLower(v) == "true" || v == "1"
-	}
-	if v := os.Getenv("NTFY_SERVER_URL"); v != "" {
-		c.NtfyServerURL = v
-	}
-	if v := os.Getenv("NTFY_TOPIC"); v != "" {
-		c.NtfyTopic = v
-	}
-	if v := os.Getenv("NTFY_TOKEN"); v != "" {
-		c.NtfyToken = v
-	}
-	if v := os.Getenv("LOG_LEVEL"); v != "" {
-		c.LogLevel = v
-	}
 }
 
 func (c *Config) validate() error {
@@ -202,19 +129,19 @@ func (c *Config) validate() error {
 		return fmt.Errorf("cache_ttl must be at least 1 hour")
 	}
 	switch c.DefaultFillerAction {
-	case ActionUnmonitor, ActionMonitor, ActionSkip:
+	case ActionUnmonitor, ActionMonitor:
 		// valid
 	default:
 		return fmt.Errorf("invalid default_filler_action: %s", c.DefaultFillerAction)
 	}
 	switch c.DefaultMixedCanonAction {
-	case ActionUnmonitor, ActionMonitor, ActionSkip:
+	case ActionUnmonitor, ActionMonitor:
 		// valid
 	default:
 		return fmt.Errorf("invalid default_mixed_canon_action: %s", c.DefaultMixedCanonAction)
 	}
 	switch c.DefaultAnimeCanonAction {
-	case ActionUnmonitor, ActionMonitor, ActionSkip:
+	case ActionUnmonitor, ActionMonitor:
 		// valid
 	default:
 		return fmt.Errorf("invalid default_anime_canon_action: %s", c.DefaultAnimeCanonAction)
@@ -226,6 +153,11 @@ func (c *Config) validate() error {
 }
 
 func isValidSonarrMonitorMode(value string) bool {
+	return IsValidSonarrMonitorMode(value)
+}
+
+// IsValidSonarrMonitorMode returns true if the value is a valid Sonarr monitor mode.
+func IsValidSonarrMonitorMode(value string) bool {
 	switch value {
 	case "", "all", "future", "missing", "existing", "pilot", "firstSeason", "latestSeason", "none":
 		return true
@@ -234,13 +166,12 @@ func isValidSonarrMonitorMode(value string) bool {
 	}
 }
 
-// parseDuration handles both Go duration strings ("6h") and plain integers ("360" = minutes).
-func parseDuration(s string) (time.Duration, error) {
-	if d, err := time.ParseDuration(s); err == nil {
-		return d, nil
+// IsValidFillerAction returns true if the value is a valid filler action.
+func IsValidFillerAction(value string) bool {
+	switch FillerAction(value) {
+	case ActionUnmonitor, ActionMonitor:
+		return true
+	default:
+		return false
 	}
-	if mins, err := strconv.Atoi(s); err == nil {
-		return time.Duration(mins) * time.Minute, nil
-	}
-	return 0, fmt.Errorf("invalid duration: %s", s)
 }

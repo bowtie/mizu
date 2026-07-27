@@ -37,19 +37,31 @@ func New(requestTimeout, rateLimitDelay time.Duration, db *database.DB) *Scraper
 	}
 }
 
-func (s *Scraper) rateLimit() {
+func (s *Scraper) rateLimit(ctx context.Context) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	since := time.Since(s.lastRequest)
+	s.mu.Unlock()
+
 	if since < s.rateLimitDelay {
-		time.Sleep(s.rateLimitDelay - since)
+		timer := time.NewTimer(s.rateLimitDelay - since)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
+
+	s.mu.Lock()
 	s.lastRequest = time.Now()
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *Scraper) fetch(ctx context.Context, url string) (*goquery.Document, error) {
-	s.rateLimit()
+	if err := s.rateLimit(ctx); err != nil {
+		return nil, err
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -89,15 +101,16 @@ func (s *Scraper) GetAllShows(ctx context.Context) ([]models.AFLShow, error) {
 		}
 	}
 
-	return s.RefreshAllShows(ctx)
+	shows, _, err := s.RefreshAllShows(ctx)
+	return shows, err
 }
 
-func (s *Scraper) RefreshAllShows(ctx context.Context) ([]models.AFLShow, error) {
+func (s *Scraper) RefreshAllShows(ctx context.Context) ([]models.AFLShow, []string, error) {
 	log.Info().Msg("fetching show list from AnimeFillerList")
 
 	doc, err := s.fetch(ctx, baseURL+"/shows")
 	if err != nil {
-		return nil, fmt.Errorf("fetching show list: %w", err)
+		return nil, nil, fmt.Errorf("fetching show list: %w", err)
 	}
 
 	var shows []models.AFLShow
@@ -116,32 +129,27 @@ func (s *Scraper) RefreshAllShows(ctx context.Context) ([]models.AFLShow, error)
 
 	log.Info().Int("count", len(shows)).Msg("fetched show list")
 
+	var newSlugs []string
 	if s.db != nil {
-		if err := s.db.ReplaceCachedAFLShows(ctx, shows, time.Now().UTC()); err != nil {
-			return nil, err
+		newSlugs, err = s.db.ReplaceCachedAFLShows(ctx, shows, time.Now().UTC())
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(newSlugs) > 0 {
+			log.Info().Int("new", len(newSlugs)).Msg("new shows detected in AFL cache")
 		}
 	}
 
-	return shows, nil
-}
-
-func (s *Scraper) SearchShows(ctx context.Context, query string) ([]models.AFLShow, error) {
-	allShows, err := s.GetAllShows(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	query = strings.ToLower(query)
-	var results []models.AFLShow
-	for _, show := range allShows {
-		if strings.Contains(strings.ToLower(show.Title), query) {
-			results = append(results, show)
-		}
-	}
-	return results, nil
+	return shows, newSlugs, nil
 }
 
 func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []models.AFLEpisode, error) {
+	// Validate slug to prevent path traversal in the URL.
+	for _, ch := range slug {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+			return "", nil, fmt.Errorf("invalid slug: %s", slug)
+		}
+	}
 	url := fmt.Sprintf("%s/shows/%s", baseURL, slug)
 	log.Info().Str("slug", slug).Str("url", url).Msg("fetching episode data")
 

@@ -3,10 +3,16 @@ mizu.exe
 *.exe
 vendor/
 web/node_modules/
-internal/web/dist/
-config.yml
+internal/web/dist/*
+!internal/web/dist/.gitkeep
 *.db
 *.db.bak
+
+# Downloaded artwork (stored locally for offline browsing)
+artwork/
+
+# Air live reload temp
+.air/
 .DS_Store
 Thumbs.db
 .tmp/

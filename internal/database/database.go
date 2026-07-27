@@ -11,6 +11,8 @@ import (
 	"mizu/internal/models"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/rs/zerolog/log"
 )
 
 // DB wraps the SQLite database connection.
@@ -20,9 +22,15 @@ type DB struct {
 
 // New opens or creates a SQLite database at the given path.
 func New(dbPath string) (*DB, error) {
-	conn, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	conn, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=1")
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
+	}
+
+	// Enable foreign key constraints so ON DELETE CASCADE actually fires.
+	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("enabling foreign keys: %w", err)
 	}
 
 	conn.SetMaxOpenConns(1)
@@ -117,10 +125,21 @@ func (db *DB) migrate() error {
 			cached_at DATETIME NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_episode_info_mapping ON episode_info(mapping_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_episode_info_mapping_num ON episode_info(mapping_id, episode_num)`,
 		`CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_sync_log_items_log_id ON sync_log_items(sync_log_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_afl_show_cache_title ON afl_show_cache(title COLLATE NOCASE)`,
 	}
 
+	for _, m := range migrations {
+		if _, err := db.conn.Exec(m); err != nil {
+			return fmt.Errorf("executing migration: %w", err)
+		}
+	}
+
+	// ALTER TABLE statements run after CREATE TABLE to upgrade existing databases
+	// with columns that were added in later versions. On fresh databases these
+	// will fail silently because the columns already exist in the CREATE TABLE.
 	for _, alterSQL := range []string{
 		"ALTER TABLE show_mappings ADD COLUMN anime_canon_action TEXT NOT NULL DEFAULT 'monitor'",
 		"ALTER TABLE show_mappings ADD COLUMN sync_watermark INTEGER NOT NULL DEFAULT 0",
@@ -133,6 +152,10 @@ func (db *DB) migrate() error {
 		"ALTER TABLE episode_info ADD COLUMN monitored INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE show_mappings ADD COLUMN anilist_poster_url TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE show_mappings ADD COLUMN anilist_banner_url TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE show_mappings ADD COLUMN artwork_source TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE show_mappings ADD COLUMN artwork_poster_path TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE show_mappings ADD COLUMN artwork_banner_path TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE show_mappings ADD COLUMN artwork_logo_path TEXT NOT NULL DEFAULT ''",
 	} {
 		db.conn.Exec(alterSQL)
 	}
@@ -146,11 +169,10 @@ func (db *DB) migrate() error {
 		db.conn.Exec(dropSQL)
 	}
 
-	for _, m := range migrations {
-		if _, err := db.conn.Exec(m); err != nil {
-			return fmt.Errorf("executing migration: %w", err)
-		}
-	}
+	// Data migration: "auto" source no longer exists — clear it so those
+	// mappings fall back to the global default.
+	db.conn.Exec("UPDATE show_mappings SET artwork_source = '' WHERE artwork_source = 'auto'")
+
 	return nil
 }
 
@@ -159,7 +181,9 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       anilist_poster_url, anilist_banner_url, created_at, updated_at
+		       anilist_poster_url, anilist_banner_url,
+		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
+		       created_at, updated_at
 		FROM show_mappings ORDER BY sonarr_title ASC`)
 	if err != nil {
 		return nil, err
@@ -173,7 +197,9 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 			&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 			&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 			&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-			&m.AnilistPosterURL, &m.AnilistBannerURL, &m.CreatedAt, &m.UpdatedAt,
+			&m.AnilistPosterURL, &m.AnilistBannerURL,
+			&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
+			&m.CreatedAt, &m.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -189,12 +215,16 @@ func (db *DB) GetMappingByID(ctx context.Context, id int64) (*models.ShowMapping
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       anilist_poster_url, anilist_banner_url, created_at, updated_at
+		       anilist_poster_url, anilist_banner_url,
+		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
+		       created_at, updated_at
 		FROM show_mappings WHERE id = ?`, id).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-		&m.AnilistPosterURL, &m.AnilistBannerURL, &m.CreatedAt, &m.UpdatedAt,
+		&m.AnilistPosterURL, &m.AnilistBannerURL,
+		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
+		&m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -212,12 +242,16 @@ func (db *DB) GetMappingBySonarrID(ctx context.Context, seriesID int) (*models.S
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       anilist_poster_url, anilist_banner_url, created_at, updated_at
+		       anilist_poster_url, anilist_banner_url,
+		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
+		       created_at, updated_at
 		FROM show_mappings WHERE sonarr_series_id = ?`, seriesID).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-		&m.AnilistPosterURL, &m.AnilistBannerURL, &m.CreatedAt, &m.UpdatedAt,
+		&m.AnilistPosterURL, &m.AnilistBannerURL,
+		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
+		&m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -247,7 +281,7 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 	now := time.Now()
 	m.UpdatedAt = now
 
-	_, err := db.conn.ExecContext(ctx, `
+	result, err := db.conn.ExecContext(ctx, `
 		INSERT INTO show_mappings (sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		    auto_matched, match_confidence, filler_action, mixed_action,
 		    anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark, created_at, updated_at)
@@ -270,11 +304,46 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 		m.AutoMatched, m.MatchConfidence, m.FillerAction, m.MixedAction,
 		m.AnimeCanonAction, m.Enabled, m.StartMode, m.WatermarkMode, m.SyncWatermark, now, now,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	// Populate the ID on insert (autoincrement). On conflict (update),
+	// LastInsertId returns 0 in modernc.org/sqlite, so fetch it if needed.
+	if m.ID == 0 {
+		if id, _ := result.LastInsertId(); id > 0 {
+			m.ID = id
+		} else {
+			// ON CONFLICT path — look up the existing ID.
+			var existingID int64
+			if err := db.conn.QueryRowContext(ctx,
+				`SELECT id FROM show_mappings WHERE sonarr_series_id = ?`, m.SonarrSeriesID).
+				Scan(&existingID); err == nil {
+				m.ID = existingID
+			}
+		}
+	}
+	return nil
 }
 
 func (db *DB) UpdateAnilistArtwork(ctx context.Context, mappingID int64, posterURL, bannerURL string) error {
 	_, err := db.conn.ExecContext(ctx, `UPDATE show_mappings SET anilist_poster_url = ?, anilist_banner_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, posterURL, bannerURL, mappingID)
+	return err
+}
+
+// UpdateArtworkFiles stores only the local file paths (not the source override).
+// Called after downloading images so the source override is preserved.
+func (db *DB) UpdateArtworkFiles(ctx context.Context, mappingID int64, posterPath, bannerPath, logoPath string) error {
+	_, err := db.conn.ExecContext(ctx,
+		`UPDATE show_mappings SET artwork_poster_path = ?, artwork_banner_path = ?, artwork_logo_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		posterPath, bannerPath, logoPath, mappingID)
+	return err
+}
+
+// UpdateArtworkSource sets the per-show provider override (empty = use global default).
+func (db *DB) UpdateArtworkSource(ctx context.Context, mappingID int64, source string) error {
+	_, err := db.conn.ExecContext(ctx,
+		`UPDATE show_mappings SET artwork_source = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		source, mappingID)
 	return err
 }
 
@@ -322,51 +391,6 @@ func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.Episod
 		episodes = append(episodes, e)
 	}
 	return episodes, rows.Err()
-}
-
-func (db *DB) BulkUpsertEpisodes(ctx context.Context, episodes []models.EpisodeInfo) error {
-	if len(episodes) == 0 {
-		return nil
-	}
-
-	tx, err := db.conn.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped,
-			sonarr_episode_id, season_number, sonarr_episode_number, absolute_episode_number, monitored)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(mapping_id, episode_num) DO UPDATE SET
-		    title = excluded.title,
-		    type = excluded.type,
-		    last_scraped = excluded.last_scraped,
-		    sonarr_episode_id = excluded.sonarr_episode_id,
-		    season_number = excluded.season_number,
-		    sonarr_episode_number = excluded.sonarr_episode_number,
-		    absolute_episode_number = excluded.absolute_episode_number,
-		    monitored = excluded.monitored`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	now := time.Now()
-	for _, e := range episodes {
-		var absNum any
-		if e.AbsoluteEpisodeNumber != nil {
-			absNum = *e.AbsoluteEpisodeNumber
-		}
-		_, err := stmt.ExecContext(ctx, e.MappingID, e.EpisodeNum, e.Title, e.Type, now,
-			e.SonarrEpisodeID, e.SeasonNumber, e.SonarrEpisodeNumber, absNum, e.Monitored)
-		if err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit()
 }
 
 func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, episodes []models.EpisodeInfo) error {
@@ -614,36 +638,66 @@ func (db *DB) GetCachedAFLShows(ctx context.Context) ([]models.AFLShow, time.Tim
 	return shows, refreshedAt, rows.Err()
 }
 
-func (db *DB) ReplaceCachedAFLShows(ctx context.Context, shows []models.AFLShow, refreshedAt time.Time) error {
+// ReplaceCachedAFLShows replaces the AFL show cache and returns the slugs
+// of shows that are new (not present in the previous cache).
+func (db *DB) ReplaceCachedAFLShows(ctx context.Context, shows []models.AFLShow, refreshedAt time.Time) ([]string, error) {
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
 
+	// Collect existing slugs before deleting so we can detect new ones.
+	existingSlugs := make(map[string]bool)
+	rows, err := tx.QueryContext(ctx, `SELECT slug FROM afl_show_cache`)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		existingSlugs[slug] = true
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
 	if _, err := tx.ExecContext(ctx, `DELETE FROM afl_show_cache`); err != nil {
-		return err
+		return nil, err
 	}
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO afl_show_cache (slug, title, url, refreshed_at)
 		VALUES (?, ?, ?, ?)`)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer stmt.Close()
 
+	var newSlugs []string
 	for _, show := range shows {
 		if _, err := stmt.ExecContext(ctx, show.Slug, show.Title, show.URL, refreshedAt); err != nil {
-			return err
+			return nil, err
+		}
+		if !existingSlugs[show.Slug] {
+			newSlugs = append(newSlugs, show.Slug)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return err
+		return nil, err
 	}
 
-	return db.SetSetting(ctx, "afl_show_cache_refreshed_at", refreshedAt.UTC().Format(time.RFC3339))
+	if err := db.SetSetting(ctx, "afl_show_cache_refreshed_at", refreshedAt.UTC().Format(time.RFC3339)); err != nil {
+		log.Warn().Err(err).Msg("failed to persist afl_show_cache_refreshed_at")
+	}
+
+	return newSlugs, nil
 }
 
 func (db *DB) GetAFLShowCacheStatus(ctx context.Context) (int, time.Time, error) {
@@ -667,10 +721,10 @@ func (db *DB) GetAFLShowCacheStatus(ctx context.Context) (int, time.Time, error)
 func (db *DB) GetFillerStats(ctx context.Context) (canon, mixed, animeCanon, filler, total int, err error) {
 	err = db.conn.QueryRowContext(ctx, `
 		SELECT
-			SUM(CASE WHEN type = 'canon' THEN 1 ELSE 0 END),
-			SUM(CASE WHEN type = 'mixed_canon' THEN 1 ELSE 0 END),
-			SUM(CASE WHEN type = 'anime_canon' THEN 1 ELSE 0 END),
-			SUM(CASE WHEN type = 'filler' THEN 1 ELSE 0 END),
+			COALESCE(SUM(CASE WHEN type = 'canon' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN type = 'mixed_canon' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN type = 'anime_canon' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN type = 'filler' THEN 1 ELSE 0 END), 0),
 			COUNT(*)
 		FROM episode_info`).Scan(&canon, &mixed, &animeCanon, &filler, &total)
 	if err == sql.ErrNoRows {

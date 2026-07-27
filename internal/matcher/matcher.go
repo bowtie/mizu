@@ -2,6 +2,7 @@ package matcher
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -40,43 +41,52 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 		}
 	}
 
-	for _, aflShow := range aflShows {
-		best := MatchResult{AFLShow: aflShow}
+	// Pre-normalize AFL titles once to avoid re-normalizing per Sonarr title.
+	type normAFL struct {
+		show models.AFLShow
+		norm string
+	}
+	normAFLShows := make([]normAFL, len(aflShows))
+	for i, s := range aflShows {
+		normAFLShows[i] = normAFL{show: s, norm: normalize(s.Title)}
+	}
+
+	for _, na := range normAFLShows {
+		best := MatchResult{AFLShow: na.show}
 
 		for _, sonarrTitle := range sonarrTitles {
-			if strings.EqualFold(sonarrTitle, aflShow.Title) {
-				best = MatchResult{AFLShow: aflShow, Confidence: 1.0, Method: "exact"}
+			if strings.EqualFold(sonarrTitle, na.show.Title) {
+				best = MatchResult{AFLShow: na.show, Confidence: 1.0, Method: "exact"}
 				break
 			}
 
 			normSonarr := normalize(sonarrTitle)
-			normAFL := normalize(aflShow.Title)
-			if normSonarr == normAFL {
+			if normSonarr == na.norm {
 				if best.Confidence < 0.95 {
-					best = MatchResult{AFLShow: aflShow, Confidence: 0.95, Method: "normalized"}
+					best = MatchResult{AFLShow: na.show, Confidence: 0.95, Method: "normalized"}
 				}
 				continue
 			}
 
-			sharedTokens := sharedTokenCount(normSonarr, normAFL)
+			sharedTokens := SharedTokenCount(normSonarr, na.norm)
 			if sharedTokens == 0 {
 				continue
 			}
 
-			containScore := containmentScore(normSonarr, normAFL)
+			containScore := ContainmentScore(normSonarr, na.norm)
 			if containScore > best.Confidence {
-				best = MatchResult{AFLShow: aflShow, Confidence: containScore, Method: "containment"}
+				best = MatchResult{AFLShow: na.show, Confidence: containScore, Method: "containment"}
 			}
 
 			// One shared franchise token like "Digimon" is too weak unless the
 			// remaining tokens are also strongly aligned (for example typos).
-			if !hasStrongFuzzyTokenAgreement(normSonarr, normAFL, sharedTokens) {
+			if !hasStrongFuzzyTokenAgreement(normSonarr, na.norm, sharedTokens) {
 				continue
 			}
 
-			jw := jaroWinkler(normSonarr, normAFL)
+			jw := jaroWinkler(normSonarr, na.norm)
 			if jw >= 0.88 && jw > best.Confidence {
-				best = MatchResult{AFLShow: aflShow, Confidence: jw, Method: "fuzzy"}
+				best = MatchResult{AFLShow: na.show, Confidence: jw, Method: "fuzzy"}
 			}
 		}
 
@@ -144,7 +154,7 @@ func normalize(s string) string {
 	}
 	s = sb.String()
 
-	noise := []string{" the ", " a ", " an ", " no ", " wa ", " ga ", " wo "}
+	noise := []string{" the ", " a ", " an "}
 	for _, n := range noise {
 		s = strings.ReplaceAll(" "+s+" ", n, " ")
 	}
@@ -153,7 +163,7 @@ func normalize(s string) string {
 	return strings.Join(fields, " ")
 }
 
-func containmentScore(a, b string) float64 {
+func ContainmentScore(a, b string) float64 {
 	if a == "" || b == "" {
 		return 0
 	}
@@ -168,7 +178,7 @@ func containmentScore(a, b string) float64 {
 	return 0
 }
 
-func sharedTokenCount(a, b string) int {
+func SharedTokenCount(a, b string) int {
 	if a == "" || b == "" {
 		return 0
 	}
@@ -244,15 +254,17 @@ func jaroWinkler(s1, s2 string) float64 {
 	if s1 == s2 {
 		return 1.0
 	}
-	if len(s1) == 0 || len(s2) == 0 {
+	r1 := []rune(s1)
+	r2 := []rune(s2)
+	if len(r1) == 0 || len(r2) == 0 {
 		return 0.0
 	}
 
-	jaro := jaroDistance(s1, s2)
+	jaro := jaroDistance(r1, r2)
 
 	prefixLen := 0
-	for i := 0; i < len(s1) && i < len(s2) && i < 4; i++ {
-		if s1[i] == s2[i] {
+	for i := 0; i < len(r1) && i < len(r2) && i < 4; i++ {
+		if r1[i] == r2[i] {
 			prefixLen++
 		} else {
 			break
@@ -263,12 +275,12 @@ func jaroWinkler(s1, s2 string) float64 {
 	return jaro + float64(prefixLen)*p*(1.0-jaro)
 }
 
-func jaroDistance(s1, s2 string) float64 {
-	if s1 == s2 {
+func jaroDistance(r1, r2 []rune) float64 {
+	if string(r1) == string(r2) {
 		return 1.0
 	}
 
-	l1, l2 := len(s1), len(s2)
+	l1, l2 := len(r1), len(r2)
 	if l1 == 0 || l2 == 0 {
 		return 0.0
 	}
@@ -300,7 +312,7 @@ func jaroDistance(s1, s2 string) float64 {
 		}
 
 		for j := start; j < end; j++ {
-			if s2Matches[j] || s1[i] != s2[j] {
+			if s2Matches[j] || r1[i] != r2[j] {
 				continue
 			}
 			s1Matches[i] = true
@@ -322,7 +334,7 @@ func jaroDistance(s1, s2 string) float64 {
 		for !s2Matches[k] {
 			k++
 		}
-		if s1[i] != s2[k] {
+		if r1[i] != r2[k] {
 			transpositions++
 		}
 		k++
@@ -333,9 +345,7 @@ func jaroDistance(s1, s2 string) float64 {
 }
 
 func sortResults(results []MatchResult) {
-	for i := 1; i < len(results); i++ {
-		for j := i; j > 0 && results[j].Confidence > results[j-1].Confidence; j-- {
-			results[j], results[j-1] = results[j-1], results[j]
-		}
-	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Confidence > results[j].Confidence
+	})
 }

@@ -15,10 +15,6 @@ services:
     ports:
       - "8978:8978"
     environment:
-      - SONARR_URL=http://sonarr:8989   # Use container name if on same network
-      - SONARR_API_KEY=your-api-key-here
-      - SCAN_INTERVAL=6h
-      - LOG_LEVEL=info
       - TZ=America/New_York              # Your timezone
     volumes:
       - ./config/mizu:/config

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,7 +27,6 @@ var (
 )
 
 func main() {
-	configPath := flag.String("config", "", "path to config YAML file")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -38,7 +38,7 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load configuration")
 	}
@@ -64,8 +64,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var bgWG sync.WaitGroup
 	syncEngine := syncengine.New(cfg, db)
-	router := setupRouter(cfg, db, syncEngine, scheduler)
+	router := setupRouter(cfg, db, syncEngine, scheduler, ctx, &bgWG)
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
 		Handler:      router,
@@ -75,15 +76,16 @@ func main() {
 	}
 
 	go startScheduler(ctx, scheduler, syncEngine)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		log.Info().Str("addr", cfg.ListenAddr).Msg("HTTP server listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("HTTP server failed")
+			log.Error().Err(err).Msg("HTTP server failed, triggering shutdown")
+			quit <- syscall.SIGTERM
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Info().Msg("shutting down...")
@@ -93,6 +95,9 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("server shutdown error")
 	}
+	// Wait for background goroutines (sync, resync, artwork refresh) to finish
+	// before closing the database.
+	bgWG.Wait()
 	log.Info().Msg("Mizu stopped")
 }
 
@@ -133,6 +138,32 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	}
 	if value, err := db.GetSetting(ctx, "sonarr_add_season_folder"); err == nil && value != "" {
 		cfg.SonarrAddSeasonFolder = value == "true"
+	}
+	if value, err := db.GetSetting(ctx, "ntfy_enabled"); err == nil && value != "" {
+		cfg.NtfyEnabled = value == "true"
+	}
+	if value, err := db.GetSetting(ctx, "ntfy_server_url"); err == nil && value != "" {
+		cfg.NtfyServerURL = value
+	}
+	if value, err := db.GetSetting(ctx, "ntfy_topic"); err == nil {
+		cfg.NtfyTopic = value
+	}
+	if value, err := db.GetSetting(ctx, "ntfy_token"); err == nil {
+		cfg.NtfyToken = value
+	}
+	if value, err := db.GetSetting(ctx, "artwork_default_source"); err == nil && value != "" {
+		// Migrate legacy "auto" to "sonarr".
+		if value == "auto" {
+			value = "sonarr"
+			_ = db.SetSetting(ctx, "artwork_default_source", "sonarr")
+		}
+		cfg.ArtworkDefaultSource = value
+	}
+	if value, err := db.GetSetting(ctx, "tmdb_api_key"); err == nil {
+		cfg.TMDBAPIKey = value
+	}
+	if value, err := db.GetSetting(ctx, "fanart_api_key"); err == nil {
+		cfg.FanartAPIKey = value
 	}
 }
 

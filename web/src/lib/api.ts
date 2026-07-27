@@ -122,14 +122,6 @@ export function getAniListArtwork(showId: string | number): Promise<Artwork> {
   return request<Artwork>('GET', '/mappings/' + showId + '/artwork');
 }
 
-export function getSonarrEpisodes(showId: string | number): Promise<Episode[]> {
-  return request<Episode[]>('GET', '/mappings/' + showId + '/episodes/sonarr');
-}
-
-export function syncEpisode(showId: string | number, epNum: string | number): Promise<Episode> {
-  return request<Episode>('POST', '/mappings/' + showId + '/episodes/' + epNum + '/sync');
-}
-
 export function setEpisodeMonitor(showId: string | number, epId: string | number, monitored: boolean): Promise<Episode> {
   return request<Episode>('PUT', '/mappings/' + showId + '/episodes/' + epId + '/monitor', { monitored });
 }

@@ -1,18 +1,18 @@
-import { useEffect, useRef } from 'react';
-import { VStack } from '@astryxdesign/core/VStack';
-import { HStack } from '@astryxdesign/core/HStack';
-import { Heading } from '@astryxdesign/core/Heading';
-import { Text } from '@astryxdesign/core/Text';
-import { Button } from '@astryxdesign/core/Button';
-import { Spinner } from '@astryxdesign/core/Spinner';
-import { EmptyState } from '@astryxdesign/core/EmptyState';
-import { Icon } from '@astryxdesign/core/Icon';
-import { TextInput } from '@astryxdesign/core/TextInput';
-import { Selector } from '@astryxdesign/core/Selector';
-import { Switch } from '@astryxdesign/core/Switch';
-import { List, ListItem } from '@astryxdesign/core/List';
-import { Divider } from '@astryxdesign/core/Divider';
-import { Search, Check, X, CircleAlert } from 'lucide-react';
+import { useEffect, useRef } from "react";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Icon } from "@astryxdesign/core/Icon";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Switch } from "@astryxdesign/core/Switch";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Search, Check, X, CircleAlert } from "lucide-react";
 import {
   addSonarrSeries,
   confirmMatch,
@@ -20,39 +20,41 @@ import {
   markManualMatchPending,
   searchAFL,
   suggestAFL,
-} from '../lib/api';
-import type { AFLMatch, SelectOption, SonarrAddPayload, SonarrSeries } from '../lib/types';
+} from "../lib/api";
+import type { AFLMatch, SelectOption, SonarrAddPayload, SonarrSeries } from "../lib/types";
 
 // ── Constants ──
 
-const START_FROM_BEGINNING = 'from_beginning';
-export const START_FROM_CURRENT = 'from_current_progress';
-export const ADD_STEP_SERIES = 'series';
-export const ADD_STEP_FALLBACK_AFL = 'fallback_afl';
-export const ADD_STEP_FALLBACK_SONARR = 'fallback_sonarr';
-export const ADD_STEP_MATCH = 'match';
-export const ADD_STEP_UNSAFE_MATCH = 'unsafe_match';
-export const ADD_STEP_POST_ADD = 'post_add';
+const START_FROM_BEGINNING = "from_beginning";
+export const START_FROM_CURRENT = "from_current_progress";
+export const ADD_STEP_SERIES = "series";
+export const ADD_STEP_FALLBACK_AFL = "fallback_afl";
+export const ADD_STEP_FALLBACK_SONARR = "fallback_sonarr";
+export const ADD_STEP_MATCH = "match";
+export const ADD_STEP_UNSAFE_MATCH = "unsafe_match";
+export const ADD_STEP_POST_ADD = "post_add";
 
 const startModeOptions: SelectOption[] = [
-  { value: START_FROM_CURRENT, label: 'Current progress' },
-  { value: START_FROM_BEGINNING, label: 'Episode 1' },
+  { value: START_FROM_CURRENT, label: "Current progress" },
+  { value: START_FROM_BEGINNING, label: "Episode 1" },
 ];
 
 const wizardSteps = [
-  { key: ADD_STEP_SERIES, label: 'Select' },
-  { key: ADD_STEP_MATCH, label: 'Match' },
-  { key: ADD_STEP_UNSAFE_MATCH, label: 'Confirm' },
-  { key: ADD_STEP_POST_ADD, label: 'Done' },
+  { key: ADD_STEP_SERIES, label: "Select" },
+  { key: ADD_STEP_MATCH, label: "Match" },
+  { key: ADD_STEP_UNSAFE_MATCH, label: "Confirm" },
+  { key: ADD_STEP_POST_ADD, label: "Done" },
 ];
 const wizardFallbackSteps = [
-  { key: ADD_STEP_FALLBACK_AFL, label: 'AFL Search' },
-  { key: ADD_STEP_FALLBACK_SONARR, label: 'Add to Sonarr' },
-  { key: ADD_STEP_MATCH, label: 'Match' },
+  { key: ADD_STEP_FALLBACK_AFL, label: "AFL Search" },
+  { key: ADD_STEP_FALLBACK_SONARR, label: "Add to Sonarr" },
+  { key: ADD_STEP_MATCH, label: "Match" },
 ];
 
 export function getWizardSteps(addStep: string) {
-  return [ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep) ? wizardFallbackSteps : wizardSteps;
+  return [ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep)
+    ? wizardFallbackSteps
+    : wizardSteps;
 }
 
 // ── Types ──
@@ -98,20 +100,20 @@ export interface AddWizardState {
 }
 
 export type AddWizardAction =
-  | { type: 'SET'; payload: Partial<AddWizardState> }
-  | { type: 'RESET_FALLBACK_FLOW' }
-  | { type: 'RETURN_TO_SERIES_STEP'; prefill?: string }
-  | { type: 'OPEN_ADD_MODAL_INIT' };
+  | { type: "SET"; payload: Partial<AddWizardState> }
+  | { type: "RESET_FALLBACK_FLOW" }
+  | { type: "RETURN_TO_SERIES_STEP"; prefill?: string }
+  | { type: "OPEN_ADD_MODAL_INIT" };
 
 export const INITIAL_WIZARD: AddWizardState = {
   showAddModal: false,
   addStep: ADD_STEP_SERIES,
   sonarrLoading: false,
-  seriesQuery: '',
+  seriesQuery: "",
   selectedSonarr: null,
   displayedMatches: [],
   matchLoading: false,
-  manualQuery: '',
+  manualQuery: "",
   manualSearching: false,
   manualSearchVisible: false,
   selectedAfl: null,
@@ -120,42 +122,42 @@ export const INITIAL_WIZARD: AddWizardState = {
   addTrackMixed: true,
   addTrackAnimeCanon: true,
   addStartMode: START_FROM_CURRENT,
-  fallbackAflQuery: '',
+  fallbackAflQuery: "",
   cachedAflShows: [],
   fallbackAflResults: [],
   fallbackAflLoading: false,
   selectedFallbackAfl: null,
-  sonarrLookupQuery: '',
+  sonarrLookupQuery: "",
   sonarrLookupResults: [],
   sonarrLookupLoading: false,
   selectedSonarrLookup: null,
   sonarrAdding: false,
   sonarrRootFolderOptions: [],
   sonarrQualityProfileOptions: [],
-  fallbackQualityProfileId: '',
+  fallbackQualityProfileId: "",
   fallbackSeasonFolder: true,
   addOutcome: null,
 };
 
 export function addWizardReducer(state: AddWizardState, action: AddWizardAction): AddWizardState {
   switch (action.type) {
-    case 'SET':
+    case "SET":
       return { ...state, ...action.payload };
-    case 'RESET_FALLBACK_FLOW':
+    case "RESET_FALLBACK_FLOW":
       return {
         ...state,
-        fallbackAflQuery: '',
+        fallbackAflQuery: "",
         fallbackAflResults: state.cachedAflShows,
         selectedFallbackAfl: null,
-        sonarrLookupQuery: '',
+        sonarrLookupQuery: "",
         sonarrLookupResults: [],
         selectedSonarrLookup: null,
-        fallbackQualityProfileId: '',
+        fallbackQualityProfileId: "",
         fallbackSeasonFolder: true,
         addOutcome: null,
         selectedAfl: null,
       };
-    case 'RETURN_TO_SERIES_STEP':
+    case "RETURN_TO_SERIES_STEP":
       return {
         ...state,
         addStep: ADD_STEP_SERIES,
@@ -167,24 +169,24 @@ export function addWizardReducer(state: AddWizardState, action: AddWizardAction)
         fallbackAflResults: [],
         seriesQuery: action.prefill ?? state.seriesQuery,
       };
-    case 'OPEN_ADD_MODAL_INIT':
+    case "OPEN_ADD_MODAL_INIT":
       return {
         ...state,
         showAddModal: true,
         addStep: ADD_STEP_SERIES,
-        seriesQuery: '',
+        seriesQuery: "",
         selectedSonarr: null,
         displayedMatches: [],
         selectedAfl: null,
-        manualQuery: '',
+        manualQuery: "",
         manualSearchVisible: false,
-        fallbackAflQuery: '',
+        fallbackAflQuery: "",
         fallbackAflResults: state.cachedAflShows,
         selectedFallbackAfl: null,
-        sonarrLookupQuery: '',
+        sonarrLookupQuery: "",
         sonarrLookupResults: [],
         selectedSonarrLookup: null,
-        fallbackQualityProfileId: '',
+        fallbackQualityProfileId: "",
         fallbackSeasonFolder: true,
         addOutcome: null,
       };
@@ -196,24 +198,28 @@ export function addWizardReducer(state: AddWizardState, action: AddWizardAction)
 // ── Helpers ──
 
 export const actionToTracked = (action: string | undefined, fallback: boolean = true): boolean =>
-  (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
-export const trackedToAction = (tracked: boolean): string => (tracked ? 'monitor' : 'unmonitor');
+  (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
+export const trackedToAction = (tracked: boolean): string => (tracked ? "monitor" : "unmonitor");
 
 function isUnsafeMatch(match: AFLMatch | null): boolean {
   return !!match && match.confidence == null;
 }
 function isCompactMatchSelection(match: AFLMatch | null): boolean {
   if (!match || isUnsafeMatch(match)) return false;
-  return match.method === 'exact' || match.method === 'normalized' || (match.confidence ?? 0) >= 0.95;
+  return (
+    match.method === "exact" || match.method === "normalized" || (match.confidence ?? 0) >= 0.95
+  );
 }
 function shouldAutoCreateMappingAfterSonarrAdd(match: AFLMatch | null): boolean {
-  return !!match && !isUnsafeMatch(match) && match.method === 'exact' && (match.confidence ?? 0) >= 1;
+  return (
+    !!match && !isUnsafeMatch(match) && match.method === "exact" && (match.confidence ?? 0) >= 1
+  );
 }
 function matchTitle(match: AFLMatch | null | undefined): string {
-  return match?.afl_show?.title || match?.title || '';
+  return match?.afl_show?.title || match?.title || "";
 }
 function matchSlug(match: AFLMatch | null | undefined): string {
-  return match?.afl_show?.slug || match?.slug || '';
+  return match?.afl_show?.slug || match?.slug || "";
 }
 
 // ── Props ──
@@ -241,16 +247,26 @@ export interface AddAnimeDialogProps {
 
 export function AddAnimeDialog(props: AddAnimeDialogProps) {
   const {
-    w, dispatch,
-    allSeries, setAllSeries, setSeriesById,
-    mappedSeriesIds, filteredSeriesLibrary,
-    activeWizardSteps, currentStepIndex,
-    loadLanding, openShow, openExistingMapping, addNotification,
-    preferredAnimeRootFolder, preferredAnimeQualityProfileId,
+    w,
+    dispatch,
+    allSeries,
+    setAllSeries,
+    setSeriesById,
+    mappedSeriesIds,
+    filteredSeriesLibrary,
+    activeWizardSteps,
+    currentStepIndex,
+    loadLanding,
+    openShow,
+    openExistingMapping,
+    addNotification,
+    preferredAnimeRootFolder,
+    preferredAnimeQualityProfileId,
     posterUrl,
   } = props;
 
   const fallbackFilterTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestReqId = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -262,74 +278,101 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
 
   const loadSuggestedMatches = async () => {
     if (!w.selectedSonarr) return;
-    dispatch({ type: 'SET', payload: { matchLoading: true, selectedAfl: null } });
+    const reqId = ++suggestReqId.current;
+    dispatch({ type: "SET", payload: { matchLoading: true, selectedAfl: null } });
     try {
       const suggested = await suggestAFL(w.selectedSonarr.id);
+      if (reqId !== suggestReqId.current) return; // stale response
       const visible = suggested.length === 0 || !!w.selectedSonarr.manualMatchPending;
-      dispatch({ type: 'SET', payload: { displayedMatches: suggested, manualSearchVisible: visible } });
+      dispatch({
+        type: "SET",
+        payload: { displayedMatches: suggested, manualSearchVisible: visible },
+      });
       const bestMatch = suggested[0];
       if (bestMatch && isCompactMatchSelection(bestMatch)) {
-        dispatch({ type: 'SET', payload: { selectedAfl: bestMatch } });
+        dispatch({ type: "SET", payload: { selectedAfl: bestMatch } });
       }
       if (visible && w.selectedSonarr.manualMatchPending && w.manualQuery.trim()) {
-        dispatch({ type: 'SET', payload: { displayedMatches: await searchAFL(w.manualQuery.trim(), w.selectedSonarr.id) } });
+        const manualResults = await searchAFL(w.manualQuery.trim(), w.selectedSonarr.id);
+        if (reqId !== suggestReqId.current) return; // stale response
+        dispatch({
+          type: "SET",
+          payload: { displayedMatches: manualResults },
+        });
       }
     } catch {
-      dispatch({ type: 'SET', payload: { displayedMatches: [], manualSearchVisible: true } });
-      addNotification('Failed to load AFL suggestions', 'error');
+      if (reqId !== suggestReqId.current) return;
+      dispatch({ type: "SET", payload: { displayedMatches: [], manualSearchVisible: true } });
+      addNotification("Failed to load AFL suggestions", "error");
     }
-    dispatch({ type: 'SET', payload: { matchLoading: false } });
+    if (reqId === suggestReqId.current) {
+      dispatch({ type: "SET", payload: { matchLoading: false } });
+    }
   };
 
   const goToMatchStep = async () => {
     if (!w.selectedSonarr) return;
-    dispatch({ type: 'SET', payload: { addStep: ADD_STEP_MATCH, manualQuery: w.selectedSonarr.title || '' } });
+    dispatch({
+      type: "SET",
+      payload: { addStep: ADD_STEP_MATCH, manualQuery: w.selectedSonarr.title || "" },
+    });
     await loadSuggestedMatches();
   };
 
   const handleManualSearch = async () => {
     if (!w.selectedSonarr || !w.manualSearchVisible) return;
-    dispatch({ type: 'SET', payload: { manualSearching: true, selectedAfl: null } });
+    dispatch({ type: "SET", payload: { manualSearching: true, selectedAfl: null } });
     try {
-      dispatch({ type: 'SET', payload: { displayedMatches: await searchAFL(w.manualQuery.trim(), w.selectedSonarr.id) } });
+      dispatch({
+        type: "SET",
+        payload: { displayedMatches: await searchAFL(w.manualQuery.trim(), w.selectedSonarr.id) },
+      });
     } catch {
-      dispatch({ type: 'SET', payload: { displayedMatches: [] } });
-      addNotification('AFL search failed', 'error');
+      dispatch({ type: "SET", payload: { displayedMatches: [] } });
+      addNotification("AFL search failed", "error");
     }
-    dispatch({ type: 'SET', payload: { manualSearching: false } });
+    dispatch({ type: "SET", payload: { manualSearching: false } });
   };
 
-  const handleConfirmMatch = async () => {
-    if (!w.selectedSonarr || !w.selectedAfl) return;
-    dispatch({ type: 'SET', payload: { confirming: true } });
+  const handleConfirmMatch = async (overrideAfl?: AFLMatch | null) => {
+    const afl = overrideAfl ?? w.selectedAfl;
+    if (!w.selectedSonarr || !afl) return;
+    dispatch({ type: "SET", payload: { confirming: true } });
     try {
       const created = await confirmMatch({
         sonarr_series_id: w.selectedSonarr.id,
         sonarr_title: w.selectedSonarr.title,
-        afl_slug: w.selectedAfl.afl_show?.slug || w.selectedAfl.slug,
-        afl_title: w.selectedAfl.afl_show?.title || w.selectedAfl.title,
+        afl_slug: afl.afl_show?.slug || afl.slug,
+        afl_title: afl.afl_show?.title || afl.title,
         filler_action: trackedToAction(w.addTrackFiller),
         mixed_action: trackedToAction(w.addTrackMixed),
         anime_canon_action: trackedToAction(w.addTrackAnimeCanon),
         start_mode: w.addStartMode,
       });
-      addNotification(`Added "${w.selectedSonarr.title}" to Mizu`, 'success');
-      dispatch({ type: 'SET', payload: {
-        addOutcome: { title: w.selectedSonarr.title, type: 'mapping_created', mappingId: created?.id || null },
-        addStep: ADD_STEP_POST_ADD,
-      }});
+      addNotification(`Added "${w.selectedSonarr.title}" to Mizu`, "success");
+      dispatch({
+        type: "SET",
+        payload: {
+          addOutcome: {
+            title: w.selectedSonarr.title,
+            type: "mapping_created",
+            mappingId: created?.id || null,
+          },
+          addStep: ADD_STEP_POST_ADD,
+        },
+      });
       await loadLanding();
     } catch (err: any) {
-      addNotification('Failed to sync anime: ' + err.message, 'error');
+      addNotification("Failed to sync anime: " + err.message, "error");
     } finally {
-      dispatch({ type: 'SET', payload: { confirming: false } });
+      dispatch({ type: "SET", payload: { confirming: false } });
     }
   };
 
   const handlePrimaryMatchAction = async () => {
     if (!w.selectedAfl) return;
     if (isUnsafeMatch(w.selectedAfl)) {
-      dispatch({ type: 'SET', payload: { addStep: ADD_STEP_UNSAFE_MATCH } });
+      dispatch({ type: "SET", payload: { addStep: ADD_STEP_UNSAFE_MATCH } });
       return;
     }
     await handleConfirmMatch();
@@ -339,15 +382,18 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     if (!w.selectedSonarr?.id) return;
     try {
       await markManualMatchPending(w.selectedSonarr.id);
-      dispatch({ type: 'SET', payload: {
-        addOutcome: { title: w.selectedSonarr.title, type: 'pending_manual_match' },
-        addStep: ADD_STEP_POST_ADD,
-      }});
-      setAllSeries((prev) => prev.map((s) =>
-        s.id === w.selectedSonarr?.id ? { ...s, manualMatchPending: true } : s
-      ));
+      dispatch({
+        type: "SET",
+        payload: {
+          addOutcome: { title: w.selectedSonarr.title, type: "pending_manual_match" },
+          addStep: ADD_STEP_POST_ADD,
+        },
+      });
+      setAllSeries((prev) =>
+        prev.map((s) => (s.id === w.selectedSonarr?.id ? { ...s, manualMatchPending: true } : s)),
+      );
     } catch (err: any) {
-      addNotification('Failed to persist manual match reminder: ' + err.message, 'error');
+      addNotification("Failed to persist manual match reminder: " + err.message, "error");
     }
   };
 
@@ -355,36 +401,39 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
 
   const ensureCachedAflShowsLoaded = async () => {
     if (w.cachedAflShows.length > 0) {
-      dispatch({ type: 'SET', payload: { fallbackAflResults: w.cachedAflShows } });
+      dispatch({ type: "SET", payload: { fallbackAflResults: w.cachedAflShows } });
       return;
     }
-    dispatch({ type: 'SET', payload: { fallbackAflLoading: true, selectedFallbackAfl: null } });
+    dispatch({ type: "SET", payload: { fallbackAflLoading: true, selectedFallbackAfl: null } });
     try {
-      const cached = await searchAFL('');
-      dispatch({ type: 'SET', payload: { cachedAflShows: cached, fallbackAflResults: cached } });
+      const cached = await searchAFL("");
+      dispatch({ type: "SET", payload: { cachedAflShows: cached, fallbackAflResults: cached } });
     } catch (err: any) {
-      dispatch({ type: 'SET', payload: { cachedAflShows: [], fallbackAflResults: [] } });
-      addNotification('AFL cache load failed: ' + err.message, 'error');
+      dispatch({ type: "SET", payload: { cachedAflShows: [], fallbackAflResults: [] } });
+      addNotification("AFL cache load failed: " + err.message, "error");
     } finally {
-      dispatch({ type: 'SET', payload: { fallbackAflLoading: false } });
+      dispatch({ type: "SET", payload: { fallbackAflLoading: false } });
     }
   };
 
   const filterFallbackAflResults = (query: string = w.fallbackAflQuery) => {
-    const normalized = (query || '').trim().toLowerCase();
+    const normalized = (query || "").trim().toLowerCase();
     if (!normalized) {
-      dispatch({ type: 'SET', payload: { fallbackAflResults: w.cachedAflShows } });
+      dispatch({ type: "SET", payload: { fallbackAflResults: w.cachedAflShows } });
       return;
     }
     const tokens = normalized.split(/\s+/).filter(Boolean);
-    dispatch({ type: 'SET', payload: {
-      fallbackAflResults: w.cachedAflShows.filter((show) => {
-        const title = (show.title || '').toLowerCase();
-        if (!title) return false;
-        if (title.includes(normalized)) return true;
-        return tokens.every((token) => title.includes(token));
-      }),
-    }});
+    dispatch({
+      type: "SET",
+      payload: {
+        fallbackAflResults: w.cachedAflShows.filter((show) => {
+          const title = (show.title || "").toLowerCase();
+          if (!title) return false;
+          if (title.includes(normalized)) return true;
+          return tokens.every((token) => title.includes(token));
+        }),
+      },
+    });
   };
 
   const scheduleFallbackAflFilter = () => {
@@ -392,39 +441,52 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     fallbackFilterTimeout.current = setTimeout(() => filterFallbackAflResults(), 120);
   };
 
-  const goToFallbackAflStep = async (prefill: string = '') => {
-    dispatch({ type: 'RESET_FALLBACK_FLOW' });
-    dispatch({ type: 'SET', payload: { addStep: ADD_STEP_FALLBACK_AFL, fallbackAflQuery: prefill } });
+  const goToFallbackAflStep = async (prefill: string = "") => {
+    dispatch({ type: "RESET_FALLBACK_FLOW" });
+    dispatch({
+      type: "SET",
+      payload: {
+        addStep: ADD_STEP_FALLBACK_AFL,
+        fallbackAflQuery: prefill,
+        fallbackQualityProfileId: preferredAnimeQualityProfileId,
+      },
+    });
     await ensureCachedAflShowsLoaded();
     filterFallbackAflResults(prefill);
   };
 
   const loadSonarrLookupResults = async () => {
     if (!w.sonarrLookupQuery.trim()) return;
-    dispatch({ type: 'SET', payload: { sonarrLookupLoading: true, selectedSonarrLookup: null } });
+    dispatch({ type: "SET", payload: { sonarrLookupLoading: true, selectedSonarrLookup: null } });
     try {
-      dispatch({ type: 'SET', payload: { sonarrLookupResults: await lookupSonarrSeries(w.sonarrLookupQuery.trim()) } });
+      dispatch({
+        type: "SET",
+        payload: { sonarrLookupResults: await lookupSonarrSeries(w.sonarrLookupQuery.trim()) },
+      });
     } catch (err: any) {
-      dispatch({ type: 'SET', payload: { sonarrLookupResults: [] } });
-      addNotification('Sonarr lookup failed: ' + err.message, 'error');
+      dispatch({ type: "SET", payload: { sonarrLookupResults: [] } });
+      addNotification("Sonarr lookup failed: " + err.message, "error");
     }
-    dispatch({ type: 'SET', payload: { sonarrLookupLoading: false } });
+    dispatch({ type: "SET", payload: { sonarrLookupLoading: false } });
   };
 
   const goToFallbackSonarrStep = async () => {
     if (!w.selectedFallbackAfl) return;
-    dispatch({ type: 'SET', payload: {
-      addStep: ADD_STEP_FALLBACK_SONARR,
-      sonarrLookupQuery: w.selectedFallbackAfl.title || '',
-    }});
+    dispatch({
+      type: "SET",
+      payload: {
+        addStep: ADD_STEP_FALLBACK_SONARR,
+        sonarrLookupQuery: w.selectedFallbackAfl.title || "",
+      },
+    });
     await loadSonarrLookupResults();
   };
 
   const buildSonarrAddPayload = (series: SonarrSeries): SonarrAddPayload => ({
-    series: { ...series, seriesType: 'anime' },
+    series: { ...series, seriesType: "anime" },
     root_folder_path: preferredAnimeRootFolder,
     quality_profile_id: Number(w.fallbackQualityProfileId || 0),
-    monitor_mode: 'none',
+    monitor_mode: "none",
     season_folder: w.fallbackSeasonFolder,
     search_on_add: false,
   });
@@ -432,57 +494,73 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
   const handleAddSelectedSonarrLookup = async () => {
     if (!w.selectedFallbackAfl || !w.selectedSonarrLookup) return;
     const fallbackAflSlug = w.selectedFallbackAfl.slug;
-    dispatch({ type: 'SET', payload: { sonarrAdding: true } });
+    dispatch({ type: "SET", payload: { sonarrAdding: true } });
     try {
       const created = await addSonarrSeries(buildSonarrAddPayload(w.selectedSonarrLookup));
-      const nextAll = [...allSeries.filter((s) => s.id !== created.id), created].sort((a, b) => a.title.localeCompare(b.title));
+      const nextAll = [...allSeries.filter((s) => s.id !== created.id), created].sort((a, b) =>
+        a.title.localeCompare(b.title),
+      );
       setAllSeries(nextAll);
       setSeriesById(Object.fromEntries(nextAll.map((s) => [s.id, s])));
-      dispatch({ type: 'SET', payload: {
-        selectedSonarr: created,
-        manualQuery: w.selectedFallbackAfl.title || created.title || '',
-      }});
+      dispatch({
+        type: "SET",
+        payload: {
+          selectedSonarr: created,
+          manualQuery: w.selectedFallbackAfl.title || created.title || "",
+        },
+      });
 
-      const query = w.selectedFallbackAfl.title || created.title || '';
+      const query = w.selectedFallbackAfl.title || created.title || "";
       const results = await searchAFL(query.trim(), created.id);
       const visible = results.length === 0 || !!created.manualMatchPending;
-      dispatch({ type: 'SET', payload: { displayedMatches: results, manualSearchVisible: visible } });
+      dispatch({
+        type: "SET",
+        payload: { displayedMatches: results, manualSearchVisible: visible },
+      });
       const chosenResult = results.find((item) => matchSlug(item) === fallbackAflSlug);
       if (chosenResult && shouldAutoCreateMappingAfterSonarrAdd(chosenResult)) {
-        dispatch({ type: 'SET', payload: { selectedAfl: chosenResult } });
-        await handleConfirmMatch();
+        dispatch({ type: "SET", payload: { selectedAfl: chosenResult } });
+        await handleConfirmMatch(chosenResult);
         return;
       }
       if (chosenResult && !isUnsafeMatch(chosenResult)) {
-        dispatch({ type: 'SET', payload: { selectedAfl: chosenResult, addStep: ADD_STEP_MATCH } });
+        dispatch({ type: "SET", payload: { selectedAfl: chosenResult, addStep: ADD_STEP_MATCH } });
         return;
       }
       if (chosenResult) {
-        dispatch({ type: 'SET', payload: { selectedAfl: chosenResult, addStep: ADD_STEP_UNSAFE_MATCH } });
+        dispatch({
+          type: "SET",
+          payload: { selectedAfl: chosenResult, addStep: ADD_STEP_UNSAFE_MATCH },
+        });
         return;
       }
       await handleKeepSonarrOnly();
     } catch (err: any) {
-      addNotification('Failed to add anime to Sonarr: ' + err.message, 'error');
+      addNotification("Failed to add anime to Sonarr: " + err.message, "error");
     } finally {
-      dispatch({ type: 'SET', payload: { sonarrAdding: false } });
+      dispatch({ type: "SET", payload: { sonarrAdding: false } });
     }
   };
 
-  const returnToSeriesStep = (prefill: string = '') => {
-    dispatch({ type: 'RETURN_TO_SERIES_STEP', prefill });
+  const returnToSeriesStep = (prefill: string = "") => {
+    dispatch({ type: "RETURN_TO_SERIES_STEP", prefill });
   };
 
   const stepDescription = (): string => {
-    if (w.addStep === ADD_STEP_SERIES) return 'Search your actionable Sonarr anime library first. If the anime is missing, switch to cached AFL search and add it into Sonarr from here.';
-    if (w.addStep === ADD_STEP_FALLBACK_AFL) return 'Search cached AnimeFillerList titles, then use the chosen title to look up the right Sonarr series before adding it.';
-    if (w.addStep === ADD_STEP_FALLBACK_SONARR) return `Confirm the Sonarr series Mizu should add for ${w.selectedFallbackAfl?.title || ''}.`;
+    if (w.addStep === ADD_STEP_SERIES)
+      return "Search your actionable Sonarr anime library first. If the anime is missing, switch to cached AFL search and add it into Sonarr from here.";
+    if (w.addStep === ADD_STEP_FALLBACK_AFL)
+      return "Search cached AnimeFillerList titles, then use the chosen title to look up the right Sonarr series before adding it.";
+    if (w.addStep === ADD_STEP_FALLBACK_SONARR)
+      return `Confirm the Sonarr series Mizu should add for ${w.selectedFallbackAfl?.title || ""}.`;
     if (w.addStep === ADD_STEP_POST_ADD) {
-      if (w.addOutcome?.type === 'mapping_created') return `${w.addOutcome?.title} is now tracked by Mizu.`;
+      if (w.addOutcome?.type === "mapping_created")
+        return `${w.addOutcome?.title} is now tracked by Mizu.`;
       return `${w.addOutcome?.title} is in Sonarr now, but still needs a safe AFL mapping before Mizu can track it.`;
     }
-    if (w.addStep === ADD_STEP_UNSAFE_MATCH) return `Mizu found a possible cached AFL entry for ${w.selectedSonarr?.title || ''}, but it needs your confirmation before creating the mapping.`;
-    return `Match ${w.selectedSonarr?.title || ''} with the correct AnimeFillerList entry.`;
+    if (w.addStep === ADD_STEP_UNSAFE_MATCH)
+      return `Mizu found a possible cached AFL entry for ${w.selectedSonarr?.title || ""}, but it needs your confirmation before creating the mapping.`;
+    return `Match ${w.selectedSonarr?.title || ""} with the correct AnimeFillerList entry.`;
   };
 
   // ── Render ──
@@ -491,7 +569,13 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     <VStack gap={4} padding={6} isScrollable height="100%">
       <HStack justify="between" align="center">
         <Heading level={2}>Add anime</Heading>
-        <Button label="Close" variant="ghost" isIconOnly icon={<X size={16} />} onClick={() => dispatch({ type: 'SET', payload: { showAddModal: false } })} />
+        <Button
+          label="Close"
+          variant="ghost"
+          isIconOnly
+          icon={<X size={16} />}
+          onClick={() => dispatch({ type: "SET", payload: { showAddModal: false } })}
+        />
       </HStack>
 
       {/* Step progress */}
@@ -503,7 +587,12 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
             <HStack key={step.key} gap={1} align="center">
               {i > 0 && <Divider />}
               {isPast && <Check size={10} color="var(--color-accent)" />}
-              <Text type="supporting" color={isCurrent ? 'primary' : isPast ? 'secondary' : 'placeholder'}>{step.label}</Text>
+              <Text
+                type="supporting"
+                color={isCurrent ? "primary" : isPast ? "secondary" : "placeholder"}
+              >
+                {step.label}
+              </Text>
             </HStack>
           );
         })}
@@ -514,8 +603,8 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       <Divider />
 
       {/* Step content */}
-      {w.addStep === ADD_STEP_SERIES && (
-        w.sonarrLoading ? (
+      {w.addStep === ADD_STEP_SERIES &&
+        (w.sonarrLoading ? (
           <VStack gap={3} hAlign="center" padding={6}>
             <Spinner size="lg" label="Loading available Sonarr anime" />
           </VStack>
@@ -530,7 +619,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
             <TextInput
               label="Search"
               value={w.seriesQuery}
-              onChange={(v) => dispatch({ type: 'SET', payload: { seriesQuery: v } })}
+              onChange={(v) => dispatch({ type: "SET", payload: { seriesQuery: v } })}
               placeholder="Search Sonarr anime"
               startIcon={Search}
             />
@@ -539,10 +628,17 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                 title="No anime match that search"
                 description="Try a different title, year, or jump into the cached AFL list and add it from there."
                 icon={<Icon icon={Search} size="lg" color="secondary" />}
-                actions={<Button label="Not in Sonarr? Search AFL and add to Sonarr" variant="secondary" icon={<Search size={16} />} onClick={() => goToFallbackAflStep(w.seriesQuery.trim())} />}
+                actions={
+                  <Button
+                    label="Not in Sonarr? Search AFL and add to Sonarr"
+                    variant="secondary"
+                    icon={<Search size={16} />}
+                    onClick={() => goToFallbackAflStep(w.seriesQuery.trim())}
+                  />
+                }
               />
             ) : (
-              <List hasDividers style={{ maxHeight: 'var(--spacing-80)', overflow: 'auto' }}>
+              <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
                 {filteredSeriesLibrary.map((series) => {
                   const seriesMapped = mappedSeriesIds.has(series.id);
                   const manualPending = !!series.manualMatchPending;
@@ -551,23 +647,37 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                     <ListItem
                       key={series.id}
                       label={series.title}
-                      description={`${series.year || 'Anime'}${series.statistics?.episodeCount ? ` · ${series.statistics.episodeCount} eps` : ''}${manualPending ? ' · Needs match' : seriesMapped ? ' · Already added' : ''}`}
+                      description={`${series.year || "Anime"}${series.statistics?.episodeCount ? ` · ${series.statistics.episodeCount} eps` : ""}${manualPending ? " · Needs match" : seriesMapped ? " · Already added" : ""}`}
                       onClick={() => {
-                        if (seriesMapped) { openExistingMapping(series.id); return; }
-                        dispatch({ type: 'SET', payload: { selectedSonarr: series } });
+                        if (seriesMapped) {
+                          openExistingMapping(series.id);
+                          return;
+                        }
+                        dispatch({ type: "SET", payload: { selectedSonarr: series } });
                       }}
                       startContent={
                         <img
                           src={posterUrl(series)}
                           alt=""
                           loading="lazy"
-                          style={{ width: 32, height: 44, objectFit: 'cover', borderRadius: 'var(--radius-1)' }}
+                          style={{
+                            width: 32,
+                            height: 44,
+                            objectFit: "cover",
+                            borderRadius: "var(--radius-1)",
+                          }}
                         />
                       }
                       endContent={
-                        seriesMapped ? <Text type="supporting">Open</Text> :
-                        manualPending ? <Text type="supporting" color="accent">Match</Text> :
-                        isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined
+                        seriesMapped ? (
+                          <Text type="supporting">Open</Text>
+                        ) : manualPending ? (
+                          <Text type="supporting" color="accent">
+                            Match
+                          </Text>
+                        ) : isSelected ? (
+                          <Check size={16} color="var(--color-accent)" />
+                        ) : undefined
                       }
                     />
                   );
@@ -578,15 +688,17 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
               <Button label="Continue" variant="primary" onClick={goToMatchStep} />
             )}
           </VStack>
-        )
-      )}
+        ))}
 
       {w.addStep === ADD_STEP_FALLBACK_AFL && (
         <VStack gap={4}>
           <TextInput
             label="Cached AFL title"
             value={w.fallbackAflQuery}
-            onChange={(v) => { dispatch({ type: 'SET', payload: { fallbackAflQuery: v } }); scheduleFallbackAflFilter(); }}
+            onChange={(v) => {
+              dispatch({ type: "SET", payload: { fallbackAflQuery: v } });
+              scheduleFallbackAflFilter();
+            }}
             placeholder="Filter cached AnimeFillerList titles"
           />
           {w.fallbackAflLoading ? (
@@ -597,25 +709,33 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
             <EmptyState
               title="No cached AFL titles found"
               description="Try another filter or refresh the AFL cache in Settings if this anime is new."
-                icon={<Icon icon={Search} size="lg" color="secondary" />}
+              icon={<Icon icon={Search} size="lg" color="secondary" />}
             />
           ) : (
-            <List hasDividers style={{ maxHeight: 'var(--spacing-80)', overflow: 'auto' }}>
+            <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
               {w.fallbackAflResults.map((result) => {
                 const isSelected = w.selectedFallbackAfl?.slug === result.slug;
                 return (
                   <ListItem
                     key={result.slug}
-                    label={result.title || ''}
-                    onClick={() => dispatch({ type: 'SET', payload: { selectedFallbackAfl: result } })}
-                    endContent={isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined}
+                    label={result.title || ""}
+                    onClick={() =>
+                      dispatch({ type: "SET", payload: { selectedFallbackAfl: result } })
+                    }
+                    endContent={
+                      isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined
+                    }
                   />
                 );
               })}
             </List>
           )}
           {w.selectedFallbackAfl && (
-            <Button label="Continue to Sonarr lookup" variant="primary" onClick={goToFallbackSonarrStep} />
+            <Button
+              label="Continue to Sonarr lookup"
+              variant="primary"
+              onClick={goToFallbackSonarrStep}
+            />
           )}
         </VStack>
       )}
@@ -625,29 +745,43 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           <TextInput
             label="Sonarr lookup"
             value={w.sonarrLookupQuery}
-            onChange={(v) => dispatch({ type: 'SET', payload: { sonarrLookupQuery: v } })}
+            onChange={(v) => dispatch({ type: "SET", payload: { sonarrLookupQuery: v } })}
             placeholder="Search Sonarr for series to add"
             startIcon={Search}
           />
-          <Button label="Search Sonarr" variant="secondary" onClick={loadSonarrLookupResults} isLoading={w.sonarrLookupLoading} />
+          <Button
+            label="Search Sonarr"
+            variant="secondary"
+            onClick={loadSonarrLookupResults}
+            isLoading={w.sonarrLookupLoading}
+          />
           {w.sonarrLookupResults.length > 0 && (
-            <List hasDividers style={{ maxHeight: 'var(--spacing-80)', overflow: 'auto' }}>
+            <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
               {w.sonarrLookupResults.map((series) => {
                 const isSelected = w.selectedSonarrLookup?.id === series.id;
                 return (
                   <ListItem
                     key={series.id}
                     label={series.title}
-                    description={String(series.year || 'Anime')}
-                    onClick={() => dispatch({ type: 'SET', payload: { selectedSonarrLookup: series } })}
-                    endContent={isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined}
+                    description={String(series.year || "Anime")}
+                    onClick={() =>
+                      dispatch({ type: "SET", payload: { selectedSonarrLookup: series } })
+                    }
+                    endContent={
+                      isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined
+                    }
                   />
                 );
               })}
             </List>
           )}
           {w.selectedSonarrLookup && (
-            <Button label="Add to Sonarr and match" variant="primary" onClick={handleAddSelectedSonarrLookup} isLoading={w.sonarrAdding} />
+            <Button
+              label="Add to Sonarr and match"
+              variant="primary"
+              onClick={handleAddSelectedSonarrLookup}
+              isLoading={w.sonarrAdding}
+            />
           )}
         </VStack>
       )}
@@ -665,15 +799,20 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                   <TextInput
                     label="Manual AFL search"
                     value={w.manualQuery}
-                    onChange={(v) => dispatch({ type: 'SET', payload: { manualQuery: v } })}
+                    onChange={(v) => dispatch({ type: "SET", payload: { manualQuery: v } })}
                     placeholder="Search AnimeFillerList"
                     startIcon={Search}
                   />
-                  <Button label="Search" variant="secondary" onClick={handleManualSearch} isLoading={w.manualSearching} />
+                  <Button
+                    label="Search"
+                    variant="secondary"
+                    onClick={handleManualSearch}
+                    isLoading={w.manualSearching}
+                  />
                 </VStack>
               )}
               {w.displayedMatches.length > 0 ? (
-                <List hasDividers style={{ maxHeight: 'var(--spacing-80)', overflow: 'auto' }}>
+                <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
                   {w.displayedMatches.map((match) => {
                     const isSelected = matchSlug(w.selectedAfl) === matchSlug(match);
                     const unsafe = isUnsafeMatch(match);
@@ -681,12 +820,14 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                       <ListItem
                         key={matchSlug(match)}
                         label={matchTitle(match)}
-                        description={unsafe ? 'Needs confirmation' : undefined}
-                        onClick={() => dispatch({ type: 'SET', payload: { selectedAfl: match } })}
+                        description={unsafe ? "Needs confirmation" : undefined}
+                        onClick={() => dispatch({ type: "SET", payload: { selectedAfl: match } })}
                         endContent={
                           <HStack gap={2} align="center">
                             {match.confidence != null && (
-                              <Text type="supporting" hasTabularNumbers>{Math.round(match.confidence * 100)}%</Text>
+                              <Text type="supporting" hasTabularNumbers>
+                                {Math.round(match.confidence * 100)}%
+                              </Text>
                             )}
                             {isSelected && <Check size={16} color="var(--color-accent)" />}
                           </HStack>
@@ -696,7 +837,13 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                   })}
                 </List>
               ) : (
-                !w.manualSearchVisible && <EmptyState title="No AFL matches" description="Try a manual search above." icon={<Icon icon={Search} size="lg" color="secondary" />} />
+                !w.manualSearchVisible && (
+                  <EmptyState
+                    title="No AFL matches"
+                    description="Try a manual search above."
+                    icon={<Icon icon={Search} size="lg" color="secondary" />}
+                  />
+                )
               )}
 
               {/* Tracking rules */}
@@ -706,33 +853,47 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                 label="Track filler"
                 description="Monitor filler episodes in Sonarr"
                 value={w.addTrackFiller}
-                onChange={(v) => dispatch({ type: 'SET', payload: { addTrackFiller: v } })}
+                onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
               />
               <Switch
                 label="Track mixed canon"
                 description="Monitor mixed canon/filler episodes"
                 value={w.addTrackMixed}
-                onChange={(v) => dispatch({ type: 'SET', payload: { addTrackMixed: v } })}
+                onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
               />
               <Switch
                 label="Track anime canon"
                 description="Monitor anime-original episodes"
                 value={w.addTrackAnimeCanon}
-                onChange={(v) => dispatch({ type: 'SET', payload: { addTrackAnimeCanon: v } })}
+                onChange={(v) => dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })}
               />
               <Selector
                 label="Start tracking from"
                 options={startModeOptions}
                 value={w.addStartMode}
-                onChange={(v) => dispatch({ type: 'SET', payload: { addStartMode: v } })}
+                onChange={(v) => dispatch({ type: "SET", payload: { addStartMode: v } })}
               />
 
               {w.addStep === ADD_STEP_UNSAFE_MATCH ? (
-                <Button label="Confirm match" variant="primary" onClick={handleConfirmMatch} isLoading={w.confirming} />
+                <Button
+                  label="Confirm match"
+                  variant="primary"
+                  onClick={handleConfirmMatch}
+                  isLoading={w.confirming}
+                />
               ) : (
                 <HStack gap={2}>
-                  <Button label="Keep Sonarr only" variant="secondary" onClick={handleKeepSonarrOnly} />
-                  <Button label="Confirm match" variant="primary" onClick={handlePrimaryMatchAction} isLoading={w.confirming} />
+                  <Button
+                    label="Keep Sonarr only"
+                    variant="secondary"
+                    onClick={handleKeepSonarrOnly}
+                  />
+                  <Button
+                    label="Confirm match"
+                    variant="primary"
+                    onClick={handlePrimaryMatchAction}
+                    isLoading={w.confirming}
+                  />
                 </HStack>
               )}
             </>
@@ -745,13 +906,20 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           <Check size={32} color="var(--color-success)" />
           <Heading level={3}>{w.addOutcome?.title}</Heading>
           <Text type="supporting">
-            {w.addOutcome?.type === 'mapping_created'
-              ? 'Now tracked by Mizu.'
-              : 'In Sonarr now, but still needs a safe AFL mapping before Mizu can track it.'}
+            {w.addOutcome?.type === "mapping_created"
+              ? "Now tracked by Mizu."
+              : "In Sonarr now, but still needs a safe AFL mapping before Mizu can track it."}
           </Text>
           <HStack gap={2}>
             {w.addOutcome?.mappingId && (
-              <Button label="Open anime" variant="primary" onClick={() => { dispatch({ type: 'SET', payload: { showAddModal: false } }); openShow(w.addOutcome!.mappingId!); }} />
+              <Button
+                label="Open anime"
+                variant="primary"
+                onClick={() => {
+                  dispatch({ type: "SET", payload: { showAddModal: false } });
+                  openShow(w.addOutcome!.mappingId!);
+                }}
+              />
             )}
             <Button label="Add another" variant="secondary" onClick={() => returnToSeriesStep()} />
           </HStack>

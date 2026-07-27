@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
     "dev:backend": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-backend.ps1",
-    "dev:windows": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -SeparateWindows"
+    "dev:windows": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -SeparateWindows",
+    "build": "powershell -ExecutionPolicy Bypass -File ./scripts/build.ps1"
   }
 }

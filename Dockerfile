@@ -2,8 +2,21 @@
 # Mizu - Multi-stage Docker Build
 # =============================================================================
 
-# Stage 1: Build the Go binary
-FROM golang:1.22-alpine AS builder
+# Stage 1: Build the frontend (Astryx React app via Vite+)
+FROM oven/bun:1 AS frontend
+
+WORKDIR /frontend
+
+# Cache deps
+COPY web-astryx/package.json web-astryx/bun.lock ./
+RUN bun install --frozen-lockfile
+
+# Build
+COPY web-astryx/ ./
+RUN bunx vp build
+
+# Stage 2: Build the Go binary
+FROM golang:1.26-alpine AS builder
 
 ARG VERSION=dev
 ARG COMMIT=unknown
@@ -18,6 +31,9 @@ RUN go mod download
 # Copy source
 COPY . .
 
+# Copy frontend build output into the embed directory (replaces any stale content)
+COPY --from=frontend /frontend/dist/ ./internal/web/dist/
+
 # Build with ldflags for version info, static binary
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags "-s -w \
@@ -27,7 +43,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /mizu \
     ./cmd/server
 
-# Stage 2: Minimal runtime image
+# Stage 3: Minimal runtime image
 FROM alpine:3.19
 
 # Install ca-certificates for HTTPS requests + tzdata for timezone support
@@ -43,14 +59,8 @@ RUN mkdir -p /config && chown afg:afg /config
 # Copy binary from builder
 COPY --from=builder /mizu /usr/local/bin/mizu
 
-# Environment defaults
-ENV SONARR_URL=http://localhost:8989 \
-    SONARR_API_KEY= \
-    SCAN_INTERVAL=6h \
-    LISTEN_ADDR=:8978 \
-    DB_PATH=/config/mizu.db \
-    LOG_LEVEL=info \
-    TZ=UTC
+# Timezone only — all app config lives in SQLite (app_settings table)
+ENV TZ=UTC
 
 # Expose port
 EXPOSE 8978
@@ -61,6 +71,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 # Persistent storage
 VOLUME /config
+
+# Run from /config so the default relative DB path (mizu.db) resolves there
+WORKDIR /config
 
 # Run as non-root
 USER afg

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +53,7 @@ func TestHandleAFLSearchEmptyQueryReturnsCachedTitles(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := db.ReplaceCachedAFLShows(t.Context(), []models.AFLShow{
+	if _, err := db.ReplaceCachedAFLShows(t.Context(), []models.AFLShow{
 		{Title: "One Piece", Slug: "one-piece"},
 		{Title: "Bleach", Slug: "bleach"},
 	}, time.Now().UTC()); err != nil {
@@ -90,7 +91,7 @@ func TestMatchCachedAFLShowsUsesOnlyProvidedCachedCandidates(t *testing.T) {
 		{Title: "Bleach", Slug: "bleach"},
 	}
 
-	results := matchCachedAFLShows(matcher.New(0.82), series, cachedShows)
+	results := matchCachedAFLShows(context.Background(), matcher.New(0.82), series, cachedShows)
 	if len(results) == 0 {
 		t.Fatalf("expected a fuzzy cached match")
 	}

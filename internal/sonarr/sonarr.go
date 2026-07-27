@@ -166,50 +166,54 @@ func (c *Client) GetSeries(ctx context.Context, seriesID int) (*models.SonarrSer
 	if err != nil {
 		return nil, err
 	}
-	return decodeResponse[*models.SonarrSeries](resp)
-}
-
-// UpdateSeries updates a series (used for applying tags).
-func (c *Client) UpdateSeries(ctx context.Context, series *models.SonarrSeries) error {
-	path := fmt.Sprintf("/series/%d", series.ID)
-	resp, err := c.doRequest(ctx, http.MethodPut, path, series)
+	result, err := decodeResponse[*models.SonarrSeries](resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	resp.Body.Close()
-	return nil
+	if result == nil {
+		return nil, fmt.Errorf("series %d not found", seriesID)
+	}
+	return result, nil
 }
 
 func (c *Client) AddSeries(ctx context.Context, series models.SonarrSeries, options AddSeriesOptions) (*models.SonarrSeries, error) {
-	payloadBytes, err := json.Marshal(series)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling series payload: %w", err)
-	}
-
-	var payload map[string]interface{}
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return nil, fmt.Errorf("decoding series payload: %w", err)
-	}
-
-	payload["rootFolderPath"] = options.RootFolderPath
-	payload["qualityProfileId"] = options.QualityProfileID
-	payload["seasonFolder"] = options.SeasonFolder
+	// Set add-options directly on the series struct to avoid a
+	// marshal→unmarshal→marshal round-trip that loses type information.
 	monitorMode := options.MonitorMode
 	if monitorMode == "" {
 		monitorMode = "none"
 	}
-	payload["seriesType"] = "anime"
-	payload["monitored"] = monitorMode != "none"
-	payload["addOptions"] = map[string]interface{}{
-		"monitor":                  monitorMode,
-		"searchForMissingEpisodes": options.SearchOnAdd,
+	series.RootFolderPath = options.RootFolderPath
+	series.QualityProfileID = options.QualityProfileID
+	series.SeasonFolder = options.SeasonFolder
+	series.SeriesType = "anime"
+	series.Monitored = monitorMode != "none"
+
+	// Use an anonymous struct to add the addOptions field that SonarrSeries
+	// doesn't have, then marshal once.
+	payload := struct {
+		models.SonarrSeries
+		AddOptions map[string]interface{} `json:"addOptions"`
+	}{
+		SonarrSeries: series,
+		AddOptions: map[string]interface{}{
+			"monitor":                  monitorMode,
+			"searchForMissingEpisodes": options.SearchOnAdd,
+		},
 	}
 
 	resp, err := c.doRequest(ctx, http.MethodPost, "/series", payload)
 	if err != nil {
 		return nil, err
 	}
-	return decodeResponse[*models.SonarrSeries](resp)
+	result, err := decodeResponse[*models.SonarrSeries](resp)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("sonarr returned null for added series")
+	}
+	return result, nil
 }
 
 // --- Episodes ---
@@ -222,17 +226,6 @@ func (c *Client) GetEpisodes(ctx context.Context, seriesID int) ([]models.Sonarr
 		return nil, err
 	}
 	return decodeResponse[[]models.SonarrEpisode](resp)
-}
-
-// UpdateEpisode updates an episode (primarily to toggle monitored status).
-func (c *Client) UpdateEpisode(ctx context.Context, episode *models.SonarrEpisode) error {
-	path := fmt.Sprintf("/episode/%d", episode.ID)
-	resp, err := c.doRequest(ctx, http.MethodPut, path, episode)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	return nil
 }
 
 // SetEpisodeMonitored sets the monitored status for an episode.

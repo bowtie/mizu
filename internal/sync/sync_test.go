@@ -129,7 +129,7 @@ func TestMatchSpecialAFLEpisodeByTitlePrefersExactTitle(t *testing.T) {
 		{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeFiller},
 	}
 
-	got, ok := matchSpecialAFLEpisodeByTitle("Police Academy Arc Wild Police Story CASE. Rei Furuya", candidates)
+	got, ok := matchAFLEpisodeByTitle("Police Academy Arc Wild Police Story CASE. Rei Furuya", candidates)
 	if !ok {
 		t.Fatal("expected a special title match")
 	}
@@ -153,7 +153,7 @@ func TestSelectAFLEpisodeForSonarrIncludesMatchedSpecial(t *testing.T) {
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	aflNum, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if !ok {
 		t.Fatal("expected special episode to be matched")
 	}
@@ -180,7 +180,7 @@ func TestSelectAFLEpisodeForSonarrPrefersTitleMatchedMainlineDuplicate(t *testin
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	aflNum, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if !ok {
 		t.Fatal("expected mainline episode to be matched")
 	}
@@ -210,7 +210,7 @@ func TestSelectAFLEpisodeForSonarrSupportsNegativeOneSpecialSeason(t *testing.T)
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	_, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if !ok {
 		t.Fatal("expected -1 special season to be matched")
 	}
@@ -234,7 +234,7 @@ func TestSelectAFLEpisodeForSonarrDoesNotStealMainlineForUnmatchedSpecial(t *tes
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if ok {
 		t.Fatal("expected unmatched special to remain unmatched")
 	}
@@ -254,7 +254,7 @@ func TestSelectAFLEpisodeForSonarrDoesNotAutoMatchSingleCandidateSpecial(t *test
 	preferred := map[int]models.AFLEpisode{9001: candidates[0]}
 	byNumber := map[int][]models.AFLEpisode{9001: candidates}
 
-	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if ok {
 		t.Fatal("expected special with only a number match to remain unmatched")
 	}
@@ -274,7 +274,7 @@ func TestSelectAFLEpisodeForSonarrRejectsWeakSingleTokenSpecialMatch(t *testing.
 	preferred := map[int]models.AFLEpisode{1077: candidates[0]}
 	byNumber := map[int][]models.AFLEpisode{1077: candidates}
 
-	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if ok {
 		t.Fatal("expected weak single-token overlap to remain unmatched for a special")
 	}
@@ -294,7 +294,7 @@ func TestSelectAFLEpisodeForSonarrFallsBackToGlobalStrictTitleForSpecial(t *test
 	}
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(byNumber[1076][0], byNumber[1076][1])}
 
-	aflNum, got, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if !ok {
 		t.Fatal("expected special to match by exact title across AFL lookup")
 	}
@@ -319,7 +319,7 @@ func TestSelectAFLEpisodeForSonarrRejectsWeakGlobalSpecialMatch(t *testing.T) {
 	}
 	preferred := map[int]models.AFLEpisode{1077: byNumber[1077][0]}
 
-	_, _, ok := selectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
 	if ok {
 		t.Fatal("expected weak global title overlap to remain unmatched for a special")
 	}

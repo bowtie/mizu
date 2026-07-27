@@ -1,25 +1,25 @@
-import { StrictMode, useState, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
-import { Theme } from '@astryxdesign/core/theme';
-import { TopNav } from '@astryxdesign/core/TopNav';
-import { TopNavHeading } from '@astryxdesign/core/TopNav';
-import { TopNavItem } from '@astryxdesign/core/TopNav';
-import { DropdownMenu } from '@astryxdesign/core/DropdownMenu';
-import { Check, Palette } from 'lucide-react';
-import { BrowserRouter, useLocation, Link } from 'react-router-dom';
+import { StrictMode, useState, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import { Theme } from "@astryxdesign/core/theme";
+import { TopNav } from "@astryxdesign/core/TopNav";
+import { TopNavHeading } from "@astryxdesign/core/TopNav";
+import { TopNavItem } from "@astryxdesign/core/TopNav";
+import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Check, Palette } from "lucide-react";
+import { BrowserRouter, useLocation, Link } from "react-router-dom";
 
 // Import theme CSS files
-import '@astryxdesign/core/reset.css';
-import '@astryxdesign/core/astryx.css';
-import '@astryxdesign/theme-neutral/theme.css';
-import '@astryxdesign/theme-y2k/theme.css';
+import "@astryxdesign/core/reset.css";
+import "@astryxdesign/core/astryx.css";
+import "@astryxdesign/theme-neutral/theme.css";
+import "@astryxdesign/theme-y2k/theme.css";
 
-import './index.css';
-import { App } from './App';
-import { themeOptions, defaultTheme } from './lib/themes';
-import type { ThemeOption } from './lib/themes';
+import "./index.css";
+import { App } from "./App";
+import { themeOptions, defaultTheme } from "./lib/themes";
+import type { ThemeOption } from "./lib/themes";
 
-const STORAGE_KEY = 'mizu-theme';
+const STORAGE_KEY = "mizu-theme";
 
 function ThemeMenu({
   selected,
@@ -38,8 +38,8 @@ function ThemeMenu({
     <DropdownMenu
       button={{
         label: selected.label,
-        variant: 'secondary',
-        size: 'sm',
+        variant: "secondary",
+        size: "sm",
         isIconOnly: true,
         icon: <Palette size={16} />,
       }}
@@ -52,9 +52,10 @@ function ThemeMenu({
 function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
   const location = useLocation();
   const currentPath = location.pathname;
-  const isShows = currentPath === '/' || currentPath === '/shows' || currentPath.startsWith('/shows/');
-  const isActivity = currentPath === '/activity';
-  const isSettings = currentPath === '/settings';
+  const isShows =
+    currentPath === "/" || currentPath === "/shows" || currentPath.startsWith("/shows/");
+  const isActivity = currentPath === "/activity";
+  const isSettings = currentPath === "/settings";
 
   return (
     <TopNav
@@ -86,21 +87,21 @@ function Root() {
 
   return (
     <StrictMode>
-      <Theme theme={selected.theme} mode={selected.mode ?? 'system'}>
+      <Theme theme={selected.theme} mode={selected.mode ?? "system"}>
         <BrowserRouter>
-          <div style={{ minHeight: '100vh', background: 'var(--color-background-surface)' }}>
+          <div style={{ minHeight: "100vh", background: "var(--color-background-surface)" }}>
             <div
               style={{
-                position: 'sticky',
+                position: "sticky",
                 top: 0,
                 zIndex: 1000,
-                background: 'color-mix(in srgb, var(--color-background-surface) 70%, transparent)',
-                backdropFilter: 'blur(14px) saturate(140%)',
-                WebkitBackdropFilter: 'blur(14px) saturate(140%)',
-                borderBottom: '1px solid var(--color-border)',
+                background: "color-mix(in srgb, var(--color-background-surface) 70%, transparent)",
+                backdropFilter: "blur(14px) saturate(140%)",
+                WebkitBackdropFilter: "blur(14px) saturate(140%)",
+                borderBottom: "1px solid var(--color-border)",
               }}
             >
-              <div style={{ maxWidth: 900, marginInline: 'auto' }}>
+              <div style={{ maxWidth: 900, marginInline: "auto" }}>
                 <Nav themeMenu={menu} />
               </div>
             </div>
@@ -112,4 +113,4 @@ function Root() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<Root />);
+createRoot(document.getElementById("root")!).render(<Root />);

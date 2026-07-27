@@ -20,7 +20,6 @@ type FillerAction string
 const (
 	ActionUnmonitor FillerAction = "unmonitor"
 	ActionMonitor   FillerAction = "monitor"
-	ActionSkip      FillerAction = "skip"
 )
 
 type StartMode string
@@ -39,24 +38,28 @@ const (
 
 // ShowMapping links a Sonarr series to an AnimeFillerList show.
 type ShowMapping struct {
-	ID               int64         `json:"id"`
-	SonarrSeriesID   int           `json:"sonarr_series_id"`
-	SonarrTitle      string        `json:"sonarr_title"`
-	AFLSlug          string        `json:"afl_slug"` // e.g., "naruto-shippuden"
-	AFLTitle         string        `json:"afl_title"`
-	AutoMatched      bool          `json:"auto_matched"`
-	MatchConfidence  float64       `json:"match_confidence"` // 0.0 - 1.0
-	FillerAction     FillerAction  `json:"filler_action"`    // per-show override
-	MixedAction      FillerAction  `json:"mixed_action"`     // per-show override
-	AnimeCanonAction FillerAction  `json:"anime_canon_action"`
-	Enabled          bool          `json:"enabled"`
-	StartMode        StartMode     `json:"start_mode"`
-	WatermarkMode    WatermarkMode `json:"watermark_mode"`
-	SyncWatermark    int           `json:"sync_watermark"`
-	AnilistPosterURL string        `json:"anilist_poster_url,omitempty"`
-	AnilistBannerURL string        `json:"anilist_banner_url,omitempty"`
-	CreatedAt        time.Time     `json:"created_at"`
-	UpdatedAt        time.Time     `json:"updated_at"`
+	ID                int64         `json:"id"`
+	SonarrSeriesID    int           `json:"sonarr_series_id"`
+	SonarrTitle       string        `json:"sonarr_title"`
+	AFLSlug           string        `json:"afl_slug"` // e.g., "naruto-shippuden"
+	AFLTitle          string        `json:"afl_title"`
+	AutoMatched       bool          `json:"auto_matched"`
+	MatchConfidence   float64       `json:"match_confidence"` // 0.0 - 1.0
+	FillerAction      FillerAction  `json:"filler_action"`    // per-show override
+	MixedAction       FillerAction  `json:"mixed_action"`     // per-show override
+	AnimeCanonAction  FillerAction  `json:"anime_canon_action"`
+	Enabled           bool          `json:"enabled"`
+	StartMode         StartMode     `json:"start_mode"`
+	WatermarkMode     WatermarkMode `json:"watermark_mode"`
+	SyncWatermark     int           `json:"sync_watermark"`
+	AnilistPosterURL  string        `json:"anilist_poster_url,omitempty"`
+	AnilistBannerURL  string        `json:"anilist_banner_url,omitempty"`
+	ArtworkSource     string        `json:"artwork_source,omitempty"`      // provider that supplied current artwork
+	ArtworkPosterPath string        `json:"artwork_poster_path,omitempty"` // relative path to local poster file
+	ArtworkBannerPath string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file
+	ArtworkLogoPath   string        `json:"artwork_logo_path,omitempty"`   // relative path to local logo file
+	CreatedAt         time.Time     `json:"created_at"`
+	UpdatedAt         time.Time     `json:"updated_at"`
 }
 
 // EpisodeInfo holds filler data for a single episode.

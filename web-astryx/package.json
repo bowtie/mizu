@@ -1,15 +1,12 @@
 {
   "name": "mizu-web-astryx",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
-  "browserslist": [
-    "last 1 Chrome version"
-  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "dev": "vp dev",
+    "build": "tsc -b && vp build",
+    "preview": "vp preview",
     "astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs"
   },
   "dependencies": {
@@ -33,8 +30,22 @@
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "typescript": "^5.9.0",
-    "vite": "^7.1.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
+    "vite-plus": "0.2.4"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4"
+  },
+  "browserslist": [
+    "last 1 Chrome version"
+  ],
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.3.14",
+      "onFail": "download"
+    }
   }
 }

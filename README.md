@@ -1,12 +1,12 @@
 # Mizu
 
-Automatically manage filler episodes in Sonarr using data from [AnimeFillerList](https://www.animefillerlist.com/). Unmonitor, skip, or tag filler and mixed-canon episodes so you only download the episodes that matter.
+Automatically manage filler episodes in Sonarr using data from [AnimeFillerList](https://www.animefillerlist.com/). Unmonitor or keep filler and mixed-canon episodes so you only download the episodes that matter.
 
 ## Features
 
 - **Automatic filler detection** -- Scrapes AnimeFillerList and cross-references with your Sonarr library
 - **Fuzzy matching** -- Jaro-Winkler algorithm matches Sonarr series to AFL entries, even with title variations
-- **Configurable actions** -- Per-show rules: unmonitor, keep (monitor), or skip+delete filler episodes
+- **Configurable actions** -- Per-show rules: unmonitor or keep (monitor) filler episodes
 - **Mixed canon support** -- Separate rules for mixed canon/filler episodes
 - **Push notifications** -- Get notified on sync results via [ntfy.sh](https://ntfy.sh) (self-hosted or public)
 - **Web dashboard** -- Dark-themed UI for managing mappings, viewing episodes, and configuring settings
@@ -24,9 +24,6 @@ services:
     container_name: mizu
     ports:
       - "8978:8978"
-    environment:
-      - SONARR_URL=http://sonarr:8989
-      - SONARR_API_KEY=your-sonarr-api-key
     volumes:
       - ./config:/config
     restart: unless-stopped
@@ -36,7 +33,7 @@ services:
 docker compose up -d
 ```
 
-Open `http://localhost:8978` to access the dashboard.
+Open `http://localhost:8978` to access the dashboard, then configure your Sonarr URL and API key in Settings.
 
 ### Docker Run
 
@@ -44,8 +41,6 @@ Open `http://localhost:8978` to access the dashboard.
 docker run -d \
   --name mizu \
   -p 8978:8978 \
-  -e SONARR_URL=http://sonarr:8989 \
-  -e SONARR_API_KEY=your-sonarr-api-key \
   -v ./config:/config \
   mizu:latest
 ```
@@ -62,50 +57,23 @@ go build -o mizu ./cmd/server
 
 ## Configuration
 
-All settings can be configured via environment variables, a YAML config file, or the web UI. Environment variables take precedence over the config file.
+All settings are stored in the embedded SQLite database and managed through the web UI (Settings page). Defaults are applied on first launch and can be overridden at any time.
 
-### Environment Variables
+### Settings
 
-| Variable | Default | Description |
+| Setting | Default | Description |
 |---|---|---|
-| `SONARR_URL` | `http://localhost:8989` | Sonarr instance URL |
-| `SONARR_API_KEY` | *(required)* | Sonarr API key (Settings > General > Security) |
-| `SCAN_INTERVAL` | `6h` | How often to sync (Go duration or minutes) |
-| `LISTEN_ADDR` | `:8978` | HTTP server listen address |
-| `BASE_URL` | `/` | Base URL path (for reverse proxies) |
-| `DB_PATH` | `/config/mizu.db` | SQLite database path |
-| `CACHE_TTL` | `24h` | How long to cache scraped AFL data |
-| `DEFAULT_FILLER_ACTION` | `unmonitor` | Default action for filler episodes |
-| `DEFAULT_MIXED_CANON_ACTION` | `monitor` | Default action for mixed canon episodes |
-| `NTFY_ENABLED` | `false` | Enable ntfy push notifications |
-| `NTFY_SERVER_URL` | `https://ntfy.sh` | ntfy server URL |
-| `NTFY_TOPIC` | *(empty)* | ntfy topic name |
-| `NTFY_TOKEN` | *(empty)* | ntfy access token (optional) |
-| `LOG_LEVEL` | `info` | Log level: debug, info, warn, error |
-
-### YAML Config File
-
-```yaml
-sonarr_url: http://localhost:8989
-sonarr_api_key: your-api-key
-
-scan_interval: 6h
-listen_addr: ":8978"
-db_path: /config/mizu.db
-cache_ttl: 24h
-
-default_filler_action: unmonitor    # unmonitor | monitor | skip
-default_mixed_canon_action: monitor # unmonitor | monitor | skip
-
-ntfy_enabled: false
-ntfy_server_url: https://ntfy.sh
-ntfy_topic: mizu
-ntfy_token: ""
-
-log_level: info
-```
-
-Pass the config file with `--config /path/to/config.yml`.
+| `sonarr_url` | `http://localhost:8989` | Sonarr instance URL |
+| `sonarr_api_key` | *(required)* | Sonarr API key (Settings > General > Security) |
+| `sync_interval` | `6h` | How often to sync (1h, 3h, 6h, 12h, or 24h) |
+| `default_filler_action` | `unmonitor` | Default action for filler episodes |
+| `default_mixed_canon_action` | `monitor` | Default action for mixed canon episodes |
+| `default_anime_canon_action` | `monitor` | Default action for anime canon episodes |
+| `enable_anilist_artwork` | `false` | Fetch poster/banner artwork from AniList |
+| `ntfy_enabled` | `false` | Enable ntfy push notifications |
+| `ntfy_server_url` | `https://ntfy.sh` | ntfy server URL |
+| `ntfy_topic` | *(empty)* | ntfy topic name |
+| `ntfy_token` | *(empty)* | ntfy access token (optional) |
 
 ### Filler Actions
 
@@ -113,7 +81,6 @@ Pass the config file with `--config /path/to/config.yml`.
 |---|---|
 | `unmonitor` | Marks filler episodes as unmonitored in Sonarr (won't be downloaded) |
 | `monitor` | Keeps episodes monitored (no change) |
-| `skip` | Unmonitors and deletes existing files for filler episodes |
 
 ## Architecture
 
@@ -123,7 +90,7 @@ cmd/server/
   router.go            # HTTP API routes and handlers
 
 internal/
-  config/config.go     # YAML + env var configuration
+  config/config.go     # SQLite-based configuration with defaults
   database/database.go # SQLite with migrations, full CRUD
   matcher/matcher.go   # Jaro-Winkler fuzzy title matching
   models/models.go     # Shared types (Sonarr, AFL, mappings)
@@ -204,7 +171,7 @@ bun run dev:windows
 cd web && vp dev
 
 # Backend
-go run ./cmd/server --config config.yml
+go run ./cmd/server
 
 # Tests
 cd web && vp test
@@ -218,7 +185,7 @@ cd web && vp build
 
 `bun run dev` opens two PowerShell windows:
 - frontend Vite+ dev server on http://localhost:5173
-- backend watcher that restarts `go run ./cmd/server --config config.yml` whenever Go or config files change
+- backend watcher that restarts `go run ./cmd/server` whenever Go files change
 
 The Vite+ dev server proxies /api requests to the Go backend on port 8978.
 

@@ -29,6 +29,15 @@ export interface Settings {
   sonarr_add_season_folder: boolean;
   afl_show_cache_refreshed_at: string | null;
   afl_show_cache_count: number;
+  artwork_default_source?: string;
+  tmdb_api_key?: string;
+  tmdb_api_key_set?: boolean;
+  fanart_api_key?: string;
+  fanart_api_key_set?: boolean;
+  ntfy_enabled?: boolean;
+  ntfy_server_url?: string;
+  ntfy_topic?: string;
+  ntfy_token_set?: boolean;
   [key: string]: unknown;
 }
 
@@ -68,6 +77,10 @@ export interface Show {
   afl_slug?: string;
   anilist_poster_url?: string;
   anilist_banner_url?: string;
+  artwork_source?: string;
+  artwork_poster_path?: string;
+  artwork_banner_path?: string;
+  artwork_logo_path?: string;
   poster?: string;
   sync_watermark: number;
   enabled: boolean;
@@ -75,7 +88,6 @@ export interface Show {
   mixed_action: string;
   anime_canon_action: string;
   watermark_mode: string;
-  manual_match_pending?: boolean;
   [key: string]: unknown;
 }
 
@@ -117,9 +129,19 @@ export interface AFLMatch {
   [key: string]: unknown;
 }
 
-export interface Artwork {
-  banner_image?: string;
-  poster_image?: string;
+export interface ArtworkProvider {
+  id: string;
+  label: string;
+  needs_key: boolean;
+  available: boolean;
+}
+
+export interface ArtworkRefreshResult {
+  source: string;
+  found: boolean;
+  poster_path?: string;
+  banner_path?: string;
+  logo_path?: string;
 }
 
 export interface SelectOption {
@@ -174,6 +196,7 @@ export interface TestConnectionResult {
 
 export interface StoredApiKeyResponse {
   sonarr_api_key?: string;
+  sonarr_api_key_set?: boolean;
 }
 
 export interface StatusResponse {

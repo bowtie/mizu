@@ -1,6 +1,7 @@
 import type {
   AFLMatch,
-  Artwork,
+  ArtworkProvider,
+  ArtworkRefreshResult,
   Episode,
   MappingCreate,
   Settings,
@@ -15,14 +16,14 @@ import type {
   SyncLogResponse,
   TestConnectionResult,
   VersionResponse,
-} from './types';
+} from "./types";
 
-const BASE = '/api';
+const BASE = "/api";
 
 async function request<T>(method: string, path: string, body: unknown = null): Promise<T> {
   const opts: RequestInit = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   };
   if (body) opts.body = JSON.stringify(body);
 
@@ -35,136 +36,205 @@ async function request<T>(method: string, path: string, body: unknown = null): P
 }
 
 export function getStatus(): Promise<StatusResponse> {
-  return request<StatusResponse>('GET', '/health');
+  return request<StatusResponse>("GET", "/health");
 }
 
 export function getVersion(): Promise<VersionResponse> {
-  return request<VersionResponse>('GET', '/version');
+  return request<VersionResponse>("GET", "/version");
 }
 
 export function getStats(): Promise<StatsResponse> {
-  return request<StatsResponse>('GET', '/stats');
+  return request<StatsResponse>("GET", "/stats");
+}
+
+// In-memory cache for Sonarr series by ID — survives navigations within
+// the session. The backend also caches in SQLite for 24h, but this avoids
+// a network round-trip when revisiting a show in the same session.
+const seriesCache = new Map<number, SonarrSeries>();
+
+// clearSeriesCache removes a single entry (or all if id is omitted) from the
+// in-memory series cache. Call after operations that modify a series in Sonarr.
+export function clearSeriesCache(id?: number) {
+  if (id !== undefined) {
+    seriesCache.delete(id);
+  } else {
+    seriesCache.clear();
+  }
 }
 
 export function getSonarrSeriesById(seriesId: number): Promise<SonarrSeries> {
-  return request<SonarrSeries>('GET', '/sonarr/series/' + seriesId);
+  const cached = seriesCache.get(seriesId);
+  if (cached) return Promise.resolve(cached);
+  return request<SonarrSeries>("GET", "/sonarr/series/" + seriesId).then((series) => {
+    seriesCache.set(seriesId, series);
+    return series;
+  });
 }
 
 export function getSonarrSeries(matchableOnly: boolean = false): Promise<SonarrSeries[]> {
   const params = new URLSearchParams();
-  if (matchableOnly) params.set('matchable_only', 'true');
-  const suffix = params.size > 0 ? '?' + params.toString() : '';
-  return request<SonarrSeries[]>('GET', '/sonarr/series' + suffix);
+  if (matchableOnly) params.set("matchable_only", "true");
+  const suffix = params.size > 0 ? "?" + params.toString() : "";
+  return request<SonarrSeries[]>("GET", "/sonarr/series" + suffix);
 }
 
 export function lookupSonarrSeries(query: string): Promise<SonarrSeries[]> {
   const params = new URLSearchParams();
-  params.set('q', query || '');
-  return request<SonarrSeries[]>('GET', '/sonarr/lookup?' + params.toString());
+  params.set("q", query || "");
+  return request<SonarrSeries[]>("GET", "/sonarr/lookup?" + params.toString());
 }
 
 export function addSonarrSeries(data: SonarrAddPayload): Promise<SonarrSeries> {
-  return request<SonarrSeries>('POST', '/sonarr/series', data);
+  return request<SonarrSeries>("POST", "/sonarr/series", data).then((series) => {
+    // Cache the freshly created series so subsequent lookups are instant.
+    seriesCache.set(series.id, series);
+    return series;
+  });
 }
 
 export function getSonarrAddOptions(): Promise<SonarrAddOptions> {
-  return request<SonarrAddOptions>('GET', '/sonarr/add-options');
+  return request<SonarrAddOptions>("GET", "/sonarr/add-options");
 }
 
 export function markManualMatchPending(seriesId: string | number): Promise<unknown> {
-  return request<unknown>('POST', '/sonarr/manual-match-pending', { sonarr_series_id: seriesId });
+  return request<unknown>("POST", "/sonarr/manual-match-pending", { sonarr_series_id: seriesId });
 }
 
 export function testSonarrConnection(url: string, apiKey: string): Promise<TestConnectionResult> {
-  return request<TestConnectionResult>('POST', '/sonarr/test', { url, api_key: apiKey });
+  return request<TestConnectionResult>("POST", "/sonarr/test", { url, api_key: apiKey });
 }
 
 export function getShows(): Promise<Show[]> {
-  return request<Show[]>('GET', '/mappings');
+  return request<Show[]>("GET", "/mappings");
 }
 
 export function getShow(id: string | number): Promise<Show> {
-  return request<Show>('GET', '/mappings/' + id);
+  return request<Show>("GET", "/mappings/" + id);
 }
 
 export function createShow(data: MappingCreate): Promise<Show> {
-  return request<Show>('POST', '/mappings', data);
+  return request<Show>("POST", "/mappings", data);
 }
 
 export function updateShow(id: string | number, data: ShowUpdate): Promise<Show> {
-  return request<Show>('PUT', '/mappings/' + id, data);
+  return request<Show>("PUT", "/mappings/" + id, data);
 }
 
 export function deleteShow(id: string | number): Promise<unknown> {
-  return request<unknown>('DELETE', '/mappings/' + id);
+  return request<unknown>("DELETE", "/mappings/" + id);
 }
 
 export function autoMatch(sonarrSeriesId: string | number): Promise<Show> {
-  return request<Show>('POST', '/mappings', { sonarr_series_id: sonarrSeriesId, auto_match: true });
+  return request<Show>("POST", "/mappings", { sonarr_series_id: sonarrSeriesId, auto_match: true });
 }
 
 export function confirmMatch(data: MappingCreate): Promise<Show> {
-  return request<Show>('POST', '/mappings', data);
+  return request<Show>("POST", "/mappings", data);
 }
 
 export function suggestAFL(seriesId: string | number): Promise<AFLMatch[]> {
-  return request<AFLMatch[]>('GET', '/afl/suggest?series_id=' + encodeURIComponent(seriesId));
+  return request<AFLMatch[]>("GET", "/afl/suggest?series_id=" + encodeURIComponent(seriesId));
 }
 
-export function searchAFL(query: string, seriesId: string | number | null = null): Promise<AFLMatch[]> {
+export function searchAFL(
+  query: string,
+  seriesId: string | number | null = null,
+): Promise<AFLMatch[]> {
   const params = new URLSearchParams();
-  params.set('q', query || '');
-  if (seriesId != null) params.set('series_id', String(seriesId));
-  return request<AFLMatch[]>('GET', '/afl/search?' + params.toString());
+  params.set("q", query || "");
+  if (seriesId != null) params.set("series_id", String(seriesId));
+  return request<AFLMatch[]>("GET", "/afl/search?" + params.toString());
 }
 
 export function getEpisodes(showId: string | number): Promise<Episode[]> {
-  return request<Episode[]>('GET', '/mappings/' + showId + '/episodes');
+  return request<Episode[]>("GET", "/mappings/" + showId + "/episodes");
 }
 
-export function getAniListArtwork(showId: string | number): Promise<Artwork> {
-  return request<Artwork>('GET', '/mappings/' + showId + '/artwork');
+// --- Artwork (multi-provider, locally stored) ---
+
+export function getArtworkProviders(): Promise<{ providers: ArtworkProvider[] }> {
+  return request<{ providers: ArtworkProvider[] }>("GET", "/artwork/providers");
 }
 
-export function getSonarrEpisodes(showId: string | number): Promise<Episode[]> {
-  return request<Episode[]>('GET', '/mappings/' + showId + '/episodes/sonarr');
+export function getArtworkPosterUrl(mappingId: string | number): string {
+  return `${BASE}/artwork/${mappingId}/poster`;
 }
 
-export function syncEpisode(showId: string | number, epNum: string | number): Promise<Episode> {
-  return request<Episode>('POST', '/mappings/' + showId + '/episodes/' + epNum + '/sync');
+export function getArtworkBannerUrl(mappingId: string | number): string {
+  return `${BASE}/artwork/${mappingId}/banner`;
 }
 
-export function setEpisodeMonitor(showId: string | number, epId: string | number, monitored: boolean): Promise<Episode> {
-  return request<Episode>('PUT', '/mappings/' + showId + '/episodes/' + epId + '/monitor', { monitored });
+export function getArtworkLogoUrl(mappingId: string | number): string {
+  return `${BASE}/artwork/${mappingId}/logo`;
 }
 
-export function resyncAll(showId: string | number): Promise<Show> {
-  return request<Show>('POST', '/mappings/' + showId + '/resync');
+export function refreshArtwork(
+  showId: string | number,
+  source?: string,
+): Promise<ArtworkRefreshResult> {
+  const query = source ? `?source=${encodeURIComponent(source)}` : "";
+  return request<ArtworkRefreshResult>(
+    "POST",
+    `/mappings/${showId}/artwork/refresh${query}`,
+  );
+}
+
+export function setArtworkSource(
+  showId: string | number,
+  source: string,
+): Promise<{ status: string }> {
+  return request<{ status: string }>(
+    "PUT",
+    `/mappings/${showId}/artwork/source`,
+    { source },
+  );
+}
+
+export function refreshAllArtwork(): Promise<{ status: string }> {
+  return request<{ status: string }>("POST", "/artwork/refresh-all");
+}
+
+export function setEpisodeMonitor(
+  showId: string | number,
+  epId: string | number,
+  monitored: boolean,
+): Promise<{ monitored: boolean }> {
+  return request<{ monitored: boolean }>("PUT", "/mappings/" + showId + "/episodes/" + epId + "/monitor", {
+    monitored,
+  });
 }
 
 export function triggerSync(): Promise<unknown> {
-  return request<unknown>('POST', '/sync');
+  return request<unknown>("POST", "/sync");
 }
 
 export function getSyncLogs(limit: number = 12, offset: number = 0): Promise<SyncLogResponse> {
   const params = new URLSearchParams();
-  params.set('limit', String(limit));
-  params.set('offset', String(offset));
-  return request<SyncLogResponse>('GET', '/logs?' + params.toString());
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  return request<SyncLogResponse>("GET", "/logs?" + params.toString());
 }
 
 export function getSettings(): Promise<Settings> {
-  return request<Settings>('GET', '/settings');
+  return request<Settings>("GET", "/settings");
 }
 
 export function getStoredSonarrApiKey(): Promise<StoredApiKeyResponse> {
-  return request<StoredApiKeyResponse>('GET', '/settings/sonarr-api-key');
+  return request<StoredApiKeyResponse>("GET", "/settings/sonarr-api-key");
 }
 
-export function updateSettings(data: Settings | Partial<Settings>): Promise<Settings> {
-  return request<Settings>('PUT', '/settings', data);
+export function updateSettings(data: Settings | Partial<Settings>): Promise<{ status: string }> {
+  return request<{ status: string }>("PUT", "/settings", data);
 }
 
 export function refreshAflCache(): Promise<unknown> {
-  return request<unknown>('POST', '/settings/afl-cache/refresh');
+  return request<unknown>("POST", "/settings/afl-cache/refresh");
+}
+
+export function testNtfyConnection(data: {
+  server_url?: string;
+  topic?: string;
+  token?: string;
+}): Promise<TestConnectionResult> {
+  return request<TestConnectionResult>("POST", "/ntfy/test", data);
 }

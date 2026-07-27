@@ -1,45 +1,55 @@
-import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
-import { VStack } from '@astryxdesign/core/VStack';
-import { HStack } from '@astryxdesign/core/HStack';
-import { Section } from '@astryxdesign/core/Section';
-import { Grid } from '@astryxdesign/core/Grid';
-import { Heading } from '@astryxdesign/core/Heading';
-import { Text } from '@astryxdesign/core/Text';
-import { Button } from '@astryxdesign/core/Button';
-import { Badge } from '@astryxdesign/core/Badge';
-import { Spinner } from '@astryxdesign/core/Spinner';
-import { TextInput } from '@astryxdesign/core/TextInput';
-import { Switch } from '@astryxdesign/core/Switch';
-import { Selector } from '@astryxdesign/core/Selector';
-import { Divider } from '@astryxdesign/core/Divider';
-import { Card } from '@astryxdesign/core/Card';
-import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from 'lucide-react';
-import { useAppStore } from '../lib/store';
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Section } from "@astryxdesign/core/Section";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Switch } from "@astryxdesign/core/Switch";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Card } from "@astryxdesign/core/Card";
+import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { useAppStore } from "../lib/store";
 import {
   getSettings,
   getStoredSonarrApiKey,
   refreshAflCache,
+  refreshAllArtwork,
+  testNtfyConnection,
   testSonarrConnection,
   updateSettings,
-} from '../lib/api';
-import type { Settings as SettingsType, SelectOption } from '../lib/types';
+} from "../lib/api";
+import type { Settings as SettingsType, SelectOption } from "../lib/types";
 
 const actionToTracked = (action: string | undefined, fallback = true): boolean =>
-  (action || (fallback ? 'monitor' : 'unmonitor')) === 'monitor';
-const trackedToAction = (tracked: boolean): string => (tracked ? 'monitor' : 'unmonitor');
+  (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
+const trackedToAction = (tracked: boolean): string => (tracked ? "monitor" : "unmonitor");
 
 const syncIntervalOptions: SelectOption[] = [
-  { value: '1h', label: '1 hour' },
-  { value: '3h', label: '3 hours' },
-  { value: '6h', label: '6 hours' },
-  { value: '12h', label: '12 hours' },
-  { value: '24h', label: '24 hours' },
+  { value: "1h", label: "1 hour" },
+  { value: "3h", label: "3 hours" },
+  { value: "6h", label: "6 hours" },
+  { value: "12h", label: "12 hours" },
+  { value: "24h", label: "24 hours" },
+];
+
+const artworkSourceOptions: SelectOption[] = [
+  { value: "sonarr", label: "Sonarr (local)" },
+  { value: "anilist", label: "AniList" },
+  { value: "tmdb", label: "TMDB" },
+  { value: "fanart", label: "Fanart.tv" },
+  { value: "kitsu", label: "Kitsu" },
 ];
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const rowPadding: CSSProperties = {
-  paddingBlock: 'var(--spacing-4)',
+  paddingBlock: "var(--spacing-4)",
 };
 
 interface PristineSnapshot {
@@ -47,9 +57,16 @@ interface PristineSnapshot {
   apiKeyDirty: boolean;
   syncInterval: string;
   enableAniListArtwork: boolean;
+  artworkDefaultSource: string;
+  tmdbApiKeyDirty: boolean;
+  fanartApiKeyDirty: boolean;
   trackFillerDefault: boolean;
   trackMixedDefault: boolean;
   trackAnimeCanonDefault: boolean;
+  ntfyEnabled: boolean;
+  ntfyServerUrl: string;
+  ntfyTopic: string;
+  ntfyTokenDirty: boolean;
 }
 
 export function SettingsPage() {
@@ -59,52 +76,83 @@ export function SettingsPage() {
   const [, setTesting] = useState(false);
   const [refreshingCache, setRefreshingCache] = useState(false);
   const [revealingKey, setRevealingKey] = useState(false);
-  const [testPhase, setTestPhase] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle');
-  const [testErrorMessage, setTestErrorMessage] = useState('');
+  const [testPhase, setTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
+  const [testErrorMessage, setTestErrorMessage] = useState("");
 
-  const [sonarrUrl, setSonarrUrl] = useState('');
-  const [sonarrApiKey, setSonarrApiKey] = useState('');
-  const [savedApiKeyMasked, setSavedApiKeyMasked] = useState('');
+  const [sonarrUrl, setSonarrUrl] = useState("");
+  const [sonarrApiKey, setSonarrApiKey] = useState("");
+  const [savedApiKeyMasked, setSavedApiKeyMasked] = useState("");
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
-  const [syncInterval, setSyncInterval] = useState('6h');
+  const [syncInterval, setSyncInterval] = useState("6h");
   const [enableAniListArtwork, setEnableAniListArtwork] = useState(false);
+  const [artworkDefaultSource, setArtworkDefaultSource] = useState("sonarr");
+  const [tmdbApiKey, setTmdbApiKey] = useState("");
+  const [tmdbApiKeySet, setTmdbApiKeySet] = useState(false);
+  const [tmdbApiKeyDirty, setTmdbApiKeyDirty] = useState(false);
+  const [fanartApiKey, setFanartApiKey] = useState("");
+  const [fanartApiKeySet, setFanartApiKeySet] = useState(false);
+  const [fanartApiKeyDirty, setFanartApiKeyDirty] = useState(false);
   const [trackFillerDefault, setTrackFillerDefault] = useState(false);
   const [trackMixedDefault, setTrackMixedDefault] = useState(true);
   const [trackAnimeCanonDefault, setTrackAnimeCanonDefault] = useState(true);
   const [cacheRefreshedAt, setCacheRefreshedAt] = useState<string | null>(null);
   const [cacheCount, setCacheCount] = useState(0);
 
+  const [ntfyEnabled, setNtfyEnabled] = useState(false);
+  const [ntfyServerUrl, setNtfyServerUrl] = useState("");
+  const [ntfyTopic, setNtfyTopic] = useState("");
+  const [ntfyToken, setNtfyToken] = useState("");
+  const [ntfyTokenSet, setNtfyTokenSet] = useState(false);
+  const [ntfyTokenDirty, setNtfyTokenDirty] = useState(false);
+  const [ntfyTestPhase, setNtfyTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
+  const [ntfyTestErrorMessage, setNtfyTestErrorMessage] = useState("");
+
   const [pristine, setPristine] = useState<PristineSnapshot>({
-    sonarrUrl: '',
+    sonarrUrl: "",
     apiKeyDirty: false,
-    syncInterval: '6h',
+    syncInterval: "6h",
     enableAniListArtwork: false,
+    artworkDefaultSource: "sonarr",
+    tmdbApiKeyDirty: false,
+    fanartApiKeyDirty: false,
     trackFillerDefault: false,
     trackMixedDefault: true,
     trackAnimeCanonDefault: true,
+    ntfyEnabled: false,
+    ntfyServerUrl: "",
+    ntfyTopic: "",
+    ntfyTokenDirty: false,
   });
 
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ntfyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const settingsDirty = !loading && (
-    sonarrUrl !== pristine.sonarrUrl ||
-    apiKeyDirty ||
-    syncInterval !== pristine.syncInterval ||
-    enableAniListArtwork !== pristine.enableAniListArtwork ||
-    trackFillerDefault !== pristine.trackFillerDefault ||
-    trackMixedDefault !== pristine.trackMixedDefault ||
-    trackAnimeCanonDefault !== pristine.trackAnimeCanonDefault
-  );
+  const settingsDirty =
+    !loading &&
+    (sonarrUrl !== pristine.sonarrUrl ||
+      apiKeyDirty ||
+      syncInterval !== pristine.syncInterval ||
+      enableAniListArtwork !== pristine.enableAniListArtwork ||
+      artworkDefaultSource !== pristine.artworkDefaultSource ||
+      tmdbApiKeyDirty ||
+      fanartApiKeyDirty ||
+      trackFillerDefault !== pristine.trackFillerDefault ||
+      trackMixedDefault !== pristine.trackMixedDefault ||
+      trackAnimeCanonDefault !== pristine.trackAnimeCanonDefault ||
+      ntfyEnabled !== pristine.ntfyEnabled ||
+      ntfyServerUrl !== pristine.ntfyServerUrl ||
+      ntfyTopic !== pristine.ntfyTopic ||
+      ntfyTokenDirty);
 
   const urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
 
   const scheduleReset = (delay = 1800) => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
     resetTimer.current = setTimeout(() => {
-      setTestPhase('idle');
-      setTestErrorMessage('');
+      setTestPhase("idle");
+      setTestErrorMessage("");
     }, delay);
   };
 
@@ -115,14 +163,17 @@ export function SettingsPage() {
 
   const clearTestResult = () => {
     clearReset();
-    if (testPhase === 'success' || testPhase === 'error') {
-      setTestPhase('idle');
-      setTestErrorMessage('');
+    if (testPhase === "success" || testPhase === "error") {
+      setTestPhase("idle");
+      setTestErrorMessage("");
     }
   };
 
   useEffect(() => {
-    return () => { if (resetTimer.current) clearTimeout(resetTimer.current); };
+    return () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+      if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
+    };
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -130,32 +181,54 @@ export function SettingsPage() {
     try {
       const data = await getSettings();
       if (data && !data.error) {
-        setSonarrUrl(data.sonarr_url || '');
-        setSavedApiKeyMasked(data.sonarr_api_key_masked || '');
+        setSonarrUrl(data.sonarr_url || "");
+        setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
         setHasSavedApiKey(!!data.sonarr_api_key_set);
-        setSonarrApiKey(data.sonarr_api_key_masked || '');
+        setSonarrApiKey(data.sonarr_api_key_masked || "");
         setApiKeyVisible(false);
         setApiKeyDirty(false);
-        setSyncInterval(data.sync_interval || '6h');
+        setSyncInterval(data.sync_interval || "6h");
         setEnableAniListArtwork(data.enable_anilist_artwork || false);
+        setArtworkDefaultSource(data.artwork_default_source || "sonarr");
+        setTmdbApiKeySet(!!data.tmdb_api_key_set);
+        setTmdbApiKey("");
+        setTmdbApiKeyDirty(false);
+        setFanartApiKeySet(!!data.fanart_api_key_set);
+        setFanartApiKey("");
+        setFanartApiKeyDirty(false);
         setTrackFillerDefault(actionToTracked(data.default_filler_action, false));
         setTrackMixedDefault(actionToTracked(data.default_mixed_canon_action, true));
         setTrackAnimeCanonDefault(actionToTracked(data.default_anime_canon_action, true));
         setCacheRefreshedAt(data.afl_show_cache_refreshed_at || null);
         setCacheCount(data.afl_show_cache_count || 0);
+        setNtfyEnabled(!!data.ntfy_enabled);
+        setNtfyServerUrl(data.ntfy_server_url || "");
+        setNtfyTopic(data.ntfy_topic || "");
+        setNtfyTokenSet(!!data.ntfy_token_set);
+        setNtfyToken("");
+        setNtfyTokenDirty(false);
+        setNtfyTestPhase("idle");
+        setNtfyTestErrorMessage("");
         setSettings(data);
         setPristine({
-          sonarrUrl: data.sonarr_url || '',
+          sonarrUrl: data.sonarr_url || "",
           apiKeyDirty: false,
-          syncInterval: data.sync_interval || '6h',
+          syncInterval: data.sync_interval || "6h",
           enableAniListArtwork: data.enable_anilist_artwork || false,
+          artworkDefaultSource: data.artwork_default_source || "sonarr",
+          tmdbApiKeyDirty: false,
+          fanartApiKeyDirty: false,
           trackFillerDefault: actionToTracked(data.default_filler_action, false),
           trackMixedDefault: actionToTracked(data.default_mixed_canon_action, true),
           trackAnimeCanonDefault: actionToTracked(data.default_anime_canon_action, true),
+          ntfyEnabled: !!data.ntfy_enabled,
+          ntfyServerUrl: data.ntfy_server_url || "",
+          ntfyTopic: data.ntfy_topic || "",
+          ntfyTokenDirty: false,
         });
       }
     } catch (err: any) {
-      addNotification('Failed to load settings: ' + err.message, 'error');
+      addNotification("Failed to load settings: " + err.message, "error");
     }
     setLoading(false);
   }, [setSettings, addNotification]);
@@ -187,9 +260,9 @@ export function SettingsPage() {
       setRevealingKey(true);
       try {
         const data = await getStoredSonarrApiKey();
-        setSonarrApiKey(data.sonarr_api_key || '');
+        setSonarrApiKey(data.sonarr_api_key || "");
       } catch (err: any) {
-        addNotification('Failed to reveal saved API key: ' + err.message, 'error');
+        addNotification("Failed to reveal saved API key: " + err.message, "error");
         setRevealingKey(false);
         return;
       }
@@ -203,11 +276,12 @@ export function SettingsPage() {
       return sonarrApiKey;
     }
     const data = await getStoredSonarrApiKey();
-    return data.sonarr_api_key || '';
+    return data.sonarr_api_key || "";
   };
 
   const handleSave = async () => {
     setSaving(true);
+    const sourceChanged = artworkDefaultSource !== pristine.artworkDefaultSource;
     try {
       const payload: Partial<SettingsType> = {
         sonarr_url: sonarrUrl,
@@ -216,34 +290,60 @@ export function SettingsPage() {
         default_anime_canon_action: trackedToAction(trackAnimeCanonDefault),
         sync_interval: syncInterval,
         enable_anilist_artwork: enableAniListArtwork,
+        artwork_default_source: artworkDefaultSource,
       };
-      if (apiKeyDirty || !hasSavedApiKey) {
+      if (apiKeyDirty && sonarrApiKey) {
         payload.sonarr_api_key = sonarrApiKey;
       }
+      if (tmdbApiKeyDirty && tmdbApiKey) {
+        payload.tmdb_api_key = tmdbApiKey;
+      }
+      if (fanartApiKeyDirty && fanartApiKey) {
+        payload.fanart_api_key = fanartApiKey;
+      }
+      payload.ntfy_enabled = ntfyEnabled;
+      payload.ntfy_server_url = ntfyServerUrl;
+      payload.ntfy_topic = ntfyTopic;
+      if (ntfyTokenDirty) {
+        payload.ntfy_token = ntfyToken;
+      }
       await updateSettings(payload);
-      addNotification('Settings saved', 'success');
+      addNotification("Settings saved", "success");
       await loadSettings();
+
+      // If the global artwork source changed, trigger a background refresh
+      // of all shows so their local artwork matches the new default.
+      if (sourceChanged) {
+        addNotification("Refreshing all artwork from new source...", "info", 6000);
+        refreshAllArtwork()
+          .then(() => {
+            addNotification("Artwork refresh triggered — updates will appear shortly", "info");
+          })
+          .catch(() => {
+            addNotification("Background artwork refresh failed", "error");
+          });
+      }
     } catch (err: any) {
-      addNotification('Failed to save settings: ' + err.message, 'error');
+      addNotification("Failed to save settings: " + err.message, "error");
     }
     setSaving(false);
   };
 
   const handleTestConnection = async () => {
     if (!sonarrUrl) {
-      setTestErrorMessage('Enter a Sonarr URL first');
-      setTestPhase('error');
+      setTestErrorMessage("Enter a Sonarr URL first");
+      setTestPhase("error");
       return;
     }
     if (!urlValid) {
-      setTestErrorMessage('URL must start with http:// or https://');
-      setTestPhase('error');
+      setTestErrorMessage("URL must start with http:// or https://");
+      setTestPhase("error");
       return;
     }
     setTesting(true);
-    setTestErrorMessage('');
+    setTestErrorMessage("");
     clearReset();
-    setTestPhase('connecting');
+    setTestPhase("connecting");
     const startTime = Date.now();
     const minDelay = 1100;
     try {
@@ -252,15 +352,15 @@ export function SettingsPage() {
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
       if (!result?.success) {
-        throw new Error(result?.error || 'Connection failed');
+        throw new Error(result?.error || "Connection failed");
       }
-      setTestPhase('success');
+      setTestPhase("success");
       scheduleReset(2000);
     } catch (err: any) {
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
       setTestErrorMessage(err.message);
-      setTestPhase('error');
+      setTestPhase("error");
       scheduleReset(4000);
     }
     setTesting(false);
@@ -270,22 +370,64 @@ export function SettingsPage() {
     setRefreshingCache(true);
     try {
       await refreshAflCache();
-      addNotification('AFL show list refreshed', 'success');
+      addNotification("AFL show list refreshed", "success");
       await loadSettings();
     } catch (err: any) {
-      addNotification('Failed to refresh AFL cache: ' + err.message, 'error');
+      addNotification("Failed to refresh AFL cache: " + err.message, "error");
     }
     setRefreshingCache(false);
   };
 
+  const handleTestNtfy = async () => {
+    if (!ntfyServerUrl) {
+      setNtfyTestErrorMessage("Enter a server URL first");
+      setNtfyTestPhase("error");
+      return;
+    }
+    if (!ntfyTopic) {
+      setNtfyTestErrorMessage("Enter a topic first");
+      setNtfyTestPhase("error");
+      return;
+    }
+    setNtfyTestPhase("connecting");
+    setNtfyTestErrorMessage("");
+    const startTime = Date.now();
+    const minDelay = 1100;
+    try {
+      const result = await testNtfyConnection({
+        server_url: ntfyServerUrl,
+        topic: ntfyTopic,
+        token: ntfyTokenDirty ? ntfyToken : undefined,
+      });
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDelay) await sleep(minDelay - elapsed);
+      if (!result?.success) {
+        throw new Error(result?.error || "Test failed");
+      }
+      setNtfyTestPhase("success");
+      if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
+      ntfyResetTimer.current = setTimeout(() => setNtfyTestPhase("idle"), 2000);
+    } catch (err: any) {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDelay) await sleep(minDelay - elapsed);
+      setNtfyTestErrorMessage(err.message);
+      setNtfyTestPhase("error");
+      if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
+      ntfyResetTimer.current = setTimeout(() => {
+        setNtfyTestPhase("idle");
+        setNtfyTestErrorMessage("");
+      }, 4000);
+    }
+  };
+
   const formatCacheTime = (value: string | null | undefined): string => {
-    if (!value) return 'Never refreshed';
+    if (!value) return "Never refreshed";
     return new Date(value).toLocaleString();
   };
 
   if (loading) {
     return (
-      <Section padding={4} maxWidth={900} style={{ marginInline: 'auto' }}>
+      <Section padding={4} maxWidth={900} style={{ marginInline: "auto" }}>
         <VStack gap={3} hAlign="center" padding={6}>
           <Spinner size="lg" label="Loading settings" />
         </VStack>
@@ -294,7 +436,7 @@ export function SettingsPage() {
   }
 
   return (
-    <Section padding={4} maxWidth={900} style={{ marginInline: 'auto' }}>
+    <Section padding={4} maxWidth={900} style={{ marginInline: "auto" }}>
       <VStack gap={8}>
         {/* Header */}
         <HStack justify="between" align="center" wrap="wrap" gap={4}>
@@ -307,7 +449,7 @@ export function SettingsPage() {
           <HStack gap={3} align="center">
             {settingsDirty && <Badge variant="warning" label="Unsaved changes" />}
             <Button
-              label={saving ? 'Saving...' : 'Save settings'}
+              label={saving ? "Saving..." : "Save settings"}
               variant="primary"
               icon={<Save size={16} />}
               onClick={handleSave}
@@ -324,10 +466,16 @@ export function SettingsPage() {
 
           <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
             <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">Sonarr URL</Text>
-              <Text type="supporting" color="secondary" display="block">Base URL of your Sonarr instance.</Text>
+              <Text type="body" weight="semibold" display="block">
+                Sonarr URL
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Base URL of your Sonarr instance.
+              </Text>
               {sonarrUrl && !urlValid && (
-                <Text type="supporting" display="block" style={{ color: 'var(--color-error)' }}>URL must start with http:// or https://</Text>
+                <Text type="supporting" display="block" style={{ color: "var(--color-error)" }}>
+                  URL must start with http:// or https://
+                </Text>
               )}
             </VStack>
             <TextInput
@@ -343,25 +491,37 @@ export function SettingsPage() {
 
           <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
             <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">API key</Text>
-              <Text type="supporting" color="secondary" display="block">Found in Sonarr under Settings, General.</Text>
+              <Text type="body" weight="semibold" display="block">
+                API key
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Found in Sonarr under Settings, General.
+              </Text>
             </VStack>
             <HStack gap={2} align="center">
               <TextInput
                 label="API key"
-                type={apiKeyVisible ? 'text' : 'password'}
+                type={apiKeyVisible ? "text" : "password"}
                 value={sonarrApiKey}
                 onChange={handleApiKeyInput}
-                placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
+                placeholder={hasSavedApiKey ? "Saved API key" : "Your Sonarr API key"}
                 isLabelHidden
                 width={280}
               />
               {(hasSavedApiKey || apiKeyDirty) && (
                 <Button
-                  label={apiKeyVisible ? 'Hide' : 'Show'}
+                  label={apiKeyVisible ? "Hide" : "Show"}
                   variant="ghost"
                   isIconOnly
-                  icon={apiKeyVisible ? <EyeOff size={16} /> : revealingKey ? <Spinner size="sm" /> : <Eye size={16} />}
+                  icon={
+                    apiKeyVisible ? (
+                      <EyeOff size={16} />
+                    ) : revealingKey ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <Eye size={16} />
+                    )
+                  }
                   onClick={toggleApiKeyVisibility}
                   isDisabled={revealingKey}
                 />
@@ -372,42 +532,69 @@ export function SettingsPage() {
 
           <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
             <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">Test connection</Text>
-              <Text type="supporting" color="secondary" display="block">Check that Mizu can reach Sonarr with the URL and API key above.</Text>
-              {testPhase === 'error' && testErrorMessage && (
-                <Text type="supporting" display="block" style={{ color: 'var(--color-error)' }}>{testErrorMessage}</Text>
+              <Text type="body" weight="semibold" display="block">
+                Test connection
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Check that Mizu can reach Sonarr with the URL and API key above.
+              </Text>
+              {testPhase === "error" && testErrorMessage && (
+                <Text type="supporting" display="block" style={{ color: "var(--color-error)" }}>
+                  {testErrorMessage}
+                </Text>
               )}
             </VStack>
             <Button
               label={
-                testPhase === 'connecting' ? 'Testing' :
-                testPhase === 'success' ? 'Connected' :
-                testPhase === 'error' ? 'Retry' : 'Test'
+                testPhase === "connecting"
+                  ? "Testing"
+                  : testPhase === "success"
+                    ? "Connected"
+                    : testPhase === "error"
+                      ? "Retry"
+                      : "Test"
               }
               variant={
-                testPhase === 'success' ? 'primary' :
-                testPhase === 'error' ? 'destructive' : 'secondary'
+                testPhase === "success"
+                  ? "primary"
+                  : testPhase === "error"
+                    ? "destructive"
+                    : "secondary"
               }
               icon={
-                testPhase === 'connecting' ? <Spinner size="sm" /> :
-                testPhase === 'success' ? <Check size={16} /> :
-                testPhase === 'error' ? <AlertTriangle size={16} /> : <Plug size={16} />
+                testPhase === "connecting" ? (
+                  <Spinner size="sm" />
+                ) : testPhase === "success" ? (
+                  <Check size={16} />
+                ) : testPhase === "error" ? (
+                  <AlertTriangle size={16} />
+                ) : (
+                  <Plug size={16} />
+                )
               }
               onClick={handleTestConnection}
-              isDisabled={testPhase !== 'idle' || !sonarrUrl || !urlValid}
-              style={testPhase === 'success' ? {
-                background: 'var(--color-success)',
-                borderColor: 'var(--color-success)',
-                color: 'var(--color-on-success)',
-                opacity: 1,
-                cursor: 'default',
-              } : testPhase === 'error' ? {
-                opacity: 1,
-                cursor: 'default',
-              } : testPhase === 'connecting' ? {
-                opacity: 1,
-                cursor: 'default',
-              } : undefined}
+              isDisabled={testPhase !== "idle" || !sonarrUrl || !urlValid}
+              style={
+                testPhase === "success"
+                  ? {
+                      background: "var(--color-success)",
+                      borderColor: "var(--color-success)",
+                      color: "var(--color-on-success)",
+                      opacity: 1,
+                      cursor: "default",
+                    }
+                  : testPhase === "error"
+                    ? {
+                        opacity: 1,
+                        cursor: "default",
+                      }
+                    : testPhase === "connecting"
+                      ? {
+                          opacity: 1,
+                          cursor: "default",
+                        }
+                      : undefined
+              }
             />
           </HStack>
         </VStack>
@@ -419,8 +606,12 @@ export function SettingsPage() {
 
           <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
             <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">Sync interval</Text>
-              <Text type="supporting" color="secondary" display="block">How often Mizu checks for episode changes and updates Sonarr.</Text>
+              <Text type="body" weight="semibold" display="block">
+                Sync interval
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                How often Mizu checks for episode changes and updates Sonarr.
+              </Text>
             </VStack>
             <Selector
               label="Sync interval"
@@ -435,8 +626,13 @@ export function SettingsPage() {
 
           <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
             <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">AniList artwork</Text>
-              <Text type="supporting" color="secondary" display="block">Use AniList banners and posters instead of Sonarr images only.</Text>
+              <Text type="body" weight="semibold" display="block">
+                AniList artwork (legacy)
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Enable AniList URL caching (old system). The new multi-source
+                artwork system below downloads images locally for offline use.
+              </Text>
             </VStack>
             <Switch
               label="AniList artwork"
@@ -447,19 +643,262 @@ export function SettingsPage() {
           </HStack>
           <Divider />
 
+          {/* Multi-source artwork system */}
           <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
             <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">AFL cache</Text>
+              <Text type="body" weight="semibold" display="block">
+                Artwork source
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Default provider for fetching show artwork. Images are
+                downloaded and stored locally so browsing works offline.
+              </Text>
+            </VStack>
+            <Selector
+              label="Artwork source"
+              value={artworkDefaultSource}
+              options={artworkSourceOptions}
+              onChange={(v) => setArtworkDefaultSource(v as string)}
+              isLabelHidden
+              width={220}
+            />
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                TMDB API key
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Required for TMDB artwork. Get a free key at themoviedb.org.
+              </Text>
+            </VStack>
+            <HStack gap={2} align="center">
+              <TextInput
+                label="TMDB API key"
+                type="password"
+                value={tmdbApiKey}
+                onChange={(v) => {
+                  setTmdbApiKey(v);
+                  setTmdbApiKeyDirty(true);
+                }}
+                placeholder={tmdbApiKeySet ? "Saved API key" : "Enter TMDB API key"}
+                isLabelHidden
+                width={260}
+              />
+              {tmdbApiKeySet && !tmdbApiKeyDirty && (
+                <Badge variant="success" label="Key set" />
+              )}
+            </HStack>
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                Fanart.tv API key
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Required for Fanart.tv artwork. Get a free key at fanart.tv.
+              </Text>
+            </VStack>
+            <HStack gap={2} align="center">
+              <TextInput
+                label="Fanart.tv API key"
+                type="password"
+                value={fanartApiKey}
+                onChange={(v) => {
+                  setFanartApiKey(v);
+                  setFanartApiKeyDirty(true);
+                }}
+                placeholder={fanartApiKeySet ? "Saved API key" : "Enter Fanart.tv API key"}
+                isLabelHidden
+                width={260}
+              />
+              {fanartApiKeySet && !fanartApiKeyDirty && (
+                <Badge variant="success" label="Key set" />
+              )}
+            </HStack>
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                AFL cache
+              </Text>
               <Text type="supporting" color="secondary" hasTabularNumbers display="block">
                 {cacheCount} shows cached, refreshed {formatCacheTime(cacheRefreshedAt)}.
               </Text>
             </VStack>
             <Button
-              label={refreshingCache ? 'Refreshing...' : 'Refresh'}
+              label={refreshingCache ? "Refreshing..." : "Refresh"}
               variant="secondary"
               icon={<RefreshCw size={16} />}
               onClick={handleRefreshCache}
               isLoading={refreshingCache}
+            />
+          </HStack>
+        </VStack>
+
+        {/* Notifications */}
+        <VStack gap={0}>
+          <Heading level={2}>Notifications</Heading>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                Enable notifications
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Get a push notification after each sync via ntfy.sh.
+              </Text>
+            </VStack>
+            <Switch
+              label="Enable notifications"
+              value={ntfyEnabled}
+              onChange={setNtfyEnabled}
+              isLabelHidden
+            />
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                Server URL
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                ntfy server URL (self-hosted or public ntfy.sh).
+              </Text>
+            </VStack>
+            <TextInput
+              label="Server URL"
+              value={ntfyServerUrl}
+              onChange={setNtfyServerUrl}
+              placeholder="https://ntfy.sh"
+              isLabelHidden
+              width={320}
+            />
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                Topic
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                ntfy topic name to publish to.
+              </Text>
+            </VStack>
+            <TextInput
+              label="Topic"
+              value={ntfyTopic}
+              onChange={setNtfyTopic}
+              placeholder="my-anime-sync"
+              isLabelHidden
+              width={320}
+            />
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                Access token
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Optional — only needed if your ntfy server requires authentication.
+              </Text>
+            </VStack>
+            <HStack gap={2} align="center">
+              <TextInput
+                label="Access token"
+                type="password"
+                value={ntfyToken}
+                onChange={(v) => {
+                  setNtfyToken(v);
+                  setNtfyTokenDirty(true);
+                }}
+                placeholder={ntfyTokenSet ? "Saved token" : "Enter access token"}
+                isLabelHidden
+                width={260}
+              />
+              {ntfyTokenSet && !ntfyTokenDirty && (
+                <Badge variant="success" label="Token set" />
+              )}
+            </HStack>
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">
+                Test notification
+              </Text>
+              <Text type="supporting" color="secondary" display="block">
+                Send a test notification to verify your configuration.
+              </Text>
+              {ntfyTestPhase === "error" && ntfyTestErrorMessage && (
+                <Text type="supporting" display="block" style={{ color: "var(--color-error)" }}>
+                  {ntfyTestErrorMessage}
+                </Text>
+              )}
+            </VStack>
+            <Button
+              label={
+                ntfyTestPhase === "connecting"
+                  ? "Sending"
+                  : ntfyTestPhase === "success"
+                    ? "Sent"
+                    : ntfyTestPhase === "error"
+                      ? "Retry"
+                      : "Test"
+              }
+              variant={
+                ntfyTestPhase === "success"
+                  ? "primary"
+                  : ntfyTestPhase === "error"
+                    ? "destructive"
+                    : "secondary"
+              }
+              icon={
+                ntfyTestPhase === "connecting" ? (
+                  <Spinner size="sm" />
+                ) : ntfyTestPhase === "success" ? (
+                  <Check size={16} />
+                ) : ntfyTestPhase === "error" ? (
+                  <AlertTriangle size={16} />
+                ) : (
+                  <Plug size={16} />
+                )
+              }
+              onClick={handleTestNtfy}
+              isDisabled={ntfyTestPhase === "connecting" || !ntfyServerUrl || !ntfyTopic}
+              style={
+                ntfyTestPhase === "success"
+                  ? {
+                      background: "var(--color-success)",
+                      borderColor: "var(--color-success)",
+                      color: "var(--color-on-success)",
+                      opacity: 1,
+                      cursor: "default",
+                    }
+                  : ntfyTestPhase === "error"
+                    ? {
+                        opacity: 1,
+                        cursor: "default",
+                      }
+                    : ntfyTestPhase === "connecting"
+                      ? {
+                          opacity: 1,
+                          cursor: "default",
+                        }
+                      : undefined
+              }
             />
           </HStack>
         </VStack>
@@ -469,7 +908,8 @@ export function SettingsPage() {
           <VStack gap={1}>
             <Heading level={2}>Defaults</Heading>
             <Text type="supporting" color="secondary" display="block">
-              These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.
+              These tracking rules are applied automatically when you add a new anime mapping. You
+              can override them per anime.
             </Text>
           </VStack>
 
@@ -477,15 +917,24 @@ export function SettingsPage() {
             <Card padding={4} variant="green">
               <HStack hAlign="between" vAlign="center" wrap="nowrap">
                 <VStack gap={0} style={{ minWidth: 120 }}>
-                  <Text type="body" weight="semibold" display="block">Canon</Text>
-                  <Text type="supporting" color="secondary" display="block">Main plot episodes</Text>
+                  <Text type="body" weight="semibold" display="block">
+                    Canon
+                  </Text>
+                  <Text type="supporting" color="secondary" display="block">
+                    Main plot episodes
+                  </Text>
                 </VStack>
                 <Switch
                   label="Track canon"
                   value={trackAnimeCanonDefault}
                   onChange={setTrackAnimeCanonDefault}
                   isLabelHidden
-                  style={{ '--color-accent': 'var(--color-border-green)', '--color-background-gray': 'var(--color-background-green)' } as React.CSSProperties}
+                  style={
+                    {
+                      "--color-accent": "var(--color-border-green)",
+                      "--color-background-gray": "var(--color-background-green)",
+                    } as React.CSSProperties
+                  }
                 />
               </HStack>
             </Card>
@@ -493,15 +942,24 @@ export function SettingsPage() {
             <Card padding={4} variant="yellow">
               <HStack hAlign="between" vAlign="center" wrap="nowrap">
                 <VStack gap={0} style={{ minWidth: 120 }}>
-                  <Text type="body" weight="semibold" display="block">Mixed</Text>
-                  <Text type="supporting" color="secondary" display="block">Mix of canon and filler</Text>
+                  <Text type="body" weight="semibold" display="block">
+                    Mixed
+                  </Text>
+                  <Text type="supporting" color="secondary" display="block">
+                    Mix of canon and filler
+                  </Text>
                 </VStack>
                 <Switch
                   label="Track mixed"
                   value={trackMixedDefault}
                   onChange={setTrackMixedDefault}
                   isLabelHidden
-                  style={{ '--color-accent': 'var(--color-border-yellow)', '--color-background-gray': 'var(--color-background-yellow)' } as React.CSSProperties}
+                  style={
+                    {
+                      "--color-accent": "var(--color-border-yellow)",
+                      "--color-background-gray": "var(--color-background-yellow)",
+                    } as React.CSSProperties
+                  }
                 />
               </HStack>
             </Card>
@@ -509,15 +967,24 @@ export function SettingsPage() {
             <Card padding={4} variant="red">
               <HStack hAlign="between" vAlign="center" wrap="nowrap">
                 <VStack gap={0} style={{ minWidth: 120 }}>
-                  <Text type="body" weight="semibold" display="block">Filler</Text>
-                  <Text type="supporting" color="secondary" display="block">Skippable, no plot impact</Text>
+                  <Text type="body" weight="semibold" display="block">
+                    Filler
+                  </Text>
+                  <Text type="supporting" color="secondary" display="block">
+                    Skippable, no plot impact
+                  </Text>
                 </VStack>
                 <Switch
                   label="Track filler"
                   value={trackFillerDefault}
                   onChange={setTrackFillerDefault}
                   isLabelHidden
-                  style={{ '--color-accent': 'var(--color-border-red)', '--color-background-gray': 'var(--color-background-red)' } as React.CSSProperties}
+                  style={
+                    {
+                      "--color-accent": "var(--color-border-red)",
+                      "--color-background-gray": "var(--color-background-red)",
+                    } as React.CSSProperties
+                  }
                 />
               </HStack>
             </Card>
@@ -527,4 +994,3 @@ export function SettingsPage() {
     </Section>
   );
 }
-
