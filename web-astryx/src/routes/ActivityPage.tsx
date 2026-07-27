@@ -54,6 +54,7 @@ export function ActivityPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoad = useRef(true);
+  const isMounted = useRef(true);
 
   const filteredLogs = useMemo(
     () =>
@@ -112,6 +113,7 @@ export function ActivityPage() {
 
   useEffect(() => {
     return () => {
+      isMounted.current = false;
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, []);
@@ -120,8 +122,10 @@ export function ActivityPage() {
     if (pollTimer.current) clearTimeout(pollTimer.current);
     let attempts = 0;
     const poll = async () => {
+      if (!isMounted.current) return;
       attempts++;
       await loadActivity(true);
+      if (!isMounted.current) return;
       setLogs((current) => {
         if (current.some((l) => l.status === "running") && attempts < 20) {
           pollTimer.current = setTimeout(poll, 2000);
