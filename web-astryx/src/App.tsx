@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "./lib/store";
 import { ToastViewport } from "./components/ToastViewport";
 import { ShowsPage } from "./routes/ShowsPage";
@@ -15,6 +15,7 @@ export function App() {
         <Route path="/shows/:id" element={<ShowDetailPage />} />
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastViewport />
     </AppProvider>

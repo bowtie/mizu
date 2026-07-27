@@ -40,21 +40,26 @@ func New(requestTimeout, rateLimitDelay time.Duration, db *database.DB) *Scraper
 func (s *Scraper) rateLimit(ctx context.Context) error {
 	s.mu.Lock()
 	since := time.Since(s.lastRequest)
-	s.mu.Unlock()
-
-	if since < s.rateLimitDelay {
-		timer := time.NewTimer(s.rateLimitDelay - since)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-		}
+	if since >= s.rateLimitDelay {
+		// Enough time has passed — claim this slot immediately.
+		s.lastRequest = time.Now()
+		s.mu.Unlock()
+		return nil
 	}
-
-	s.mu.Lock()
-	s.lastRequest = time.Now()
+	// Not enough time yet — reserve our slot now so concurrent callers
+	// see a future lastRequest and wait longer. This prevents two
+	// goroutines from both passing the check and firing simultaneously.
+	wait := s.rateLimitDelay - since
+	s.lastRequest = s.lastRequest.Add(s.rateLimitDelay)
 	s.mu.Unlock()
+
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+	}
 	return nil
 }
 

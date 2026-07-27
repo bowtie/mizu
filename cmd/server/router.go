@@ -612,7 +612,9 @@ func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine, epCache *episod
 		}
 
 		// Persist to DB so future loads are instant
-		_ = db.ReplaceEpisodesForMapping(r.Context(), id, enriched)
+		if err := db.ReplaceEpisodesForMapping(r.Context(), id, enriched); err != nil {
+			log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to persist live-fetched episodes")
+		}
 
 		epCache.set(id, enriched)
 		writeJSON(w, http.StatusOK, enriched)
@@ -688,6 +690,7 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 
 	return enriched, nil
 }
+
 func handleGetSonarrEpisodes(db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -747,6 +750,10 @@ func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stds
 			writeError(w, http.StatusBadRequest, "invalid mapping ID")
 			return
 		}
+		if engine.IsRunning() {
+			writeError(w, http.StatusConflict, "sync already in progress")
+			return
+		}
 		bgWG.Add(1)
 		go func() {
 			defer bgWG.Done()
@@ -760,6 +767,10 @@ func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stds
 
 func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if engine.IsRunning() {
+			writeError(w, http.StatusConflict, "sync already in progress")
+			return
+		}
 		bgWG.Add(1)
 		go func() {
 			defer bgWG.Done()
@@ -1035,6 +1046,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		writeJSON(w, http.StatusOK, map[string]string{"status": "settings updated"})
 	}
 }
+
 func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		shows, newSlugs, err := engine.ScraperClient().RefreshAllShows(r.Context())
@@ -1044,7 +1056,10 @@ func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFun
 		}
 
 		// Log the cache refresh to the activity feed.
-		logID, _ := db.CreateSyncLog(r.Context(), "afl_cache_refresh")
+		logID, err := db.CreateSyncLog(r.Context(), "afl_cache_refresh")
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to create AFL cache refresh log")
+		}
 		items := make([]models.SyncLogItem, 0, len(newSlugs))
 		for _, slug := range newSlugs {
 			// Find the title for this slug from the fetched shows.
@@ -1062,13 +1077,17 @@ func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFun
 			})
 		}
 		if len(items) > 0 {
-			_ = db.ReplaceSyncLogItems(r.Context(), logID, items)
+			if err := db.ReplaceSyncLogItems(r.Context(), logID, items); err != nil {
+				log.Warn().Err(err).Int64("log_id", logID).Msg("failed to store AFL cache refresh log items")
+			}
 		}
 		status := "success"
 		if len(newSlugs) > 0 {
 			status = "partial" // has new items to review
 		}
-		_ = db.CompleteSyncLog(r.Context(), logID, status, len(newSlugs), 0, "")
+		if err := db.CompleteSyncLog(r.Context(), logID, status, len(newSlugs), 0, ""); err != nil {
+			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
+		}
 
 		count, refreshedAt, err := db.GetAFLShowCacheStatus(r.Context())
 		if err != nil {
@@ -1540,7 +1559,9 @@ func handleGetSonarrSeriesByID(db *database.DB, syncEngine *sync.Engine) http.Ha
 		}
 
 		// Cache the result
-		_ = db.SetCachedSonarrSeries(r.Context(), id, series)
+		if err := db.SetCachedSonarrSeries(r.Context(), id, series); err != nil {
+			log.Warn().Err(err).Int("series_id", id).Msg("failed to cache Sonarr series")
+		}
 
 		writeJSON(w, http.StatusOK, series)
 	}
@@ -1704,7 +1725,9 @@ func clearManualMatchPendingSeriesID(ctx context.Context, db *database.DB, serie
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Error().Err(err).Msg("failed to write JSON response")
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
@@ -1866,7 +1889,9 @@ func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerF
 		// so the frontend falls back to Sonarr image URLs instead of stale downloads.
 		if body.Source == "sonarr" {
 			mgr.DeleteArtwork(id)
-			_ = db.UpdateArtworkFiles(r.Context(), id, "", "", "")
+			if err := db.UpdateArtworkFiles(r.Context(), id, "", "", ""); err != nil {
+				log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to clear artwork file paths")
+			}
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "source updated"})
 	}

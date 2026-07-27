@@ -10,7 +10,7 @@ import (
 //go:embed all:dist
 var distFS embed.FS
 
-// SPAHandler serves the embedded Svelte SPA.
+// SPAHandler serves the embedded React SPA.
 // It serves static files from dist/ and falls back to index.html
 // for all non-file routes (client-side routing support).
 func SPAHandler() http.Handler {

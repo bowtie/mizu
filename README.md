@@ -49,7 +49,7 @@ docker run -d \
 
 ```bash
 # Build frontend
-cd web && npm install && npm run build && cd ..
+cd web-astryx && bun install && bun run build && cd ..
 
 # Build Go binary
 go build -o mizu ./cmd/server
@@ -69,7 +69,7 @@ All settings are stored in the embedded SQLite database and managed through the 
 | `default_filler_action` | `unmonitor` | Default action for filler episodes |
 | `default_mixed_canon_action` | `monitor` | Default action for mixed canon episodes |
 | `default_anime_canon_action` | `monitor` | Default action for anime canon episodes |
-| `enable_anilist_artwork` | `false` | Fetch poster/banner artwork from AniList |
+| `artwork_default_source` | `sonarr` | Default artwork provider (`sonarr`, `anilist`, `tmdb`, `fanart`, `kitsu`) |
 | `ntfy_enabled` | `false` | Enable ntfy push notifications |
 | `ntfy_server_url` | `https://ntfy.sh` | ntfy server URL |
 | `ntfy_topic` | *(empty)* | ntfy topic name |
@@ -98,13 +98,13 @@ internal/
   scraper/scraper.go   # AnimeFillerList HTML parser
   sonarr/sonarr.go     # Sonarr API v3 client
   sync/sync.go         # Orchestrates scraper + matcher + Sonarr
-  web/embed.go         # Embeds Svelte SPA into Go binary
+  web/embed.go         # Embeds React SPA into Go binary
 
-web/                   # Svelte SPA frontend
+web-astryx/            # React SPA frontend (Vite+ + StyleX)
   src/
-    components/        # Navbar, Modal, Toast, Badge, Spinner
-    pages/             # Dashboard, Shows, ShowDetail, Settings, Logs
-    lib/               # API client, stores
+    routes/            # ShowsPage, ShowDetailPage, SettingsPage, ActivityPage, AddAnimeDialog
+    components/        # ToastViewport
+    lib/               # API client, stores, types, themes
 ```
 
 ## Notifications (ntfy)
@@ -120,7 +120,7 @@ Mizu can send push notifications after each sync via [ntfy.sh](https://ntfy.sh).
 
 ### Self-hosted ntfy
 
-If you run your own ntfy server, set `NTFY_SERVER_URL` to your instance URL and provide an access token if authentication is required.
+If you run your own ntfy server, set the ntfy server URL in Settings and provide an access token if authentication is required.
 
 ### Notification Types
 
@@ -139,18 +139,38 @@ All endpoints are under `/api`.
 | `GET` | `/api/health` | Health check with Sonarr connectivity |
 | `GET` | `/api/version` | Version info |
 | `GET` | `/api/stats` | Dashboard statistics |
+| `GET` | `/api/artwork/providers` | List available artwork providers |
+| `GET` | `/api/artwork/{id}/poster` | Serve poster artwork for a mapping |
+| `GET` | `/api/artwork/{id}/banner` | Serve banner artwork for a mapping |
+| `GET` | `/api/artwork/{id}/logo` | Serve logo artwork for a mapping |
+| `POST` | `/api/artwork/refresh-all` | Refresh artwork for all mappings |
 | `GET` | `/api/mappings` | List all show mappings |
 | `POST` | `/api/mappings` | Create mapping (auto-match or manual) |
+| `GET` | `/api/mappings/:id` | Get a single mapping |
 | `PUT` | `/api/mappings/:id` | Update a mapping |
 | `DELETE` | `/api/mappings/:id` | Delete a mapping |
+| `POST` | `/api/mappings/:id/artwork/refresh` | Refresh artwork for a single mapping |
+| `PUT` | `/api/mappings/:id/artwork/source` | Change artwork source for a mapping |
 | `GET` | `/api/mappings/:id/episodes` | Get episodes for a mapping |
+| `GET` | `/api/mappings/:id/episodes/sonarr` | Get Sonarr episode data for a mapping |
+| `PUT` | `/api/mappings/:id/episodes/{epId}/monitor` | Toggle episode monitor status |
+| `POST` | `/api/mappings/:id/resync` | Resync a single mapping |
 | `POST` | `/api/sync` | Trigger manual sync |
 | `GET` | `/api/logs` | Get sync history |
 | `GET` | `/api/settings` | Get current settings |
+| `GET` | `/api/settings/sonarr-api-key` | Get stored Sonarr API key |
 | `PUT` | `/api/settings` | Update settings |
+| `POST` | `/api/settings/afl-cache/refresh` | Refresh AFL cache |
+| `GET` | `/api/sonarr/series` | List Sonarr series |
+| `GET` | `/api/sonarr/series/:id` | Get a single Sonarr series |
+| `POST` | `/api/sonarr/series` | Add a series to Sonarr |
+| `GET` | `/api/sonarr/lookup` | Lookup series in Sonarr |
+| `GET` | `/api/sonarr/add-options` | Get Sonarr add options (root folders, quality profiles) |
+| `POST` | `/api/sonarr/manual-match-pending` | Mark a series as pending manual match |
 | `POST` | `/api/sonarr/test` | Test Sonarr connection |
 | `POST` | `/api/ntfy/test` | Send test ntfy notification |
 | `GET` | `/api/afl/search?q=` | Search AnimeFillerList |
+| `GET` | `/api/afl/suggest` | Get AFL suggestions |
 
 ## Development
 
@@ -168,24 +188,21 @@ bun run dev
 bun run dev:windows
 
 # Frontend (hot reload via Vite+)
-cd web && vp dev
+cd web-astryx && vp dev
 
 # Backend
 go run ./cmd/server
 
-# Tests
-cd web && vp test
-
-# Lint + format + type-check
-cd web && vp check
+# Type-check
+cd web-astryx && bunx tsc --noEmit
 
 # Production build
-cd web && vp build
+cd web-astryx && bun run build
 ```
 
-`bun run dev` opens two PowerShell windows:
-- frontend Vite+ dev server on http://localhost:5173
-- backend watcher that restarts `go run ./cmd/server` whenever Go files change
+`bun run dev` starts both processes in one terminal:
+- frontend Vite+ dev server on http://localhost:3001
+- backend watcher (air) that restarts `go run ./cmd/server` whenever Go files change
 
 The Vite+ dev server proxies /api requests to the Go backend on port 8978.
 

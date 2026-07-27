@@ -18,8 +18,9 @@ services:
       - ./config/mizu:/config
     networks:
       - arr-network
-    depends_on:
-      - sonarr
+    # Uncomment if you define a sonarr service below:
+    # depends_on:
+    #   - sonarr
 
   # --- Your existing *arr services (example) ---
   # sonarr:

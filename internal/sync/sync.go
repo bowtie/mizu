@@ -670,6 +670,7 @@ func episodeTypePriority(t models.EpisodeType) int {
 func isSpecialSeason(season int) bool {
 	return season == 0 || season == -1
 }
+
 func pluralize(count int) string {
 	if count == 1 {
 		return ""
@@ -749,7 +750,7 @@ func nextAutoWatermark(current int, episodes []models.SonarrEpisode, now time.Ti
 func initialWatermarkForEpisodes(episodes []models.SonarrEpisode, now time.Time) int {
 	maxWatermark := 0
 	for _, ep := range episodes {
-		if ep.SeasonNumber == 0 {
+		if isSpecialSeason(ep.SeasonNumber) {
 			continue
 		}
 		if ep.AirDateUTC.After(now) {

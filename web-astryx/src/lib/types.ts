@@ -5,14 +5,6 @@ export interface Notification {
   duration: number;
 }
 
-export interface SyncStatus {
-  connected: boolean;
-  aflReachable: boolean;
-  lastSync: string | null;
-  nextSync: string | null;
-  syncing: boolean;
-}
-
 export interface Settings {
   sonarr_url: string;
   sonarr_api_key: string;
@@ -103,8 +95,10 @@ export interface MappingCreate {
 }
 
 export interface Episode {
+  id?: number;
   sonarr_episode_id?: number;
   episode_num?: number;
+  afl_episode_number?: number;
   season_number?: number;
   sonarr_episode_number?: number;
   absolute_episode_number?: number;
@@ -161,6 +155,9 @@ export interface SonarrAddPayload {
 }
 
 export interface SyncLogItem {
+  id?: number;
+  sync_log_id?: number;
+  mapping_id?: number;
   status?: string;
   sonarr_title?: string;
   summary?: string;
@@ -194,21 +191,4 @@ export interface TestConnectionResult {
 export interface StoredApiKeyResponse {
   sonarr_api_key?: string;
   sonarr_api_key_set?: boolean;
-}
-
-export interface StatusResponse {
-  status: string;
-  version?: string;
-  last_sync_at?: string;
-  next_sync_at?: string;
-}
-
-export interface VersionResponse {
-  version: string;
-  commit?: string;
-  build_date?: string;
-}
-
-export interface StatsResponse {
-  [key: string]: unknown;
 }

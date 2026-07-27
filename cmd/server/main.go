@@ -153,7 +153,9 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		// Migrate legacy "auto" to "sonarr".
 		if value == "auto" {
 			value = "sonarr"
-			_ = db.SetSetting(ctx, "artwork_default_source", "sonarr")
+			if err := db.SetSetting(ctx, "artwork_default_source", "sonarr"); err != nil {
+				log.Warn().Err(err).Msg("failed to migrate artwork_default_source from auto to sonarr")
+			}
 		}
 		cfg.ArtworkDefaultSource = value
 	}

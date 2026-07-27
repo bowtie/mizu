@@ -230,8 +230,8 @@ export function SettingsPage() {
   useEffect(() => {
     getArtworkProviders()
       .then((res) => setArtworkProviders(res.providers || []))
-      .catch(() => {});
-  }, []);
+      .catch((err) => addNotification("Failed to load artwork providers: " + err.message, "error"));
+  }, [addNotification]);
 
   const artworkSourceOptions = useMemo<SelectOption[]>(() => {
     const opts: SelectOption[] = [{ value: "sonarr", label: "Sonarr (local)" }];
