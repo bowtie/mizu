@@ -64,6 +64,30 @@ export default defineConfig({
         __dirname,
         'node_modules/@astryxdesign/theme-neutral/dist/theme.css',
       ),
+      '@astryxdesign/theme-y2k/theme.css': path.resolve(
+        __dirname,
+        'node_modules/@astryxdesign/theme-y2k/dist/theme.css',
+      ),
+      '@astryxdesign/theme-butter/theme.css': path.resolve(
+        __dirname,
+        'node_modules/@astryxdesign/theme-butter/dist/theme.css',
+      ),
+      '@astryxdesign/theme-chocolate/theme.css': path.resolve(
+        __dirname,
+        'node_modules/@astryxdesign/theme-chocolate/dist/theme.css',
+      ),
+      '@astryxdesign/theme-gothic/theme.css': path.resolve(
+        __dirname,
+        'node_modules/@astryxdesign/theme-gothic/dist/theme.css',
+      ),
+      '@astryxdesign/theme-matcha/theme.css': path.resolve(
+        __dirname,
+        'node_modules/@astryxdesign/theme-matcha/dist/theme.css',
+      ),
+      '@astryxdesign/theme-stone/theme.css': path.resolve(
+        __dirname,
+        'node_modules/@astryxdesign/theme-stone/dist/theme.css',
+      ),
       '@astryxdesign/core': path.resolve(__dirname, 'node_modules/@astryxdesign/core/src'),
       '@': path.resolve(__dirname, 'src'),
     },

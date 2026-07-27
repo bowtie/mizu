@@ -8,8 +8,8 @@ import { Button } from '@astryxdesign/core/Button';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Icon } from '@astryxdesign/core/Icon';
 import { Card } from '@astryxdesign/core/Card';
-import { Divider } from '@astryxdesign/core/Divider';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Search } from 'lucide-react';
 import { RefreshCw, History, ChevronDown, TriangleAlert } from 'lucide-react';
@@ -22,9 +22,9 @@ const PAGE_SIZE = 8;
 
 const statusFilters = [
   { value: 'all', label: 'All' },
-  { value: 'success', label: 'Success' },
-  { value: 'partial', label: 'Partial' },
-  { value: 'failed', label: 'Failed' },
+  { value: 'success', label: 'Success', color: 'var(--color-success)' },
+  { value: 'partial', label: 'Partial', color: 'var(--color-warning)' },
+  { value: 'failed', label: 'Failed', color: 'var(--color-error)' },
 ];
 
 function formatDuration(startedAt: string | null | undefined, completedAt: string | null | undefined): string {
@@ -48,7 +48,8 @@ function formatTrigger(trigger: string | undefined): string {
 function humanSummary(log: SyncLog): string {
   const anime = log.shows_processed || 0;
   const episodes = log.episodes_updated || 0;
-  return `Checked ${anime} anime, changed ${episodes} ${episodes === 1 ? 'episode' : 'episodes'}.`;
+  const epLabel = episodes === 1 ? 'episode' : 'episodes';
+  return episodes > 0 ? `${anime} anime, ${episodes} ${epLabel} changed` : `${anime} anime checked`;
 }
 
 function detailLine(item: SyncLogItem): string {
@@ -164,13 +165,13 @@ export function ActivityPage() {
   };
 
   return (
-    <Section padding={6}>
+    <Section padding={4} maxWidth={900} style={{ marginInline: 'auto' }}>
       <VStack gap={6}>
         {/* Header */}
-        <HStack justify="between" align="start" wrap="wrap">
+        <HStack justify="between" align="center" wrap="wrap" gap={3}>
           <VStack gap={1}>
             <Heading level={1}>Activity</Heading>
-            <Text type="supporting">Sync history and per-anime change logs.</Text>
+            <Text type="supporting" color="secondary">Sync history and per-anime change logs.</Text>
           </VStack>
           <Button
             label={syncing ? 'Syncing...' : 'Sync now'}
@@ -182,30 +183,38 @@ export function ActivityPage() {
         </HStack>
 
         {loading ? (
-          <VStack gap={3} hAlign="center" padding={10}>
+          <VStack gap={3} hAlign="center" padding={6}>
             <Spinner size="lg" label="Loading activity" />
           </VStack>
         ) : logs.length === 0 ? (
           <EmptyState
             title="No sync activity yet"
             description="Run a sync to start building the activity history for your anime library."
-            icon={<History size={22} />}
+            icon={<Icon icon={History} size="lg" color="secondary" />}
             actions={<Button label="Sync now" variant="primary" icon={<RefreshCw size={16} />} onClick={handleSync} />}
           />
         ) : (
           <>
             {/* Filters */}
-            <HStack gap={3} justify="between" wrap="wrap">
-              <HStack gap={0}>
-                {statusFilters.map((f) => (
-                  <Button
-                    key={f.value}
-                    label={f.label}
-                    variant={statusFilter === f.value ? 'primary' : 'secondary'}
-                    size="sm"
-                    onClick={() => setStatusFilter(f.value)}
-                  />
-                ))}
+            <VStack gap={3} style={{ width: '100%' }}>
+              <HStack gap={2} wrap="wrap" align="center">
+                {statusFilters.map((f) => {
+                  const isActive = statusFilter === f.value;
+                  return (
+                    <Button
+                      key={f.value}
+                      label={f.label}
+                      variant={isActive ? 'primary' : 'secondary'}
+                      size="sm"
+                      style={f.color ? {
+                        background: isActive ? f.color : undefined,
+                        borderColor: isActive ? f.color : f.color,
+                        color: isActive ? '#fff' : f.color,
+                      } : undefined}
+                      onClick={() => setStatusFilter(f.value)}
+                    />
+                  );
+                })}
               </HStack>
               <TextInput
                 label="Search logs"
@@ -214,32 +223,32 @@ export function ActivityPage() {
                 placeholder="Search logs..."
                 startIcon={Search}
                 isLabelHidden
-                width={250}
+                width="100%"
               />
-            </HStack>
-
-            <HStack gap={3} align="center">
-              <Text type="supporting">Recent runs</Text>
-              <Divider />
-            </HStack>
+            </VStack>
 
             {filteredLogs.length === 0 ? (
-              <EmptyState title="No matching logs" description="Try adjusting your filters or search query." />
+              <EmptyState
+                title="No matching logs"
+                description="Try adjusting your filters or search query."
+                icon={<Icon icon={Search} size="lg" color="secondary" />}
+                actions={<Button label="Clear filters" variant="secondary" onClick={() => { setStatusFilter('all'); setSearchQuery(''); }} />}
+              />
             ) : (
               <VStack gap={3}>
                 {filteredLogs.map((log) => {
                   const runBadge = runStatusBadge(log.status);
                   return (
-                    <Card key={String(log.id)} padding={4}>
+                    <Card key={String(log.id)} padding={3} variant="muted">
                       <VStack gap={2}>
-                        <HStack justify="between" align="start" wrap="wrap">
-                          <VStack gap={1}>
-                            <HStack gap={2} align="center">
+                        <HStack justify="between" align="center" wrap="wrap" gap={2}>
+                          <VStack gap={1} style={{ minWidth: 0, flex: 1 }}>
+                            <HStack gap={2} align="center" wrap="wrap">
                               <Badge variant={runBadgeVariant(log.status)} label={runBadge.label} />
                               <Text type="body" weight="medium">{humanSummary(log)}</Text>
                             </HStack>
-                            <Text type="supporting" hasTabularNumbers>
-                              {formatTrigger(log.trigger)} · {formatDuration(log.started_at, log.completed_at)} · {formatTime(log.started_at)}
+                            <Text type="supporting" hasTabularNumbers style={{ fontSize: 'var(--font-size-sm)' }}>
+                              {formatTrigger(log.trigger)} {formatDuration(log.started_at, log.completed_at)} {formatTime(log.started_at)}
                             </Text>
                           </VStack>
                           {hasDetails(log) && (
@@ -264,15 +273,15 @@ export function ActivityPage() {
                         )}
 
                         {expandedId === log.id && hasDetails(log) && (
-                          <VStack gap={2} padding={3}>
+                          <VStack gap={2}>
                             {log.items?.length && (
                               <VStack gap={2}>
                                 {log.items.map((item, idx) => {
                                   const itemBadge = itemStatusBadge(item.status);
                                   return (
-                                    <Section key={idx} variant="muted" padding={3}>
-                                      <HStack justify="between" align="start" wrap="wrap">
-                                        <VStack gap={0}>
+                                    <Card key={idx} padding={2} variant="default">
+                                      <HStack justify="between" align="center" wrap="wrap" gap={2}>
+                                        <VStack gap={0} style={{ minWidth: 0, flex: 1 }}>
                                           <Text type="body" weight="semibold">{item.sonarr_title}</Text>
                                           <Text type="supporting">{detailLine(item)}</Text>
                                         </VStack>
@@ -284,19 +293,19 @@ export function ActivityPage() {
                                           <Text type="supporting">{item.error}</Text>
                                         </HStack>
                                       )}
-                                    </Section>
+                                    </Card>
                                   );
                                 })}
                               </VStack>
                             )}
                             {log.errors && (
-                              <Section variant="muted" padding={3}>
+                              <Card padding={2} variant="default">
                                 <HStack gap={2} align="center">
                                   <TriangleAlert size={14} />
                                   <Text type="body" weight="medium">Run errors</Text>
                                 </HStack>
                                 <Text type="supporting">{log.errors}</Text>
-                              </Section>
+                              </Card>
                             )}
                           </VStack>
                         )}
@@ -307,7 +316,7 @@ export function ActivityPage() {
               </VStack>
             )}
 
-            {hasMore && (
+            {hasMore && filteredLogs.length > 0 && (
               <HStack justify="center">
                 <Button
                   label={loadingMore ? 'Loading...' : 'Load more'}

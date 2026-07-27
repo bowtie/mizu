@@ -1,3 +1,248 @@
 :root {
   --stylex-injection: 0;
 }
+
+body {
+  background: var(--color-background-body);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+}
+
+.mizu-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: var(--shadow-low);
+}
+
+.mizu-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-med);
+}
+
+.mizu-card-img-wrap {
+  position: relative;
+}
+
+.mizu-card-img-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 45%);
+  pointer-events: none;
+}
+
+.mizu-card-img-wrap.is-empty::after {
+  display: none;
+}
+
+.mizu-card-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 12px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.mizu-card-overlay-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Episode type filter — colored selected states for SegmentedControl */
+.astryx-segmented-control-item.selected[data-value="all"] {
+  color: var(--color-text-primary);
+  background-color: var(--color-neutral);
+  box-shadow: none;
+}
+
+.astryx-segmented-control-item.selected[data-value="canon"] {
+  color: var(--color-border-blue);
+  background-color: var(--color-background-blue);
+  box-shadow: none;
+}
+
+.astryx-segmented-control-item.selected[data-value="anime_canon"] {
+  color: var(--color-border-purple);
+  background-color: var(--color-background-purple);
+  box-shadow: none;
+}
+
+.astryx-segmented-control-item.selected[data-value="mixed_canon"] {
+  color: var(--color-border-yellow);
+  background-color: var(--color-background-yellow);
+  box-shadow: none;
+}
+
+.astryx-segmented-control-item.selected[data-value="filler"] {
+  color: var(--color-border-red);
+  background-color: var(--color-background-red);
+  box-shadow: none;
+}
+
+/* Season rows — separate the primary season label from supporting episode count */
+.astryx-collapsible > button > span:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--spacing-3);
+  width: 100%;
+}
+
+/* Episode list — suppress divider on last item */
+.astryx-list .astryx-list-item:last-child {
+  border-block-end: none;
+}
+
+/* Episode list — hover feedback */
+.astryx-list .astryx-list-item {
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+@media (hover: hover) {
+  .astryx-list .astryx-list-item:hover {
+    background-color: var(--color-overlay-hover);
+  }
+}
+
+/* Controls reveal — bar slides from behind hero (N900), grid pushes content down */
+.show-actions-bar {
+  margin-top: calc(-1 * var(--radius-container));
+}
+
+.controls-reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+  position: relative;
+  z-index: 1;
+}
+
+@media (hover: hover) {
+  .controls-reveal {
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 220ms ease-out;
+  }
+
+  .controls-reveal > .controls-reveal-inner {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .show-actions-bar {
+    transform: translateY(calc(-100% + var(--radius-container)));
+    transition: transform 220ms ease-out;
+  }
+
+  .show-hero:hover ~ .controls-reveal,
+  .controls-reveal:hover,
+  .controls-reveal:focus-within {
+    grid-template-rows: 1fr;
+  }
+
+  .show-hero:hover ~ .controls-reveal .show-actions-bar,
+  .controls-reveal:hover .show-actions-bar,
+  .controls-reveal:focus-within .show-actions-bar {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .controls-reveal {
+    transition: none;
+  }
+  .show-actions-bar {
+    transition: none;
+  }
+}
+
+.episode-filters-mobile {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .show-actions-bar {
+    width: 100% !important;
+    max-width: none !important;
+    gap: var(--spacing-3) !important;
+    justify-content: flex-start !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .show-actions-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .show-actions-bar > * {
+    flex-shrink: 0;
+  }
+
+  .show-actions-bar .show-actions-bar-center {
+    margin-inline: auto;
+  }
+
+  .show-actions-bar .show-actions-bar-end {
+    margin-left: 0;
+  }
+
+  .episode-filters-desktop {
+    display: none;
+  }
+
+  .episode-filters-mobile {
+    display: block;
+  }
+}
+
+/* Episode list — fixed-width type badges for alignment */
+.astryx-list .astryx-list-item .astryx-badge {
+  width: 56px;
+  justify-content: center;
+}
+
+/* Episode input — use the adjacent +/- controls instead of native spinners */
+.astryx-number-input input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* Actions bar — blend +/- addons with the number input as one unified control */
+.show-actions-bar .astryx-input-group-text {
+  background-color: var(--color-background-surface);
+  border: 1px solid var(--color-border-emphasized);
+}
+
+.show-actions-bar .astryx-input-group-text:first-child {
+  border-inline-end: none;
+}
+
+.show-actions-bar .astryx-input-group-text:last-child {
+  border-inline-start: none;
+}
+
+/* Enabled +/- buttons get a lighter surface than the input field */
+.show-actions-bar .astryx-input-group-text:not(:has(button:disabled)) {
+  background-color: var(--color-overlay-hover);
+}
+
+/* Disabled InputGroup already fades the whole group; prevent double opacity on the input */
+.show-actions-bar .astryx-number-input {
+  opacity: 1;
+}
+
+.show-actions-bar .astryx-number-input input[type='number'] {
+  text-align: center;
+}
+
+.astryx-number-input input[type='number']::-webkit-inner-spin-button,
+.astryx-number-input input[type='number']::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}

@@ -1,17 +1,115 @@
-import { StrictMode } from 'react';
+import { StrictMode, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Theme } from '@astryxdesign/core/theme';
-import { neutralTheme } from '@astryxdesign/theme-neutral';
+import { TopNav } from '@astryxdesign/core/TopNav';
+import { TopNavHeading } from '@astryxdesign/core/TopNav';
+import { TopNavItem } from '@astryxdesign/core/TopNav';
+import { DropdownMenu } from '@astryxdesign/core/DropdownMenu';
+import { Check, Palette } from 'lucide-react';
+import { BrowserRouter, useLocation, Link } from 'react-router-dom';
+
+// Import theme CSS files
 import '@astryxdesign/core/reset.css';
 import '@astryxdesign/core/astryx.css';
 import '@astryxdesign/theme-neutral/theme.css';
+import '@astryxdesign/theme-y2k/theme.css';
+
 import './index.css';
 import { App } from './App';
+import { themeOptions, defaultTheme } from './lib/themes';
+import type { ThemeOption } from './lib/themes';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <Theme theme={neutralTheme}>
-      <App />
-    </Theme>
-  </StrictMode>,
-);
+const STORAGE_KEY = 'mizu-theme';
+
+function ThemeMenu({
+  selected,
+  onSelect,
+}: {
+  selected: ThemeOption;
+  onSelect: (t: ThemeOption) => void;
+}) {
+  const items = themeOptions.map((opt) => ({
+    label: opt.label,
+    icon: selected.id === opt.id ? <Check size={14} /> : undefined,
+    onClick: () => onSelect(opt),
+  }));
+
+  return (
+    <DropdownMenu
+      button={{
+        label: selected.label,
+        variant: 'secondary',
+        size: 'sm',
+        isIconOnly: true,
+        icon: <Palette size={16} />,
+      }}
+      items={items}
+      menuWidth={220}
+    />
+  );
+}
+
+function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const isShows = currentPath === '/' || currentPath === '/shows' || currentPath.startsWith('/shows/');
+  const isActivity = currentPath === '/activity';
+  const isSettings = currentPath === '/settings';
+
+  return (
+    <TopNav
+      label="Mizu navigation"
+      heading={<TopNavHeading heading="Mizu" headingHref="/" as={Link} />}
+      startContent={
+        <>
+          <TopNavItem label="Library" href="/" isSelected={isShows} as={Link} />
+          <TopNavItem label="Activity" href="/activity" isSelected={isActivity} as={Link} />
+          <TopNavItem label="Settings" href="/settings" isSelected={isSettings} as={Link} />
+        </>
+      }
+      endContent={themeMenu}
+    />
+  );
+}
+
+function Root() {
+  const [selected, setSelected] = useState<ThemeOption>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return themeOptions.find((t) => t.id === saved) ?? defaultTheme;
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, selected.id);
+  }, [selected.id]);
+
+  const menu = <ThemeMenu selected={selected} onSelect={setSelected} />;
+
+  return (
+    <StrictMode>
+      <Theme theme={selected.theme} mode={selected.mode ?? 'system'}>
+        <BrowserRouter>
+          <div style={{ minHeight: '100vh', background: 'var(--color-background-surface)' }}>
+            <div
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 1000,
+                background: 'color-mix(in srgb, var(--color-background-surface) 70%, transparent)',
+                backdropFilter: 'blur(14px) saturate(140%)',
+                WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+                borderBottom: '1px solid var(--color-border)',
+              }}
+            >
+              <div style={{ maxWidth: 900, marginInline: 'auto' }}>
+                <Nav themeMenu={menu} />
+              </div>
+            </div>
+            <App />
+          </div>
+        </BrowserRouter>
+      </Theme>
+    </StrictMode>
+  );
+}
+
+createRoot(document.getElementById('root')!).render(<Root />);

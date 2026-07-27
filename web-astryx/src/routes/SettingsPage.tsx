@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
 import { Section } from '@astryxdesign/core/Section';
+import { Grid } from '@astryxdesign/core/Grid';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
@@ -9,8 +10,10 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Switch } from '@astryxdesign/core/Switch';
+import { Selector } from '@astryxdesign/core/Selector';
 import { Divider } from '@astryxdesign/core/Divider';
-import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff, Minus, Plus } from 'lucide-react';
+import { Card } from '@astryxdesign/core/Card';
+import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { useAppStore } from '../lib/store';
 import {
   getSettings,
@@ -35,6 +38,10 @@ const syncIntervalOptions: SelectOption[] = [
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+const rowPadding: CSSProperties = {
+  paddingBlock: 'var(--spacing-4)',
+};
+
 interface PristineSnapshot {
   sonarrUrl: string;
   apiKeyDirty: boolean;
@@ -49,7 +56,7 @@ export function SettingsPage() {
   const { setSettings, addNotification } = useAppStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [, setTesting] = useState(false);
   const [refreshingCache, setRefreshingCache] = useState(false);
   const [revealingKey, setRevealingKey] = useState(false);
   const [testPhase, setTestPhase] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle');
@@ -92,7 +99,6 @@ export function SettingsPage() {
   );
 
   const urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
-  const syncIntervalIndex = syncIntervalOptions.findIndex((o) => o.value === syncInterval);
 
   const scheduleReset = (delay = 1800) => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -272,11 +278,6 @@ export function SettingsPage() {
     setRefreshingCache(false);
   };
 
-  const stepSyncInterval = (dir: number) => {
-    const next = Math.min(Math.max(syncIntervalIndex + dir, 0), syncIntervalOptions.length - 1);
-    setSyncInterval(syncIntervalOptions[next].value);
-  };
-
   const formatCacheTime = (value: string | null | undefined): string => {
     if (!value) return 'Never refreshed';
     return new Date(value).toLocaleString();
@@ -284,8 +285,8 @@ export function SettingsPage() {
 
   if (loading) {
     return (
-      <Section padding={6}>
-        <VStack gap={3} hAlign="center" padding={10}>
+      <Section padding={4} maxWidth={900} style={{ marginInline: 'auto' }}>
+        <VStack gap={3} hAlign="center" padding={6}>
           <Spinner size="lg" label="Loading settings" />
         </VStack>
       </Section>
@@ -293,13 +294,15 @@ export function SettingsPage() {
   }
 
   return (
-    <Section padding={6}>
-      <VStack gap={6}>
+    <Section padding={4} maxWidth={900} style={{ marginInline: 'auto' }}>
+      <VStack gap={8}>
         {/* Header */}
-        <HStack justify="between" align="start" wrap="wrap">
+        <HStack justify="between" align="center" wrap="wrap" gap={4}>
           <VStack gap={1}>
             <Heading level={1}>Settings</Heading>
-            <Text type="supporting">Configure Sonarr connection, sync behavior, and defaults.</Text>
+            <Text type="supporting" color="secondary">
+              Configure Sonarr connection, sync behavior, and defaults.
+            </Text>
           </VStack>
           <HStack gap={3} align="center">
             {settingsDirty && <Badge variant="warning" label="Unsaved changes" />}
@@ -314,206 +317,214 @@ export function SettingsPage() {
           </HStack>
         </HStack>
 
-        {/* Connection group */}
-        <Section variant="muted" padding={5}>
-          <VStack gap={0}>
-            <Heading level={3}>Connection</Heading>
-            <Divider />
+        {/* Connection */}
+        <VStack gap={0}>
+          <Heading level={2}>Connection</Heading>
+          <Divider />
 
-            {/* Sonarr URL */}
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">Sonarr URL</Text>
-                <Text type="supporting">Base URL of your Sonarr instance.</Text>
-                {sonarrUrl && !urlValid && <Text type="supporting" color="accent">URL must start with http:// or https://</Text>}
-              </VStack>
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">Sonarr URL</Text>
+              <Text type="supporting" color="secondary" display="block">Base URL of your Sonarr instance.</Text>
+              {sonarrUrl && !urlValid && (
+                <Text type="supporting" display="block" style={{ color: 'var(--color-error)' }}>URL must start with http:// or https://</Text>
+              )}
+            </VStack>
+            <TextInput
+              label="Sonarr URL"
+              value={sonarrUrl}
+              onChange={handleUrlInput}
+              placeholder="http://localhost:8989"
+              isLabelHidden
+              width={320}
+            />
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">API key</Text>
+              <Text type="supporting" color="secondary" display="block">Found in Sonarr under Settings, General.</Text>
+            </VStack>
+            <HStack gap={2} align="center">
               <TextInput
-                label="Sonarr URL"
-                value={sonarrUrl}
-                onChange={handleUrlInput}
-                placeholder="http://localhost:8989"
+                label="API key"
+                type={apiKeyVisible ? 'text' : 'password'}
+                value={sonarrApiKey}
+                onChange={handleApiKeyInput}
+                placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
                 isLabelHidden
-                width={256}
+                width={280}
               />
+              {(hasSavedApiKey || apiKeyDirty) && (
+                <Button
+                  label={apiKeyVisible ? 'Hide' : 'Show'}
+                  variant="ghost"
+                  isIconOnly
+                  icon={apiKeyVisible ? <EyeOff size={16} /> : revealingKey ? <Spinner size="sm" /> : <Eye size={16} />}
+                  onClick={toggleApiKeyVisibility}
+                  isDisabled={revealingKey}
+                />
+              )}
             </HStack>
+          </HStack>
+          <Divider />
 
-            <Divider />
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">Test connection</Text>
+              <Text type="supporting" color="secondary" display="block">Check that Mizu can reach Sonarr with the URL and API key above.</Text>
+              {testPhase === 'error' && testErrorMessage && (
+                <Text type="supporting" display="block" style={{ color: 'var(--color-error)' }}>{testErrorMessage}</Text>
+              )}
+            </VStack>
+            <Button
+              label={
+                testPhase === 'connecting' ? 'Testing' :
+                testPhase === 'success' ? 'Connected' :
+                testPhase === 'error' ? 'Retry' : 'Test'
+              }
+              variant={
+                testPhase === 'success' ? 'primary' :
+                testPhase === 'error' ? 'destructive' : 'secondary'
+              }
+              icon={
+                testPhase === 'connecting' ? <Spinner size="sm" /> :
+                testPhase === 'success' ? <Check size={16} /> :
+                testPhase === 'error' ? <AlertTriangle size={16} /> : <Plug size={16} />
+              }
+              onClick={handleTestConnection}
+              isDisabled={testPhase !== 'idle' || !sonarrUrl || !urlValid}
+              style={testPhase === 'success' ? {
+                background: 'var(--color-success)',
+                borderColor: 'var(--color-success)',
+                color: 'var(--color-on-success)',
+                opacity: 1,
+                cursor: 'default',
+              } : testPhase === 'error' ? {
+                opacity: 1,
+                cursor: 'default',
+              } : testPhase === 'connecting' ? {
+                opacity: 1,
+                cursor: 'default',
+              } : undefined}
+            />
+          </HStack>
+        </VStack>
 
-            {/* API key */}
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">API key</Text>
-                <Text type="supporting">Found in Sonarr under Settings, General.</Text>
-              </VStack>
-              <HStack gap={2} align="center">
-                <TextInput
-                  label="API key"
-                  type={apiKeyVisible ? 'text' : 'password'}
-                  value={sonarrApiKey}
-                  onChange={handleApiKeyInput}
-                  placeholder={hasSavedApiKey ? 'Saved API key' : 'Your Sonarr API key'}
+        {/* Sync */}
+        <VStack gap={0}>
+          <Heading level={2}>Sync</Heading>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">Sync interval</Text>
+              <Text type="supporting" color="secondary" display="block">How often Mizu checks for episode changes and updates Sonarr.</Text>
+            </VStack>
+            <Selector
+              label="Sync interval"
+              value={syncInterval}
+              options={syncIntervalOptions}
+              onChange={(v) => setSyncInterval(v as string)}
+              isLabelHidden
+              width={180}
+            />
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">AniList artwork</Text>
+              <Text type="supporting" color="secondary" display="block">Use AniList banners and posters instead of Sonarr images only.</Text>
+            </VStack>
+            <Switch
+              label="AniList artwork"
+              value={enableAniListArtwork}
+              onChange={setEnableAniListArtwork}
+              isLabelHidden
+            />
+          </HStack>
+          <Divider />
+
+          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
+            <VStack gap={0}>
+              <Text type="body" weight="semibold" display="block">AFL cache</Text>
+              <Text type="supporting" color="secondary" hasTabularNumbers display="block">
+                {cacheCount} shows cached, refreshed {formatCacheTime(cacheRefreshedAt)}.
+              </Text>
+            </VStack>
+            <Button
+              label={refreshingCache ? 'Refreshing...' : 'Refresh'}
+              variant="secondary"
+              icon={<RefreshCw size={16} />}
+              onClick={handleRefreshCache}
+              isLoading={refreshingCache}
+            />
+          </HStack>
+        </VStack>
+
+        {/* Defaults */}
+        <VStack gap={4}>
+          <VStack gap={1}>
+            <Heading level={2}>Defaults</Heading>
+            <Text type="supporting" color="secondary" display="block">
+              These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.
+            </Text>
+          </VStack>
+
+          <Grid columns={3} gap={4} align="start">
+            <Card padding={4} variant="green">
+              <HStack hAlign="between" vAlign="center" wrap="nowrap">
+                <VStack gap={0} style={{ minWidth: 120 }}>
+                  <Text type="body" weight="semibold" display="block">Canon</Text>
+                  <Text type="supporting" color="secondary" display="block">Main plot episodes</Text>
+                </VStack>
+                <Switch
+                  label="Track canon"
+                  value={trackAnimeCanonDefault}
+                  onChange={setTrackAnimeCanonDefault}
                   isLabelHidden
-                  width={256}
-                />
-                {(hasSavedApiKey || apiKeyDirty) && (
-                  <Button
-                    label={apiKeyVisible ? 'Hide' : 'Show'}
-                    variant="ghost"
-                    isIconOnly
-                    icon={apiKeyVisible ? <EyeOff size={16} /> : revealingKey ? <Spinner size="sm" /> : <Eye size={16} />}
-                    onClick={toggleApiKeyVisibility}
-                    isDisabled={revealingKey}
-                  />
-                )}
-              </HStack>
-            </HStack>
-
-            <Divider />
-
-            {/* Test connection */}
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">Test connection</Text>
-                <Text type="supporting">Check that Mizu can reach Sonarr with the URL and API key above.</Text>
-                {testPhase === 'error' && testErrorMessage && (
-                  <HStack gap={2} align="start" style={{ color: 'var(--color-error)' }}>
-                    <AlertTriangle size={14} />
-                    <Text type="supporting">{testErrorMessage}</Text>
-                  </HStack>
-                )}
-              </VStack>
-              <Button
-                label={
-                  testPhase === 'connecting' ? 'Testing' :
-                  testPhase === 'success' ? 'Connected' :
-                  testPhase === 'error' ? 'Retry' : 'Test'
-                }
-                variant={
-                  testPhase === 'success' ? 'primary' :
-                  testPhase === 'error' ? 'destructive' : 'secondary'
-                }
-                icon={
-                  testPhase === 'connecting' ? <Spinner size="sm" /> :
-                  testPhase === 'success' ? <Check size={16} /> :
-                  testPhase === 'error' ? <AlertTriangle size={16} /> : <Plug size={16} />
-                }
-                onClick={handleTestConnection}
-                isDisabled={testing || testPhase === 'success' || !sonarrUrl || !urlValid}
-                isLoading={testing}
-              />
-            </HStack>
-          </VStack>
-        </Section>
-
-        {/* Sync group */}
-        <Section variant="muted" padding={5}>
-          <VStack gap={0}>
-            <Heading level={3}>Sync</Heading>
-            <Divider />
-
-            {/* Sync interval */}
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">Sync interval</Text>
-                <Text type="supporting">How often Mizu checks for episode changes and updates Sonarr.</Text>
-              </VStack>
-              <HStack gap={0}>
-                <Button
-                  label="Decrease"
-                  variant="secondary"
-                  isIconOnly
-                  icon={<Minus size={16} />}
-                  onClick={() => stepSyncInterval(-1)}
-                  isDisabled={syncIntervalIndex <= 0}
-                />
-                <Section variant="muted" padding={3} style={{ minWidth: 80, textAlign: 'center' }}>
-                  <Text type="body" hasTabularNumbers>{syncIntervalOptions[syncIntervalIndex]?.label}</Text>
-                </Section>
-                <Button
-                  label="Increase"
-                  variant="secondary"
-                  isIconOnly
-                  icon={<Plus size={16} />}
-                  onClick={() => stepSyncInterval(1)}
-                  isDisabled={syncIntervalIndex >= syncIntervalOptions.length - 1}
+                  style={{ '--color-accent': 'var(--color-border-green)', '--color-background-gray': 'var(--color-background-green)' } as React.CSSProperties}
                 />
               </HStack>
-            </HStack>
+            </Card>
 
-            <Divider />
+            <Card padding={4} variant="yellow">
+              <HStack hAlign="between" vAlign="center" wrap="nowrap">
+                <VStack gap={0} style={{ minWidth: 120 }}>
+                  <Text type="body" weight="semibold" display="block">Mixed</Text>
+                  <Text type="supporting" color="secondary" display="block">Mix of canon and filler</Text>
+                </VStack>
+                <Switch
+                  label="Track mixed"
+                  value={trackMixedDefault}
+                  onChange={setTrackMixedDefault}
+                  isLabelHidden
+                  style={{ '--color-accent': 'var(--color-border-yellow)', '--color-background-gray': 'var(--color-background-yellow)' } as React.CSSProperties}
+                />
+              </HStack>
+            </Card>
 
-            {/* AniList artwork */}
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">AniList artwork</Text>
-                <Text type="supporting">Use AniList banners and posters instead of Sonarr images only.</Text>
-              </VStack>
-              <Switch
-                label="AniList artwork"
-                value={enableAniListArtwork}
-                onChange={setEnableAniListArtwork}
-                isLabelHidden
-              />
-            </HStack>
-
-            <Divider />
-
-            {/* AFL cache */}
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">AFL cache</Text>
-                <Text type="supporting" hasTabularNumbers>
-                  {cacheCount} shows cached, refreshed {formatCacheTime(cacheRefreshedAt)}.
-                </Text>
-              </VStack>
-              <Button
-                label={refreshingCache ? 'Refreshing...' : 'Refresh'}
-                variant="secondary"
-                icon={<RefreshCw size={16} />}
-                onClick={handleRefreshCache}
-                isLoading={refreshingCache}
-              />
-            </HStack>
-          </VStack>
-        </Section>
-
-        {/* Defaults group */}
-        <Section variant="muted" padding={5}>
-          <VStack gap={0}>
-            <Heading level={3}>Defaults</Heading>
-            <Text type="supporting">These tracking rules are applied automatically when you add a new anime mapping. You can override them per anime.</Text>
-            <Divider />
-
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">Anime canon</Text>
-                <Text type="supporting">Original anime episodes</Text>
-              </VStack>
-              <Switch label="Track anime canon" value={trackAnimeCanonDefault} onChange={setTrackAnimeCanonDefault} isLabelHidden />
-            </HStack>
-
-            <Divider />
-
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">Mixed canon</Text>
-                <Text type="supporting">Episodes that mix canon and filler content</Text>
-              </VStack>
-              <Switch label="Track mixed canon" value={trackMixedDefault} onChange={setTrackMixedDefault} isLabelHidden />
-            </HStack>
-
-            <Divider />
-
-            <HStack justify="between" align="center" wrap="wrap" paddingBlock={3}>
-              <VStack gap={0}>
-                <Text type="body" weight="medium">Filler</Text>
-                <Text type="supporting">Anime-original filler episodes</Text>
-              </VStack>
-              <Switch label="Track filler" value={trackFillerDefault} onChange={setTrackFillerDefault} isLabelHidden />
-            </HStack>
-          </VStack>
-        </Section>
+            <Card padding={4} variant="red">
+              <HStack hAlign="between" vAlign="center" wrap="nowrap">
+                <VStack gap={0} style={{ minWidth: 120 }}>
+                  <Text type="body" weight="semibold" display="block">Filler</Text>
+                  <Text type="supporting" color="secondary" display="block">Skippable, no plot impact</Text>
+                </VStack>
+                <Switch
+                  label="Track filler"
+                  value={trackFillerDefault}
+                  onChange={setTrackFillerDefault}
+                  isLabelHidden
+                  style={{ '--color-accent': 'var(--color-border-red)', '--color-background-gray': 'var(--color-background-red)' } as React.CSSProperties}
+                />
+              </HStack>
+            </Card>
+          </Grid>
+        </VStack>
       </VStack>
     </Section>
   );
 }
+

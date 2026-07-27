@@ -7,7 +7,7 @@ export function Navbar() {
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const isShows = currentPath === '/shows' || currentPath.startsWith('/shows/');
+  const isShows = currentPath === '/' || currentPath === '/shows' || currentPath.startsWith('/shows/');
   const isActivity = currentPath === '/activity';
   const isSettings = currentPath === '/settings';
 
@@ -15,11 +15,11 @@ export function Navbar() {
     <TopNav
       label="Mizu navigation"
       heading={
-        <TopNavHeading heading="Mizu" headingHref="/shows" />
+        <TopNavHeading heading="Mizu" headingHref="/" />
       }
       startContent={
         <>
-          <TopNavItem label="Anime" href="/shows" isSelected={isShows} />
+          <TopNavItem label="Library" href="/" isSelected={isShows} />
           <TopNavItem label="Activity" href="/activity" isSelected={isActivity} />
           <TopNavItem label="Settings" href="/settings" isSelected={isSettings} />
         </>

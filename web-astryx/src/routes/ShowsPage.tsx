@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
+import { StackItem } from '@astryxdesign/core/Stack';
 import { Section } from '@astryxdesign/core/Section';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Text } from '@astryxdesign/core/Text';
@@ -9,12 +10,16 @@ import { Button } from '@astryxdesign/core/Button';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Icon } from '@astryxdesign/core/Icon';
 import { Dialog } from '@astryxdesign/core/Dialog';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Selector } from '@astryxdesign/core/Selector';
+import { DropdownMenu } from '@astryxdesign/core/DropdownMenu';
 import { Switch } from '@astryxdesign/core/Switch';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { Divider } from '@astryxdesign/core/Divider';
+import { ClickableCard } from '@astryxdesign/core/ClickableCard';
+import { Grid } from '@astryxdesign/core/Grid';
 import { Plus, Search, Waves, CircleAlert, Check, X } from 'lucide-react';
 import { useAppStore } from '../lib/store';
 import {
@@ -144,6 +149,7 @@ export function ShowsPage() {
     return {
       ...show,
       poster: (settings?.enable_anilist_artwork && show.anilist_poster_url) ? show.anilist_poster_url : posterUrl(series),
+      banner: bannerUrl(show, series),
     };
   });
 
@@ -190,8 +196,6 @@ export function ShowsPage() {
     if (!preferred) return '';
     return resolveSonarrImageUrl(preferred, settings?.sonarr_url || '');
   }
-  void bannerUrl;
-
   const loadLanding = useCallback(async () => {
     setLoading(true);
     try {
@@ -560,90 +564,112 @@ export function ShowsPage() {
   };
 
   return (
-    <Section padding={6}>
+    <Section padding={4} maxWidth={900} style={{ marginInline: 'auto' }}>
       <VStack gap={6}>
-        {/* Header */}
-        <HStack justify="between" align="end" wrap="wrap">
+        {/* Row 1: title + supporting text left, add right */}
+        <HStack justify="between" align="center" wrap="wrap" gap={4}>
           <VStack gap={1}>
-            <Heading level={1}>Anime</Heading>
-            <Text type="supporting">
-              {!loading && <><Text type="body" hasTabularNumbers>{(shows || []).length}</Text> tracked · </>}
-              Tracked series, sync status, and filler mapping.
+            <Heading level={1}>Library</Heading>
+            <Text type="supporting" color="secondary">
+              {(shows || []).length} tracked
             </Text>
           </VStack>
           <Button label="Add anime" variant="primary" icon={<Plus size={16} />} onClick={openAddModal} />
         </HStack>
 
-        {/* Search + sort */}
-        <HStack gap={3} align="center" wrap="wrap">
-          <TextInput
-            label="Search anime"
-            value={filter}
-            onChange={setFilter}
-            placeholder="Search anime by title or slug"
-            isLabelHidden
-            startIcon={Search}
-            width="100%"
-          />
-          <Selector
-            label="Sort by"
-            options={sortOptions}
-            value={sortBy}
-            onChange={setSortBy}
-            width={200}
-          />
+        {/* Row 2: search (fill) + sort, independent */}
+        <HStack gap={3} align="center" wrap="nowrap" width="100%">
+          <StackItem size="fill">
+            <TextInput
+              label="Search anime"
+              value={filter}
+              onChange={setFilter}
+              placeholder="Search anime..."
+              isLabelHidden
+              startIcon={Search}
+              width="100%"
+            />
+          </StackItem>
+          <StackItem size="static">
+            <DropdownMenu
+              button={{label: sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort', size: 'lg'}}
+              items={sortOptions.map((o) => ({
+                label: o.label,
+                onClick: () => setSortBy(o.value),
+              }))}
+            />
+          </StackItem>
         </HStack>
 
         {/* Content */}
         {loading ? (
-          <VStack gap={3} hAlign="center" padding={10}>
+          <VStack gap={3} hAlign="center" padding={6}>
             <Spinner size="lg" label="Loading anime" />
           </VStack>
         ) : filteredShows.length === 0 && (shows || []).length === 0 ? (
           <EmptyState
             title="No anime synced yet"
             description="Add your first Sonarr anime mapping to start monitoring filler decisions in Mizu."
-            icon={<Waves size={18} />}
+            icon={<Icon icon={Waves} size="lg" color="secondary" />}
             actions={<Button label="Add anime" variant="primary" icon={<Plus size={16} />} onClick={openAddModal} />}
           />
         ) : filteredShows.length === 0 ? (
           <EmptyState
             title="No matching anime"
             description="Try another title, slug, or keyword."
-            icon={<CircleAlert size={18} />}
+            icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
+            actions={<Button label="Clear search" variant="secondary" onClick={() => setFilter('')} />}
           />
         ) : (
-          <VStack gap={0}>
-            <HStack gap={3} align="center">
-              <Text type="supporting">Tracked</Text>
-              <Divider />
-            </HStack>
-            <List hasDividers>
-              {filteredShows.map((show: Show & { poster?: string }) => {
+          <VStack gap={4}>
+            <Grid columns={{minWidth: 320}} gap={4}>
+              {filteredShows.map((show: Show & { poster?: string; banner?: string }) => {
                 const badge = syncStateBadge(show.enabled);
+                const img = show.banner || show.poster;
                 return (
-                  <ListItem
+                  <ClickableCard
                     key={String(show.id)}
                     label={show.sonarr_title}
-                    description={`#${show.sync_watermark > 0 ? show.sync_watermark : 0}`}
                     onClick={() => openShow(show.id)}
-                    startContent={
-                      show.poster ? (
+                    padding={0}
+                    className="mizu-card"
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div
+                      className={`mizu-card-img-wrap${img ? '' : ' is-empty'}`}
+                      style={{ position: 'relative', aspectRatio: '16/9', overflow: 'clip', flexShrink: 0, background: 'var(--color-background-muted)' }}
+                    >
+                      {img ? (
                         <img
-                          src={show.poster}
+                          src={img}
                           alt=""
                           loading="lazy"
-                          style={{ width: 40, height: 56, objectFit: 'cover', borderRadius: 'var(--radius-2)' }}
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                         />
-                      ) : undefined
-                    }
-                    endContent={
-                      <Badge variant={show.enabled ? 'success' : 'neutral'} label={badge.label} />
-                    }
-                  />
+                      ) : (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Waves size={24} color="var(--color-icon-secondary)" />
+                        </div>
+                      )}
+                      {img && (
+                        <div className="mizu-card-overlay">
+                          <span className="mizu-card-overlay-title">{show.sonarr_title}</span>
+                          <Badge variant={show.enabled ? 'success' : 'neutral'} label={badge.label} />
+                        </div>
+                      )}
+                    </div>
+                    {!img && (
+                      <Section variant="transparent" padding={3}>
+                        <VStack gap={1}>
+                          <Heading level={3} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{show.sonarr_title}</Heading>
+                          <Text type="supporting" size="sm">#{show.sync_watermark > 0 ? show.sync_watermark : 0}</Text>
+                        </VStack>
+                      </Section>
+                    )}
+                  </ClickableCard>
                 );
               })}
-            </List>
+            </Grid>
           </VStack>
         )}
       </VStack>
@@ -684,11 +710,15 @@ export function ShowsPage() {
           {/* Step content */}
           {addStep === ADD_STEP_SERIES && (
             sonarrLoading ? (
-              <VStack gap={3} hAlign="center" padding={10}>
+              <VStack gap={3} hAlign="center" padding={6}>
                 <Spinner size="lg" label="Loading available Sonarr anime" />
               </VStack>
             ) : allSeries.length === 0 ? (
-              <EmptyState title="No anime found in Sonarr" description="Sonarr returned no anime series for this library." />
+              <EmptyState
+                title="No anime found in Sonarr"
+                description="Sonarr returned no anime series for this library."
+                icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
+              />
             ) : (
               <VStack gap={4}>
                 <TextInput
@@ -702,6 +732,7 @@ export function ShowsPage() {
                   <EmptyState
                     title="No anime match that search"
                     description="Try a different title, year, or jump into the cached AFL list and add it from there."
+                    icon={<Icon icon={Search} size="lg" color="secondary" />}
                     actions={<Button label="Not in Sonarr? Search AFL and add to Sonarr" variant="secondary" icon={<Search size={16} />} onClick={() => goToFallbackAflStep(seriesQuery.trim())} />}
                   />
                 ) : (
@@ -753,11 +784,15 @@ export function ShowsPage() {
                 placeholder="Filter cached AnimeFillerList titles"
               />
               {fallbackAflLoading ? (
-                <VStack gap={3} hAlign="center" padding={10}>
+                <VStack gap={3} hAlign="center" padding={6}>
                   <Spinner size="lg" label="Loading cached AnimeFillerList titles" />
                 </VStack>
               ) : fallbackAflResults.length === 0 ? (
-                <EmptyState title="No cached AFL titles found" description="Try another filter or refresh the AFL cache in Settings if this anime is new." />
+                <EmptyState
+                  title="No cached AFL titles found"
+                  description="Try another filter or refresh the AFL cache in Settings if this anime is new."
+                  icon={<Icon icon={Search} size="lg" color="secondary" />}
+                />
               ) : (
                 <List hasDividers style={{ maxHeight: 'var(--spacing-80)', overflow: 'auto' }}>
                   {fallbackAflResults.map((result) => {
@@ -814,7 +849,7 @@ export function ShowsPage() {
           {(addStep === ADD_STEP_MATCH || addStep === ADD_STEP_UNSAFE_MATCH) && (
             <VStack gap={4}>
               {matchLoading ? (
-                <VStack gap={3} hAlign="center" padding={10}>
+                <VStack gap={3} hAlign="center" padding={6}>
                   <Spinner size="lg" label="Loading AFL suggestions" />
                 </VStack>
               ) : (
@@ -855,7 +890,7 @@ export function ShowsPage() {
                       })}
                     </List>
                   ) : (
-                    !manualSearchVisible && <EmptyState title="No AFL matches" description="Try a manual search above." />
+                    !manualSearchVisible && <EmptyState title="No AFL matches" description="Try a manual search above." icon={<Icon icon={Search} size="lg" color="secondary" />} />
                   )}
 
                   {/* Tracking rules */}
