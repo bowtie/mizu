@@ -267,6 +267,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
 
   const fallbackFilterTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestReqId = useRef(0);
+  const lookupReqId = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -321,17 +322,20 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
 
   const handleManualSearch = async () => {
     if (!w.selectedSonarr || !w.manualSearchVisible) return;
+    const reqId = ++suggestReqId.current;
     dispatch({ type: "SET", payload: { manualSearching: true, selectedAfl: null } });
     try {
-      dispatch({
-        type: "SET",
-        payload: { displayedMatches: await searchAFL(w.manualQuery.trim(), w.selectedSonarr.id) },
-      });
+      const results = await searchAFL(w.manualQuery.trim(), w.selectedSonarr.id);
+      if (reqId !== suggestReqId.current) return;
+      dispatch({ type: "SET", payload: { displayedMatches: results } });
     } catch {
+      if (reqId !== suggestReqId.current) return;
       dispatch({ type: "SET", payload: { displayedMatches: [] } });
       addNotification("AFL search failed", "error");
     }
-    dispatch({ type: "SET", payload: { manualSearching: false } });
+    if (reqId === suggestReqId.current) {
+      dispatch({ type: "SET", payload: { manualSearching: false } });
+    }
   };
 
   const handleConfirmMatch = async (overrideAfl?: AFLMatch | null) => {
@@ -455,31 +459,36 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     filterFallbackAflResults(prefill);
   };
 
-  const loadSonarrLookupResults = async () => {
-    if (!w.sonarrLookupQuery.trim()) return;
+  const loadSonarrLookupResults = async (query?: string) => {
+    const q = (query ?? w.sonarrLookupQuery).trim();
+    if (!q) return;
+    const reqId = ++lookupReqId.current;
     dispatch({ type: "SET", payload: { sonarrLookupLoading: true, selectedSonarrLookup: null } });
     try {
-      dispatch({
-        type: "SET",
-        payload: { sonarrLookupResults: await lookupSonarrSeries(w.sonarrLookupQuery.trim()) },
-      });
+      const results = await lookupSonarrSeries(q);
+      if (reqId !== lookupReqId.current) return;
+      dispatch({ type: "SET", payload: { sonarrLookupResults: results } });
     } catch (err: any) {
+      if (reqId !== lookupReqId.current) return;
       dispatch({ type: "SET", payload: { sonarrLookupResults: [] } });
       addNotification("Sonarr lookup failed: " + err.message, "error");
     }
-    dispatch({ type: "SET", payload: { sonarrLookupLoading: false } });
+    if (reqId === lookupReqId.current) {
+      dispatch({ type: "SET", payload: { sonarrLookupLoading: false } });
+    }
   };
 
   const goToFallbackSonarrStep = async () => {
     if (!w.selectedFallbackAfl) return;
+    const query = w.selectedFallbackAfl.title || "";
     dispatch({
       type: "SET",
       payload: {
         addStep: ADD_STEP_FALLBACK_SONARR,
-        sonarrLookupQuery: w.selectedFallbackAfl.title || "",
+        sonarrLookupQuery: query,
       },
     });
-    await loadSonarrLookupResults();
+    await loadSonarrLookupResults(query);
   };
 
   const buildSonarrAddPayload = (series: SonarrSeries): SonarrAddPayload => ({
@@ -752,7 +761,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           <Button
             label="Search Sonarr"
             variant="secondary"
-            onClick={loadSonarrLookupResults}
+            onClick={() => loadSonarrLookupResults()}
             isLoading={w.sonarrLookupLoading}
           />
           {w.sonarrLookupResults.length > 0 && (
