@@ -5,20 +5,17 @@ import { Section } from '@astryxdesign/core/Section';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
-import { Badge } from '@astryxdesign/core/Badge';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
-import { Card } from '@astryxdesign/core/Card';
 import { TextInput } from '@astryxdesign/core/TextInput';
-import { Search } from 'lucide-react';
-import { RefreshCw, History, ChevronDown, TriangleAlert } from 'lucide-react';
+import { Search, RefreshCw, History, ChevronDown, TriangleAlert, Check, AlertCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAppStore } from '../lib/store';
 import { getSyncLogs, triggerSync } from '../lib/api';
 import type { SyncLog, SyncLogItem } from '../lib/types';
 import { runStatusBadge, itemStatusBadge } from '../lib/fox';
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 12;
 
 const statusFilters = [
   { value: 'all', label: 'All' },
@@ -27,58 +24,44 @@ const statusFilters = [
   { value: 'failed', label: 'Failed', color: 'var(--color-error)' },
 ];
 
-function formatDuration(startedAt: string | null | undefined, completedAt: string | null | undefined): string {
-  if (!startedAt || !completedAt) return 'Running';
-  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
-}
-
 function formatTime(dt: string | null | undefined): string {
-  if (!dt) return '-';
-  return new Date(dt).toLocaleString();
+  if (!dt) return '';
+  return new Date(dt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + new Date(dt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
 function formatTrigger(trigger: string | undefined): string {
-  if (!trigger) return '-';
+  if (!trigger) return '';
   return trigger === 'manual' ? 'Manual' : 'Scheduled';
 }
 
-function humanSummary(log: SyncLog): string {
-  const anime = log.shows_processed || 0;
-  const episodes = log.episodes_updated || 0;
-  const epLabel = episodes === 1 ? 'episode' : 'episodes';
-  return episodes > 0 ? `${anime} anime, ${episodes} ${epLabel} changed` : `${anime} anime checked`;
+function statusIcon(status: string | undefined) {
+  switch (status) {
+    case 'success': return <Check size={14} />;
+    case 'partial': return <AlertCircle size={14} />;
+    case 'failed': return <XCircle size={14} />;
+    case 'running': return <Loader2 size={14} className="animate-spin" />;
+    default: return <Check size={14} />;
+  }
 }
 
-function detailLine(item: SyncLogItem): string {
-  if (item.summary) return item.summary;
-  const changed = item.episodes_changed || 0;
-  return changed > 0
-    ? `${changed} ${changed === 1 ? 'episode change' : 'episode changes'}.`
-    : 'No episode changes.';
+function statusColor(status: string | undefined): string {
+  switch (status) {
+    case 'success': return 'var(--color-success)';
+    case 'partial': return 'var(--color-warning)';
+    case 'failed': return 'var(--color-error)';
+    case 'running': return 'var(--color-accent)';
+    default: return 'var(--color-text-secondary)';
+  }
 }
 
 function hasDetails(log: SyncLog): boolean {
-  return !!(log.items?.length || log.errors);
+  const hasChanges = (log.items || []).some((item) => (item.episodes_changed || 0) > 0 || item.error);
+  return hasChanges || !!log.errors;
 }
 
-function runBadgeVariant(status: string | undefined): 'success' | 'warning' | 'error' | 'neutral' {
-  switch (status) {
-    case 'success': return 'success';
-    case 'partial': return 'warning';
-    case 'failed': return 'error';
-    default: return 'neutral';
-  }
-}
-
-function itemBadgeVariant(status: string | undefined): 'success' | 'error' | 'neutral' {
-  switch (status) {
-    case 'success': return 'success';
-    case 'failed': return 'error';
-    default: return 'neutral';
-  }
+function detailLine(item: SyncLogItem): string | null {
+  const changed = item.episodes_changed || 0;
+  return changed > 0 ? `${changed} ${changed === 1 ? 'episode' : 'episodes'} updated` : null;
 }
 
 export function ActivityPage() {
@@ -98,9 +81,8 @@ export function ActivityPage() {
     if (statusFilter !== 'all' && log.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const summary = humanSummary(log).toLowerCase();
       const itemTitles = (log.items || []).map((i) => (i.sonarr_title || '').toLowerCase()).join(' ');
-      if (!summary.includes(q) && !itemTitles.includes(q) && !(log.errors || '').toLowerCase().includes(q)) return false;
+      if (!itemTitles.includes(q) && !(log.errors || '').toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -235,85 +217,119 @@ export function ActivityPage() {
                 actions={<Button label="Clear filters" variant="secondary" onClick={() => { setStatusFilter('all'); setSearchQuery(''); }} />}
               />
             ) : (
-              <VStack gap={3}>
-                {filteredLogs.map((log) => {
-                  const runBadge = runStatusBadge(log.status);
-                  return (
-                    <Card key={String(log.id)} padding={3} variant="muted">
-                      <VStack gap={2}>
-                        <HStack justify="between" align="center" wrap="wrap" gap={2}>
-                          <VStack gap={1} style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ position: 'relative', paddingLeft: '28px' }}>
+                {/* Timeline line */}
+                <div style={{
+                  position: 'absolute',
+                  left: '11px',
+                  top: 'var(--spacing-2)',
+                  bottom: 'var(--spacing-2)',
+                  width: '2px',
+                  backgroundColor: 'var(--color-border)',
+                }} />
+
+                <VStack gap={4}>
+                  {filteredLogs.map((log) => {
+                    const isExpanded = expandedId === log.id;
+                    const episodes = log.episodes_updated || 0;
+                    const anime = log.shows_processed || 0;
+                    const canExpand = hasDetails(log);
+                    const color = statusColor(log.status);
+
+                    return (
+                      <div key={String(log.id)} style={{ position: 'relative' }}>
+                        {/* Timeline dot */}
+                        <div style={{
+                          position: 'absolute',
+                          left: '-23px',
+                          top: '4px',
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: 'var(--radius-full)',
+                          backgroundColor: 'var(--color-background-body)',
+                          border: `3px solid ${color}`,
+                          zIndex: 1,
+                        }} />
+
+                        {/* Content */}
+                        <div
+                          style={{
+                            cursor: canExpand ? 'pointer' : 'default',
+                            transition: 'opacity 120ms ease',
+                          }}
+                          onClick={() => canExpand && toggleExpand(log.id)}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+                        >
+                          <VStack gap={1}>
                             <HStack gap={2} align="center" wrap="wrap">
-                              <Badge variant={runBadgeVariant(log.status)} label={runBadge.label} />
-                              <Text type="body" weight="medium">{humanSummary(log)}</Text>
+                              <Text type="body" weight="medium">
+                                {episodes > 0 ? `${episodes} ${episodes === 1 ? 'episode' : 'episodes'} updated` : `${anime} anime synced`}
+                              </Text>
+                              {canExpand && (
+                                <ChevronDown
+                                  size={14}
+                                  style={{
+                                    color: 'var(--color-text-secondary)',
+                                    transform: isExpanded ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s',
+                                  }}
+                                />
+                              )}
                             </HStack>
-                            <Text type="supporting" hasTabularNumbers style={{ fontSize: 'var(--font-size-sm)' }}>
-                              {formatTrigger(log.trigger)} {formatDuration(log.started_at, log.completed_at)} {formatTime(log.started_at)}
+                            <Text type="supporting" color="secondary" hasTabularNumbers style={{ fontSize: 'var(--font-size-sm)' }}>
+                              {formatTrigger(log.trigger)} sync {formatTime(log.started_at)}
                             </Text>
-                          </VStack>
-                          {hasDetails(log) && (
-                            <Button
-                              label="Details"
-                              variant="ghost"
-                              size="sm"
-                              icon={<ChevronDown
-                                size={12}
-                                style={{ transform: expandedId === log.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
-                              />}
-                              onClick={() => toggleExpand(log.id)}
-                            />
-                          )}
-                        </HStack>
 
-                        {log.errors && (
-                          <HStack gap={2} align="start" style={{ color: 'var(--color-error)' }}>
-                            <TriangleAlert size={14} />
-                            <Text type="supporting">This run completed with errors that need attention.</Text>
-                          </HStack>
-                        )}
+                            {log.errors && !isExpanded && (
+                              <HStack gap={1} align="center" style={{ color: 'var(--color-error)' }}>
+                                <TriangleAlert size={12} />
+                                <Text type="supporting" style={{ fontSize: 'var(--font-size-sm)' }}>Completed with errors</Text>
+                              </HStack>
+                            )}
 
-                        {expandedId === log.id && hasDetails(log) && (
-                          <VStack gap={2}>
-                            {log.items?.length && (
-                              <VStack gap={2}>
-                                {log.items.map((item, idx) => {
-                                  const itemBadge = itemStatusBadge(item.status);
+                            {/* Expanded details */}
+                            {isExpanded && canExpand && (
+                              <VStack gap={2} style={{ paddingTop: 'var(--spacing-2)' }}>
+                                {log.items?.filter((item) => (item.episodes_changed || 0) > 0 || item.error).map((item, i) => {
+                                  const itemColor = statusColor(item.status);
                                   return (
-                                    <Card key={idx} padding={2} variant="default">
-                                      <HStack justify="between" align="center" wrap="wrap" gap={2}>
-                                        <VStack gap={0} style={{ minWidth: 0, flex: 1 }}>
-                                          <Text type="body" weight="semibold">{item.sonarr_title}</Text>
-                                          <Text type="supporting">{detailLine(item)}</Text>
-                                        </VStack>
-                                        <Badge variant={itemBadgeVariant(item.status)} label={itemBadge.label} />
-                                      </HStack>
-                                      {item.error && (
-                                        <HStack gap={2} align="start" style={{ color: 'var(--color-error)' }}>
-                                          <TriangleAlert size={14} />
-                                          <Text type="supporting">{item.error}</Text>
-                                        </HStack>
-                                      )}
-                                    </Card>
+                                    <HStack key={i} gap={2} align="start">
+                                      <div style={{
+                                        flexShrink: 0,
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: 'var(--radius-full)',
+                                        backgroundColor: itemColor,
+                                        marginTop: '6px',
+                                      }} />
+                                      <VStack gap={0} style={{ minWidth: 0, flex: 1 }}>
+                                        <Text type="body">{item.sonarr_title}</Text>
+                                        {detailLine(item) && (
+                                          <Text type="supporting" color="secondary" style={{ fontSize: 'var(--font-size-sm)' }}>{detailLine(item)}</Text>
+                                        )}
+                                        {item.error && (
+                                          <Text type="supporting" style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-error)' }}>{item.error}</Text>
+                                        )}
+                                      </VStack>
+                                    </HStack>
                                   );
                                 })}
+                                {log.errors && (
+                                  <HStack gap={2} align="start" style={{ color: 'var(--color-error)' }}>
+                                    <TriangleAlert size={12} style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <Text type="supporting" style={{ fontSize: 'var(--font-size-sm)' }}>{log.errors}</Text>
+                                  </HStack>
+                                )}
                               </VStack>
                             )}
-                            {log.errors && (
-                              <Card padding={2} variant="default">
-                                <HStack gap={2} align="center">
-                                  <TriangleAlert size={14} />
-                                  <Text type="body" weight="medium">Run errors</Text>
-                                </HStack>
-                                <Text type="supporting">{log.errors}</Text>
-                              </Card>
-                            )}
                           </VStack>
-                        )}
-                      </VStack>
-                    </Card>
-                  );
-                })}
-              </VStack>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </VStack>
+              </div>
             )}
 
             {hasMore && filteredLogs.length > 0 && (
