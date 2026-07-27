@@ -46,6 +46,10 @@ export function getStats(): Promise<StatsResponse> {
   return request<StatsResponse>('GET', '/stats');
 }
 
+export function getSonarrSeriesById(seriesId: number): Promise<SonarrSeries> {
+  return request<SonarrSeries>('GET', '/sonarr/series/' + seriesId);
+}
+
 export function getSonarrSeries(matchableOnly: boolean = false): Promise<SonarrSeries[]> {
   const params = new URLSearchParams();
   if (matchableOnly) params.set('matchable_only', 'true');

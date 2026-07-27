@@ -1,30 +1,10 @@
 param(
-    [string]$ConfigPath = "config.yml",
     [switch]$SeparateWindows
 )
 
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$resolvedConfigPath = if ([System.IO.Path]::IsPathRooted($ConfigPath)) {
-    $ConfigPath
-} else {
-    Join-Path $root $ConfigPath
-}
-
-if (-not (Test-Path $resolvedConfigPath)) {
-    throw "Config file not found: $resolvedConfigPath"
-}
-
-$vp = Get-Command vp -ErrorAction SilentlyContinue
-$frontendExecutable = if ($vp) {
-    $vp.Source
-} else {
-    $vpBin = Join-Path $env:USERPROFILE ".vite-plus\bin\vp.exe"
-    if (Test-Path $vpBin) { $vpBin } else { throw "vp not found. Install Vite+: irm https://vite.plus/ps1 | iex" }
-}
-
-$frontendArguments = "dev"
 $backendScriptPath = Join-Path $root "scripts\dev-backend.ps1"
 
 function Write-DevLog {
@@ -38,31 +18,30 @@ function Write-DevLog {
 }
 
 function Start-FrontendProcess {
-    Start-Process -FilePath $frontendExecutable -ArgumentList @(
-        "dev"
-    ) -WorkingDirectory (Join-Path $root "web") -NoNewWindow -PassThru
+    Start-Process -FilePath "npx" -ArgumentList @(
+        "vite"
+    ) -WorkingDirectory (Join-Path $root "web-astryx") -NoNewWindow -PassThru
 }
 
 Write-Host ""
 Write-Host "Starting Mizu development mode..." -ForegroundColor Cyan
-Write-Host "Frontend: http://localhost:5173" -ForegroundColor DarkGray
+Write-Host "Frontend: http://localhost:3001" -ForegroundColor DarkGray
 Write-Host "Backend:  http://localhost:8978" -ForegroundColor DarkGray
 Write-Host ""
 
 if ($SeparateWindows) {
-    $frontendScript = "Set-Location '$root\web'; & '$frontendExecutable' dev"
+    $frontendScript = "Set-Location '$root\web-astryx'; npx vite"
 
     Start-Process -FilePath "powershell" -ArgumentList @(
         "-NoExit",
         "-ExecutionPolicy", "Bypass",
         "-Command", $frontendScript
-    ) -WorkingDirectory (Join-Path $root "web")
+    ) -WorkingDirectory (Join-Path $root "web-astryx")
 
     Start-Process -FilePath "powershell" -ArgumentList @(
         "-NoExit",
         "-ExecutionPolicy", "Bypass",
-        "-File", $backendScriptPath,
-        "-ConfigPath", $resolvedConfigPath
+        "-File", $backendScriptPath
     ) -WorkingDirectory $root
 
     Write-Host "Mizu dev windows launched." -ForegroundColor Green
@@ -75,7 +54,7 @@ $frontendProcess = $null
 try {
     $frontendProcess = Start-FrontendProcess
     Write-DevLog "mizu:web" "frontend started in this terminal; use Ctrl+C once to stop both processes" DarkGray
-    & $backendScriptPath -ConfigPath $resolvedConfigPath
+    & $backendScriptPath
 }
 finally {
     if ($frontendProcess -and -not $frontendProcess.HasExited) {

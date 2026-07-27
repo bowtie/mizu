@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -109,6 +110,11 @@ func (db *DB) migrate() error {
 			title TEXT NOT NULL,
 			url TEXT NOT NULL,
 			refreshed_at DATETIME NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS sonarr_series_cache (
+			series_id INTEGER PRIMARY KEY,
+			data_json TEXT NOT NULL,
+			cached_at DATETIME NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_episode_info_mapping ON episode_info(mapping_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC)`,
@@ -671,6 +677,37 @@ func (db *DB) GetFillerStats(ctx context.Context) (canon, mixed, animeCanon, fil
 		return 0, 0, 0, 0, 0, nil
 	}
 	return
+}
+
+func (db *DB) GetCachedSonarrSeries(ctx context.Context, seriesID int, maxAge time.Duration) (*models.SonarrSeries, bool) {
+	var dataJSON string
+	var cachedAt time.Time
+	err := db.conn.QueryRowContext(ctx,
+		`SELECT data_json, cached_at FROM sonarr_series_cache WHERE series_id = ?`, seriesID).
+		Scan(&dataJSON, &cachedAt)
+	if err != nil {
+		return nil, false
+	}
+	if time.Since(cachedAt) > maxAge {
+		return nil, false
+	}
+	var series models.SonarrSeries
+	if err := json.Unmarshal([]byte(dataJSON), &series); err != nil {
+		return nil, false
+	}
+	return &series, true
+}
+
+func (db *DB) SetCachedSonarrSeries(ctx context.Context, seriesID int, series *models.SonarrSeries) error {
+	dataJSON, err := json.Marshal(series)
+	if err != nil {
+		return err
+	}
+	_, err = db.conn.ExecContext(ctx,
+		`INSERT INTO sonarr_series_cache (series_id, data_json, cached_at) VALUES (?, ?, ?)
+		ON CONFLICT(series_id) DO UPDATE SET data_json = excluded.data_json, cached_at = excluded.cached_at`,
+		seriesID, string(dataJSON), time.Now())
+	return err
 }
 
 func normalizeMapping(m models.ShowMapping) models.ShowMapping {

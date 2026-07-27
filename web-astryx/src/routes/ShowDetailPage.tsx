@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
@@ -28,8 +28,8 @@ import {
   getAniListArtwork,
   getEpisodes,
   getSettings,
-  getShows,
-  getSonarrSeries,
+  getShow,
+  getSonarrSeriesById,
   setEpisodeMonitor,
   updateShow,
 } from '../lib/api';
@@ -61,9 +61,10 @@ function episodeLabel(ep: Episode): string {
 }
 function episodeSeason(ep: Episode): number {
   const raw = ep.season_number;
-  const rawSeason = typeof raw === 'number' && Number.isInteger(raw) ? raw : -1;
-  if (isSpecialSeasonNumber(rawSeason)) return -1;
-  return rawSeason;
+  // Only treat valid positive integers as real seasons.
+  // null/undefined/0/-1 all go to the "Specials" bucket (-1).
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw <= 0) return -1;
+  return raw;
 }
 function resolveSonarrEpisode(ep: Episode) {
   if (!ep.sonarr_episode_id) return null;
@@ -84,20 +85,27 @@ function badgeVariantForType(type: string | undefined | null): 'neutral' | 'blue
   }
 }
 
+/** Composite syncing key — avoids collision when sonarr_episode_id is 0/null. */
+function epSyncKey(groupSeason: number, ep: Episode): string {
+  return `${groupSeason}-${displayEpisodeNumber(ep)}-${ep.sonarr_episode_id ?? 'x'}`;
+}
+
 export function ShowDetailPage() {
   const { id: showId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { settings, setSettings, addNotification } = useAppStore();
 
-  const [loading, setLoading] = useState(true);
+  const [loadingShow, setLoadingShow] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [show, setShow] = useState<Show | null>(null);
   const [series, setSeries] = useState<SonarrSeries | null>(null);
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [episodesLoading, setEpisodesLoading] = useState(true);
   const [trackFiller, setTrackFiller] = useState(false);
   const [trackMixed, setTrackMixed] = useState(true);
   const [trackAnimeCanon, setTrackAnimeCanon] = useState(true);
@@ -121,15 +129,15 @@ export function ShowDetailPage() {
     (!watermarkAuto && markerValue !== pristineMarkerValue)
   );
 
-  const filteredEpisodes = episodes.filter((ep) => {
+  const filteredEpisodes = useMemo(() => episodes.filter((ep) => {
     if (activeTypeFilter === 'all') return true;
     if (activeTypeFilter === 'canon' && isMobile) {
       return ep.type === 'canon' || ep.type === 'anime_canon';
     }
     return ep.type === activeTypeFilter;
-  });
+  }), [episodes, activeTypeFilter, isMobile]);
 
-  const groupedBySeason = (() => {
+  const groupedBySeason = useMemo(() => {
     const groups: Record<string, Episode[]> = {};
     for (const ep of filteredEpisodes) {
       const season = String(episodeSeason(ep));
@@ -147,50 +155,105 @@ export function ShowDetailPage() {
         if (b.season === -1) return -1;
         return b.season - a.season;
       });
-  })();
+  }, [filteredEpisodes]);
 
-  const epStats = {
-    total: episodes.length,
-    canon: episodes.filter((e) => e.type === 'canon').length,
-    anime: episodes.filter((e) => e.type === 'anime_canon').length,
-    mixed: episodes.filter((e) => e.type === 'mixed_canon').length,
-    filler: episodes.filter((e) => e.type === 'filler').length,
-  };
+  const epStats = useMemo(() => {
+    let total = 0, canon = 0, anime = 0, mixed = 0, filler = 0;
+    for (const e of episodes) {
+      total++;
+      switch (e.type) {
+        case 'canon': canon++; break;
+        case 'anime_canon': anime++; break;
+        case 'mixed_canon': mixed++; break;
+        case 'filler': filler++; break;
+      }
+    }
+    return { total, canon, anime, mixed, filler };
+  }, [episodes]);
 
-  const clampMarkerValue = (next: number, source: Episode[] = episodes): number => {
+  /** Highest episode number across all loaded episodes — computed once, reused everywhere. */
+  const maxEpisode = useMemo(() => {
+    if (!episodes.length) return 0;
+    return episodes.reduce((highest, ep) => Math.max(highest, displayEpisodeNumber(ep)), 0);
+  }, [episodes]);
+
+  const clampMarkerValue = useCallback((next: number): number => {
     const normalized = Math.max(0, Number(next) || 0);
-    if (!source?.length) return normalized;
-    const upper = source.reduce((highest, ep) => Math.max(highest, displayEpisodeNumber(ep)), 0);
-    return Math.min(normalized, upper);
-  };
+    return Math.min(normalized, maxEpisode);
+  }, [maxEpisode]);
 
-  const loadShow = useCallback(async () => {
-    if (!showId) return;
-    setLoading(true);
+  /** Memoized backdrop URL — recomputes only when series/artwork/settings change. */
+  const backdropUrl = useMemo((): string => {
+    if (artwork?.banner_image) return artwork.banner_image;
+    if (artwork?.poster_image) return artwork.poster_image;
+    if (!series?.images?.length) return '';
+    const preferred = series.images.find((img) => img.coverType === 'fanart')
+      || series.images.find((img) => img.coverType === 'banner')
+      || series.images[0];
+    if (!preferred) return '';
+    return resolveSonarrImageUrl(preferred, settings?.sonarr_url || '');
+  }, [artwork, series, settings?.sonarr_url]);
+
+  const loadShowData = useCallback(async (): Promise<Show | null> => {
+    if (!showId) return null;
+    setLoadingShow(true);
     try {
-      const [showsResult, settingsResult, episodesResult] = await Promise.all([
-        getShows(),
-        settings ? Promise.resolve(settings) : getSettings(),
-        getEpisodes(showId),
-      ]) as [Show[], Settings, Episode[]];
-
-      if (!settings) setSettings(settingsResult);
-
-      const foundShow = (showsResult || []).find((item) => String(item.id) === String(showId));
-      if (!foundShow) {
+      const showRes = await getShow(showId);
+      if (!showRes) {
         addNotification('Anime not found', 'error');
         navigate('/shows');
-        return;
+        return null;
       }
-      setShow(foundShow);
-      setEpisodes(episodesResult || []);
+      setShow(showRes);
+      setTrackFiller(actionToTracked(showRes.filler_action, false));
+      setTrackMixed(actionToTracked(showRes.mixed_action, true));
+      setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
+      setWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+      setMarkerValue(Math.max(0, showRes.sync_watermark || 0));
+      setPristineFiller(actionToTracked(showRes.filler_action, false));
+      setPristineMixed(actionToTracked(showRes.mixed_action, true));
+      setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
+      setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+      setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
 
-      // AniList artwork: use cached mapping URLs if available, else fetch from API
-      if (settingsResult?.enable_anilist_artwork) {
-        if (foundShow.anilist_banner_url || foundShow.anilist_poster_url) {
+      // Fetch backdrop image in parallel — cached SQLite lookup
+      if (showRes.sonarr_series_id) {
+        getSonarrSeriesById(showRes.sonarr_series_id)
+          .then(setSeries)
+          .catch(() => {});
+      }
+      return showRes;
+    } catch (err: any) {
+      addNotification('Failed to load anime: ' + err.message, 'error');
+      return null;
+    } finally {
+      setLoadingShow(false);
+    }
+  }, [showId, addNotification, navigate]);
+
+  /** Requires an explicit `currentShow` — never falls back to stale closure state. */
+  const loadEpisodeData = useCallback(async (currentShow: Show) => {
+    if (!showId) return;
+    setEpisodesLoading(true);
+    try {
+      const [settingsRes, episodesRes] = await Promise.all([
+        settings ? Promise.resolve(settings) : getSettings(),
+        getEpisodes(showId),
+      ]) as [Settings, Episode[]];
+
+      if (!settings) setSettings(settingsRes);
+
+      const episodesList = episodesRes || [];
+      setEpisodes(episodesList);
+      setMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
+      setPristineMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
+
+      // AniList artwork — fire-and-forget
+      if (settingsRes?.enable_anilist_artwork) {
+        if (currentShow.anilist_banner_url || currentShow.anilist_poster_url) {
           setArtwork({
-            banner_image: foundShow.anilist_banner_url || '',
-            poster_image: foundShow.anilist_poster_url || '',
+            banner_image: currentShow.anilist_banner_url || '',
+            poster_image: currentShow.anilist_poster_url || '',
           });
         } else {
           getAniListArtwork(showId)
@@ -202,32 +265,24 @@ export function ShowDetailPage() {
       } else {
         setArtwork(null);
       }
-
-      setTrackFiller(actionToTracked(foundShow.filler_action, false));
-      setTrackMixed(actionToTracked(foundShow.mixed_action, true));
-      setTrackAnimeCanon(actionToTracked(foundShow.anime_canon_action, true));
-      setWatermarkAuto((foundShow.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setMarkerValue(clampMarkerValue(foundShow.sync_watermark || 0, episodesResult || []));
-      setPristineFiller(actionToTracked(foundShow.filler_action, false));
-      setPristineMixed(actionToTracked(foundShow.mixed_action, true));
-      setPristineAnimeCanon(actionToTracked(foundShow.anime_canon_action, true));
-      setPristineWatermarkAuto((foundShow.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setPristineMarkerValue(clampMarkerValue(foundShow.sync_watermark || 0, episodesResult || []));
-
-      getSonarrSeries()
-        .then((all: SonarrSeries[]) => {
-          setSeries((all || []).find((s) => s.id === foundShow.sonarr_series_id) || null);
-        })
-        .catch(() => {});
     } catch (err: any) {
-      addNotification('Failed to load anime: ' + err.message, 'error');
+      addNotification('Failed to load episodes: ' + err.message, 'error');
     }
-    setLoading(false);
-  }, [showId, settings, setSettings, addNotification, navigate]);
+    setEpisodesLoading(false);
+  }, [showId, settings, setSettings, addNotification, clampMarkerValue]);
+
+  const effectSkipRef = useRef(false);
 
   useEffect(() => {
-    loadShow();
-  }, [loadShow]);
+    loadShowData();
+  }, [loadShowData]);
+
+  useEffect(() => {
+    if (!loadingShow && show && !effectSkipRef.current) {
+      loadEpisodeData(show);
+    }
+    effectSkipRef.current = false;
+  }, [loadingShow, show, loadEpisodeData]);
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 600);
@@ -241,6 +296,13 @@ export function ShowDetailPage() {
       setActiveTypeFilter('canon');
     }
   }, [isMobile, activeTypeFilter]);
+
+  // Clean up savedFlash timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+    };
+  }, []);
 
   const handleSave = async () => {
     if (!showId) return;
@@ -258,8 +320,13 @@ export function ShowDetailPage() {
       await updateShow(showId, payload);
       addNotification(`Saved tracking rules for ${show?.sonarr_title || 'anime'}`, 'success');
       setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 1500);
-      await loadShow();
+      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+      savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
+      const refreshedShow = await loadShowData();
+      if (refreshedShow) {
+        effectSkipRef.current = true;
+        await loadEpisodeData(refreshedShow);
+      }
     } catch (err: any) {
       addNotification('Failed to save anime: ' + err.message, 'error');
     }
@@ -280,13 +347,14 @@ export function ShowDetailPage() {
     setDeleting(false);
   };
 
-  const toggleEpisodeMonitor = async (ep: Episode) => {
+  const toggleEpisodeMonitor = async (groupSeason: number, ep: Episode) => {
     const sonarrEp = resolveSonarrEpisode(ep);
     if (!sonarrEp?.id || !showId) {
       addNotification('No Sonarr episode found for ' + episodeLabel(ep), 'error');
       return;
     }
-    setSyncingEps((prev) => ({ ...prev, [sonarrEp.id]: true }));
+    const key = epSyncKey(groupSeason, ep);
+    setSyncingEps((prev) => ({ ...prev, [key]: true }));
     try {
       const nextState = !sonarrEp.monitored;
       await setEpisodeMonitor(showId, sonarrEp.id, nextState);
@@ -297,21 +365,10 @@ export function ShowDetailPage() {
     } catch (err: any) {
       addNotification('Failed to update episode: ' + err.message, 'error');
     }
-    setSyncingEps((prev) => { const next = { ...prev }; delete next[sonarrEp.id]; return next; });
+    setSyncingEps((prev) => { const next = { ...prev }; delete next[key]; return next; });
   };
 
-  const backdropUrl = (): string => {
-    // Prefer AniList banner when available
-    if (artwork?.banner_image) return artwork.banner_image;
-    if (artwork?.poster_image) return artwork.poster_image;
-    // Fall back to Sonarr images
-    if (!series?.images?.length) return '';
-    const preferred = series.images.find((img) => img.coverType === 'fanart') || series.images.find((img) => img.coverType === 'banner') || series.images[0];
-    if (!preferred) return '';
-    return resolveSonarrImageUrl(preferred, settings?.sonarr_url || '');
-  };
-
-  if (loading) {
+  if (loadingShow) {
     return (
       <Section padding={4} maxWidth={900} style={{ marginInline: 'auto' }}>
         <VStack gap={3} hAlign="center" padding={6}>
@@ -349,10 +406,10 @@ export function ShowDetailPage() {
       width: '100%',
       margin: 0,
     }}>
-          {backdropUrl() && (
+          {backdropUrl && (
             <>
               <img
-                src={backdropUrl()}
+                src={backdropUrl}
                 alt=""
                 loading="lazy"
                 decoding="async"
@@ -388,7 +445,7 @@ export function ShowDetailPage() {
               <VStack gap={1} style={{ minWidth: 0 }}>
                 <Heading level={1} style={{ color: 'var(--color-text-primary)' }}>{show.sonarr_title}</Heading>
                 <Text type="supporting" color="secondary" hasTabularNumbers display="block">
-                  {episodes.length} episodes · from ep {show.sync_watermark > 0 ? show.sync_watermark : 0}
+                  {episodesLoading ? 'Loading episodes...' : `${episodes.length} episodes · from ep ${show.sync_watermark > 0 ? show.sync_watermark : 0}`}
                 </Text>
                 {series?.overview && (
                   <Text type="supporting" color="secondary" display="block" style={{
@@ -444,7 +501,7 @@ export function ShowDetailPage() {
             value={markerValue}
             onChange={(value) => setMarkerValue(clampMarkerValue(value))}
             min={0}
-            max={episodes.length > 0 ? episodes.reduce((h, ep) => Math.max(h, displayEpisodeNumber(ep)), 0) : null}
+            max={maxEpisode || null}
             step={1}
             isIntegerOnly
             isDisabled={watermarkAuto}
@@ -629,7 +686,11 @@ export function ShowDetailPage() {
           </div>
 
           {/* Episodes by season */}
-          {filteredEpisodes.length === 0 ? (
+          {episodesLoading ? (
+            <VStack gap={3} hAlign="center" padding={6}>
+              <Spinner size="md" label="Loading episodes" />
+            </VStack>
+          ) : filteredEpisodes.length === 0 ? (
             <EmptyState
               title="No episodes"
               description="No episodes match the selected type."
@@ -656,9 +717,9 @@ export function ShowDetailPage() {
                     <List density="balanced" hasDividers>
                       {group.episodes.map((ep) => {
                         const typeBadge = episodeTypeBadge(ep.type);
-                        const epId = resolveSonarrEpisode(ep)?.id ?? 0;
-                        const isSyncing = syncingEps[epId];
                         const monitored = episodeMonitored(ep);
+                        const key = epSyncKey(group.season, ep);
+                        const isSyncing = syncingEps[key];
                         return (
                           <ListItem
                             key={`${group.season}-${displayEpisodeNumber(ep)}`}
@@ -674,10 +735,10 @@ export function ShowDetailPage() {
                                   icon={<Eye size={14} />}
                                   pressedIcon={<EyeOff size={14} />}
                                   isPressed={monitored}
-                                  isDisabled={isSyncing || !epId}
+                                  isDisabled={isSyncing || !ep.sonarr_episode_id}
                                   isLoading={isSyncing}
                                   tooltip={monitored ? 'Unmonitor' : 'Monitor'}
-                                  onPressedChange={() => toggleEpisodeMonitor(ep)}
+                                  onPressedChange={() => toggleEpisodeMonitor(group.season, ep)}
                                 />
                               </HStack>
                             }

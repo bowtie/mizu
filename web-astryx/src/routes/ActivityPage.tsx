@@ -1,68 +1,34 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
 import { Section } from '@astryxdesign/core/Section';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
+import { Badge } from '@astryxdesign/core/Badge';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
+import { Card } from '@astryxdesign/core/Card';
 import { TextInput } from '@astryxdesign/core/TextInput';
-import { Search, RefreshCw, History, ChevronDown, TriangleAlert, Check, AlertCircle, XCircle, Loader2 } from 'lucide-react';
+import { Timestamp } from '@astryxdesign/core/Timestamp';
+import { Search } from 'lucide-react';
+import { RefreshCw, History, ChevronDown, TriangleAlert } from 'lucide-react';
 import { useAppStore } from '../lib/store';
 import { getSyncLogs, triggerSync } from '../lib/api';
-import type { SyncLog, SyncLogItem } from '../lib/types';
-import { runStatusBadge, itemStatusBadge } from '../lib/fox';
+import type { SyncLog } from '../lib/types';
+import { runStatusBadge, itemStatusBadge, runStatusBadgeVariant, itemStatusBadgeVariant } from '../lib/fox';
+import { formatDuration, formatTrigger, humanSummary, detailLine, hasDetails } from '../lib/activity-utils';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 8;
 
 const statusFilters = [
   { value: 'all', label: 'All' },
+  { value: 'running', label: 'Running', color: 'var(--color-accent)' },
   { value: 'success', label: 'Success', color: 'var(--color-success)' },
   { value: 'partial', label: 'Partial', color: 'var(--color-warning)' },
   { value: 'failed', label: 'Failed', color: 'var(--color-error)' },
 ];
-
-function formatTime(dt: string | null | undefined): string {
-  if (!dt) return '';
-  return new Date(dt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + new Date(dt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
-
-function formatTrigger(trigger: string | undefined): string {
-  if (!trigger) return '';
-  return trigger === 'manual' ? 'Manual' : 'Scheduled';
-}
-
-function statusIcon(status: string | undefined) {
-  switch (status) {
-    case 'success': return <Check size={14} />;
-    case 'partial': return <AlertCircle size={14} />;
-    case 'failed': return <XCircle size={14} />;
-    case 'running': return <Loader2 size={14} className="animate-spin" />;
-    default: return <Check size={14} />;
-  }
-}
-
-function statusColor(status: string | undefined): string {
-  switch (status) {
-    case 'success': return 'var(--color-success)';
-    case 'partial': return 'var(--color-warning)';
-    case 'failed': return 'var(--color-error)';
-    case 'running': return 'var(--color-accent)';
-    default: return 'var(--color-text-secondary)';
-  }
-}
-
-function hasDetails(log: SyncLog): boolean {
-  const hasChanges = (log.items || []).some((item) => (item.episodes_changed || 0) > 0 || item.error);
-  return hasChanges || !!log.errors;
-}
-
-function detailLine(item: SyncLogItem): string | null {
-  const changed = item.episodes_changed || 0;
-  return changed > 0 ? `${changed} ${changed === 1 ? 'episode' : 'episodes'} updated` : null;
-}
 
 export function ActivityPage() {
   const { addNotification } = useAppStore();
@@ -76,38 +42,43 @@ export function ActivityPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialLoad = useRef(true);
 
-  const filteredLogs = logs.filter((log) => {
+  const filteredLogs = useMemo(() => logs.filter((log) => {
     if (statusFilter !== 'all' && log.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
+      const summary = humanSummary(log).toLowerCase();
       const itemTitles = (log.items || []).map((i) => (i.sonarr_title || '').toLowerCase()).join(' ');
-      if (!itemTitles.includes(q) && !(log.errors || '').toLowerCase().includes(q)) return false;
+      if (!summary.includes(q) && !itemTitles.includes(q) && !(log.errors || '').toLowerCase().includes(q)) return false;
     }
     return true;
-  });
+  }), [logs, statusFilter, searchQuery]);
 
   const loadActivity = useCallback(async (reset = true) => {
     if (reset) {
-      setLoading(logs.length === 0);
+      setLoading(isInitialLoad.current);
     } else {
       setLoadingMore(true);
     }
     try {
-      const page = (await getSyncLogs(PAGE_SIZE, reset ? 0 : nextOffset)) || { items: [], has_more: false, next_offset: 0 };
+      const offset = reset ? 0 : nextOffset;
+      const page = (await getSyncLogs(PAGE_SIZE, offset)) || { items: [], has_more: false, next_offset: 0 };
       const newLogs = page.items || [];
       setLogs(reset ? newLogs : (prev) => [...prev, ...newLogs]);
       setHasMore(!!page.has_more);
-      setNextOffset(page.next_offset ?? (reset ? newLogs.length : nextOffset + newLogs.length));
+      setNextOffset(page.next_offset ?? (reset ? newLogs.length : offset + newLogs.length));
     } catch (err: any) {
       addNotification('Failed to load activity: ' + err.message, 'error');
     }
     setLoading(false);
     setLoadingMore(false);
-  }, [nextOffset, logs.length, addNotification]);
+    isInitialLoad.current = false;
+  }, [nextOffset, addNotification]);
 
   useEffect(() => {
     loadActivity(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -217,119 +188,87 @@ export function ActivityPage() {
                 actions={<Button label="Clear filters" variant="secondary" onClick={() => { setStatusFilter('all'); setSearchQuery(''); }} />}
               />
             ) : (
-              <div style={{ position: 'relative', paddingLeft: '28px' }}>
-                {/* Timeline line */}
-                <div style={{
-                  position: 'absolute',
-                  left: '11px',
-                  top: 'var(--spacing-2)',
-                  bottom: 'var(--spacing-2)',
-                  width: '2px',
-                  backgroundColor: 'var(--color-border)',
-                }} />
-
-                <VStack gap={4}>
-                  {filteredLogs.map((log) => {
-                    const isExpanded = expandedId === log.id;
-                    const episodes = log.episodes_updated || 0;
-                    const anime = log.shows_processed || 0;
-                    const canExpand = hasDetails(log);
-                    const color = statusColor(log.status);
-
-                    return (
-                      <div key={String(log.id)} style={{ position: 'relative' }}>
-                        {/* Timeline dot */}
-                        <div style={{
-                          position: 'absolute',
-                          left: '-23px',
-                          top: '4px',
-                          width: '14px',
-                          height: '14px',
-                          borderRadius: 'var(--radius-full)',
-                          backgroundColor: 'var(--color-background-body)',
-                          border: `3px solid ${color}`,
-                          zIndex: 1,
-                        }} />
-
-                        {/* Content */}
-                        <div
-                          style={{
-                            cursor: canExpand ? 'pointer' : 'default',
-                            transition: 'opacity 120ms ease',
-                          }}
-                          onClick={() => canExpand && toggleExpand(log.id)}
-                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
-                        >
-                          <VStack gap={1}>
+              <VStack gap={3}>
+                {filteredLogs.map((log) => {
+                  const isExpanded = expandedId === log.id;
+                  const runBadge = runStatusBadge(log.status);
+                  return (
+                    <Card key={String(log.id)} padding={3} variant="muted">
+                      <VStack gap={2}>
+                        <HStack justify="between" align="center" wrap="wrap" gap={2}>
+                          <VStack gap={1} style={{ minWidth: 0, flex: 1 }}>
                             <HStack gap={2} align="center" wrap="wrap">
-                              <Text type="body" weight="medium">
-                                {episodes > 0 ? `${episodes} ${episodes === 1 ? 'episode' : 'episodes'} updated` : `${anime} anime synced`}
-                              </Text>
-                              {canExpand && (
-                                <ChevronDown
-                                  size={14}
-                                  style={{
-                                    color: 'var(--color-text-secondary)',
-                                    transform: isExpanded ? 'rotate(180deg)' : 'none',
-                                    transition: 'transform 0.2s',
-                                  }}
-                                />
-                              )}
+                              <Badge variant={runStatusBadgeVariant(log.status)} label={runBadge.label} />
+                              <Text type="body" weight="medium">{humanSummary(log)}</Text>
                             </HStack>
-                            <Text type="supporting" color="secondary" hasTabularNumbers style={{ fontSize: 'var(--font-size-sm)' }}>
-                              {formatTrigger(log.trigger)} sync {formatTime(log.started_at)}
+                            <Text type="supporting" hasTabularNumbers style={{ fontSize: 'var(--font-size-sm)' }}>
+                              {formatTrigger(log.trigger)} {formatDuration(log.started_at, log.completed_at)} <Timestamp value={log.started_at || ''} format="auto" type="supporting" color="secondary" />
                             </Text>
+                          </VStack>
+                          {hasDetails(log) && (
+                            <Button
+                              label="Details"
+                              variant="ghost"
+                              size="sm"
+                              icon={<ChevronDown
+                                size={12}
+                                style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                              />}
+                              onClick={() => toggleExpand(log.id)}
+                            />
+                          )}
+                        </HStack>
 
-                            {log.errors && !isExpanded && (
-                              <HStack gap={1} align="center" style={{ color: 'var(--color-error)' }}>
-                                <TriangleAlert size={12} />
-                                <Text type="supporting" style={{ fontSize: 'var(--font-size-sm)' }}>Completed with errors</Text>
-                              </HStack>
-                            )}
+                        {/* Run-level errors shown only when not expanded (expanded view shows them below) */}
+                        {log.errors && !isExpanded && (
+                          <HStack gap={2} align="start" style={{ color: 'var(--color-error)' }}>
+                            <TriangleAlert size={14} />
+                            <Text type="supporting">This run completed with errors that need attention.</Text>
+                          </HStack>
+                        )}
 
-                            {/* Expanded details */}
-                            {isExpanded && canExpand && (
-                              <VStack gap={2} style={{ paddingTop: 'var(--spacing-2)' }}>
-                                {log.items?.filter((item) => (item.episodes_changed || 0) > 0 || item.error).map((item, i) => {
-                                  const itemColor = statusColor(item.status);
+                        {isExpanded && hasDetails(log) && (
+                          <VStack gap={2}>
+                            {log.items?.length && (
+                              <VStack gap={2}>
+                                {log.items.map((item, idx) => {
+                                  const itemBadge = itemStatusBadge(item.status);
                                   return (
-                                    <HStack key={i} gap={2} align="start">
-                                      <div style={{
-                                        flexShrink: 0,
-                                        width: 8,
-                                        height: 8,
-                                        borderRadius: 'var(--radius-full)',
-                                        backgroundColor: itemColor,
-                                        marginTop: '6px',
-                                      }} />
-                                      <VStack gap={0} style={{ minWidth: 0, flex: 1 }}>
-                                        <Text type="body">{item.sonarr_title}</Text>
-                                        {detailLine(item) && (
-                                          <Text type="supporting" color="secondary" style={{ fontSize: 'var(--font-size-sm)' }}>{detailLine(item)}</Text>
-                                        )}
-                                        {item.error && (
-                                          <Text type="supporting" style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-error)' }}>{item.error}</Text>
-                                        )}
-                                      </VStack>
-                                    </HStack>
+                                    <Card key={idx} padding={2} variant="default">
+                                      <HStack justify="between" align="center" wrap="wrap" gap={2}>
+                                        <VStack gap={0} style={{ minWidth: 0, flex: 1 }}>
+                                          <Text type="body" weight="semibold">{item.sonarr_title}</Text>
+                                          <Text type="supporting">{detailLine(item)}</Text>
+                                        </VStack>
+                                        <Badge variant={itemStatusBadgeVariant(item.status)} label={itemBadge.label} />
+                                      </HStack>
+                                      {item.error && (
+                                        <HStack gap={2} align="start" style={{ color: 'var(--color-error)' }}>
+                                          <TriangleAlert size={14} />
+                                          <Text type="supporting">{item.error}</Text>
+                                        </HStack>
+                                      )}
+                                    </Card>
                                   );
                                 })}
-                                {log.errors && (
-                                  <HStack gap={2} align="start" style={{ color: 'var(--color-error)' }}>
-                                    <TriangleAlert size={12} style={{ flexShrink: 0, marginTop: '2px' }} />
-                                    <Text type="supporting" style={{ fontSize: 'var(--font-size-sm)' }}>{log.errors}</Text>
-                                  </HStack>
-                                )}
                               </VStack>
                             )}
+                            {log.errors && (
+                              <Card padding={2} variant="default">
+                                <HStack gap={2} align="center">
+                                  <TriangleAlert size={14} />
+                                  <Text type="body" weight="medium">Run errors</Text>
+                                </HStack>
+                                <Text type="supporting">{log.errors}</Text>
+                              </Card>
+                            )}
                           </VStack>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </VStack>
-              </div>
+                        )}
+                      </VStack>
+                    </Card>
+                  );
+                })}
+              </VStack>
             )}
 
             {hasMore && filteredLogs.length > 0 && (

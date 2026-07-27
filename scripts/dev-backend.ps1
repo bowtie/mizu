@@ -1,18 +1,5 @@
-param(
-    [string]$ConfigPath = "config.yml"
-)
-
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$resolvedConfigPath = if ([System.IO.Path]::IsPathRooted($ConfigPath)) {
-    $ConfigPath
-} else {
-    Join-Path $root $ConfigPath
-}
-
-if (-not (Test-Path $resolvedConfigPath)) {
-    throw "Config file not found: $resolvedConfigPath"
-}
 
 $state = [hashtable]::Synchronized(@{
     RestartPending = $false
@@ -41,12 +28,10 @@ function Stop-BackendProcess {
 }
 
 function Start-BackendProcess {
-    Write-DevLog "starting backend watcher target"
+    Write-DevLog "starting backend"
     $script:backendProcess = Start-Process -FilePath "go" -ArgumentList @(
         "run",
-        "./cmd/server",
-        "--config",
-        $resolvedConfigPath
+        "./cmd/server"
     ) -WorkingDirectory $root -NoNewWindow -PassThru
 }
 
@@ -90,10 +75,8 @@ New-CodeWatcher -Path (Join-Path $root "cmd") -IncludeSubdirectories $true
 New-CodeWatcher -Path (Join-Path $root "internal") -IncludeSubdirectories $true
 New-CodeWatcher -Path $root -Filter "go.mod"
 New-CodeWatcher -Path $root -Filter "go.sum"
-New-CodeWatcher -Path $root -Filter ([System.IO.Path]::GetFileName($resolvedConfigPath))
 
-Write-DevLog "watching Go sources and config for changes" DarkGray
-Write-DevLog "using config $resolvedConfigPath" DarkGray
+Write-DevLog "watching Go sources for changes" DarkGray
 Start-BackendProcess
 
 try {

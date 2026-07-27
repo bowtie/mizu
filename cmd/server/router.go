@@ -130,6 +130,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Put("/settings", handleUpdateSettings(cfg, db, scheduler))
 		r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db))
 		r.Get("/sonarr/series", handleGetSonarrSeries(cfg, db, syncEngine))
+		r.Get("/sonarr/series/{id}", handleGetSonarrSeriesByID(cfg, db))
 		r.Post("/sonarr/series", handleAddSonarrSeries(cfg))
 		r.Get("/sonarr/lookup", handleLookupSonarrSeries(cfg))
 		r.Get("/sonarr/add-options", handleGetSonarrAddOptions(cfg))
@@ -1212,6 +1213,38 @@ func handleMarkManualMatchPending(db *database.DB) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"status": "pending", "sonarr_series_id": req.SonarrSeriesID})
+	}
+}
+
+func handleGetSonarrSeriesByID(cfg *config.Config, db *database.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(chi.URLParam(r, "id"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid series ID")
+			return
+		}
+
+		// Serve from cache if fresh (< 24h)
+		if cached, ok := db.GetCachedSonarrSeries(r.Context(), id, 24*time.Hour); ok {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+
+		c := sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, 15*time.Second)
+		series, err := c.GetSeries(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to fetch Sonarr series: "+err.Error())
+			return
+		}
+		if series == nil {
+			writeError(w, http.StatusNotFound, "series not found")
+			return
+		}
+
+		// Cache the result
+		_ = db.SetCachedSonarrSeries(r.Context(), id, series)
+
+		writeJSON(w, http.StatusOK, series)
 	}
 }
 

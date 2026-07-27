@@ -57,3 +57,23 @@ export function monitorStateBadge(
     ? { label: yesLabel }
     : { label: noLabel };
 }
+
+export type BadgeVariant = 'success' | 'warning' | 'error' | 'neutral';
+
+export function runStatusBadgeVariant(status: string | undefined | null): BadgeVariant {
+  switch (status) {
+    case 'success': return 'success';
+    case 'partial': return 'warning';
+    case 'failed': return 'error';
+    case 'running': return 'neutral';
+    default: return 'neutral';
+  }
+}
+
+export function itemStatusBadgeVariant(status: string | undefined | null): BadgeVariant {
+  switch (status) {
+    case 'success': return 'success';
+    case 'failed': return 'error';
+    default: return 'neutral';
+  }
+}
