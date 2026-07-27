@@ -22,7 +22,6 @@ export interface Settings {
   default_mixed_canon_action: string;
   default_anime_canon_action: string;
   sync_interval: string;
-  enable_anilist_artwork: boolean;
   sonarr_add_root_folder: string;
   sonarr_add_quality_profile_id: number;
   sonarr_add_monitor_mode: string;
@@ -75,8 +74,6 @@ export interface Show {
   sonarr_title: string;
   afl_title?: string;
   afl_slug?: string;
-  anilist_poster_url?: string;
-  anilist_banner_url?: string;
   artwork_source?: string;
   artwork_poster_path?: string;
   artwork_banner_path?: string;

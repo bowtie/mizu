@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -103,7 +104,7 @@ func main() {
 
 func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Config) {
 	if value, err := db.GetSetting(ctx, "sonarr_url"); err == nil && value != "" {
-		cfg.SonarrURL = value
+		cfg.SonarrURL = strings.TrimRight(value, "/")
 	}
 	if value, err := db.GetSetting(ctx, "sonarr_api_key"); err == nil {
 		cfg.SonarrAPIKey = value
@@ -121,9 +122,6 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		if _, d, parseErr := normalizeScanInterval(value); parseErr == nil {
 			cfg.ScanInterval = d
 		}
-	}
-	if value, err := db.GetSetting(ctx, "enable_anilist_artwork"); err == nil && value != "" {
-		cfg.EnableAniListArtwork = value == "true"
 	}
 	if value, err := db.GetSetting(ctx, "sonarr_add_root_folder"); err == nil {
 		cfg.SonarrAddRootFolder = value

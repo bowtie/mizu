@@ -57,6 +57,16 @@ export function ShowsPage() {
 
   // ── Derived values ──
 
+  // Only the settings fields that affect artwork URL resolution — avoids
+  // recomputing all show posters/banners when unrelated settings change.
+  const artworkSettings = useMemo(
+    () => ({
+      artwork_default_source: settings?.artwork_default_source,
+      sonarr_url: settings?.sonarr_url,
+    }),
+    [settings?.artwork_default_source, settings?.sonarr_url],
+  );
+
   const mappedSeriesIds = useMemo(
     () => new Set((shows || []).map((s: Show) => s.sonarr_series_id)),
     [shows],
@@ -73,7 +83,8 @@ export function ShowsPage() {
           logo: logoUrl(show),
         };
       }),
-    [shows, seriesById, settings],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shows, seriesById, artworkSettings],
   );
 
   const filteredShows = useMemo(
@@ -120,7 +131,7 @@ export function ShowsPage() {
   const currentStepIndex = activeWizardSteps.findIndex((s) => s.key === w.addStep);
 
   function posterUrl(show: Show, series: SonarrSeries | null | undefined): string {
-    const effectiveSource = show.artwork_source || settings?.artwork_default_source || "sonarr";
+    const effectiveSource = show.artwork_source || artworkSettings.artwork_default_source || "sonarr";
     // 1. Locally downloaded artwork (from the selected provider)
     //    Skip when source is "sonarr" — those files are from another provider.
     if (effectiveSource !== "sonarr" && show.artwork_poster_path) {
@@ -137,11 +148,11 @@ export function ShowsPage() {
       series.images.find((img) => img.coverType === "fanart") ||
       series.images[0];
     if (!preferred) return "";
-    return resolveSonarrImageUrl(preferred, settings?.sonarr_url || "");
+    return resolveSonarrImageUrl(preferred, artworkSettings.sonarr_url || "");
   }
 
   function bannerUrl(show: Show, series: SonarrSeries | null | undefined): string {
-    const effectiveSource = show.artwork_source || settings?.artwork_default_source || "sonarr";
+    const effectiveSource = show.artwork_source || artworkSettings.artwork_default_source || "sonarr";
     // 1. Locally downloaded artwork (from the selected provider)
     //    Skip when source is "sonarr" — those files are from another provider.
     if (effectiveSource !== "sonarr" && show.artwork_banner_path) {
@@ -154,7 +165,7 @@ export function ShowsPage() {
       series.images.find((img) => img.coverType === "banner") ||
       series.images[0];
     if (!preferred) return "";
-    return resolveSonarrImageUrl(preferred, settings?.sonarr_url || "");
+    return resolveSonarrImageUrl(preferred, artworkSettings.sonarr_url || "");
   }
 
   function logoUrl(show: Show): string {

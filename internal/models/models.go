@@ -52,8 +52,6 @@ type ShowMapping struct {
 	StartMode         StartMode     `json:"start_mode"`
 	WatermarkMode     WatermarkMode `json:"watermark_mode"`
 	SyncWatermark     int           `json:"sync_watermark"`
-	AnilistPosterURL  string        `json:"anilist_poster_url,omitempty"`
-	AnilistBannerURL  string        `json:"anilist_banner_url,omitempty"`
 	ArtworkSource     string        `json:"artwork_source,omitempty"`      // provider that supplied current artwork
 	ArtworkPosterPath string        `json:"artwork_poster_path,omitempty"` // relative path to local poster file
 	ArtworkBannerPath string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file

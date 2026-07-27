@@ -56,7 +56,6 @@ interface PristineSnapshot {
   sonarrUrl: string;
   apiKeyDirty: boolean;
   syncInterval: string;
-  enableAniListArtwork: boolean;
   artworkDefaultSource: string;
   tmdbApiKeyDirty: boolean;
   fanartApiKeyDirty: boolean;
@@ -86,7 +85,6 @@ export function SettingsPage() {
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
   const [syncInterval, setSyncInterval] = useState("6h");
-  const [enableAniListArtwork, setEnableAniListArtwork] = useState(false);
   const [artworkDefaultSource, setArtworkDefaultSource] = useState("sonarr");
   const [tmdbApiKey, setTmdbApiKey] = useState("");
   const [tmdbApiKeySet, setTmdbApiKeySet] = useState(false);
@@ -113,7 +111,6 @@ export function SettingsPage() {
     sonarrUrl: "",
     apiKeyDirty: false,
     syncInterval: "6h",
-    enableAniListArtwork: false,
     artworkDefaultSource: "sonarr",
     tmdbApiKeyDirty: false,
     fanartApiKeyDirty: false,
@@ -134,7 +131,6 @@ export function SettingsPage() {
     (sonarrUrl !== pristine.sonarrUrl ||
       apiKeyDirty ||
       syncInterval !== pristine.syncInterval ||
-      enableAniListArtwork !== pristine.enableAniListArtwork ||
       artworkDefaultSource !== pristine.artworkDefaultSource ||
       tmdbApiKeyDirty ||
       fanartApiKeyDirty ||
@@ -188,7 +184,6 @@ export function SettingsPage() {
         setApiKeyVisible(false);
         setApiKeyDirty(false);
         setSyncInterval(data.sync_interval || "6h");
-        setEnableAniListArtwork(data.enable_anilist_artwork || false);
         setArtworkDefaultSource(data.artwork_default_source || "sonarr");
         setTmdbApiKeySet(!!data.tmdb_api_key_set);
         setTmdbApiKey("");
@@ -214,7 +209,6 @@ export function SettingsPage() {
           sonarrUrl: data.sonarr_url || "",
           apiKeyDirty: false,
           syncInterval: data.sync_interval || "6h",
-          enableAniListArtwork: data.enable_anilist_artwork || false,
           artworkDefaultSource: data.artwork_default_source || "sonarr",
           tmdbApiKeyDirty: false,
           fanartApiKeyDirty: false,
@@ -289,7 +283,6 @@ export function SettingsPage() {
         default_mixed_canon_action: trackedToAction(trackMixedDefault),
         default_anime_canon_action: trackedToAction(trackAnimeCanonDefault),
         sync_interval: syncInterval,
-        enable_anilist_artwork: enableAniListArtwork,
         artwork_default_source: artworkDefaultSource,
       };
       if (apiKeyDirty && sonarrApiKey) {
@@ -620,25 +613,6 @@ export function SettingsPage() {
               onChange={(v) => setSyncInterval(v as string)}
               isLabelHidden
               width={180}
-            />
-          </HStack>
-          <Divider />
-
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                AniList artwork (legacy)
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Enable AniList URL caching (old system). The new multi-source
-                artwork system below downloads images locally for offline use.
-              </Text>
-            </VStack>
-            <Switch
-              label="AniList artwork"
-              value={enableAniListArtwork}
-              onChange={setEnableAniListArtwork}
-              isLabelHidden
             />
           </HStack>
           <Divider />

@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"mizu/internal/anilist"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	matcherpkg "mizu/internal/matcher"
@@ -428,19 +427,6 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 			result.MonitoredCount = len(toMonitor)
 			result.EpisodesUpdated += len(toMonitor)
 			log.Info().Str("series", series.Title).Int("count", len(toMonitor)).Msg("monitored episodes")
-		}
-	}
-
-	e.cfg.RLock()
-	enableAnilist := e.cfg.EnableAniListArtwork
-	requestTimeout := e.cfg.RequestTimeout
-	e.cfg.RUnlock()
-
-	if enableAnilist && mapping.AnilistPosterURL == "" {
-		if artwork, artErr := anilist.New(requestTimeout).SearchArtwork(ctx, series); artErr == nil && artwork != nil {
-			if artErr := e.db.UpdateAnilistArtwork(ctx, mapping.ID, artwork.PosterImage, artwork.BannerImage); artErr != nil {
-				log.Warn().Err(artErr).Str("series", series.Title).Msg("failed to cache AniList artwork")
-			}
 		}
 	}
 

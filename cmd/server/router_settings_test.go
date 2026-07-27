@@ -1,21 +1,15 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
 	"mizu/internal/config"
 	"mizu/internal/database"
-	"mizu/internal/models"
-	syncengine "mizu/internal/sync"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func TestHandleUpdateSettingsRejectsInvalidFillerAction(t *testing.T) {
@@ -186,62 +180,5 @@ func TestHandleCreateMappingRejectsInvalidFillerAction(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid filler action, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestHandleGetMappingArtworkReturnsCachedArtwork(t *testing.T) {
-	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-	mapping := models.ShowMapping{
-		SonarrSeriesID:   1,
-		SonarrTitle:      "Naruto",
-		AFLSlug:          "naruto",
-		AFLTitle:         "Naruto",
-		FillerAction:     models.ActionUnmonitor,
-		MixedAction:      models.ActionMonitor,
-		AnimeCanonAction: models.ActionMonitor,
-		Enabled:          true,
-	}
-	if err := db.UpsertMapping(ctx, &mapping); err != nil {
-		t.Fatalf("creating mapping: %v", err)
-	}
-	// Fetch back to get the auto-incremented ID
-	stored, err := db.GetMappingBySonarrID(ctx, mapping.SonarrSeriesID)
-	if err != nil || stored == nil {
-		t.Fatalf("loading saved mapping: %v", err)
-	}
-	mapping = *stored
-	if err := db.UpdateAnilistArtwork(ctx, mapping.ID, "https://example.com/poster.jpg", "https://example.com/banner.jpg"); err != nil {
-		t.Fatalf("setting artwork: %v", err)
-	}
-
-	cfg := config.DefaultConfig()
-	cfg.EnableAniListArtwork = true
-
-	engine := syncengine.New(cfg, db)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/mappings/1/artwork", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", strconv.FormatInt(mapping.ID, 10))
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rec := httptest.NewRecorder()
-
-	handleGetMappingArtwork(cfg, db, engine)(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
-	if result["poster_image"] != "https://example.com/poster.jpg" {
-		t.Fatalf("expected cached poster URL, got %v", result["poster_image"])
 	}
 }

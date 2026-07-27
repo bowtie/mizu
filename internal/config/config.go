@@ -38,7 +38,6 @@ type Config struct {
 	DefaultFillerAction       FillerAction
 	DefaultMixedCanonAction   FillerAction
 	DefaultAnimeCanonAction   FillerAction
-	EnableAniListArtwork      bool
 	SonarrAddRootFolder       string
 	SonarrAddQualityProfileID int
 	SonarrAddMonitorMode      string
@@ -91,7 +90,6 @@ func DefaultConfig() *Config {
 		DefaultFillerAction:       ActionUnmonitor,
 		DefaultMixedCanonAction:   ActionMonitor,
 		DefaultAnimeCanonAction:   ActionMonitor,
-		EnableAniListArtwork:      false,
 		SonarrAddRootFolder:       "",
 		SonarrAddQualityProfileID: 0,
 		SonarrAddMonitorMode:      "all",

@@ -11,7 +11,6 @@ import (
 	stdsync "sync"
 	"time"
 
-	"mizu/internal/anilist"
 	"mizu/internal/artwork"
 	"mizu/internal/config"
 	"mizu/internal/database"
@@ -161,8 +160,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", handleGetMapping(db))
 				r.Put("/", handleUpdateMapping(syncEngine, db))
-				r.Delete("/", handleDeleteMapping(db))
-				r.Get("/artwork", handleGetMappingArtwork(cfg, db, syncEngine))
+				r.Delete("/", handleDeleteMapping(db, artworkMgr, epCache))
 				r.Post("/artwork/refresh", handleRefreshArtwork(cfg, db, artworkMgr, syncEngine))
 				r.Put("/artwork/source", handleSetArtworkSource(db, artworkMgr))
 				r.Get("/episodes", handleGetEpisodes(db, syncEngine, epCache))
@@ -545,7 +543,7 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 	}
 }
 
-func handleDeleteMapping(db *database.DB) http.HandlerFunc {
+func handleDeleteMapping(db *database.DB, mgr *artwork.Manager, epCache *episodeCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
@@ -556,6 +554,9 @@ func handleDeleteMapping(db *database.DB) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "failed to delete mapping: "+err.Error())
 			return
 		}
+		// Clean up cached episodes and downloaded artwork files
+		epCache.invalidate(id)
+		mgr.DeleteArtwork(id)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	}
 }
@@ -804,7 +805,6 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
 			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
 			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
-			"enable_anilist_artwork":        cfg.EnableAniListArtwork,
 			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
 			"sonarr_add_quality_profile_id": cfg.SonarrAddQualityProfileID,
 			"sonarr_add_monitor_mode":       cfg.SonarrAddMonitorMode,
@@ -850,7 +850,6 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			DefaultMixedCanonAction   *string `json:"default_mixed_canon_action"`
 			DefaultAnimeCanonAction   *string `json:"default_anime_canon_action"`
 			SyncInterval              *string `json:"sync_interval"`
-			EnableAniListArtwork      *bool   `json:"enable_anilist_artwork"`
 			SonarrAddRootFolder       *string `json:"sonarr_add_root_folder"`
 			SonarrAddQualityProfileID *int    `json:"sonarr_add_quality_profile_id"`
 			SonarrAddMonitorMode      *string `json:"sonarr_add_monitor_mode"`
@@ -869,16 +868,16 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		}
 
 		cfg.Lock()
-		defer cfg.Unlock()
 
 		if update.SonarrURL != nil {
-			cfg.SonarrURL = *update.SonarrURL
+			cfg.SonarrURL = strings.TrimRight(*update.SonarrURL, "/")
 		}
 		if update.SonarrAPIKey != nil && *update.SonarrAPIKey != "" {
 			cfg.SonarrAPIKey = *update.SonarrAPIKey
 		}
 		if update.DefaultFillerAction != nil {
 			if !config.IsValidFillerAction(*update.DefaultFillerAction) {
+				cfg.Unlock()
 				writeError(w, http.StatusBadRequest, "invalid default_filler_action")
 				return
 			}
@@ -886,6 +885,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		}
 		if update.DefaultMixedCanonAction != nil {
 			if !config.IsValidFillerAction(*update.DefaultMixedCanonAction) {
+				cfg.Unlock()
 				writeError(w, http.StatusBadRequest, "invalid default_mixed_canon_action")
 				return
 			}
@@ -893,6 +893,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		}
 		if update.DefaultAnimeCanonAction != nil {
 			if !config.IsValidFillerAction(*update.DefaultAnimeCanonAction) {
+				cfg.Unlock()
 				writeError(w, http.StatusBadRequest, "invalid default_anime_canon_action")
 				return
 			}
@@ -901,15 +902,13 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		if update.SyncInterval != nil {
 			normalized, d, err := normalizeScanInterval(*update.SyncInterval)
 			if err != nil {
+				cfg.Unlock()
 				writeError(w, http.StatusBadRequest, "invalid sync interval")
 				return
 			}
 			cfg.ScanInterval = d
 			scheduler.UpdateInterval(d)
 			update.SyncInterval = &normalized
-		}
-		if update.EnableAniListArtwork != nil {
-			cfg.EnableAniListArtwork = *update.EnableAniListArtwork
 		}
 		if update.SonarrAddRootFolder != nil {
 			cfg.SonarrAddRootFolder = *update.SonarrAddRootFolder
@@ -919,6 +918,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		}
 		if update.SonarrAddMonitorMode != nil {
 			if !config.IsValidSonarrMonitorMode(*update.SonarrAddMonitorMode) {
+				cfg.Unlock()
 				writeError(w, http.StatusBadRequest, "invalid Sonarr monitor mode")
 				return
 			}
@@ -931,7 +931,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			cfg.NtfyEnabled = *update.NtfyEnabled
 		}
 		if update.NtfyServerURL != nil {
-			cfg.NtfyServerURL = *update.NtfyServerURL
+			cfg.NtfyServerURL = strings.TrimRight(*update.NtfyServerURL, "/")
 		}
 		if update.NtfyTopic != nil {
 			cfg.NtfyTopic = *update.NtfyTopic
@@ -942,6 +942,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		// Validate ntfy config: if enabled, server URL and topic are required.
 		if cfg.NtfyEnabled && (cfg.NtfyServerURL == "" || cfg.NtfyTopic == "") {
 			cfg.NtfyEnabled = false
+			cfg.Unlock()
 			writeError(w, http.StatusBadRequest, "ntfy_server_url and ntfy_topic are required when ntfy is enabled")
 			return
 		}
@@ -956,6 +957,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 					}
 				}
 				if !valid {
+					cfg.Unlock()
 					writeError(w, http.StatusBadRequest, "invalid artwork_default_source: "+src)
 					return
 				}
@@ -969,14 +971,14 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			cfg.FanartAPIKey = *update.FanartAPIKey
 		}
 
-		for k, v := range map[string]string{
+		// Snapshot values for DB persistence while still holding the lock.
+		settingsSnapshot := map[string]string{
 			"sonarr_url":                    cfg.SonarrURL,
 			"sonarr_api_key":                cfg.SonarrAPIKey,
 			"default_filler_action":         string(cfg.DefaultFillerAction),
 			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
 			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
 			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
-			"enable_anilist_artwork":        strconv.FormatBool(cfg.EnableAniListArtwork),
 			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
 			"sonarr_add_quality_profile_id": strconv.Itoa(cfg.SonarrAddQualityProfileID),
 			"sonarr_add_monitor_mode":       cfg.SonarrAddMonitorMode,
@@ -988,7 +990,14 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"fanart_api_key":                cfg.FanartAPIKey,
-		} {
+		}
+		tmdbKey := cfg.TMDBAPIKey
+		fanartKey := cfg.FanartAPIKey
+		requestTimeout := cfg.RequestTimeout
+		cfg.Unlock()
+
+		// Persist to DB outside the config lock so concurrent readers aren't blocked.
+		for k, v := range settingsSnapshot {
 			if err := db.SetSetting(r.Context(), k, v); err != nil {
 				log.Warn().Err(err).Str("key", k).Msg("failed to persist setting")
 			}
@@ -1002,10 +1011,10 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		// Recreate artwork providers so new API keys take effect immediately.
 		if artworkMgr != nil {
 			artworkMgr.UpdateProviders([]artwork.Provider{
-				artwork.NewAniListProvider(cfg.RequestTimeout),
-				artwork.NewTMDBProvider(cfg.TMDBAPIKey, cfg.RequestTimeout),
-				artwork.NewFanartProvider(cfg.FanartAPIKey, cfg.RequestTimeout),
-				artwork.NewKitsuProvider(cfg.RequestTimeout),
+				artwork.NewAniListProvider(requestTimeout),
+				artwork.NewTMDBProvider(tmdbKey, requestTimeout),
+				artwork.NewFanartProvider(fanartKey, requestTimeout),
+				artwork.NewKitsuProvider(requestTimeout),
 			})
 		}
 
@@ -1076,7 +1085,7 @@ func handleTestSonarr() http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "url and api_key are required")
 			return
 		}
-		c := sonarr.New(req.URL, req.APIKey, 10*time.Second)
+		c := sonarr.New(strings.TrimRight(req.URL, "/"), req.APIKey, 10*time.Second)
 		info, err := c.TestConnection(r.Context())
 		if err != nil {
 			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
@@ -1670,76 +1679,6 @@ func clearManualMatchPendingSeriesID(ctx context.Context, db *database.DB, serie
 	return storeManualMatchPendingSeriesIDs(ctx, db, ids)
 }
 
-// Legacy AniList artwork endpoint — the multi-provider system uses
-// /mappings/{id}/artwork/refresh instead. This handler is kept for the
-// frontend's getAniListArtwork call which expects the old response shape.
-func handleGetMappingArtwork(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid mapping ID")
-			return
-		}
-
-		mapping, err := db.GetMappingByID(r.Context(), id)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		if mapping == nil {
-			writeError(w, http.StatusNotFound, "mapping not found")
-			return
-		}
-		cfg.RLock()
-		enableAnilist := cfg.EnableAniListArtwork
-		sonarrURL := cfg.SonarrURL
-		requestTimeout := cfg.RequestTimeout
-		cfg.RUnlock()
-
-		if !enableAnilist {
-			writeJSON(w, http.StatusOK, map[string]interface{}{})
-			return
-		}
-
-		// Return cached artwork if already fetched
-		if mapping.AnilistPosterURL != "" || mapping.AnilistBannerURL != "" {
-			writeJSON(w, http.StatusOK, map[string]interface{}{
-				"poster_image": mapping.AnilistPosterURL,
-				"banner_image": mapping.AnilistBannerURL,
-				"source":       "anilist",
-			})
-			return
-		}
-
-		series := models.SonarrSeries{
-			ID:    mapping.SonarrSeriesID,
-			Title: mapping.SonarrTitle,
-		}
-
-		if sonarrURL != "" {
-			if fetched, fetchErr := syncEngine.SonarrClient().GetSeries(r.Context(), mapping.SonarrSeriesID); fetchErr == nil && fetched != nil {
-				series = *fetched
-			} else if fetchErr != nil {
-				log.Warn().Err(fetchErr).Int("sonarr_series_id", mapping.SonarrSeriesID).Msg("failed to fetch Sonarr series for artwork lookup")
-			}
-		}
-
-		artwork, err := anilist.New(requestTimeout).SearchArtwork(r.Context(), series)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "failed to fetch AniList artwork: "+err.Error())
-			return
-		}
-		if artwork == nil {
-			writeJSON(w, http.StatusOK, map[string]interface{}{})
-			return
-		}
-
-		_ = db.UpdateAnilistArtwork(r.Context(), id, artwork.PosterImage, artwork.BannerImage)
-
-		writeJSON(w, http.StatusOK, artwork)
-	}
-}
-
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -1815,6 +1754,8 @@ func handleRefreshArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Mana
 		if sonarrURL != "" {
 			if fetched, ferr := syncEngine.SonarrClient().GetSeries(r.Context(), mapping.SonarrSeriesID); ferr == nil && fetched != nil {
 				series = *fetched
+			} else if ferr != nil {
+				log.Warn().Err(ferr).Int("sonarr_series_id", mapping.SonarrSeriesID).Msg("failed to fetch Sonarr series for artwork refresh")
 			}
 		}
 		// AFL slug is a clean, normalized title — add it as an alternate title
@@ -1899,9 +1840,10 @@ func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerF
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		// When switching to "sonarr", clear local artwork paths so the
-		// frontend falls back to Sonarr image URLs instead of stale downloads.
+		// When switching to "sonarr", clear local artwork files and DB paths
+		// so the frontend falls back to Sonarr image URLs instead of stale downloads.
 		if body.Source == "sonarr" {
+			mgr.DeleteArtwork(id)
 			_ = db.UpdateArtworkFiles(r.Context(), id, "", "", "")
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "source updated"})

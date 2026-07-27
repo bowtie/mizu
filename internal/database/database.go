@@ -181,7 +181,6 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       anilist_poster_url, anilist_banner_url,
 		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
 		       created_at, updated_at
 		FROM show_mappings ORDER BY sonarr_title ASC`)
@@ -197,7 +196,6 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 			&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 			&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 			&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-			&m.AnilistPosterURL, &m.AnilistBannerURL,
 			&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
 			&m.CreatedAt, &m.UpdatedAt,
 		)
@@ -215,14 +213,12 @@ func (db *DB) GetMappingByID(ctx context.Context, id int64) (*models.ShowMapping
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       anilist_poster_url, anilist_banner_url,
 		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
 		       created_at, updated_at
 		FROM show_mappings WHERE id = ?`, id).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-		&m.AnilistPosterURL, &m.AnilistBannerURL,
 		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
 		&m.CreatedAt, &m.UpdatedAt,
 	)
@@ -242,14 +238,12 @@ func (db *DB) GetMappingBySonarrID(ctx context.Context, seriesID int) (*models.S
 		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       anilist_poster_url, anilist_banner_url,
 		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
 		       created_at, updated_at
 		FROM show_mappings WHERE sonarr_series_id = ?`, seriesID).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-		&m.AnilistPosterURL, &m.AnilistBannerURL,
 		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
 		&m.CreatedAt, &m.UpdatedAt,
 	)
@@ -323,11 +317,6 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 		}
 	}
 	return nil
-}
-
-func (db *DB) UpdateAnilistArtwork(ctx context.Context, mappingID int64, posterURL, bannerURL string) error {
-	_, err := db.conn.ExecContext(ctx, `UPDATE show_mappings SET anilist_poster_url = ?, anilist_banner_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, posterURL, bannerURL, mappingID)
-	return err
 }
 
 // UpdateArtworkFiles stores only the local file paths (not the source override).
