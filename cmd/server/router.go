@@ -183,7 +183,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Get("/sonarr/add-options", handleGetSonarrAddOptions(syncEngine))
 		r.Post("/sonarr/manual-match-pending", handleMarkManualMatchPending(db))
 		r.Post("/sonarr/test", handleTestSonarr())
-		r.Post("/ntfy/test", handleTestNtfy(cfg, syncEngine))
+		r.Post("/ntfy/test", handleTestNtfy(cfg))
 		r.Get("/afl/search", handleAFLSearch(syncEngine, db))
 		r.Get("/afl/suggest", handleAFLSuggest(syncEngine, db))
 	})
@@ -276,6 +276,12 @@ func clampWatermark(value *int) int {
 }
 
 const manualMatchPendingSeriesIDsKey = "manual_match_pending_series_ids"
+
+// manualMatchMu guards the read-modify-write cycle on the
+// manual_match_pending_series_ids setting. Without it, two concurrent
+// requests could load the same list, each add/remove one ID, and the
+// second write would clobber the first.
+var manualMatchMu stdsync.Mutex
 
 func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -927,24 +933,32 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		if update.SonarrAddSeasonFolder != nil {
 			cfg.SonarrAddSeasonFolder = *update.SonarrAddSeasonFolder
 		}
+		// Compute effective ntfy values before applying, so we can validate
+		// without mutating cfg on a failed validation.
+		ntfyEnabled := cfg.NtfyEnabled
 		if update.NtfyEnabled != nil {
-			cfg.NtfyEnabled = *update.NtfyEnabled
+			ntfyEnabled = *update.NtfyEnabled
 		}
+		ntfyServerURL := cfg.NtfyServerURL
 		if update.NtfyServerURL != nil {
-			cfg.NtfyServerURL = strings.TrimRight(*update.NtfyServerURL, "/")
+			ntfyServerURL = strings.TrimRight(*update.NtfyServerURL, "/")
 		}
+		ntfyTopic := cfg.NtfyTopic
 		if update.NtfyTopic != nil {
-			cfg.NtfyTopic = *update.NtfyTopic
-		}
-		if update.NtfyToken != nil {
-			cfg.NtfyToken = *update.NtfyToken
+			ntfyTopic = *update.NtfyTopic
 		}
 		// Validate ntfy config: if enabled, server URL and topic are required.
-		if cfg.NtfyEnabled && (cfg.NtfyServerURL == "" || cfg.NtfyTopic == "") {
-			cfg.NtfyEnabled = false
+		if ntfyEnabled && (ntfyServerURL == "" || ntfyTopic == "") {
 			cfg.Unlock()
 			writeError(w, http.StatusBadRequest, "ntfy_server_url and ntfy_topic are required when ntfy is enabled")
 			return
+		}
+		// Validation passed — apply ntfy values.
+		cfg.NtfyEnabled = ntfyEnabled
+		cfg.NtfyServerURL = ntfyServerURL
+		cfg.NtfyTopic = ntfyTopic
+		if update.NtfyToken != nil {
+			cfg.NtfyToken = *update.NtfyToken
 		}
 		if update.ArtworkDefaultSource != nil {
 			src := *update.ArtworkDefaultSource
@@ -1095,7 +1109,7 @@ func handleTestSonarr() http.HandlerFunc {
 	}
 }
 
-func handleTestNtfy(cfg *config.Config, syncEngine *sync.Engine) http.HandlerFunc {
+func handleTestNtfy(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ServerURL *string `json:"server_url"`
@@ -1117,7 +1131,7 @@ func handleTestNtfy(cfg *config.Config, syncEngine *sync.Engine) http.HandlerFun
 		token := cfg.NtfyToken
 		cfg.RUnlock()
 		if req.ServerURL != nil {
-			serverURL = *req.ServerURL
+			serverURL = strings.TrimRight(*req.ServerURL, "/")
 		}
 		if req.Topic != nil {
 			topic = *req.Topic
@@ -1154,17 +1168,21 @@ func handleAFLSearch(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 			return
 		}
 
-		results := excludeMappedAFLShows(filterCachedAFLShows(query, cachedShows), mappings, 0)
-
 		seriesIDParam := r.URL.Query().Get("series_id")
-		if seriesIDParam == "" {
-			writeJSON(w, http.StatusOK, results)
-			return
+		seriesID := 0
+		if seriesIDParam != "" {
+			var parseErr error
+			seriesID, parseErr = strconv.Atoi(seriesIDParam)
+			if parseErr != nil || seriesID == 0 {
+				writeError(w, http.StatusBadRequest, "invalid series_id parameter")
+				return
+			}
 		}
 
-		seriesID, err := strconv.Atoi(seriesIDParam)
-		if err != nil || seriesID == 0 {
-			writeError(w, http.StatusBadRequest, "invalid series_id parameter")
+		results := excludeMappedAFLShows(filterCachedAFLShows(query, cachedShows), mappings, seriesID)
+
+		if seriesID == 0 {
+			writeJSON(w, http.StatusOK, results)
 			return
 		}
 
@@ -1176,7 +1194,7 @@ func handleAFLSearch(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 
 		matches := excludeMappedMatchResults(matchCachedAFLShows(r.Context(), engine.MatcherClient(), *series, results), mappings, seriesID)
 		if len(matches) == 0 {
-			writeJSON(w, http.StatusOK, excludeMappedAFLShows(results, mappings, seriesID))
+			writeJSON(w, http.StatusOK, results)
 			return
 		}
 		writeJSON(w, http.StatusOK, matches)
@@ -1662,6 +1680,8 @@ func storeManualMatchPendingSeriesIDs(ctx context.Context, db *database.DB, ids 
 }
 
 func markManualMatchPendingSeriesID(ctx context.Context, db *database.DB, seriesID int) error {
+	manualMatchMu.Lock()
+	defer manualMatchMu.Unlock()
 	ids, err := loadManualMatchPendingSeriesIDs(ctx, db)
 	if err != nil {
 		return err
@@ -1671,6 +1691,8 @@ func markManualMatchPendingSeriesID(ctx context.Context, db *database.DB, series
 }
 
 func clearManualMatchPendingSeriesID(ctx context.Context, db *database.DB, seriesID int) error {
+	manualMatchMu.Lock()
+	defer manualMatchMu.Unlock()
 	ids, err := loadManualMatchPendingSeriesIDs(ctx, db)
 	if err != nil {
 		return err

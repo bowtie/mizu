@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from "react";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Section } from "@astryxdesign/core/Section";
@@ -16,6 +16,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAppStore } from "../lib/store";
 import {
+  getArtworkProviders,
   getSettings,
   getStoredSonarrApiKey,
   refreshAflCache,
@@ -24,7 +25,7 @@ import {
   testSonarrConnection,
   updateSettings,
 } from "../lib/api";
-import type { Settings as SettingsType, SelectOption } from "../lib/types";
+import type { ArtworkProvider, Settings as SettingsType, SelectOption } from "../lib/types";
 
 const actionToTracked = (action: string | undefined, fallback = true): boolean =>
   (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
@@ -36,14 +37,6 @@ const syncIntervalOptions: SelectOption[] = [
   { value: "6h", label: "6 hours" },
   { value: "12h", label: "12 hours" },
   { value: "24h", label: "24 hours" },
-];
-
-const artworkSourceOptions: SelectOption[] = [
-  { value: "sonarr", label: "Sonarr (local)" },
-  { value: "anilist", label: "AniList" },
-  { value: "tmdb", label: "TMDB" },
-  { value: "fanart", label: "Fanart.tv" },
-  { value: "kitsu", label: "Kitsu" },
 ];
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -106,6 +99,7 @@ export function SettingsPage() {
   const [ntfyTokenDirty, setNtfyTokenDirty] = useState(false);
   const [ntfyTestPhase, setNtfyTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
   const [ntfyTestErrorMessage, setNtfyTestErrorMessage] = useState("");
+  const [artworkProviders, setArtworkProviders] = useState<ArtworkProvider[]>([]);
 
   const [pristine, setPristine] = useState<PristineSnapshot>({
     sonarrUrl: "",
@@ -230,6 +224,23 @@ export function SettingsPage() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Fetch artwork providers from the API so the dropdown reflects the
+  // actual backend state (available providers, API key requirements).
+  useEffect(() => {
+    getArtworkProviders()
+      .then((res) => setArtworkProviders(res.providers || []))
+      .catch(() => {});
+  }, []);
+
+  const artworkSourceOptions = useMemo<SelectOption[]>(() => {
+    const opts: SelectOption[] = [{ value: "sonarr", label: "Sonarr (local)" }];
+    for (const p of artworkProviders) {
+      const suffix = p.needs_key && !p.available ? " (needs API key)" : "";
+      opts.push({ value: p.id, label: `${p.label}${suffix}` });
+    }
+    return opts;
+  }, [artworkProviders]);
 
   const handleApiKeyInput = (value: string) => {
     setApiKeyDirty(true);

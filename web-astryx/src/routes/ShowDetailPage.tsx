@@ -345,8 +345,8 @@ export function ShowDetailPage() {
   useEffect(() => {
     getArtworkProviders()
       .then((res) => setArtworkProviders(res.providers || []))
-      .catch(() => {});
-  }, []);
+      .catch((err) => addNotification("Failed to load artwork providers: " + err.message, "error"));
+  }, [addNotification]);
 
   /** Build Selector options for the artwork source dropdown. */
   const artworkSourceOptions = useMemo<SelectOption[]>(() => {
@@ -422,25 +422,29 @@ export function ShowDetailPage() {
     setArtworkRefreshing(true);
     try {
       await setArtworkSource(showId, source);
-      // Reload show to reflect the change (clears local paths if "sonarr").
-      await loadShowData();
-      effectSkipRef.current = true;
-      setArtworkVersion((v) => v + 1);
 
       if (source === "" ) {
+        await loadShowData();
+        effectSkipRef.current = true;
+        setArtworkVersion((v) => v + 1);
         addNotification("Using global default artwork source", "info");
       } else if (source === "sonarr") {
+        // Reload show to reflect cleared local paths, then bust cache.
+        await loadShowData();
+        effectSkipRef.current = true;
+        setArtworkVersion((v) => v + 1);
         addNotification("Switched to Sonarr images", "info");
       } else {
-        // Fetch artwork from the selected provider.
+        // Fetch artwork from the selected provider, then reload once
+        // to pick up the new paths — no need to reload before the fetch.
         const result = await refreshArtwork(showId, source);
+        const refreshed = await loadShowData();
+        if (refreshed) {
+          effectSkipRef.current = true;
+          setArtworkVersion((v) => v + 1);
+        }
         if (result.found) {
           addNotification(`Switched to ${result.source} artwork`, "success");
-          const refreshed = await loadShowData();
-          if (refreshed) {
-            effectSkipRef.current = true;
-            setArtworkVersion((v) => v + 1);
-          }
         } else {
           addNotification(`No artwork found from ${source}`, "warning");
         }

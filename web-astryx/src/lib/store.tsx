@@ -28,7 +28,7 @@ const defaultSettings: Settings = {
   ntfy_server_url: "",
   ntfy_topic: "",
   ntfy_token_set: false,
-  artwork_default_source: "anilist",
+  artwork_default_source: "sonarr",
   tmdb_api_key: "",
   tmdb_api_key_set: false,
   fanart_api_key: "",

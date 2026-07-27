@@ -205,6 +205,8 @@ export interface StatusResponse {
 
 export interface VersionResponse {
   version: string;
+  commit?: string;
+  build_date?: string;
 }
 
 export interface StatsResponse {

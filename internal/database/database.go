@@ -67,8 +67,6 @@ func (db *DB) migrate() error {
 			start_mode TEXT NOT NULL DEFAULT 'from_current_progress',
 			watermark_mode TEXT NOT NULL DEFAULT 'auto',
 			sync_watermark INTEGER NOT NULL DEFAULT 0,
-			anilist_poster_url TEXT NOT NULL DEFAULT '',
-			anilist_banner_url TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -150,8 +148,6 @@ func (db *DB) migrate() error {
 		"ALTER TABLE episode_info ADD COLUMN sonarr_episode_number INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE episode_info ADD COLUMN absolute_episode_number INTEGER",
 		"ALTER TABLE episode_info ADD COLUMN monitored INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE show_mappings ADD COLUMN anilist_poster_url TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE show_mappings ADD COLUMN anilist_banner_url TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE show_mappings ADD COLUMN artwork_source TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE show_mappings ADD COLUMN artwork_poster_path TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE show_mappings ADD COLUMN artwork_banner_path TEXT NOT NULL DEFAULT ''",
@@ -164,6 +160,8 @@ func (db *DB) migrate() error {
 		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS episode_cutoff",
 		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS season_cutoff",
 		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS episode_offset",
+		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS anilist_poster_url",
+		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS anilist_banner_url",
 		"ALTER TABLE episode_info DROP COLUMN IF EXISTS arc_name",
 	} {
 		db.conn.Exec(dropSQL)

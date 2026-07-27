@@ -10,12 +10,9 @@ import type {
   SonarrAddOptions,
   SonarrAddPayload,
   SonarrSeries,
-  StatsResponse,
-  StatusResponse,
   StoredApiKeyResponse,
   SyncLogResponse,
   TestConnectionResult,
-  VersionResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -35,32 +32,10 @@ async function request<T>(method: string, path: string, body: unknown = null): P
   return res.json() as Promise<T>;
 }
 
-export function getStatus(): Promise<StatusResponse> {
-  return request<StatusResponse>("GET", "/health");
-}
-
-export function getVersion(): Promise<VersionResponse> {
-  return request<VersionResponse>("GET", "/version");
-}
-
-export function getStats(): Promise<StatsResponse> {
-  return request<StatsResponse>("GET", "/stats");
-}
-
 // In-memory cache for Sonarr series by ID — survives navigations within
 // the session. The backend also caches in SQLite for 24h, but this avoids
 // a network round-trip when revisiting a show in the same session.
 const seriesCache = new Map<number, SonarrSeries>();
-
-// clearSeriesCache removes a single entry (or all if id is omitted) from the
-// in-memory series cache. Call after operations that modify a series in Sonarr.
-export function clearSeriesCache(id?: number) {
-  if (id !== undefined) {
-    seriesCache.delete(id);
-  } else {
-    seriesCache.clear();
-  }
-}
 
 export function getSonarrSeriesById(seriesId: number): Promise<SonarrSeries> {
   const cached = seriesCache.get(seriesId);

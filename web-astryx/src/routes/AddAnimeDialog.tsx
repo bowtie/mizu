@@ -665,17 +665,29 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                         dispatch({ type: "SET", payload: { selectedSonarr: series } });
                       }}
                       startContent={
-                        <img
-                          src={posterUrl(series)}
-                          alt=""
-                          loading="lazy"
-                          style={{
-                            width: 32,
-                            height: 44,
-                            objectFit: "cover",
-                            borderRadius: "var(--radius-1)",
-                          }}
-                        />
+                        posterUrl(series) ? (
+                          <img
+                            src={posterUrl(series)}
+                            alt=""
+                            loading="lazy"
+                            style={{
+                              width: 32,
+                              height: 44,
+                              objectFit: "cover",
+                              borderRadius: "var(--radius-1)",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 32,
+                              height: 44,
+                              borderRadius: "var(--radius-1)",
+                              background: "var(--color-background-muted)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        )
                       }
                       endContent={
                         seriesMapped ? (

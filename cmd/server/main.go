@@ -141,7 +141,7 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		cfg.NtfyEnabled = value == "true"
 	}
 	if value, err := db.GetSetting(ctx, "ntfy_server_url"); err == nil && value != "" {
-		cfg.NtfyServerURL = value
+		cfg.NtfyServerURL = strings.TrimRight(value, "/")
 	}
 	if value, err := db.GetSetting(ctx, "ntfy_topic"); err == nil {
 		cfg.NtfyTopic = value

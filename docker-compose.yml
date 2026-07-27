@@ -3,8 +3,6 @@
 # Add this to your existing *arr stack docker-compose.yml
 # =============================================================================
 
-version: "3.8"
-
 services:
   mizu:
     build: .
