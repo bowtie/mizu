@@ -203,23 +203,26 @@ export function ShowsPage() {
 
   const loadLanding = useCallback(async () => {
     setLoading(true);
-    try {
-      const [showsRes, seriesRes, settingsRes] = await Promise.allSettled([
-        getShows(),
-        getSonarrSeries(),
-        getSettings(),
-      ]);
-      const nextShows: Show[] = showsRes.status === "fulfilled" ? showsRes.value || [] : [];
-      setShows(nextShows);
-      const nextSeries: SonarrSeries[] =
-        seriesRes.status === "fulfilled" ? seriesRes.value || [] : [];
+    const [showsRes, seriesRes, settingsRes] = await Promise.allSettled([
+      getShows(),
+      getSonarrSeries(),
+      getSettings(),
+    ]);
+    if (showsRes.status === "fulfilled") {
+      setShows(showsRes.value || []);
+    } else {
+      setShows([]);
+      addNotification("Failed to load anime: " + showsRes.reason?.message, "error");
+    }
+    if (seriesRes.status === "fulfilled") {
+      const nextSeries = seriesRes.value || [];
       setAllSeries(nextSeries);
       setSeriesById(Object.fromEntries(nextSeries.map((s) => [s.id, s])));
-      if (settingsRes.status === "fulfilled") {
-        setSettings(settingsRes.value ?? null);
-      }
-    } catch (err: any) {
-      addNotification("Failed to load Mizu anime: " + err.message, "error");
+    } else {
+      addNotification("Failed to load Sonarr series: " + seriesRes.reason?.message, "error");
+    }
+    if (settingsRes.status === "fulfilled") {
+      setSettings(settingsRes.value ?? null);
     }
     setLoading(false);
   }, [setShows, setSettings, addNotification]);
@@ -235,6 +238,10 @@ export function ShowsPage() {
   }, []);
 
   const handleRefreshAllArtwork = async () => {
+    if (artworkReloadTimer.current) {
+      clearTimeout(artworkReloadTimer.current);
+      artworkReloadTimer.current = null;
+    }
     setArtworkRefreshing(true);
     try {
       await refreshAllArtwork();
@@ -242,6 +249,7 @@ export function ShowsPage() {
       // The backend runs the refresh asynchronously. Wait for it to finish,
       // then reload shows to pick up the new artwork paths.
       artworkReloadTimer.current = setTimeout(() => {
+        artworkReloadTimer.current = null;
         loadLanding().then(() => {
           setArtworkRefreshing(false);
           addNotification("Artwork refresh complete", "success");
