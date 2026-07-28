@@ -14,6 +14,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Search } from "lucide-react";
 import { RefreshCw, History, ChevronDown, TriangleAlert } from "lucide-react";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { useAppStore } from "../lib/store";
 import { getSyncLogs, triggerSync, errorMessage } from "../lib/api";
 import type { SyncLog } from "../lib/types";
@@ -32,14 +33,6 @@ import {
 } from "../lib/activity-utils";
 
 const PAGE_SIZE = 8;
-
-const statusFilters = [
-  { value: "all", label: "All" },
-  { value: "running", label: "Running", color: "var(--color-accent)" },
-  { value: "success", label: "Success", color: "var(--color-success)" },
-  { value: "partial", label: "Partial", color: "var(--color-warning)" },
-  { value: "failed", label: "Failed", color: "var(--color-error)" },
-];
 
 export function ActivityPage() {
   const { addNotification } = useAppStore();
@@ -194,29 +187,19 @@ export function ActivityPage() {
           <>
             {/* Filters */}
             <VStack gap={3} style={{ width: "100%" }}>
-              <HStack gap={2} wrap="wrap" align="center">
-                {statusFilters.map((f) => {
-                  const isActive = statusFilter === f.value;
-                  return (
-                    <Button
-                      key={f.value}
-                      label={f.label}
-                      variant={isActive ? "primary" : "secondary"}
-                      size="sm"
-                      style={
-                        f.color
-                          ? {
-                              background: isActive ? f.color : undefined,
-                              borderColor: isActive ? f.color : f.color,
-                              color: isActive ? "#fff" : f.color,
-                            }
-                          : undefined
-                      }
-                      onClick={() => setStatusFilter(f.value)}
-                    />
-                  );
-                })}
-              </HStack>
+              <SegmentedControl
+                value={statusFilter}
+                onChange={setStatusFilter}
+                label="Status filter"
+                layout="fill"
+                size="md"
+              >
+                <SegmentedControlItem value="all" label="All" />
+                <SegmentedControlItem value="running" label="Running" />
+                <SegmentedControlItem value="success" label="Success" />
+                <SegmentedControlItem value="partial" label="Partial" />
+                <SegmentedControlItem value="failed" label="Failed" />
+              </SegmentedControl>
               <TextInput
                 label="Search logs"
                 value={searchQuery}

@@ -464,18 +464,8 @@ export function ShowsPage() {
                     onClick={() => openShow(show.id)}
                     padding={0}
                     className="mizu-card"
-                    style={{ overflow: "hidden" }}
                   >
-                    <div
-                      className={`mizu-card-img-wrap${img ? "" : " is-empty"}`}
-                      style={{
-                        position: "relative",
-                        aspectRatio: "16/9",
-                        overflow: "clip",
-                        flexShrink: 0,
-                        background: "var(--color-background-muted)",
-                      }}
-                    >
+                    <div className={`mizu-card-img-wrap${img ? "" : " is-empty"}`}>
                       {img ? (
                         <img
                           src={img}

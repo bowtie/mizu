@@ -66,7 +66,6 @@ export function SettingsPage() {
   const { setSettings, addNotification } = useAppStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [, setTesting] = useState(false);
   const [refreshingCache, setRefreshingCache] = useState(false);
   const [revealingKey, setRevealingKey] = useState(false);
   const [testPhase, setTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
@@ -335,6 +334,7 @@ export function SettingsPage() {
   };
 
   const handleTestConnection = async () => {
+    if (testPhase !== "idle") return;
     if (!sonarrUrl) {
       setTestErrorMessage("Enter a Sonarr URL first");
       setTestPhase("error");
@@ -345,7 +345,6 @@ export function SettingsPage() {
       setTestPhase("error");
       return;
     }
-    setTesting(true);
     setTestErrorMessage("");
     clearReset();
     setTestPhase("connecting");
@@ -368,7 +367,6 @@ export function SettingsPage() {
       setTestPhase("error");
       scheduleReset(4000);
     }
-    setTesting(false);
   };
 
   const handleRefreshCache = async () => {
@@ -384,6 +382,7 @@ export function SettingsPage() {
   };
 
   const handleTestNtfy = async () => {
+    if (ntfyTestPhase !== "idle") return;
     if (!ntfyServerUrl) {
       setNtfyTestErrorMessage("Enter a server URL first");
       setNtfyTestPhase("error");
@@ -578,28 +577,8 @@ export function SettingsPage() {
                 )
               }
               onClick={handleTestConnection}
-              isDisabled={testPhase !== "idle" || !sonarrUrl || !urlValid}
-              style={
-                testPhase === "success"
-                  ? {
-                      background: "var(--color-success)",
-                      borderColor: "var(--color-success)",
-                      color: "var(--color-on-success)",
-                      opacity: 1,
-                      cursor: "default",
-                    }
-                  : testPhase === "error"
-                    ? {
-                        opacity: 1,
-                        cursor: "default",
-                      }
-                    : testPhase === "connecting"
-                      ? {
-                          opacity: 1,
-                          cursor: "default",
-                        }
-                      : undefined
-              }
+              isDisabled={!sonarrUrl || !urlValid}
+              className={testPhase !== "idle" ? "test-status-btn" : undefined}
             />
           </HStack>
         </VStack>
@@ -863,28 +842,8 @@ export function SettingsPage() {
                 )
               }
               onClick={handleTestNtfy}
-              isDisabled={ntfyTestPhase === "connecting" || !ntfyServerUrl || !ntfyTopic}
-              style={
-                ntfyTestPhase === "success"
-                  ? {
-                      background: "var(--color-success)",
-                      borderColor: "var(--color-success)",
-                      color: "var(--color-on-success)",
-                      opacity: 1,
-                      cursor: "default",
-                    }
-                  : ntfyTestPhase === "error"
-                    ? {
-                        opacity: 1,
-                        cursor: "default",
-                      }
-                    : ntfyTestPhase === "connecting"
-                      ? {
-                          opacity: 1,
-                          cursor: "default",
-                        }
-                      : undefined
-              }
+              isDisabled={!ntfyServerUrl || !ntfyTopic}
+              className={ntfyTestPhase !== "idle" ? "test-status-btn" : undefined}
             />
           </HStack>
         </VStack>

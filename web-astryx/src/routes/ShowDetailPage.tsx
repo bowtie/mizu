@@ -21,6 +21,7 @@ import { InputGroup, InputGroupText } from "@astryxdesign/core/InputGroup";
 import { Collapsible } from "@astryxdesign/core/Collapsible";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Selector } from "@astryxdesign/core/Selector";
+import { Divider } from "@astryxdesign/core/Divider";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import {
   Trash2,
@@ -758,7 +759,7 @@ export function ShowDetailPage() {
               <HStack gap={3} align="center">
                 <ImageIcon size={16} />
                 <Heading level={3}>Artwork</Heading>
-                <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+                <Divider xstyle={{ flex: 1 }} />
                 <Button
                   label={artworkRefreshing ? "Refreshing..." : "Refresh"}
                   variant="ghost"
@@ -792,7 +793,7 @@ export function ShowDetailPage() {
           <VStack gap={4}>
             <HStack gap={3} align="center">
               <Heading level={2}>Tracking rules</Heading>
-              <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+              <Divider xstyle={{ flex: 1 }} />
               {rulesDirty && <Badge variant="warning" label="Unsaved changes" />}
             </HStack>
 
@@ -865,7 +866,7 @@ export function ShowDetailPage() {
           <VStack gap={4}>
             <HStack gap={3} align="center">
               <Heading level={2}>Episode list</Heading>
-              <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+              <Divider xstyle={{ flex: 1 }} />
             </HStack>
 
             {/* Episode filters */}
