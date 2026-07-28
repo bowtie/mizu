@@ -53,6 +53,7 @@ import {
   setArtworkSource,
   setEpisodeMonitor,
   updateShow,
+  errorMessage,
 } from "../lib/api";
 import type {
   ArtworkProvider,
@@ -295,8 +296,8 @@ export function ShowDetailPage() {
         }
       }
       return showRes;
-    } catch (err: any) {
-      addNotification("Failed to load anime: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to load anime: " + errorMessage(err), "error");
       return null;
     } finally {
       setLoadingShow(false);
@@ -327,8 +328,8 @@ export function ShowDetailPage() {
         setEpisodes(episodesList);
         setMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
         setPristineMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
-      } catch (err: any) {
-        addNotification("Failed to load episodes: " + err.message, "error");
+      } catch (err: unknown) {
+        addNotification("Failed to load episodes: " + errorMessage(err), "error");
       }
       setEpisodesLoading(false);
     },
@@ -345,7 +346,7 @@ export function ShowDetailPage() {
   useEffect(() => {
     getArtworkProviders()
       .then((res) => setArtworkProviders(res.providers || []))
-      .catch((err) => addNotification("Failed to load artwork providers: " + err.message, "error"));
+      .catch((err: unknown) => addNotification("Failed to load artwork providers: " + errorMessage(err), "error"));
   }, [addNotification]);
 
   /** Build Selector options for the artwork source dropdown. */
@@ -411,8 +412,8 @@ export function ShowDetailPage() {
           "warning",
         );
       }
-    } catch (err: any) {
-      addNotification("Failed to fetch artwork: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to fetch artwork: " + errorMessage(err), "error");
     }
     setArtworkRefreshing(false);
   };
@@ -449,8 +450,8 @@ export function ShowDetailPage() {
           addNotification(`No artwork found from ${source}`, "warning");
         }
       }
-    } catch (err: any) {
-      addNotification("Failed to set artwork source: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to set artwork source: " + errorMessage(err), "error");
     }
     setArtworkRefreshing(false);
   };
@@ -478,8 +479,8 @@ export function ShowDetailPage() {
         effectSkipRef.current = true;
         await loadEpisodeData(refreshedShow);
       }
-    } catch (err: any) {
-      addNotification("Failed to save anime: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to save anime: " + errorMessage(err), "error");
     }
     setSaving(false);
   };
@@ -493,8 +494,8 @@ export function ShowDetailPage() {
       addNotification(`Removed ${show?.sonarr_title || "anime"} from Mizu`, "success");
       setShowDeleteDialog(false);
       navigate("/shows");
-    } catch (err: any) {
-      addNotification("Failed to remove anime: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to remove anime: " + errorMessage(err), "error");
     }
     setDeleting(false);
   };
@@ -517,8 +518,8 @@ export function ShowDetailPage() {
         `${episodeLabel(ep)} ${nextState ? "now monitored" : "now unmonitored"}`,
         "success",
       );
-    } catch (err: any) {
-      addNotification("Failed to update episode: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to update episode: " + errorMessage(err), "error");
     }
     setSyncingEps((prev) => {
       const next = { ...prev };

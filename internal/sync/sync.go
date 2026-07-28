@@ -81,11 +81,21 @@ func (e *Engine) notifierClient() *notifier.Notifier {
 // UpdateClients recreates the Sonarr and ntfy clients from the current config
 // values. This should be called after settings are updated at runtime.
 func (e *Engine) UpdateClients() {
+	e.cfg.RLock()
+	sonarrURL := e.cfg.SonarrURL
+	sonarrAPIKey := e.cfg.SonarrAPIKey
+	requestTimeout := e.cfg.RequestTimeout
+	ntfyEnabled := e.cfg.NtfyEnabled
+	ntfyServerURL := e.cfg.NtfyServerURL
+	ntfyTopic := e.cfg.NtfyTopic
+	ntfyToken := e.cfg.NtfyToken
+	e.cfg.RUnlock()
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.sonarr = sonarr.New(e.cfg.SonarrURL, e.cfg.SonarrAPIKey, e.cfg.RequestTimeout)
-	if e.cfg.NtfyEnabled {
-		e.notifier = notifier.New(e.cfg.NtfyServerURL, e.cfg.NtfyTopic, e.cfg.NtfyToken)
+	e.sonarr = sonarr.New(sonarrURL, sonarrAPIKey, requestTimeout)
+	if ntfyEnabled {
+		e.notifier = notifier.New(ntfyServerURL, ntfyTopic, ntfyToken)
 	} else {
 		e.notifier = nil
 	}
@@ -118,7 +128,7 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		errMsg := fmt.Sprintf("failed to load mappings from database: %v", err)
 		log.Error().Err(err).Msg(errMsg)
 		e.completeSyncLog(ctx, logID, "failed", 0, 0, errMsg)
-		return fmt.Errorf("%s", errMsg)
+		return fmt.Errorf("failed to load mappings from database: %w", err)
 	}
 
 	enabledMappings := make([]models.ShowMapping, 0, len(mappings))

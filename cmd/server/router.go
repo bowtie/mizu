@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	stdsync "sync"
+	"sync/atomic"
 	"time"
 
 	"mizu/internal/artwork"
@@ -282,6 +283,15 @@ const manualMatchPendingSeriesIDsKey = "manual_match_pending_series_ids"
 // requests could load the same list, each add/remove one ID, and the
 // second write would clobber the first.
 var manualMatchMu stdsync.Mutex
+
+// aflCacheRefreshing prevents concurrent AFL cache refreshes — two
+// simultaneous calls would both scrape AFL and race on ReplaceCachedAFLShows,
+// corrupting the "new shows" detection.
+var aflCacheRefreshing atomic.Bool
+
+// artworkRefreshing prevents concurrent background artwork refreshes —
+// two simultaneous refreshes waste bandwidth and race on file writes.
+var artworkRefreshing atomic.Bool
 
 func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1049,6 +1059,12 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 
 func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !aflCacheRefreshing.CompareAndSwap(false, true) {
+			writeError(w, http.StatusConflict, "AFL cache refresh already in progress")
+			return
+		}
+		defer aflCacheRefreshing.Store(false)
+
 		shows, newSlugs, err := engine.ScraperClient().RefreshAllShows(r.Context())
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "failed to refresh AFL show list: "+err.Error())
@@ -1085,8 +1101,10 @@ func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFun
 		if len(newSlugs) > 0 {
 			status = "partial" // has new items to review
 		}
-		if err := db.CompleteSyncLog(r.Context(), logID, status, len(newSlugs), 0, ""); err != nil {
-			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
+		if logID > 0 {
+			if err := db.CompleteSyncLog(r.Context(), logID, status, len(newSlugs), 0, ""); err != nil {
+				log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
+			}
 		}
 
 		count, refreshedAt, err := db.GetAFLShowCacheStatus(r.Context())
@@ -1791,6 +1809,21 @@ func handleRefreshArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Mana
 			source = mgr.ResolveSource(mapping.ArtworkSource, artworkDefaultSource)
 		}
 
+		// Validate source: "auto", "sonarr", empty, or a registered provider.
+		if source != "" && source != "auto" && source != "sonarr" {
+			valid := false
+			for _, p := range mgr.Providers() {
+				if p.ID == source {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				writeError(w, http.StatusBadRequest, "unknown artwork source: "+source)
+				return
+			}
+		}
+
 		// Fetch full Sonarr series for provider metadata (TVDB ID, alt titles, etc.)
 		series := models.SonarrSeries{
 			ID:    mapping.SonarrSeriesID,
@@ -1820,8 +1853,14 @@ func handleRefreshArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Mana
 
 func handleRefreshAllArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Manager, syncEngine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !artworkRefreshing.CompareAndSwap(false, true) {
+			writeError(w, http.StatusConflict, "artwork refresh already in progress")
+			return
+		}
+
 		mappings, err := db.GetAllMappings(r.Context())
 		if err != nil {
+			artworkRefreshing.Store(false)
 			writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
 			return
 		}
@@ -1844,6 +1883,7 @@ func handleRefreshAllArtwork(cfg *config.Config, db *database.DB, mgr *artwork.M
 		bgWG.Add(1)
 		go func() {
 			defer bgWG.Done()
+			defer artworkRefreshing.Store(false)
 			summary := mgr.RefreshAll(appCtx, mappings, artworkDefaultSource, seriesFetcher)
 			log.Info().Int("total", summary.Total).Int("succeeded", summary.Succeeded).Int("failed", summary.Failed).Int("not_found", summary.NotFound).Msg("background artwork refresh complete")
 		}()

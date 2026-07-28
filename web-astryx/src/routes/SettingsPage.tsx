@@ -24,6 +24,7 @@ import {
   testNtfyConnection,
   testSonarrConnection,
   updateSettings,
+  errorMessage,
 } from "../lib/api";
 import type { ArtworkProvider, Settings as SettingsType, SelectOption } from "../lib/types";
 
@@ -215,8 +216,8 @@ export function SettingsPage() {
           ntfyTokenDirty: false,
         });
       }
-    } catch (err: any) {
-      addNotification("Failed to load settings: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to load settings: " + errorMessage(err), "error");
     }
     setLoading(false);
   }, [setSettings, addNotification]);
@@ -230,7 +231,7 @@ export function SettingsPage() {
   useEffect(() => {
     getArtworkProviders()
       .then((res) => setArtworkProviders(res.providers || []))
-      .catch((err) => addNotification("Failed to load artwork providers: " + err.message, "error"));
+      .catch((err: unknown) => addNotification("Failed to load artwork providers: " + errorMessage(err), "error"));
   }, [addNotification]);
 
   const artworkSourceOptions = useMemo<SelectOption[]>(() => {
@@ -266,8 +267,8 @@ export function SettingsPage() {
       try {
         const data = await getStoredSonarrApiKey();
         setSonarrApiKey(data.sonarr_api_key || "");
-      } catch (err: any) {
-        addNotification("Failed to reveal saved API key: " + err.message, "error");
+      } catch (err: unknown) {
+        addNotification("Failed to reveal saved API key: " + errorMessage(err), "error");
         setRevealingKey(false);
         return;
       }
@@ -323,12 +324,12 @@ export function SettingsPage() {
           .then(() => {
             addNotification("Artwork refresh triggered — updates will appear shortly", "info");
           })
-          .catch(() => {
-            addNotification("Background artwork refresh failed", "error");
+          .catch((err: unknown) => {
+            addNotification("Background artwork refresh failed: " + errorMessage(err), "error");
           });
       }
-    } catch (err: any) {
-      addNotification("Failed to save settings: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to save settings: " + errorMessage(err), "error");
     }
     setSaving(false);
   };
@@ -360,10 +361,10 @@ export function SettingsPage() {
       }
       setTestPhase("success");
       scheduleReset(2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
-      setTestErrorMessage(err.message);
+      setTestErrorMessage(errorMessage(err));
       setTestPhase("error");
       scheduleReset(4000);
     }
@@ -376,8 +377,8 @@ export function SettingsPage() {
       await refreshAflCache();
       addNotification("AFL show list refreshed", "success");
       await loadSettings();
-    } catch (err: any) {
-      addNotification("Failed to refresh AFL cache: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to refresh AFL cache: " + errorMessage(err), "error");
     }
     setRefreshingCache(false);
   };
@@ -411,10 +412,10 @@ export function SettingsPage() {
       setNtfyTestPhase("success");
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
       ntfyResetTimer.current = setTimeout(() => setNtfyTestPhase("idle"), 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
-      setNtfyTestErrorMessage(err.message);
+      setNtfyTestErrorMessage(errorMessage(err));
       setNtfyTestPhase("error");
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
       ntfyResetTimer.current = setTimeout(() => {

@@ -15,7 +15,7 @@ import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Search } from "lucide-react";
 import { RefreshCw, History, ChevronDown, TriangleAlert } from "lucide-react";
 import { useAppStore } from "../lib/store";
-import { getSyncLogs, triggerSync } from "../lib/api";
+import { getSyncLogs, triggerSync, errorMessage } from "../lib/api";
 import type { SyncLog } from "../lib/types";
 import {
   runStatusBadge,
@@ -96,8 +96,8 @@ export function ActivityPage() {
         setLogs(reset ? newLogs : (prev) => [...prev, ...newLogs]);
         setHasMore(!!page.has_more);
         setNextOffset(page.next_offset ?? (reset ? newLogs.length : offset + newLogs.length));
-      } catch (err: any) {
-        addNotification("Failed to load activity: " + err.message, "error");
+      } catch (err: unknown) {
+        addNotification("Failed to load activity: " + errorMessage(err), "error");
       }
       setLoading(false);
       setLoadingMore(false);
@@ -142,8 +142,8 @@ export function ActivityPage() {
       await triggerSync();
       addNotification("Sync started", "info");
       startPolling();
-    } catch (err: any) {
-      addNotification("Failed to trigger sync: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to trigger sync: " + errorMessage(err), "error");
     }
     setSyncing(false);
   };

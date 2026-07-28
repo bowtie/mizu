@@ -144,14 +144,10 @@ func (c *Config) validate() error {
 	default:
 		return fmt.Errorf("invalid default_anime_canon_action: %s", c.DefaultAnimeCanonAction)
 	}
-	if !isValidSonarrMonitorMode(c.SonarrAddMonitorMode) {
+	if !IsValidSonarrMonitorMode(c.SonarrAddMonitorMode) {
 		return fmt.Errorf("invalid sonarr_add_monitor_mode: %s", c.SonarrAddMonitorMode)
 	}
 	return nil
-}
-
-func isValidSonarrMonitorMode(value string) bool {
-	return IsValidSonarrMonitorMode(value)
 }
 
 // IsValidSonarrMonitorMode returns true if the value is a valid Sonarr monitor mode.

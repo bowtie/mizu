@@ -9,7 +9,7 @@ internal/web/dist/*
 *.db.bak
 
 # Downloaded artwork (stored locally for offline browsing)
-artwork/
+/artwork/
 
 # Air live reload temp
 .air/

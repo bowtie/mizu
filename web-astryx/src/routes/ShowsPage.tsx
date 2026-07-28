@@ -18,7 +18,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Plus, Search, Waves, CircleAlert, RefreshCw } from "lucide-react";
 import { useAppStore } from "../lib/store";
-import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork } from "../lib/api";
+import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, errorMessage } from "../lib/api";
 import type { SelectOption, Settings, Show, SonarrAddOptions, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { syncStateBadge } from "../lib/fox";
@@ -223,14 +223,14 @@ export function ShowsPage() {
       setShows(showsRes.value || []);
     } else {
       setShows([]);
-      addNotification("Failed to load anime: " + showsRes.reason?.message, "error");
+      addNotification("Failed to load anime: " + errorMessage(showsRes.reason), "error");
     }
     if (seriesRes.status === "fulfilled") {
       const nextSeries = seriesRes.value || [];
       setAllSeries(nextSeries);
       setSeriesById(Object.fromEntries(nextSeries.map((s) => [s.id, s])));
     } else {
-      addNotification("Failed to load Sonarr series: " + seriesRes.reason?.message, "error");
+      addNotification("Failed to load Sonarr series: " + errorMessage(seriesRes.reason), "error");
     }
     if (settingsRes.status === "fulfilled") {
       setSettings(settingsRes.value ?? null);
@@ -266,8 +266,8 @@ export function ShowsPage() {
           addNotification("Artwork refresh complete", "success");
         });
       }, 8000);
-    } catch (err: any) {
-      addNotification("Artwork refresh failed: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Artwork refresh failed: " + errorMessage(err), "error");
       setArtworkRefreshing(false);
     }
   };
@@ -277,8 +277,8 @@ export function ShowsPage() {
       const current = await getSettings();
       setSettings(current);
       return current;
-    } catch (err: any) {
-      addNotification("Failed to load settings: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to load settings: " + errorMessage(err), "error");
       return null;
     }
   };
@@ -312,8 +312,8 @@ export function ShowsPage() {
         payload.fallbackQualityProfileId = preferredAnimeQualityProfileId;
       }
       dispatch({ type: "SET", payload });
-    } catch {
-      // silent
+    } catch (err: unknown) {
+      addNotification("Failed to load Sonarr add options: " + errorMessage(err), "error");
     }
   };
 
@@ -334,8 +334,8 @@ export function ShowsPage() {
       setAllSeries(fullSeries || []);
       setAddSeriesLibrary(modalSeries || []);
       setSeriesById(Object.fromEntries((fullSeries || []).map((s) => [s.id, s])));
-    } catch (err: any) {
-      addNotification("Failed to load Sonarr series: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
     }
     dispatch({ type: "SET", payload: { sonarrLoading: false } });
   };

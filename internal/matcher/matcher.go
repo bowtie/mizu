@@ -345,7 +345,7 @@ func jaroDistance(r1, r2 []rune) float64 {
 }
 
 func sortResults(results []MatchResult) {
-	sort.Slice(results, func(i, j int) bool {
+	sort.SliceStable(results, func(i, j int) bool {
 		return results[i].Confidence > results[j].Confidence
 	})
 }

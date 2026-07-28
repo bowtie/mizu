@@ -20,6 +20,7 @@ import {
   markManualMatchPending,
   searchAFL,
   suggestAFL,
+  errorMessage,
 } from "../lib/api";
 import type { AFLMatch, SelectOption, SonarrAddPayload, SonarrSeries } from "../lib/types";
 
@@ -301,10 +302,10 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           payload: { displayedMatches: manualResults },
         });
       }
-    } catch {
+    } catch (err: unknown) {
       if (reqId !== suggestReqId.current) return;
       dispatch({ type: "SET", payload: { displayedMatches: [], manualSearchVisible: true } });
-      addNotification("Failed to load AFL suggestions", "error");
+      addNotification("Failed to load AFL suggestions: " + errorMessage(err), "error");
     }
     if (reqId === suggestReqId.current) {
       dispatch({ type: "SET", payload: { matchLoading: false } });
@@ -328,10 +329,10 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       const results = await searchAFL(w.manualQuery.trim(), w.selectedSonarr.id);
       if (reqId !== suggestReqId.current) return;
       dispatch({ type: "SET", payload: { displayedMatches: results } });
-    } catch {
+    } catch (err: unknown) {
       if (reqId !== suggestReqId.current) return;
       dispatch({ type: "SET", payload: { displayedMatches: [] } });
-      addNotification("AFL search failed", "error");
+      addNotification("AFL search failed: " + errorMessage(err), "error");
     }
     if (reqId === suggestReqId.current) {
       dispatch({ type: "SET", payload: { manualSearching: false } });
@@ -366,8 +367,8 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         },
       });
       await loadLanding();
-    } catch (err: any) {
-      addNotification("Failed to sync anime: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to sync anime: " + errorMessage(err), "error");
     } finally {
       dispatch({ type: "SET", payload: { confirming: false } });
     }
@@ -396,8 +397,8 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       setAllSeries((prev) =>
         prev.map((s) => (s.id === w.selectedSonarr?.id ? { ...s, manualMatchPending: true } : s)),
       );
-    } catch (err: any) {
-      addNotification("Failed to persist manual match reminder: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to persist manual match reminder: " + errorMessage(err), "error");
     }
   };
 
@@ -412,9 +413,9 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     try {
       const cached = await searchAFL("");
       dispatch({ type: "SET", payload: { cachedAflShows: cached, fallbackAflResults: cached } });
-    } catch (err: any) {
+    } catch (err: unknown) {
       dispatch({ type: "SET", payload: { cachedAflShows: [], fallbackAflResults: [] } });
-      addNotification("AFL cache load failed: " + err.message, "error");
+      addNotification("AFL cache load failed: " + errorMessage(err), "error");
     } finally {
       dispatch({ type: "SET", payload: { fallbackAflLoading: false } });
     }
@@ -468,10 +469,10 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       const results = await lookupSonarrSeries(q);
       if (reqId !== lookupReqId.current) return;
       dispatch({ type: "SET", payload: { sonarrLookupResults: results } });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (reqId !== lookupReqId.current) return;
       dispatch({ type: "SET", payload: { sonarrLookupResults: [] } });
-      addNotification("Sonarr lookup failed: " + err.message, "error");
+      addNotification("Sonarr lookup failed: " + errorMessage(err), "error");
     }
     if (reqId === lookupReqId.current) {
       dispatch({ type: "SET", payload: { sonarrLookupLoading: false } });
@@ -544,8 +545,8 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         return;
       }
       await handleKeepSonarrOnly();
-    } catch (err: any) {
-      addNotification("Failed to add anime to Sonarr: " + err.message, "error");
+    } catch (err: unknown) {
+      addNotification("Failed to add anime to Sonarr: " + errorMessage(err), "error");
     } finally {
       dispatch({ type: "SET", payload: { sonarrAdding: false } });
     }

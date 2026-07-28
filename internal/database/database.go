@@ -430,6 +430,9 @@ func (db *DB) CreateSyncLog(ctx context.Context, triggerType string) (int64, err
 }
 
 func (db *DB) CompleteSyncLog(ctx context.Context, id int64, status string, showsProcessed, episodesUpdated int, errors string) error {
+	if id == 0 {
+		return nil
+	}
 	_, err := db.conn.ExecContext(ctx, `
 		UPDATE sync_logs SET completed_at = ?, status = ?, shows_processed = ?,
 		    episodes_updated = ?, errors = ?

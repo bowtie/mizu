@@ -213,3 +213,9 @@ export function testNtfyConnection(data: {
 }): Promise<TestConnectionResult> {
   return request<TestConnectionResult>("POST", "/ntfy/test", data);
 }
+
+/** Safely extract a human-readable message from an unknown catch value. */
+export function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
