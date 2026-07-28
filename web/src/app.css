@@ -1,7 +1,0 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "@skeletonlabs/skeleton";
-@import "@skeletonlabs/skeleton-svelte";
-@import "../node_modules/@skeletonlabs/skeleton/src/themes/wintry.css";
-@custom-variant dark (&:where(.dark, .dark *));
-@source "./";

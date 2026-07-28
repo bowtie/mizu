@@ -64,6 +64,10 @@ func (e *Engine) MatcherClient() *matcherpkg.Matcher { return e.matcher }
 func (e *Engine) DB() *database.DB                   { return e.db }
 func (e *Engine) IsRunning() bool                    { return e.running.Load() }
 
+// SetRunning is a test helper to force the running flag. Production code
+// should use CompareAndSwap via RunSync/RunResync instead.
+func (e *Engine) SetRunning(v bool)                  { e.running.Store(v) }
+
 // sonarrClient returns the current Sonarr client under a read lock.
 func (e *Engine) sonarrClient() *sonarr.Client {
 	e.mu.RLock()
@@ -143,58 +147,56 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		return nil
 	}
 
+	// Process mappings concurrently with a small worker pool. The scraper's
+	// rate limiter ensures AFL requests stay spaced out, while Sonarr API
+	// calls overlap — cutting wall-clock time roughly 3x for large libraries.
+	results := e.processMappingsConcurrent(ctx, enabledMappings)
+
 	showsProcessed := 0
 	episodesUpdated := 0
 	var syncErrors []string
 	var totalFiller, totalMixedCanon, totalAnimeCanon int
 	runItems := make([]models.SyncLogItem, 0, len(enabledMappings))
-	for _, mapping := range enabledMappings {
-		if err := ctx.Err(); err != nil {
-			log.Info().Msg("sync cancelled mid-run, skipping remaining mappings")
-			break
-		}
-		series, err := e.sonarrClient().GetSeries(ctx, mapping.SonarrSeriesID)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to fetch Sonarr series %d (%s): %v", mapping.SonarrSeriesID, mapping.SonarrTitle, err)
-			log.Error().Err(err).Msg(errMsg)
+	for _, res := range results {
+		if res.fetchErr != nil {
+			errMsg := fmt.Sprintf("failed to fetch Sonarr series %d (%s): %v", res.mapping.SonarrSeriesID, res.mapping.SonarrTitle, res.fetchErr)
+			log.Error().Err(res.fetchErr).Msg(errMsg)
 			syncErrors = append(syncErrors, errMsg)
 			runItems = append(runItems, models.SyncLogItem{
-				MappingID:       mapping.ID,
-				SonarrTitle:     mapping.SonarrTitle,
+				MappingID:       res.mapping.ID,
+				SonarrTitle:     res.mapping.SonarrTitle,
 				Status:          "failed",
 				EpisodesChanged: 0,
 				Summary:         "Failed before sync could start",
-				Error:           err.Error(),
+				Error:           res.fetchErr.Error(),
 			})
 			continue
 		}
-
-		result, err := e.processSeries(ctx, *series, &mapping, false)
-		if err != nil {
-			errMsg := fmt.Sprintf("error processing %q: %v", mapping.SonarrTitle, err)
-			log.Error().Err(err).Str("series", mapping.SonarrTitle).Msg("failed to process series")
+		if res.procErr != nil {
+			errMsg := fmt.Sprintf("error processing %q: %v", res.mapping.SonarrTitle, res.procErr)
+			log.Error().Err(res.procErr).Str("series", res.mapping.SonarrTitle).Msg("failed to process series")
 			syncErrors = append(syncErrors, errMsg)
 			runItems = append(runItems, models.SyncLogItem{
-				MappingID:       mapping.ID,
-				SonarrTitle:     mapping.SonarrTitle,
+				MappingID:       res.mapping.ID,
+				SonarrTitle:     res.mapping.SonarrTitle,
 				Status:          "failed",
 				EpisodesChanged: 0,
-				Summary:         fmt.Sprintf("Checked %d episode%s before failing", result.EpisodesSeen, pluralize(result.EpisodesSeen)),
-				Error:           err.Error(),
+				Summary:         fmt.Sprintf("Checked %d episode%s before failing", res.result.EpisodesSeen, pluralize(res.result.EpisodesSeen)),
+				Error:           res.procErr.Error(),
 			})
 			continue
 		}
 		showsProcessed++
-		episodesUpdated += result.EpisodesUpdated
-		totalFiller += result.FillerFound
-		totalMixedCanon += result.MixedCanonFound
-		totalAnimeCanon += result.AnimeCanonFound
+		episodesUpdated += res.result.EpisodesUpdated
+		totalFiller += res.result.FillerFound
+		totalMixedCanon += res.result.MixedCanonFound
+		totalAnimeCanon += res.result.AnimeCanonFound
 		runItems = append(runItems, models.SyncLogItem{
-			MappingID:       mapping.ID,
-			SonarrTitle:     mapping.SonarrTitle,
+			MappingID:       res.mapping.ID,
+			SonarrTitle:     res.mapping.SonarrTitle,
 			Status:          "success",
-			EpisodesChanged: result.EpisodesUpdated,
-			Summary:         summarizeProcessResult(result),
+			EpisodesChanged: res.result.EpisodesUpdated,
+			Summary:         summarizeProcessResult(res.result),
 		})
 	}
 
@@ -228,6 +230,69 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		}
 	}
 	return nil
+}
+
+// mappingResult holds the outcome of processing a single mapping.
+type mappingResult struct {
+	mapping  models.ShowMapping
+	series   *models.SonarrSeries
+	result   processSeriesResult
+	fetchErr error
+	procErr  error
+}
+
+// processMappingsConcurrent runs mappings through a worker pool. The worker
+// count is capped at 3 — enough to overlap Sonarr API calls (which are the
+// main latency source) while keeping AFL scraper concurrency at 1 (the rate
+// limiter serializes those anyway). Results are returned in input order so
+// sync log items are deterministic.
+func (e *Engine) processMappingsConcurrent(ctx context.Context, mappings []models.ShowMapping) []mappingResult {
+	const maxWorkers = 3
+	results := make([]mappingResult, len(mappings))
+
+	jobs := make(chan int, len(mappings))
+	var wg sync.WaitGroup
+
+	worker := func() {
+		defer wg.Done()
+		for idx := range jobs {
+			if err := ctx.Err(); err != nil {
+				results[idx] = mappingResult{
+					mapping:  mappings[idx],
+					fetchErr: err,
+				}
+				continue
+			}
+			res := mappingResult{mapping: mappings[idx]}
+			series, err := e.sonarrClient().GetSeries(ctx, mappings[idx].SonarrSeriesID)
+			if err != nil {
+				res.fetchErr = err
+				results[idx] = res
+				continue
+			}
+			res.series = series
+			procResult, err := e.processSeries(ctx, *series, &mappings[idx], false)
+			res.result = procResult
+			res.procErr = err
+			results[idx] = res
+		}
+	}
+
+	nWorkers := maxWorkers
+	if nWorkers > len(mappings) {
+		nWorkers = len(mappings)
+	}
+	for i := 0; i < nWorkers; i++ {
+		wg.Add(1)
+		go worker()
+	}
+	for i := range mappings {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+
+	return results
 }
 
 func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {

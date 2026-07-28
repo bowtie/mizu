@@ -18,7 +18,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Plus, Search, Waves, CircleAlert, RefreshCw } from "lucide-react";
 import { useAppStore } from "../lib/store";
-import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, errorMessage } from "../lib/api";
+import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, getArtworkRefreshStatus, errorMessage } from "../lib/api";
 import type { SelectOption, Settings, Show, SonarrAddOptions, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { syncStateBadge } from "../lib/fox";
@@ -256,16 +256,28 @@ export function ShowsPage() {
     setArtworkRefreshing(true);
     try {
       await refreshAllArtwork();
-      addNotification("Artwork refresh triggered — reloading in a few seconds...", "info", 6000);
-      // The backend runs the refresh asynchronously. Wait for it to finish,
-      // then reload shows to pick up the new artwork paths.
-      artworkReloadTimer.current = setTimeout(() => {
-        artworkReloadTimer.current = null;
-        loadLanding().then(() => {
-          setArtworkRefreshing(false);
-          addNotification("Artwork refresh complete", "success");
-        });
-      }, 8000);
+      addNotification("Artwork refresh triggered — waiting for completion...", "info", 6000);
+      // Poll the backend until the refresh completes, then reload shows.
+      const poll = async () => {
+        try {
+          const status = await getArtworkRefreshStatus();
+          if (!status.refreshing) {
+            artworkReloadTimer.current = null;
+            await loadLanding();
+            setArtworkRefreshing(false);
+            addNotification("Artwork refresh complete", "success");
+          } else {
+            artworkReloadTimer.current = setTimeout(poll, 3000);
+          }
+        } catch {
+          // If the status check fails, fall back to a single reload after a delay.
+          artworkReloadTimer.current = setTimeout(() => {
+            artworkReloadTimer.current = null;
+            loadLanding().then(() => setArtworkRefreshing(false));
+          }, 8000);
+        }
+      };
+      artworkReloadTimer.current = setTimeout(poll, 3000);
     } catch (err: unknown) {
       addNotification("Artwork refresh failed: " + errorMessage(err), "error");
       setArtworkRefreshing(false);

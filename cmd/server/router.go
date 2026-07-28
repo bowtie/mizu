@@ -154,6 +154,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Get("/artwork/{mappingId}/banner", handleServeArtwork(artworkMgr, "banner"))
 		r.Get("/artwork/{mappingId}/logo", handleServeArtwork(artworkMgr, "logo"))
 		r.Post("/artwork/refresh-all", handleRefreshAllArtwork(cfg, db, artworkMgr, syncEngine, appCtx, bgWG))
+		r.Get("/artwork/refresh-status", handleArtworkRefreshStatus)
 
 		r.Route("/mappings", func(r chi.Router) {
 			r.Get("/", handleGetMappings(db))
@@ -1890,6 +1891,12 @@ func handleRefreshAllArtwork(cfg *config.Config, db *database.DB, mgr *artwork.M
 
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "refresh triggered"})
 	}
+}
+
+func handleArtworkRefreshStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"refreshing": artworkRefreshing.Load(),
+	})
 }
 
 func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerFunc {
