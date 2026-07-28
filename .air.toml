@@ -17,7 +17,7 @@ include_ext = ["go"]
 exclude_dir = [".air", "web-astryx", "artwork", "vendor"]
 exclude_ext = ["tmp", "swp"]
 # Debounce — wait this long after last change before rebuilding
-delay = 300
+delay = 2000
 # Stop previous binary before starting new one
 stop_on_error = true
 # Send interrupt signal before kill (allows graceful shutdown)
