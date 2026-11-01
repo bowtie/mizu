@@ -38,6 +38,7 @@ vi.mock("../lib/queries", () => ({
   useShows: () => ({ data: EMPTY_SHOWS, isPending: false, isFetched: true }),
   useSettings: () => ({ data: null, isPending: false, isFetched: true }),
   useSonarrSeries: () => ({ data: EMPTY_SERIES, isPending: false, isFetched: true }),
+  useSyncLogs: () => ({ data: undefined, isPending: false, isFetched: true }),
 }));
 
 vi.mock("../lib/store", () => ({

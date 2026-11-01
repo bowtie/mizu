@@ -35,6 +35,7 @@ import {
   LayoutGrid,
   Image,
 } from "lucide-react";
+import { LastSyncedText } from "../components/LastSyncedText";
 import { useNotificationStore } from "../lib/store";
 import { useBootstrap, useShows, useSettings, useSonarrSeries } from "../lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -518,7 +519,14 @@ export function ShowsPage() {
           <VStack gap={1}>
             <Heading level={1}>Library</Heading>
             <Text type="supporting" color="secondary">
-              {loading ? "Loading..." : `${(shows || []).length} tracked`}
+              {loading ? (
+                "Loading..."
+              ) : (
+                <>
+                  {`${(shows || []).length} tracked`} ·{" "}
+                  <LastSyncedText interval={settings?.sync_interval} />
+                </>
+              )}
             </Text>
           </VStack>
           <HStack gap={2} align="center">

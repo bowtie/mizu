@@ -288,7 +288,9 @@ function Root() {
             </AppShell>
           </BrowserRouter>
         </Theme>
-        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+        {import.meta.env.DEV && (
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+        )}
       </QueryClientProvider>
     </StrictMode>
   );

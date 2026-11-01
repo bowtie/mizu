@@ -78,7 +78,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	go startScheduler(ctx, scheduler, syncEngine)
+	go startScheduler(ctx, cfg, scheduler, syncEngine)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -229,15 +229,36 @@ func seedAuthFromEnv(db *database.DB) {
 	log.Info().Msg("initial dashboard password seeded from MIZU_PASSWORD")
 }
 
-func startScheduler(ctx context.Context, scheduler *schedulerController, syncEngine *syncengine.Engine) {
+func startScheduler(ctx context.Context, cfg *config.Config, scheduler *schedulerController, syncEngine *syncengine.Engine) {
 	ticker := time.NewTicker(scheduler.Interval())
 	defer ticker.Stop()
+
+	// The ticker only fires a full interval after startup, so a process
+	// that restarts more often than that (or sat stopped for days) would
+	// never sync. Check once shortly after boot whether a sync is overdue.
+	catchUp := time.NewTimer(catchUpSyncDelay)
+	defer catchUp.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info().Msg("scheduler stopped")
 			return
+		case <-catchUp.C:
+			cfg.RLock()
+			configured := cfg.SonarrAPIKey != ""
+			cfg.RUnlock()
+			if !configured {
+				continue
+			}
+			last := lastSyncStartedAt(ctx, syncEngine.DB())
+			if !catchUpSyncDue(last, scheduler.Interval(), time.Now()) {
+				continue
+			}
+			log.Info().Msg("overdue sync detected at startup, running catch-up sync")
+			if err := syncEngine.RunSync(ctx, "scheduled"); err != nil {
+				log.Error().Err(err).Msg("catch-up sync failed")
+			}
 		case interval := <-scheduler.updates:
 			// Reset doesn't drain the channel: a tick that fired just
 			// before the interval change would otherwise be delivered

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	stdsync "sync"
 	"time"
+
+	"mizu/internal/database"
 )
 
 var allowedScanIntervals = map[string]time.Duration{
@@ -75,4 +78,30 @@ func (s *schedulerController) UpdateInterval(interval time.Duration) {
 		}
 		s.updates <- interval
 	}
+}
+
+// catchUpSyncDelay gives the HTTP server and Sonarr connection a moment to
+// come up before an overdue sync is started.
+const catchUpSyncDelay = 30 * time.Second
+
+// catchUpSyncDue reports whether a sync should run right after startup:
+// there is no sync on record, or the last one is at least a full interval old.
+func catchUpSyncDue(last *time.Time, interval time.Duration, now time.Time) bool {
+	return last == nil || now.Sub(*last) >= interval
+}
+
+// lastSyncStartedAt returns when the newest sync (scheduled or manual, not an
+// AFL cache refresh) began, or nil when none is on record.
+func lastSyncStartedAt(ctx context.Context, db *database.DB) *time.Time {
+	page, err := db.GetSyncLogsPage(ctx, 20, 0)
+	if err != nil {
+		return nil
+	}
+	for _, l := range page.Items {
+		if l.Trigger == "scheduled" || l.Trigger == "manual" {
+			t := l.StartedAt
+			return &t
+		}
+	}
+	return nil
 }

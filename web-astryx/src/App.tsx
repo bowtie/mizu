@@ -2,7 +2,8 @@ import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ToastViewport } from "./components/ToastViewport";
 import { prefetchDetailChunk } from "./lib/chunkPrefetch";
-import { useAuthStatus, useBootstrap } from "./lib/queries";
+import { useAuthStatus, useBootstrap, useSettings } from "./lib/queries";
+import { needsOnboarding } from "./lib/onboarding";
 import { applySoundsEnabled } from "./lib/sounds";
 
 // Route-based code splitting — all pages are lazy-loaded. ShowsPage
@@ -18,6 +19,9 @@ const ActivityPage = lazy(() =>
 );
 const SettingsPage = lazy(() =>
   import("./routes/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+const OnboardingPage = lazy(() =>
+  import("./routes/OnboardingPage").then((m) => ({ default: m.OnboardingPage })),
 );
 const LoginPage = lazy(() => import("./routes/LoginPage").then((m) => ({ default: m.LoginPage })));
 
@@ -100,6 +104,15 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   );
 }
 
+// A fresh install has no Sonarr key yet; send those visitors to the welcome
+// flow instead of an empty library. "Skip setup" opts out for this browser.
+function RequireSonarr({ children }: { children: React.ReactNode }) {
+  const { data: settings, isPending } = useSettings();
+  if (isPending) return <PageFallback />;
+  if (needsOnboarding(settings?.sonarr_api_key_set)) return <Navigate to="/welcome" replace />;
+  return <>{children}</>;
+}
+
 export function App() {
   // Prefetch the ShowDetailPage chunk during idle time after first
   // paint. The detail page is the most likely next navigation from
@@ -129,9 +142,11 @@ export function App() {
           path="/"
           element={
             <RequireAuth>
-              <Suspense fallback={<PageFallback />}>
-                <ShowsPage />
-              </Suspense>
+              <RequireSonarr>
+                <Suspense fallback={<PageFallback />}>
+                  <ShowsPage />
+                </Suspense>
+              </RequireSonarr>
             </RequireAuth>
           }
         />
@@ -139,8 +154,20 @@ export function App() {
           path="/shows"
           element={
             <RequireAuth>
+              <RequireSonarr>
+                <Suspense fallback={<PageFallback />}>
+                  <ShowsPage />
+                </Suspense>
+              </RequireSonarr>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/welcome"
+          element={
+            <RequireAuth>
               <Suspense fallback={<PageFallback />}>
-                <ShowsPage />
+                <OnboardingPage />
               </Suspense>
             </RequireAuth>
           }
