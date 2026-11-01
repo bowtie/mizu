@@ -685,8 +685,9 @@ export function ShowDetailPage() {
         variant="transparent"
         padding={4}
         maxWidth={900}
-        className="section-centered"
+        className="section-centered page-enter"
       >
+        <VStack gap={6}>
         <div className={`show-shell${pageSettled ? " is-settled" : ""}`}>
           {/* Hero header with backdrop — renders immediately using showId
               from the URL. The image starts loading before getShow() resolves. */}
@@ -701,7 +702,6 @@ export function ShowDetailPage() {
                   decoding="async"
                   fetchPriority="high"
                   className="show-hero-img"
-                  onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
                   onError={() => setHeroImgError(true)}
                 />
                 <div className="show-hero-gradient" />
@@ -711,7 +711,7 @@ export function ShowDetailPage() {
             )}
             <div className="show-hero-content">
               <VStack gap={1} className="show-hero-titles">
-                <HStack gap={3} align="baseline" wrap="wrap">
+                <HStack gap={3} align="center" wrap="wrap">
                   <Heading level={1} className="show-hero-title">
                     {show?.sonarr_title || "\u00a0"}
                   </Heading>
@@ -823,16 +823,15 @@ export function ShowDetailPage() {
           </div>
           )}
         </div>
-      </Section>
 
-      {/* Page content — constrained width */}
-      <Section variant="transparent" padding={4} maxWidth={900} className="section-centered page-enter">
+        <Divider />
+
         {loadingShow || !show ? (
           <VStack gap={3} hAlign="center" padding={6}>
             <Spinner size="lg" label="Loading anime" />
           </VStack>
         ) : (
-        <VStack gap={6}>
+        <>
           {/* Artwork controls */}
           <Card padding={4} variant="muted" className="artwork-card">
             <VStack gap={3}>
@@ -915,8 +914,9 @@ export function ShowDetailPage() {
             onFilterChange={setActiveTypeFilter}
             onToggleMonitor={toggleEpisodeMonitor}
           />
-        </VStack>
+        </>
         )}
+        </VStack>
       </Section>
 
       {show && (

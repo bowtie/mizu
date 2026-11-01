@@ -12,6 +12,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Divider } from "@astryxdesign/core/Divider";
+import { Card } from "@astryxdesign/core/Card";
 import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAppStore } from "../lib/store";
 import { SettingsRow } from "../components/SettingsRow";
@@ -468,6 +469,7 @@ export function SettingsPage() {
         </HStack>
 
         {/* Connection */}
+        <Card variant="muted" padding={4}>
         <VStack gap={3}>
           <Heading level={2}>Connection</Heading>
           <Divider />
@@ -561,8 +563,10 @@ export function SettingsPage() {
             />
           </SettingsRow>
         </VStack>
+        </Card>
 
         {/* Sync */}
+        <Card variant="muted" padding={4}>
         <VStack gap={3}>
           <Heading level={2}>Sync</Heading>
           <Divider />
@@ -659,8 +663,10 @@ export function SettingsPage() {
             />
           </SettingsRow>
         </VStack>
+        </Card>
 
         {/* Notifications */}
+        <Card variant="muted" padding={4}>
         <VStack gap={3}>
           <Heading level={2}>Notifications</Heading>
           <Divider />
@@ -769,6 +775,7 @@ export function SettingsPage() {
             />
           </SettingsRow>
         </VStack>
+        </Card>
 
         {/* Defaults */}
         <VStack gap={4}>

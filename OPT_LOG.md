@@ -1602,3 +1602,66 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 **Why:** Three issues reported by user: (1) hero image loads late on navigation/refresh — the `no-cache` header was forcing a network round-trip even for cached images; (2) bottom padding increases when the actions bar slides down — the bar's own bottom padding was adding to the Section gaps; (3) no divider between the actions bar and content below.
 
 **Outcome:** Kept. tsc + go build pass. Backend now caches artwork for 5 min, actions bar no longer adds extra bottom padding, divider separates bar from content.
+
+## Iteration D159 — CSS cleanup: duplicate tracking-rule-card rules + hero image opacity removal
+
+**Target:** `web-astryx/src/index.css`, `web-astryx/src/routes/ShowDetailPage.tsx`
+
+**What changed:**
+- **Removed duplicate `.tracking-rule-card` CSS:** Two separate blocks defined the same transition property — lines 786-800 set `transition: border-color` + `:active { transform: scale(0.99) }`, then lines 832-839 redefined the same selector with `transition: border-color, transform` + the same `:active` rule. The second block silently overrode the first. Consolidated into one block. Also moved `.tracking-rule-card` out of the shared `season-card, artwork-card` transition group since it has its own (broader) transition.
+- **Removed hero image opacity fade-in:** The `.show-hero-img` had `opacity: 0` with a transition to `opacity: 1` on `.is-loaded`. This made the image invisible until the `onLoad` callback fired — even for cached images, creating a perceived delay. Removed the opacity transition entirely. The image is now visible immediately when the browser renders it. Also removed the `onLoad` handler from the `<img>` element and the `.show-hero-img` entry from the `prefers-reduced-motion` block (no transition to disable).
+
+**Why:** (1) Duplicate CSS rules are confusing and error-prone — someone editing the first block would think their change is live but the second block silently overrides it. (2) The user repeatedly complained about the hero image loading slowly and asked "why are we even rendering the image at opacity" — the `opacity: 0` start state was the cause. Cached images should appear instantly, not fade in.
+
+**Outcome:** Kept. tsc + go build pass. CSS is cleaner, hero image appears immediately.
+
+## Iteration D160 — Activity page: staggered card entrance + load-more separator
+
+**Target:** `web-astryx/src/index.css`
+
+**What changed:**
+- **Staggered card entrance:** Added `card-enter` animation to `.activity-log-card` with nth-child delays (0-220ms, capped at 8+). Matches the library card pattern — cards fade and slide up slightly on page load, creating a polished entrance. The animation uses `backwards` fill mode so cards are invisible before their delay fires, preventing a flash of unstyled content.
+- **Reduced motion:** Added `.activity-log-card { animation: none }` to the `prefers-reduced-motion` block so the entrance is disabled for users who prefer reduced motion.
+- **Load-more separator:** Added `margin-block-start: var(--spacing-2)` to `.load-more-bar` for slightly more breathing room above the separator border, making it feel less cramped against the last card.
+
+**Why:** The activity page cards appeared all at once with no entrance animation, while the library page had a polished staggered entrance. Adding the same pattern to activity cards creates visual consistency across pages. The load-more separator was flush against the last card with only padding — a small margin improves the visual rhythm.
+
+**Outcome:** Kept. tsc passes. Activity cards now animate in with a staggered entrance matching the library page.
+
+## Iteration D161 — Settings page: wrap sections in muted cards for visual grouping
+
+**Target:** `web-astryx/src/routes/SettingsPage.tsx`
+
+**What changed:**
+- Wrapped the Connection, Sync, and Notifications sections in `<Card variant="muted" padding={4}>` to create visual grouping. Previously these sections were bare VStacks with Heading + Divider + rows — no visual boundary between sections except the VStack gap. The muted Card provides a clear visual container for each settings group, matching the pattern used in ShowDetailPage's artwork card.
+- The Defaults section was left unwrapped because it contains TrackingRuleCards in a Grid — wrapping it would create excessive nesting (Card > Grid > Card).
+- Internal Dividers between rows are kept — they still work inside the Card.
+- Added `Card` import from `@astryxdesign/core/Card`.
+
+**Why:** The settings page was visually flat — three sections (Connection, Sync, Notifications) flowed as undifferentiated VStacks with only gap spacing between them. There was no visual boundary to help the user understand where one section ends and another begins. Wrapping each section in a muted Card creates clear visual grouping, making the page easier to scan and more consistent with the ShowDetailPage which uses Card variant="muted" for its artwork section.
+
+**Outcome:** Kept. tsc passes. Settings page sections now have clear visual grouping via muted cards.
+
+## Iteration D162 — Season card expanded state border emphasis
+
+**Target:** `web-astryx/src/index.css`
+
+**What changed:**
+- Added `.season-card:has([aria-expanded="true"]) { border-color: var(--color-border-emphasized) }` to visually distinguish expanded season cards from collapsed ones. The Collapsible component sets `aria-expanded="true"` on its trigger button when open, so `:has()` targets the expanded state without needing JS or extra className props.
+- The border emphasis matches the existing hover state (`var(--color-border-emphasized)`), so hovering an expanded card keeps the same border — no visual conflict.
+
+**Why:** When multiple season cards are visible, it's hard to tell which ones are expanded vs collapsed at a glance. The muted Card variant has a subtle border that doesn't change between states. Adding a slightly emphasized border when expanded gives users a clear visual signal of which seasons they've opened.
+
+**Outcome:** Kept. tsc passes. Expanded season cards now have a emphasized border for clear visual distinction.
+
+## Iteration D163 — Actions bar: center alignment + divider fix
+
+**Target:** `web-astryx/src/index.css`, `web-astryx/src/routes/ShowDetailPage.tsx`
+
+**What changed:**
+- Changed `.show-actions-bar` from `align-items: flex-end` to `align-items: center` — buttons were aligned to the bottom of the bar, making them look like they were "at the bottom." Center alignment puts them vertically centered in the bar.
+- Added `.show-hero-section { padding-bottom: 0 }` to remove the hero Section's 16px bottom padding. Previously the Section padding created a gap between the actions bar's `border-bottom` divider and the content Section below, making the divider appear disconnected. With 0 bottom padding, the bar's border-bottom sits flush at the end of the hero Section, creating a clean divider between hero and content.
+
+**Why:** User reported "the bar buttons at the bottom and still no divider." The buttons were using `flex-end` alignment (bottom of bar) instead of centered. The divider (border-bottom on the actions bar) was visually disconnected from the content because the hero Section's 16px bottom padding created a gap.
+
+**Outcome:** Kept. tsc passes. Buttons now centered in bar, divider visible flush against content.

@@ -428,7 +428,6 @@ body {
   overflow: visible;
   background-color: transparent;
   box-sizing: border-box;
-  margin-top: var(--spacing-4);
 }
 
 .show-hero {
@@ -452,11 +451,6 @@ body {
   height: 100%;
   object-fit: cover;
   border-radius: var(--radius-container);
-  opacity: 0;
-  transition: opacity var(--duration-medium) var(--ease-standard);
-}
-.show-hero-img.is-loaded {
-  opacity: 1;
 }
 
 .show-hero-gradient {
@@ -548,17 +542,15 @@ body {
   position: relative;
   width: 100%;
   margin-bottom: 0;
-  padding: calc(var(--radius-container) + var(--spacing-2)) var(--spacing-4) 0;
+  padding: calc(var(--spacing-3) + var(--spacing-4)) var(--spacing-4) var(--spacing-3);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--spacing-6);
   flex-wrap: nowrap;
   box-sizing: border-box;
   background-color: var(--color-background-muted);
-  border-radius: 0 0 var(--radius-container) var(--radius-container);
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  border-radius: var(--radius-container);
 }
 
 .controls-reveal {
@@ -566,9 +558,8 @@ body {
   grid-template-rows: 0fr;
   position: relative;
   overflow: hidden;
-  /* Tuck the reveal container up behind the hero's rounded bottom corners
-     so the actions bar background continues seamlessly (no corner gaps). */
-  margin-top: calc(-1 * var(--radius-container));
+  margin-top: calc(-1 * var(--spacing-4));
+  margin-bottom: var(--spacing-4);
 }
 
 /* Before page settles: collapsed, no transition (no flash) */
@@ -589,7 +580,7 @@ body {
   /* After settled: enable transitions + hover-reveal */
   .show-shell.is-settled .controls-reveal {
     grid-template-rows: 0fr;
-    transition: grid-template-rows 220ms var(--ease-standard);
+    transition: grid-template-rows 220ms var(--ease-standard), margin-bottom 220ms var(--ease-standard);
     transition-delay: 300ms;
   }
 
@@ -608,6 +599,7 @@ body {
   .show-shell.is-settled .controls-reveal:hover,
   .show-shell.is-settled .controls-reveal:focus-within {
     grid-template-rows: 1fr;
+    margin-bottom: 0;
     transition-delay: 0ms;
   }
 
@@ -623,6 +615,7 @@ body {
 @media (hover: none) {
   .show-shell .controls-reveal {
     grid-template-rows: 1fr;
+    margin-bottom: 0;
   }
 
   .show-shell .show-actions-bar {
@@ -639,7 +632,6 @@ body {
   .show-actions-bar,
   .mizu-card,
   .mizu-card-img,
-  .show-hero-img,
   .wizard-poster-thumb,
   .wizard-step-dot,
   .wizard-step-label,
@@ -653,6 +645,9 @@ body {
   .astryx-collapsible > button,
   .tracking-rule-card {
     transition: none;
+  }
+  .activity-log-card {
+    animation: none;
   }
   .mizu-card-overlay {
     transition: none;
@@ -785,9 +780,13 @@ body {
 
 /* Season card hover */
 .season-card,
-.artwork-card,
-.tracking-rule-card {
+.artwork-card {
   transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+/* Season card — emphasize border when expanded */
+.season-card:has([aria-expanded="true"]) {
+  border-color: var(--color-border-emphasized);
 }
 
 /* Tracking rule card — press feedback for whole-card click */
@@ -829,26 +828,14 @@ body {
   }
 }
 
-/* Tracking rule card — press feedback for whole-card click */
-.tracking-rule-card {
-  transition: border-color var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
-}
-.tracking-rule-card:active {
-  transform: scale(0.99);
-}
-
-/* Show hero title + badge — baseline-align the badge with the title text.
-   Heading h1 has large line-height; baseline aligns the badge to the text
-   baseline. A small vertical offset compensates for the badge's internal
-   padding so it sits visually centered with the title. */
+/* Show hero title + badge — center-align the badge with the title text. */
 .show-hero-title {
   margin: 0;
-  line-height: 1.2;
+  line-height: 1 !important;
 }
 .show-hero-badge {
   vertical-align: middle;
-  transform: translateY(-1px);
+  align-self: center !important;
 }
 
 /* Show hero title overflow */
@@ -994,6 +981,20 @@ body {
   flex: 1;
   min-width: 0;
 }
+
+/* Activity page — staggered card entrance (matches library card pattern) */
+.activity-log-card {
+  animation: card-enter 0.3s var(--ease-standard) backwards;
+}
+.activity-log-card:nth-child(1) { animation-delay: 0ms; }
+.activity-log-card:nth-child(2) { animation-delay: 30ms; }
+.activity-log-card:nth-child(3) { animation-delay: 60ms; }
+.activity-log-card:nth-child(4) { animation-delay: 90ms; }
+.activity-log-card:nth-child(5) { animation-delay: 120ms; }
+.activity-log-card:nth-child(6) { animation-delay: 150ms; }
+.activity-log-card:nth-child(7) { animation-delay: 180ms; }
+.activity-log-card:nth-child(8) { animation-delay: 200ms; }
+.activity-log-card:nth-child(n+9) { animation-delay: 220ms; }
 
 /* Activity page — log card hover + expanded state */
 .activity-log-card {
@@ -1176,6 +1177,7 @@ body {
 /* Activity page — load more separator */
 .load-more-bar {
   padding-block-start: var(--spacing-4);
+  margin-block-start: var(--spacing-2);
   border-block-start: 1px solid var(--color-border);
 }
 
