@@ -238,8 +238,26 @@ export function ShowsPage() {
       return;
     }
 
-    // First load or forced refresh — fetch shows + settings first,
-    // then SonarrSeries in the background.
+    // First load with no store data: the store is already fetching
+    // bootstrap (shows + settings + providers) on mount. Don't make
+    // redundant getShows() + getSettings() calls — just fetch
+    // SonarrSeries in the background. The store will populate shows
+    // when bootstrap resolves, and the shows-changed effect below
+    // will clear the loading state.
+    if (!forceRefresh) {
+      getSonarrSeries()
+        .then((nextSeries) => {
+          setAllSeries(nextSeries || []);
+          setSeriesById(Object.fromEntries((nextSeries || []).map((s) => [s.id, s])));
+        })
+        .catch((err: unknown) => {
+          addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
+        });
+      return;
+    }
+
+    // Forced refresh — fetch shows + settings first, then SonarrSeries
+    // in the background.
     const [showsRes, settingsRes] = await Promise.allSettled([
       getShows(),
       getSettings(),
@@ -266,6 +284,16 @@ export function ShowsPage() {
         addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
       });
   }, [setShows, setSettings, addNotification]);
+
+  // When the store populates shows (from bootstrap), clear the loading
+  // state. This handles the first-load case where ShowsPage mounts
+  // before bootstrap resolves — the store will update shows, and this
+  // effect reacts to it without making redundant API calls.
+  useEffect(() => {
+    if (shows && shows.length > 0) {
+      setLoading(false);
+    }
+  }, [shows]);
 
   useEffect(() => {
     loadLanding();

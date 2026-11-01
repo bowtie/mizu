@@ -30,7 +30,20 @@ function ScrollToTop() {
 }
 
 function PageFallback() {
-  return null;
+  // Minimal skeleton — just enough to fill the content area so the
+  // page doesn't look broken during the brief gap between React mount
+  // and the lazy route chunk loading. ShowsPage is modulepreloaded in
+  // HTML, so this typically shows for <50ms on first visit.
+  return (
+    <div style={{ padding: "var(--spacing-5)", maxWidth: 900, margin: "0 auto" }}>
+      <div className="skeleton" style={{ width: 120, height: 28, borderRadius: "var(--radius-inner)", marginBottom: "var(--spacing-4)" }} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "var(--spacing-4)" }}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="skeleton" style={{ height: 280, borderRadius: "var(--radius-container)" }} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function App() {

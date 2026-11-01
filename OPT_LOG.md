@@ -1923,6 +1923,14 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 | 59 | D222 | Lazy-load cuelume sound library | Cuelume (~17KB source) was eagerly imported by store.tsx (play) and sounds.ts (bind, setEnabled, setVolume), pulling it into main bundle; play is only called when a notification appears, bind runs on idle, setEnabled runs when bootstrap resolves — none on first paint; replaced with dynamic import("cuelume") with module-level promise + null guard; main bundle 331.22KB→323.95KB (7.27KB / 2.2% reduction, 2.15KB gzipped), cuelume now in separate 7.66KB lazy chunk loaded on idle |
 | 60 | D223 | Synchronous prefetch cache for ShowDetailPage | On hard refresh prefetchShowDetail() fires before mount but ShowDetailPage still initialized useState with null storeShow showing skeletons; added detailDataCache Map storing resolved prefetch data, getCachedShowDetail() export returns it synchronously; all useState initializers now use initialShow/initialEpisodes from prefetch; main fetch effect short-circuits when prefetch data exists; zero skeleton flash when prefetch resolves before mount, ShowDetailPage chunk 32.99KB→33.42KB (+0.43KB) |
 | 61 | D224 | Pre-JS API fetch via inline script in index.html | getBootstrap() and prefetchShowDetail() only fired after 324KB bundle download+parse+React mount, creating sequential waterfall; added inline script in HTML head that fires fetch('/api/bootstrap') and fetch('/api/mappings/:id/detail') immediately before JS bundle starts downloading; api.ts requestPrefetched() helper reuses pre-fired Response promises; prefetchShowDetail() also reuses pre-fired response; API requests now start in parallel with bundle download saving 50-200ms, main bundle 324.06KB→324.37KB (+0.31KB), inline script ~400 bytes |
+| 62 | D225 | Immutable cache headers for hashed static assets | http.FileServer didn't set Cache-Control for embedded files, browser re-downloaded all 324KB JS + 168KB CSS on every visit; added Cache-Control: public, max-age=31536000, immutable for /assets/ and /fonts/ (content-hashed by Vite, safe to cache forever), index.html gets no-cache so browser always fetches latest version with updated hashes; eliminates ~490KB re-downloads on repeat visits, zero network requests for cached assets, immutable flag skips conditional revalidation |
+| 63 | D226 | Modulepreload ShowsPage chunk in HTML | ShowsPage (14KB) is landing page but only loaded via void import() in main.tsx after 324KB bundle parses, sequential waterfall; added Vite plugin preload-showspage that scans build bundle for ShowsPage chunk and injects link rel=modulepreload into HTML head; ShowsPage now downloads in parallel with main bundle saving ~50ms on first visit, no bundle size change |
+| 64 | D227 | Lazy-load DropdownMenu | DropdownMenu eagerly imported in main.tsx for theme menu, pulls in usePopover(13KB)+useListFocus(18KB)+useTypeahead(6KB)+layerAnimations into main bundle; theme menu only needed when user clicks palette button, never on first paint; replaced with lazy(() => import()) + Suspense with placeholder button; main bundle 324.37KB→316.94KB (7.43KB / 2.3% reduction, 2.21KB gzipped), new lazy chunks DropdownMenu 6.27KB + Section 2.47KB + ListItem 2.63KB + Item 3.82KB |
+| 65 | D228 | Conditional modulepreload ShowDetailPage on /shows/:id | ShowDetailPage chunk (33KB) only loaded via void import() in main.tsx after 317KB bundle parses, sequential waterfall on hard refresh; extended Vite plugin to inject conditional inline script that checks location.pathname for /shows/:id and dynamically creates link rel=modulepreload for ShowDetailPage chunk; 33KB chunk now downloads in parallel with main bundle on detail page hard refresh, no bundle size change |
+| 66 | D229 | Loading skeleton for lazy route fallback | PageFallback returned null, empty content area during <50ms gap between React mount and lazy chunk load looked broken; replaced with minimal skeleton (heading bar + 6-card grid) using existing .skeleton CSS; main bundle 316.94KB→317.43KB (+0.49KB), visually consistent transition |
+| 67 | D230 | Eliminate redundant getShows+getSettings on first load | ShowsPage loadLanding() fired getShows()+getSettings() as separate calls when store had no shows, but store already fetches getBootstrap() on mount which includes shows+settings+providers; added early return in loadLanding for non-forced first load that only fetches getSonarrSeries(), new useEffect watches store shows to clear loading state; eliminates 2 redundant API round-trips on first load, ShowsPage chunk 13.83KB→14.03KB (+0.2KB) |
+| 68 | D231 | Pre-JS fetch Sonarr series on library page | getSonarrSeries() only called after ShowsPage mounts (after JS bundle+chunk download+parse+render), sequential waterfall; extended inline script to fire fetch('/api/sonarr/series') when on / or /shows, api.ts getSonarrSeries() reuses pre-fired Response; Sonarr series API starts in parallel with JS bundle saving 50-200ms, main bundle 317.43KB→317.48KB (+0.05KB) |
+| 69 | D232 | ETag for index.html | no-cache on index.html means browser always validates but without ETag server always re-sends full ~3KB HTML; added init() that computes SHA-256 hash of embedded index.html as weak ETag, handler checks If-None-Match and returns 304 Not Modified when ETag matches; saves ~3KB HTML re-download on repeat visits when server binary unchanged, ETag stable within single binary version |
 
 ---
 
@@ -3006,5 +3014,142 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 - Inline script: ~400 bytes (uncompressed, in HTML head)
 - tsc clean, vp build clean
 - Behavioral: API requests now start in parallel with JS bundle download instead of after it. On a 100ms bundle download, the API has a 100ms head start. On localhost where the API responds in <10ms, the data is ready before React even mounts — `getCachedShowDetail()` returns it synchronously (via D223's cache) and `getBootstrap()` resolves instantly.
+
+**Outcome:** Kept. Committed.
+
+## D225 — Immutable cache headers for hashed static assets
+
+**Target:** `internal/web/embed.go` — repeat visit load time for all pages
+
+**Problem:** The SPA handler uses `http.FileServer` which doesn't set `Cache-Control` headers for embedded static files. Vite generates content-hashed filenames (e.g. `index-COfrjy6x.js`) that are safe to cache forever — when content changes, the hash changes, producing a new filename. But without cache headers, the browser re-downloads all 324KB JS + 168KB CSS on every page load, even though the files haven't changed.
+
+**What changed:**
+- `embed.go`: Added `Cache-Control: public, max-age=31536000, immutable` for all files under `/assets/` and `/fonts/`. These are content-hashed by Vite and never change without a filename change. The `immutable` flag tells the browser to skip even conditional revalidation (304 checks).
+- `index.html` (served as SPA fallback) gets `Cache-Control: no-cache` so the browser always fetches the latest version with updated asset hashes.
+
+**Metrics:**
+- No bundle size change (server-side only)
+- Go build clean
+- Behavioral: on repeat visits, the browser loads all JS/CSS chunks from disk cache with zero network requests. This eliminates ~490KB of re-downloads on every page revisit. First load is unaffected (no cache yet). The `immutable` flag also eliminates the conditional `If-None-Match` / `If-Modified-Since` round-trips that `no-cache` would require.
+
+**Outcome:** Kept. Committed.
+
+## D226 — Modulepreload ShowsPage chunk in HTML
+
+**Target:** `web-astryx/vite.config.ts` — first visit landing page load time
+
+**Problem:** ShowsPage (14KB / 5.3KB gz) is the landing page — the first thing users see. Its import is fired via `void import("./routes/ShowsPage")` in `main.tsx`, but that only runs after the 324KB main bundle downloads and parses. This creates a sequential waterfall: main bundle download → parse → ShowsPage download → ShowsPage parse → render. The ShowsPage download could start in parallel with the main bundle.
+
+**What changed:**
+- `vite.config.ts`: Added a custom Vite plugin `preload-showspage` that runs in the `transformIndexHtml` post-order phase. It scans the build bundle for the `ShowsPage` chunk and injects `<link rel="modulepreload" crossorigin href="/assets/ShowsPage-[hash].js">` into the HTML head. This tells the browser to start downloading the ShowsPage chunk immediately when parsing the HTML, in parallel with the main bundle.
+
+**Metrics:**
+- No bundle size change (build config only)
+- tsc clean, vp build clean
+- Built HTML now has `<link rel="modulepreload" crossorigin href="/assets/ShowsPage-DcQSpIAG.js">` in head
+- Behavioral: ShowsPage chunk (14KB) now downloads in parallel with the main bundle (324KB) instead of after it. On a 100ms main bundle download, ShowsPage has a 100ms head start. Since ShowsPage is only 5.3KB gzipped, it will likely finish downloading before the main bundle finishes parsing.
+
+**Outcome:** Kept. Committed.
+
+## D227 — Lazy-load DropdownMenu
+
+**Target:** `web-astryx/src/main.tsx` — main bundle size
+
+**Problem:** `DropdownMenu` was eagerly imported in `main.tsx` for the theme menu in the TopNav. DropdownMenu pulls in `usePopover` (13KB source), `useListFocus` (18KB source), `useTypeahead` (6KB source), and `layerAnimations` — all transitive deps that end up in the main bundle. The theme menu is only needed when the user clicks the palette button in the top-right corner, which never happens during first paint.
+
+**What changed:**
+- `main.tsx`: Replaced `import { DropdownMenu } from "@astryxdesign/core/DropdownMenu"` with `lazy(() => import(...))`. Wrapped the DropdownMenu in `ThemeMenu` with a `<Suspense>` that shows a placeholder button (same size, same icon) while the chunk loads. The placeholder is a plain `<button>` with inline styles matching the DropdownMenu button appearance.
+
+**Metrics:**
+- Main JS bundle: 324.37KB → 316.94KB (7.43KB / 2.3% reduction)
+- Main JS gzipped: 103.59KB → 101.38KB (2.21KB reduction)
+- New lazy chunks: DropdownMenu 6.27KB, Section 2.47KB, ListItem 2.63KB, Item 3.82KB (all transitive deps that were previously inlined)
+- Tooltip modulepreload removed from HTML (was transitive dep of DropdownMenu)
+- tsc clean, vp build clean
+- Behavioral: theme menu shows a placeholder button on first paint, then hydrates with the full DropdownMenu when the lazy chunk loads (~50ms on localhost, parallel with other work). No visual jarring — placeholder matches the button's appearance.
+
+**Outcome:** Kept. Committed.
+
+## D228 — Conditional modulepreload ShowDetailPage chunk on /shows/:id
+
+**Target:** `web-astryx/vite.config.ts` — first visit detail page load time
+
+**Problem:** ShowDetailPage chunk (33KB / 10.9KB gz) is prefetched via `void import("./routes/ShowDetailPage")` in `main.tsx` when on `/shows/:id`, but that only fires after the 317KB main bundle downloads and parses. On hard refresh of a detail page, this creates a sequential waterfall: main bundle download → parse → ShowDetailPage download → parse → mount. The 33KB chunk could start downloading in parallel with the main bundle.
+
+**What changed:**
+- `vite.config.ts`: Renamed the `preload-showspage` plugin to `preload-route-chunks` and extended it. It now finds both the ShowsPage and ShowDetailPage chunks in the build bundle. ShowsPage gets a static `<link rel="modulepreload">` (always needed). ShowDetailPage gets a conditional preload via a tiny inline `<script>` that checks `location.pathname` for `/shows/:id` and dynamically creates a `<link rel="modulepreload">` element if it matches. On non-detail pages, the script does nothing.
+
+**Metrics:**
+- No bundle size change (build config only)
+- tsc clean, vp build clean
+- Built HTML now has conditional preload script: `if(location.pathname.match(/^\/shows\/\d+/)){var l=document.createElement("link");l.rel="modulepreload";...}`
+- Behavioral: on hard refresh of `/shows/123`, the ShowDetailPage chunk (33KB) now downloads in parallel with the main bundle (317KB) instead of after it. On a 100ms main bundle download, ShowDetailPage has a 100ms head start. Since it's 10.9KB gzipped, it will likely finish before the main bundle finishes parsing.
+
+**Outcome:** Kept. Committed.
+
+## D229 — Loading skeleton for lazy route fallback
+
+**Target:** `web-astryx/src/App.tsx` — perceived loading experience during route chunk load
+
+**Problem:** The `PageFallback` component returned `null`, so between React mount and the lazy route chunk (ShowsPage/ShowDetailPage) loading, the user saw the nav bar but a completely empty content area. Even though the chunk loads quickly (modulepreloaded in HTML), the brief gap looks like a broken page.
+
+**What changed:**
+- `App.tsx`: Replaced `PageFallback`'s `null` return with a minimal skeleton: a heading placeholder bar + a 6-card grid skeleton. Uses existing `.skeleton` CSS classes. The skeleton fills the content area so the page looks like it's loading rather than broken.
+
+**Metrics:**
+- Main JS bundle: 316.94KB → 317.43KB (+0.49KB for skeleton JSX)
+- tsc clean, vp build clean
+- Behavioral: during the <50ms gap between React mount and ShowsPage chunk load, users see a card grid skeleton instead of an empty page. The skeleton uses the same `.skeleton` class as the ShowDetailPage skeletons, so the transition is visually consistent.
+
+**Outcome:** Kept. Committed.
+
+## D230 — Eliminate redundant getShows+getSettings on first load
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx` — API round-trips on first load
+
+**Problem:** When ShowsPage mounts with no store data (first load), `loadLanding()` fires `getShows()` + `getSettings()` as separate API calls. But the store (`AppProvider`) is already fetching `getBootstrap()` on mount, which returns shows + settings + providers in a single response. These are redundant — 2 extra API round-trips that duplicate data the store is already fetching.
+
+**What changed:**
+- `ShowsPage.tsx`: When `forceRefresh` is false and the store has no shows, `loadLanding()` no longer fires `getShows()` + `getSettings()`. Instead, it only fetches `getSonarrSeries()` in the background (not in bootstrap). A new `useEffect` watches `shows` from the store — when bootstrap resolves and populates shows, the effect clears the loading state. Forced refresh still makes individual calls (needed to bypass cache).
+- This eliminates 2 redundant API round-trips on first load. The store's bootstrap call (already in flight from D224's pre-JS fetch) provides the data instead.
+
+**Metrics:**
+- Main JS bundle: 317.43KB (unchanged)
+- ShowsPage chunk: 13.83KB → 14.03KB (+0.2KB for the new useEffect)
+- tsc clean, vp build clean
+- Behavioral: on first load, 2 fewer API round-trips (getShows + getSettings). The store's bootstrap call (fired before JS bundle via D224's inline script) provides shows + settings. ShowsPage sees the data when the store updates, clearing the loading state without redundant fetches.
+
+**Outcome:** Kept. Committed.
+
+## D231 — Pre-JS fetch Sonarr series on library page
+
+**Target:** `web-astryx/index.html`, `web-astryx/src/lib/api.ts` — Sonarr series fetch latency on library page
+
+**Problem:** `getSonarrSeries()` is called by ShowsPage after it mounts — which requires the main JS bundle to download, parse, React to mount, ShowsPage chunk to load, and the component to render. This creates a sequential waterfall for the Sonarr series data (needed for poster/banner URLs). The fetch could start much earlier.
+
+**What changed:**
+- `index.html`: Extended the inline script to also fire `fetch('/api/sonarr/series')` when on the library page (`/` or `/shows`). The Response promise is stored on `window.__mizuPrefetch.series`.
+- `api.ts`: `getSonarrSeries()` now uses `requestPrefetched()` to reuse the pre-fired Response when `matchableOnly` is false. Added `series` to the `MizuPrefetch` interface.
+
+**Metrics:**
+- Main JS bundle: 317.43KB → 317.48KB (+0.05KB, negligible)
+- tsc clean, vp build clean
+- Behavioral: on library page first visit, the Sonarr series API request starts in parallel with the JS bundle download instead of after ShowsPage mounts. This gives the Sonarr API call a 50-200ms head start. Poster/banner URLs are available sooner, reducing the time images appear blank.
+
+**Outcome:** Kept. Committed.
+
+## D232 — ETag for index.html
+
+**Target:** `internal/web/embed.go` — repeat visit HTML download
+
+**Problem:** With D225's `no-cache` header on `index.html`, the browser always sends a conditional request to validate the HTML on repeat visits. But without an ETag, the server can't respond with 304 Not Modified — it always re-sends the full HTML body (~3KB). While small, this is unnecessary bandwidth on every page load.
+
+**What changed:**
+- `embed.go`: Added an `init()` function that computes a SHA-256 hash of the embedded `index.html` at startup and stores it as a weak ETag (`W/"hash"`). When serving the SPA fallback (index.html), the handler now sets the ETag header and checks `If-None-Match` — if the ETag matches, it responds with 304 Not Modified and skips sending the body. The ETag is stable within a single server binary version (changes when the build changes and asset hashes change).
+
+**Metrics:**
+- No bundle size change (server-side only)
+- Go build clean
+- Behavioral: on repeat visits, the browser sends `If-None-Match` with the cached ETag. If the server binary hasn't changed, it gets a 304 Not Modified (saves ~3KB HTML download + compression overhead). If the server binary has changed (new build), the browser gets the full new HTML with updated asset hashes.
 
 **Outcome:** Kept. Committed.

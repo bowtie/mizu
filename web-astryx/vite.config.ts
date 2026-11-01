@@ -32,6 +32,47 @@ export default defineConfig({
         ];
       },
     },
+    // Preload the ShowsPage chunk in the built HTML so it starts
+    // downloading in parallel with the main bundle. Without this,
+    // ShowsPage only loads after the main bundle parses and fires
+    // `void import("./routes/ShowsPage")` — a sequential waterfall.
+    // The landing page is always the first thing users see, so
+    // parallelizing its download saves ~50ms on first visit.
+    //
+    // Also conditionally preloads the ShowDetailPage chunk when the
+    // user is on a /shows/:id URL — the chunk is 33KB and would
+    // otherwise only start downloading after the main bundle parses.
+    {
+      name: "preload-route-chunks",
+      apply: "build",
+      transformIndexHtml: {
+        order: "post" as const,
+        handler(html: string, ctx: { bundle?: Record<string, { name?: string; fileName: string }> }) {
+          if (!ctx.bundle) return html;
+          let showsPageUrl = "";
+          let detailPageUrl = "";
+          for (const chunk of Object.values(ctx.bundle)) {
+            if (chunk.name === "ShowsPage") showsPageUrl = "/" + chunk.fileName;
+            if (chunk.name === "ShowDetailPage") detailPageUrl = "/" + chunk.fileName;
+          }
+          let extra = "";
+          if (showsPageUrl) {
+            extra += `  <link rel="modulepreload" crossorigin href="${showsPageUrl}">\n`;
+          }
+          if (detailPageUrl) {
+            // Inject a tiny inline script that creates a modulepreload
+            // link for ShowDetailPage only when on /shows/:id. This
+            // starts the 33KB chunk download in parallel with the main
+            // bundle on hard refresh of a detail page.
+            extra += `  <script>if(location.pathname.match(/^\\/shows\\/\\d+/)){var l=document.createElement("link");l.rel="modulepreload";l.crossOrigin="anonymous";l.href="${detailPageUrl}";document.head.appendChild(l);}</script>\n`;
+          }
+          if (extra) {
+            return html.replace("</head>", extra + "  </head>");
+          }
+          return html;
+        },
+      },
+    },
     stylex.vite({
       dev: process.env.NODE_ENV === "development",
       runtimeInjection: false,

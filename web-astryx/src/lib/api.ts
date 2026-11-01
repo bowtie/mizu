@@ -23,6 +23,7 @@ interface MizuPrefetch {
   bootstrap?: Promise<Response>;
   detail?: Promise<Response>;
   detailId?: string;
+  series?: Promise<Response>;
 }
 const prefetch = (window as unknown as { __mizuPrefetch?: MizuPrefetch }).__mizuPrefetch;
 
@@ -75,6 +76,11 @@ export function getSonarrSeries(matchableOnly: boolean = false): Promise<SonarrS
   const params = new URLSearchParams();
   if (matchableOnly) params.set("matchable_only", "true");
   const suffix = params.size > 0 ? "?" + params.toString() : "";
+  // Use the pre-fired Response from the inline script if available
+  // (only for the unfiltered list, not the matchable_only variant).
+  if (!matchableOnly && prefetch?.series) {
+    return requestPrefetched<SonarrSeries[]>(prefetch.series, "/sonarr/series");
+  }
   return request<SonarrSeries[]>("GET", "/sonarr/series" + suffix);
 }
 

@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect, useCallback } from "react";
+import { StrictMode, useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
@@ -9,9 +9,17 @@ import { TopNav } from "@astryxdesign/core/TopNav";
 import { TopNavHeading } from "@astryxdesign/core/TopNav";
 import { TopNavItem } from "@astryxdesign/core/TopNav";
 import { NavIcon } from "@astryxdesign/core/NavIcon";
-import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Check, Palette } from "lucide-react";
 import { BrowserRouter, useLocation, Link } from "react-router-dom";
+
+// Lazy-load DropdownMenu — it pulls in usePopover, useListFocus,
+// useTypeahead, and layerAnimations (~53KB source). The theme menu
+// is only needed when the user clicks the palette button in the
+// top-right corner, so deferring it keeps these deps out of the
+// main bundle and off the first-paint critical path.
+const DropdownMenu = lazy(() =>
+  import("@astryxdesign/core/DropdownMenu").then((m) => ({ default: m.DropdownMenu })),
+);
 
 // Import theme CSS files
 import "@astryxdesign/core/reset.css";
@@ -62,17 +70,40 @@ function ThemeMenu({
   const selectedMeta = themeMetas.find((t) => t.id === selectedId) ?? themeMetas[0];
 
   return (
-    <DropdownMenu
-      button={{
-        label: selectedMeta.label,
-        variant: "secondary",
-        size: "sm",
-        isIconOnly: true,
-        icon: <Palette size={16} />,
-      }}
-      items={items}
-      menuWidth={220}
-    />
+    <Suspense
+      fallback={
+        <button
+          className="theme-menu-placeholder"
+          aria-label="Theme"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            borderRadius: "var(--radius-inner)",
+            border: "1px solid var(--color-border-subtle)",
+            background: "transparent",
+            cursor: "pointer",
+            color: "var(--color-icon-secondary)",
+          }}
+        >
+          <Palette size={16} />
+        </button>
+      }
+    >
+      <DropdownMenu
+        button={{
+          label: selectedMeta.label,
+          variant: "secondary",
+          size: "sm",
+          isIconOnly: true,
+          icon: <Palette size={16} />,
+        }}
+        items={items}
+        menuWidth={220}
+      />
+    </Suspense>
   );
 }
 
