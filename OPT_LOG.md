@@ -2,7 +2,7 @@
 
 ## Iteration 1 — ShowDetailPage hero: inline style soup → astryx composition
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — the hero/backdrop section (lines ~544-750)
+**Target:** `web/src/routes/ShowDetailPage.tsx` — the hero/backdrop section (lines ~544-750)
 
 **Problem:** The hero is built from ~200 lines of raw `<div>` elements with inline styles for positioning, gradients, borders, and layout. It doesn't use any astryx layout primitives (Section, Card, VStack, HStack) for its structure, making it visually inconsistent with the rest of the app which composes astryx components.
 
@@ -19,7 +19,7 @@
 
 ## Iteration 2 — AddAnimeDialog: wizard step indicator
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — step progress indicator (lines ~591-609)
+**Target:** `web/src/routes/AddAnimeDialog.tsx` — step progress indicator (lines ~591-609)
 
 **Problem:** The step indicator was built from manual `HStack` + `Divider` + `Text` composition with inline check icons and text color props. It looked like a flat breadcrumb trail — no visual hierarchy between past/current/future steps, no numbered circles, no connecting lines.
 
@@ -39,7 +39,7 @@
 
 ## Iteration 3 — SettingsPage: extract SettingsRow component
 
-**Target:** `web-astryx/src/routes/SettingsPage.tsx` — 12 repeated settings row blocks
+**Target:** `web/src/routes/SettingsPage.tsx` — 12 repeated settings row blocks
 
 **Problem:** Every settings row was an identical 15-line pattern: `HStack(hAlign="between") > VStack(Text label + Text description [+ error]) + control`. With `Divider` between each, this was ~180 lines of pure boilerplate. The `rowPadding` CSSProperties constant was the only shared piece.
 
@@ -47,7 +47,7 @@
 
 **What changed:**
 
-- Created `web-astryx/src/components/SettingsRow.tsx` — encapsulates the label/description/error/control pattern in one component with `label`, `description`, `error`, and `children` props
+- Created `web/src/components/SettingsRow.tsx` — encapsulates the label/description/error/control pattern in one component with `label`, `description`, `error`, and `children` props
 - Replaced all 12 inline settings rows in SettingsPage with `<SettingsRow>` calls
 - Removed the `rowPadding` CSSProperties constant and `CSSProperties` import
 - Added `.settings-row` CSS class (padding-block) and `.settings-row-label` (min/max width) with mobile collapse to stack
@@ -57,7 +57,7 @@
 
 ## Iteration 4 — Micro-interactions pass: cards, images, focus states
 
-**Target:** `web-astryx/src/index.css` + `ShowsPage.tsx` + `ShowDetailPage.tsx` — hover/focus/active/loading states
+**Target:** `web/src/index.css` + `ShowsPage.tsx` + `ShowDetailPage.tsx` — hover/focus/active/loading states
 
 **Problem:** Cards had hover lift but no active press feedback, no keyboard focus indicator, and no image zoom. Images appeared abruptly with no fade-in. No `prefers-reduced-motion` coverage for new animations.
 
@@ -85,7 +85,7 @@
 
 **What changed:**
 
-- Created `web-astryx/src/components/TrackingRuleCard.tsx` — encapsulates the Card+HStack+VStack+Text+Switch pattern with `variant` (green/yellow/red), `label`, `description`, `switchLabel`, `value`, `onChange` props
+- Created `web/src/components/TrackingRuleCard.tsx` — encapsulates the Card+HStack+VStack+Text+Switch pattern with `variant` (green/yellow/red), `label`, `description`, `switchLabel`, `value`, `onChange` props
 - The CSS var overrides (`--color-accent`, `--color-background-gray`) are mapped internally by variant — no more `as React.CSSProperties` casts at call sites
 - Replaced 6 inline tracking rule card blocks (3 in ShowDetailPage, 3 in SettingsPage) with `<TrackingRuleCard>` calls
 - Removed unused `Switch` import from ShowDetailPage, unused `Card` import from SettingsPage
@@ -97,7 +97,7 @@
 
 ## Iteration 6 — ActivityPage inline style cleanup
 
-**Target:** `web-astryx/src/routes/ActivityPage.tsx` — 6 inline style patterns
+**Target:** `web/src/routes/ActivityPage.tsx` — 6 inline style patterns
 
 **Problem:** ActivityPage had scattered inline styles: `width: "100%"` on VStack (has a prop for that), `fontSize` on Text (has a `size` prop), repeated `minWidth: 0, flex: 1` on summary/detail containers, repeated `color: var(--color-error)` on error rows, and an inline chevron rotation transform/transition.
 
@@ -136,7 +136,7 @@
 
 ## Iteration 8 — AddAnimeDialog: eliminate all remaining inline styles
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — 6 remaining inline styles
+**Target:** `web/src/routes/AddAnimeDialog.tsx` — 6 remaining inline styles
 
 **Problem:** 4 List components had identical `style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}`, and the series poster thumbnail + placeholder had inline sizing styles.
 
@@ -152,7 +152,7 @@
 
 ## Iteration 9 — App shell: replace inline styles in main.tsx
 
-**Target:** `web-astryx/src/main.tsx` — root container and sticky nav wrapper
+**Target:** `web/src/main.tsx` — root container and sticky nav wrapper
 
 **Problem:** The app shell in `main.tsx` had 3 nested `<div>` elements with inline styles: root container (minHeight, background), sticky nav wrapper (position, z-index, blur backdrop, border), and nav inner container (maxWidth, marginInline). These are app-level layout styles that belong in CSS.
 
@@ -169,7 +169,7 @@
 
 ## Iteration 10 — Final inline style sweep: ToastViewport + SettingsRow
 
-**Target:** `web-astryx/src/components/ToastViewport.tsx` + `SettingsRow.tsx` — last 2 inline styles
+**Target:** `web/src/components/ToastViewport.tsx` + `SettingsRow.tsx` — last 2 inline styles
 
 **Problem:** ToastViewport had inline positioning styles (fixed, bottom, right, z-index, maxWidth). SettingsRow had inline error text color.
 
@@ -252,7 +252,7 @@
 
 ## Iteration 16 — Favicon fix + minor cleanup
 
-**Target:** `web-astryx/index.html` — missing favicon causing 404
+**Target:** `web/index.html` — missing favicon causing 404
 
 **Problem:** No favicon was defined, causing a 404 request for `/favicon.ico` on every page load.
 
@@ -351,7 +351,7 @@
 
 ## Iteration D22fix — Scope hover zoom to backdrop image only
 
-**Target:** `web-astryx/src/index.css` — `.mizu-card:hover .mizu-card-img-wrap img`
+**Target:** `web/src/index.css` — `.mizu-card:hover .mizu-card-img-wrap img`
 
 **Problem:** The hover zoom rule targeted `.mizu-card-img-wrap img` which matched ALL images in the card wrap, including the overlay logo. Logos would scale up on hover, which looked wrong.
 
@@ -361,7 +361,7 @@
 
 ## Iteration D23 — SettingsPage section headers: visual hierarchy + spacing
 
-**Target:** `web-astryx/src/routes/SettingsPage.tsx` — Connection, Sync, Notifications, Defaults section headings
+**Target:** `web/src/routes/SettingsPage.tsx` — Connection, Sync, Notifications, Defaults section headings
 
 **Problem:** Section headings (Connection, Sync, Notifications, Defaults) sat flush against the Divider with no breathing room. All used `Heading level={2}` with no distinguishing style, making sections blend together visually.
 
@@ -371,7 +371,7 @@
 
 ## Iteration D24 — AddAnimeDialog tracking rules visual grouping
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — tracking rules section in the match step
+**Target:** `web/src/routes/AddAnimeDialog.tsx` — tracking rules section in the match step
 
 **Problem:** The three tracking Switches and the start-mode Selector sat bare in the VStack with just a Divider and Heading. No visual container separated them from the match list above, making the section feel unstructured.
 
@@ -397,7 +397,7 @@
 
 ## Iteration D26 — ShowDetailPage hero no-backdrop fallback
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` + `web-astryx/src/index.css` — hero section when no backdrop image exists
+**Target:** `web/src/routes/ShowDetailPage.tsx` + `web/src/index.css` — hero section when no backdrop image exists
 
 **Problem:** When a show has no backdrop image, the hero showed a flat `--color-background-muted` block — visually empty and inconsistent with the rich hero shown when a backdrop exists.
 
@@ -407,7 +407,7 @@
 
 ## Iteration D27 — Navigation active indicator: accent underline
 
-**Target:** `web-astryx/src/index.css` — TopNav active item styling
+**Target:** `web/src/index.css` — TopNav active item styling
 
 **Problem:** The TopNavItem's built-in selected state uses `--color-neutral` background + semibold text. This is functional but subtle — the active page isn't immediately obvious, especially in themes where `--color-neutral` is very close to the hover background.
 
@@ -417,7 +417,7 @@
 
 ## Iteration D28 — Fix double-spinners + section heading consistency
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/routes/ShowsPage.tsx`, `web-astryx/src/index.css`
+**Target:** `web/src/routes/ShowDetailPage.tsx`, `web/src/routes/ShowsPage.tsx`, `web/src/index.css`
 
 **Problem:** Two buttons had both `isLoading` (Astryx built-in spinner) AND a CSS `.spin` class on the RefreshCw icon — causing a double-spinner effect. Also, ShowDetailPage section headings (Episode list, Tracking rules) lacked the `.settings-section-header` styling that SettingsPage headings got in D23.
 
@@ -431,7 +431,7 @@
 
 ## Iteration D29 — Mobile responsiveness audit
 
-**Target:** `web-astryx/src/routes/SettingsPage.tsx`, `web-astryx/src/index.css`
+**Target:** `web/src/routes/SettingsPage.tsx`, `web/src/index.css`
 
 **Problem:** Two mobile responsiveness issues found:
 
@@ -473,7 +473,7 @@
 
 ## Iteration D31 — Micro-interactions: card overlay slide-up + nav underline animation
 
-**Target:** `web-astryx/src/index.css` — card overlay, nav active indicator
+**Target:** `web/src/index.css` — card overlay, nav active indicator
 
 **Problem:** Two micro-interaction refinements:
 
@@ -490,7 +490,7 @@
 
 ## Iteration D32 — Pre-build custom themes + load Figtree font
 
-**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/index.html`, new built theme files
+**Target:** `web/src/lib/themes.ts`, `web/index.html`, new built theme files
 
 **Problem:** Two console warnings:
 
@@ -512,7 +512,7 @@
 
 ## Iteration D33 — ShowDetailPage actions bar + artwork card polish
 
-**Target:** `web-astryx/src/index.css`, `web-astryx/src/routes/ShowDetailPage.tsx`
+**Target:** `web/src/index.css`, `web/src/routes/ShowDetailPage.tsx`
 
 **Problem:** Three small visual issues:
 
@@ -530,7 +530,7 @@
 
 ## Iteration D34 — Consistent section headings across all pages
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx`
+**Target:** `web/src/routes/AddAnimeDialog.tsx`
 
 **Problem:** The "Tracking rules" heading inside the AddAnimeDialog muted card (added in D24) didn't have the `.settings-section-header` class that all other section headings got in D23/D28/D33.
 
@@ -546,7 +546,7 @@
 
 ## Iteration D35 — ShowsPage: Add status badge to no-image cards
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx` — card content when no backdrop/poster image
+**Target:** `web/src/routes/ShowsPage.tsx` — card content when no backdrop/poster image
 
 **Problem:** Cards without an image showed the title and episode number but no status badge (enabled/disabled). The badge was only rendered inside the image overlay block, so no-image cards were missing the at-a-glance status indicator that image cards have.
 
@@ -556,7 +556,7 @@
 
 ## Iteration D36 — Save button success flash + ShowsPage no-image badge
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/index.css`
+**Target:** `web/src/routes/ShowDetailPage.tsx`, `web/src/index.css`
 
 **Problem:** When saving tracking rules, the button label changed to "Saved" with a Check icon but stayed the same accent blue color — no visual confirmation that the save succeeded. The test connection button already had this success color treatment (D27/R56).
 
@@ -566,7 +566,7 @@
 
 ## Iteration D37 — Wizard poster placeholder gradient + audit sweep
 
-**Target:** `web-astryx/src/index.css` — `.wizard-poster-placeholder`
+**Target:** `web/src/index.css` — `.wizard-poster-placeholder`
 
 **Problem:** The wizard poster placeholder (shown when a Sonarr series has no poster) was a flat `--color-background-muted` rectangle, inconsistent with the card image placeholder which got a gradient in D22.
 
@@ -585,7 +585,7 @@
 
 ## Iteration D38 — ShowsPage sort dropdown: selected indicator + sort icon
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx` — sort DropdownMenu
+**Target:** `web/src/routes/ShowsPage.tsx` — sort DropdownMenu
 
 **Problem:** The sort dropdown showed no indication of which option was currently selected. Users had to open the menu and scan to find the active sort. The button also had no icon, making it less obvious as a sort control.
 
@@ -599,7 +599,7 @@
 
 ## Iteration D39 — ActivityPage empty state sync button: add loading feedback
 
-**Target:** `web-astryx/src/routes/ActivityPage.tsx` — empty state "Sync now" button
+**Target:** `web/src/routes/ActivityPage.tsx` — empty state "Sync now" button
 
 **Problem:** The "Sync now" button in the empty state (no activity yet) didn't have `isLoading` — clicking it gave no visual feedback while the sync was running. The header "Sync now" button already had `isLoading={syncing}`.
 
@@ -609,7 +609,7 @@
 
 ## Iteration D40 — Hero image loading priority + ActivityPage sync feedback
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — hero backdrop image
+**Target:** `web/src/routes/ShowDetailPage.tsx` — hero backdrop image
 
 **Problem:** The hero backdrop image used `loading="lazy"` — inappropriate for an above-the-fold image that's likely the LCP element. Lazy loading delays the hero image fetch until after the initial render, making the page feel slower.
 
@@ -622,7 +622,7 @@
 
 ## Iteration D41 — Episode monitor toggle: accent-colored pressed icon
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode monitor ToggleButton
+**Target:** `web/src/routes/ShowDetailPage.tsx` — episode monitor ToggleButton
 
 **Problem:** The episode monitor ToggleButton swapped between Eye (unmonitored) and EyeOff (monitored) icons, but both used the same default color. Per Astryx docs guidance: "Use a filled or colored icon for the pressed state so users can see the current state at a glance."
 
@@ -632,7 +632,7 @@
 
 ## Iteration D42 — Collapsible expand/collapse animation (skipped)
 
-**Target:** `web-astryx/node_modules/@astryxdesign/core/src/Collapsible/Collapsible.tsx`
+**Target:** `web/node_modules/@astryxdesign/core/src/Collapsible/Collapsible.tsx`
 
 **Problem:** The Collapsible component uses `display: none` for hidden content, causing an instant show/hide with no animation. The `.episode-list-wrap` has a fade-in-up entrance animation, but collapse is instant.
 
@@ -642,7 +642,7 @@
 
 ## Iteration D43 — ActivityPage load-more button visual separator
 
-**Target:** `web-astryx/src/routes/ActivityPage.tsx` — load more button at bottom of activity list
+**Target:** `web/src/routes/ActivityPage.tsx` — load more button at bottom of activity list
 
 **Problem:** The "Load more" button sat directly below the last activity card with no visual separation, making it feel like it was part of the card content rather than a distinct pagination action.
 
@@ -652,7 +652,7 @@
 
 ## Iteration D44 — Season collapsible: episode count pill
 
-**Target:** `web-astryx/src/index.css` — `.season-episode-count` in season collapsible trigger
+**Target:** `web/src/index.css` — `.season-episode-count` in season collapsible trigger
 
 **Problem:** The episode count next to the season label in the collapsible trigger was plain secondary text with no visual distinction. It blended into the trigger and didn't read as a count/metadata.
 
@@ -674,7 +674,7 @@
 
 ## Iteration D49 — Wizard step content fade-in transition
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — step content area between wizard steps
+**Target:** `web/src/routes/AddAnimeDialog.tsx` — step content area between wizard steps
 
 **Problem:** When advancing between wizard steps (Series → Match → Post-Add, etc.), the content swapped instantly with no transition. The step indicator (dots/labels) had transitions, but the main content area didn't, creating a jarring cut.
 
@@ -684,7 +684,7 @@
 
 ## Iteration D50 — Scroll-to-top on route change + settings error fade-in
 
-**Target:** `web-astryx/src/App.tsx` — route changes; `web-astryx/src/index.css` — settings error text
+**Target:** `web/src/App.tsx` — route changes; `web/src/index.css` — settings error text
 
 **Problem 1:** When navigating between pages (e.g., clicking a show card from the library), the new page opened at the same scroll position as the previous page. This is a common SPA UX issue — the user expects to start at the top of each new page.
 
@@ -698,7 +698,7 @@
 
 ## Iteration D51 — Activity log card: clickable summary to expand details
 
-**Target:** `web-astryx/src/routes/ActivityPage.tsx` — activity log card summary area
+**Target:** `web/src/routes/ActivityPage.tsx` — activity log card summary area
 
 **Problem:** The only way to expand an activity log's details was the small "Details" ghost button on the right. The summary area (badge + title + timestamp) wasn't clickable, even though it's the natural click target for expanding a log entry.
 
@@ -708,7 +708,7 @@
 
 ## Iteration D52 — HTML head polish: meta description, theme-color, noscript
 
-**Target:** `web-astryx/index.html`
+**Target:** `web/index.html`
 
 **Problem:** The HTML head was missing several standard meta tags: no `<meta name="description">` (bad for SEO/sharing), no `<meta name="theme-color">` (mobile browsers show default white/black chrome instead of matching the app theme), and no `<noscript>` fallback.
 
@@ -722,7 +722,7 @@
 
 ## Iteration D53 — SettingsPage save button success flash
 
-**Target:** `web-astryx/src/routes/SettingsPage.tsx` — save settings button
+**Target:** `web/src/routes/SettingsPage.tsx` — save settings button
 
 **Problem:** The ShowDetailPage save button flashes green with a Check icon on successful save (D36), but the SettingsPage save button had no visual success feedback — it just reverted from "Saving..." back to "Save settings" with no confirmation that the save succeeded. This was an inconsistency between the two pages with save actions.
 
@@ -732,7 +732,7 @@
 
 ## Iteration D54 — CSS cleanup: standard line-clamp, token-ize hardcoded values
 
-**Target:** `web-astryx/src/index.css` — `.show-hero-overview`, `.mizu-card-overlay`
+**Target:** `web/src/index.css` — `.show-hero-overview`, `.mizu-card-overlay`
 
 **Problem:** Several CSS values were hardcoded pixels instead of design tokens, and the overview line clamp only had the `-webkit-` prefix.
 
@@ -746,7 +746,7 @@
 
 ## Iteration D55 — Scope wizard step dot transition
 
-**Target:** `web-astryx/src/index.css` — `.wizard-step-dot`
+**Target:** `web/src/index.css` — `.wizard-step-dot`
 
 **Problem:** The wizard step dot used `transition: all 200ms ease` — `transition: all` is generally discouraged because it can cause unexpected transitions on properties that change for non-animation reasons (e.g., layout shifts).
 
@@ -756,7 +756,7 @@
 
 ## Iteration D56 — Fix ShowDetailPage hero width misalignment
 
-**Target:** `web-astryx/src/index.css` — `.show-shell`
+**Target:** `web/src/index.css` — `.show-shell`
 
 **Problem:** The hero `show-shell` had `width: calc(100% - clamp(24px, 8vw, 64px))` and `max-width: calc(900px - 64px)`, making it up to 64px narrower per side than the content section below (which uses the full 900px with `paddingInline: clamp(12px, 4vw, 32px)`). This created a visible misalignment where the hero header was smaller than the rest of the page content — it looked like a bug rather than an intentional design choice.
 
@@ -766,7 +766,7 @@
 
 ## Iteration D57 — Wizard poster loading skeleton
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — series list poster thumbnails
+**Target:** `web/src/routes/AddAnimeDialog.tsx` — series list poster thumbnails
 
 **Problem:** When a poster URL existed, only the `<img>` was rendered with `opacity: 0` until load. While the image was loading, the list item showed an empty 32×44 blank space — no visual placeholder. The `wizard-poster-placeholder` gradient was only shown when no URL existed at all.
 
@@ -776,7 +776,7 @@
 
 ## Iteration D58 — Actions bar padding alignment with hero content
 
-**Target:** `web-astryx/src/index.css` — `.show-actions-bar` horizontal padding
+**Target:** `web/src/index.css` — `.show-actions-bar` horizontal padding
 
 **Problem:** The actions bar used `padding: ... var(--spacing-3) ...` (12px) for horizontal padding, while the hero content above it used `padding: ... clamp(12px, 4vw, 32px) ...`. On desktop (900px wide), the hero text had 32px padding while the actions bar controls had only 12px — a 20px misalignment that made the controls look pushed toward the edges relative to the hero text.
 
@@ -786,7 +786,7 @@
 
 ## Iteration D59 — List item active state for press feedback
 
-**Target:** `web-astryx/src/index.css` — `.astryx-list .astryx-list-item`
+**Target:** `web/src/index.css` — `.astryx-list .astryx-list-item`
 
 **Problem:** List items had a hover background (`--color-overlay-hover`) but no `:active` state. On touch devices and mouse clicks, there was no visual feedback when pressing a list item — it went from hover directly to no state with no intermediate "pressed" cue.
 
@@ -796,7 +796,7 @@
 
 ## Iteration D60 — Activity log card expanded indicator
 
-**Target:** `web-astryx/src/routes/ActivityPage.tsx` + `web-astryx/src/index.css` — `.activity-log-card`
+**Target:** `web/src/routes/ActivityPage.tsx` + `web/src/index.css` — `.activity-log-card`
 
 **Problem:** When a log card was expanded, the chevron rotated but the card border didn't change — the only visual indicator of expanded state was the chevron direction and the appearance of details below. On hover the card already got `border-color: var(--color-border-emphasized)`, but expanded cards lost that emphasis when the mouse moved away.
 
@@ -806,7 +806,7 @@
 
 ## Iteration D61 — Wizard step description info icon
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` + `web-astryx/src/index.css` — `.wizard-step-description`
+**Target:** `web/src/routes/AddAnimeDialog.tsx` + `web/src/index.css` — `.wizard-step-description`
 
 **Problem:** The step description was a plain text block in a muted pill. It lacked visual structure — just a blob of secondary text with no icon to signal "this is guidance/info."
 
@@ -832,7 +832,7 @@
 
 ## Iteration D64 — Mobile episode filter parity with desktop
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `.episode-filters-mobile` SegmentedControl
+**Target:** `web/src/routes/ShowDetailPage.tsx` — `.episode-filters-mobile` SegmentedControl
 
 **Problem:** The desktop episode filter showed 5 tabs with episode counts (`All (67)`, `Manga (4)`, `Anime (N)`, `Mixed (N)`, `Filler (N)`) and icons. The mobile filter only showed 4 tabs with no counts, different labels ("Canon" instead of "Manga"), and was missing the "Anime" tab entirely. Mobile users got less information and fewer filtering options.
 
@@ -842,7 +842,7 @@
 
 ## Iteration D65 — CSS consolidation + reduced-motion completeness
 
-**Target:** `web-astryx/src/index.css` — `.mizu-card-img` duplicate declarations + `prefers-reduced-motion` block
+**Target:** `web/src/index.css` — `.mizu-card-img` duplicate declarations + `prefers-reduced-motion` block
 
 **Problem 1:** `.mizu-card-img` had two separate CSS blocks — one at line 181 (`transition: transform 0.3s ease` + position styles) and another at line 266 (`opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease`). The first block's transition was dead code, overridden by the second. The hover zoom rule (`.mizu-card:hover .mizu-card-img { transform: scale(1.04) }`) was sandwiched between them, separated from the transition it depended on.
 
@@ -856,7 +856,7 @@
 
 ## Iteration D66 — Fix non-existent --spacing-80 token in wizard list
 
-**Target:** `web-astryx/src/index.css` — `.wizard-list` max-height
+**Target:** `web/src/index.css` — `.wizard-list` max-height
 
 **Problem:** `.wizard-list` used `max-height: var(--spacing-80)` but the Astryx spacing scale only goes up to `--spacing-12` (48px). The token `--spacing-80` doesn't exist in any theme or in the Astryx core token definitions. This means `max-height` resolved to nothing — the wizard series list never scrolled, it just grew until the dialog's own `maxHeight="85vh"` kicked in, pushing the footer buttons off-screen.
 
@@ -866,7 +866,7 @@
 
 ## Iteration D67 — Fix non-existent --radius-1 and --radius-2 tokens
 
-**Target:** `web-astryx/src/index.css` — 6 occurrences of `--radius-1` and 1 of `--radius-2`
+**Target:** `web/src/index.css` — 6 occurrences of `--radius-1` and 1 of `--radius-2`
 
 **Problem:** The CSS used `--radius-1` (4px) and `--radius-2` (8px) tokens that don't exist in the Astryx token system. The actual named tokens are `--radius-inner` (4px), `--radius-element` (8px), `--radius-container` (12px), etc. The `--radius-2` usage had a fallback (`var(--radius-2, 8px)`) so it worked accidentally, but the four `--radius-1` usages had no fallback — they resolved to nothing, meaning those elements had no border-radius.
 
@@ -878,7 +878,7 @@
 
 ## Iteration D68 — Fix ShowDetailPage centering + hero/content width alignment
 
-**Target:** `web-astryx/src/index.css` — `.section-centered` and `.show-shell`
+**Target:** `web/src/index.css` — `.section-centered` and `.show-shell`
 
 **Problem 1 (centering):** The `.section-centered` class sets `marginInline: auto` to center Section components, but Astryx's Section component renders StyleX-generated `marginInlineStart` and `marginInlineEnd` properties (for nested padding escape) that override our plain CSS `marginInline: auto`. On pages with no parent container padding to escape, these resolve to `calc(-1 * 0px)` = `0px`, which prevents centering.
 
@@ -892,7 +892,7 @@
 
 ## Iteration D69 — Centered TopNav layout with tilde NavIcon logo
 
-**Target:** `web-astryx/src/main.tsx` — Nav component
+**Target:** `web/src/main.tsx` — Nav component
 
 **Problem:** The TopNav used `startContent` for nav items, placing them immediately after the heading on the left side. This is a standard left-aligned layout. The user wanted a centered navigation pattern (heading left, nav items centered, actions right) matching the Astryx example with `centerContent`. The heading also lacked a logo/icon.
 
@@ -906,7 +906,7 @@
 
 ## Iteration D70 — Harmonize transition timings to design tokens
 
-**Target:** `web-astryx/src/index.css` — 9 transition declarations using hardcoded `0.2s ease` or `200ms ease`
+**Target:** `web/src/index.css` — 9 transition declarations using hardcoded `0.2s ease` or `200ms ease`
 
 **Problem:** UI element transitions (hover states, border-color, background-color, transform, opacity for non-image elements) used a mix of `0.2s ease` and `200ms ease` — same duration but inconsistent notation, and neither used the Astryx design system tokens. The token `--duration-fast` (175ms) with `--ease-standard` (cubic-bezier(0.24, 1, 0.4, 1)) is the correct pair for quick UI feedback.
 
@@ -918,7 +918,7 @@
 
 ## Iteration D71 — Replace manual layout with AppShell
 
-**Target:** `web-astryx/src/main.tsx` + `web-astryx/src/index.css`
+**Target:** `web/src/main.tsx` + `web/src/index.css`
 
 **Problem:** The app used a manual layout (`div.app-root > div.app-nav-sticky > div.app-nav-inner > Nav`) instead of Astryx's AppShell component. This meant we were missing AppShell's built-in features: skip-to-content link, `role="main"` on content area, proper sticky header in auto height mode, and responsive nav handling. The manual layout also required custom CSS for sticky positioning and centering that fought with StyleX.
 
@@ -933,7 +933,7 @@
 
 ## Iteration D72 — Update favicon to tilde matching NavIcon logo
 
-**Target:** `web-astryx/index.html` — favicon
+**Target:** `web/index.html` — favicon
 
 **Problem:** The favicon was a 🌊 emoji but D69 changed the nav logo to a tilde (`~`) in a NavIcon. The favicon didn't match the new branding.
 
@@ -1201,7 +1201,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D124 — Audit CSS token references (no fixes needed)
 
-**Target:** `web-astryx/src/index.css` — all `var(--*)` references
+**Target:** `web/src/index.css` — all `var(--*)` references
 
 **What changed:** Nothing — audit confirmed all tokens are valid.
 
@@ -1218,7 +1218,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D125 — Fix tracking rule toggle lag on ShowDetailPage (memoize episode list)
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`
+**Target:** `web/src/routes/ShowDetailPage.tsx`
 
 **What changed:**
 
@@ -1686,7 +1686,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D158 — Backend artwork caching + actions bar padding/divider fixes
 
-**Target:** `internal/artwork/manager.go`, `web-astryx/src/index.css`
+**Target:** `internal/artwork/manager.go`, `web/src/index.css`
 
 **What changed:**
 
@@ -1701,7 +1701,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D159 — CSS cleanup: duplicate tracking-rule-card rules + hero image opacity removal
 
-**Target:** `web-astryx/src/index.css`, `web-astryx/src/routes/ShowDetailPage.tsx`
+**Target:** `web/src/index.css`, `web/src/routes/ShowDetailPage.tsx`
 
 **What changed:**
 
@@ -1714,7 +1714,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D160 — Activity page: staggered card entrance + load-more separator
 
-**Target:** `web-astryx/src/index.css`
+**Target:** `web/src/index.css`
 
 **What changed:**
 
@@ -1728,7 +1728,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D161 — Settings page: wrap sections in muted cards for visual grouping
 
-**Target:** `web-astryx/src/routes/SettingsPage.tsx`
+**Target:** `web/src/routes/SettingsPage.tsx`
 
 **What changed:**
 
@@ -1743,7 +1743,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D162 — Season card expanded state border emphasis
 
-**Target:** `web-astryx/src/index.css`
+**Target:** `web/src/index.css`
 
 **What changed:**
 
@@ -1756,7 +1756,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D163 — Actions bar: center alignment + divider fix
 
-**Target:** `web-astryx/src/index.css`, `web-astryx/src/routes/ShowDetailPage.tsx`
+**Target:** `web/src/index.css`, `web/src/routes/ShowDetailPage.tsx`
 
 **What changed:**
 
@@ -1769,7 +1769,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D165 — Skeleton placeholders + store fallback for instant page loading
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `ShowsPage.tsx`, `ActivityPage.tsx`, `index.css`, `internal/database/database.go`
+**Target:** `web/src/routes/ShowDetailPage.tsx`, `ShowsPage.tsx`, `ActivityPage.tsx`, `index.css`, `internal/database/database.go`
 
 **Problem:** All three main pages (Shows, ShowDetail, Activity) showed a centered spinner during loading, leaving the page visually empty. On the ShowDetailPage specifically, the hero image loaded instantly (URL built from `showId`) but the title, tracking rules, artwork controls, and episode list all waited on `getShow()` / `getEpisodes()` to resolve before rendering — creating a jarring "hero image with empty page below" state. The SQLite connection pool was also limited to 1 connection (`SetMaxOpenConns(1)`), meaning `getShow` and `getEpisodes` serialized behind a single connection even though they were fired concurrently from the frontend.
 
@@ -1803,7 +1803,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D166 — ShowsPage renders from store data, loads SonarrSeries in background
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx`
+**Target:** `web/src/routes/ShowsPage.tsx`
 
 **Problem:** ShowsPage used `Promise.allSettled([getShows(), getSonarrSeries(), getSettings()])` and waited for ALL three before `setLoading(false)`. The store already fetches `getShows()` and `getSettings()` on app mount, so this was redundant. `getSonarrSeries()` was the slowest call (46ms, 36KB) and only needed for poster/banner URLs on shows without local artwork — not needed to render the page structure.
 
@@ -1819,7 +1819,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D167 — Prefetch episode data on show card hover
 
-**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowsPage.tsx`
+**Target:** `web/src/lib/api.ts`, `web/src/routes/ShowsPage.tsx`
 
 **Problem:** When navigating from the library page to a show detail page, the episode list fetch only starts after the user clicks. For shows with 1000+ episodes (360KB payload), this means the episode skeleton shows for the full round-trip time even though the user was already hovering the card.
 
@@ -1854,7 +1854,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D169 — SettingsPage uses store settings, adds skeleton loading
 
-**Target:** `web-astryx/src/routes/SettingsPage.tsx`
+**Target:** `web/src/routes/SettingsPage.tsx`
 
 **Problem:** SettingsPage fetched `getSettings()` independently on mount and showed a centered spinner until it resolved, even though the store already fetches the same data on app mount. On in-app navigation, the settings data was already available in the store but the page still showed a spinner.
 
@@ -1871,7 +1871,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D170 — Move artwork providers fetch to store, eliminate duplicate requests
 
-**Target:** `web-astryx/src/lib/store.tsx`, `ShowDetailPage.tsx`, `SettingsPage.tsx`
+**Target:** `web/src/lib/store.tsx`, `ShowDetailPage.tsx`, `SettingsPage.tsx`
 
 **Problem:** Both ShowDetailPage and SettingsPage independently fetched `getArtworkProviders()` on every mount. This is a tiny response (285B) but it's an unnecessary duplicate request on every page navigation — the artwork provider list rarely changes. On the ShowDetailPage, the artwork source dropdown was empty until this fetch resolved, even though the show data was already available from the store.
 
@@ -1887,7 +1887,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D171–172 — Prefetch show data on hover + skip redundant getShow
 
-**Target:** `web-astryx/src/lib/api.ts`, `ShowsPage.tsx`, `ShowDetailPage.tsx`
+**Target:** `web/src/lib/api.ts`, `ShowsPage.tsx`, `ShowDetailPage.tsx`
 
 **Problem:** On in-app navigation from library to detail page, ShowDetailPage fired `getShow()` even though the store already had the show data from the app-level `getShows()` fetch. Combined with the episode prefetch, this was 2 API calls that were either redundant (getShow) or already in-flight (getEpisodes from hover prefetch).
 
@@ -1902,7 +1902,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D173 — Route-based code splitting with React.lazy
 
-**Target:** `web-astryx/src/App.tsx`
+**Target:** `web/src/App.tsx`
 
 **Problem:** The entire app was bundled into a single 641KB JS file with no code splitting. All pages (Shows, ShowDetail, Activity, Settings) and their dependencies (including the 1000+ episode rendering logic, AddAnimeDialog, all icons) loaded upfront on the initial page load, even though the user only sees the library page first.
 
@@ -1918,7 +1918,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## Iteration D174 — Prefetch lazy route chunks on hover for instant navigation
 
-**Target:** `web-astryx/src/lib/chunkPrefetch.ts` (new), `ShowsPage.tsx`, `main.tsx`
+**Target:** `web/src/lib/chunkPrefetch.ts` (new), `ShowsPage.tsx`, `main.tsx`
 
 **Problem:** With route-based code splitting (D173), navigating to a lazy-loaded route for the first time requires downloading the JS chunk before the page can render. On fast connections this is ~50-100ms, but on slower connections it's noticeable. The user hovers a card or nav item for 200-500ms before clicking — that time is wasted.
 
@@ -2062,7 +2062,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D177 — Pre-compute epStats during episode load, eliminate memo
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — epStats computation (~line 418)
+**Target:** `web/src/routes/ShowDetailPage.tsx` — epStats computation (~line 418)
 
 **Problem:** `epStats` was a `useMemo` that iterated all episodes (1200+) to count types (canon, anime_canon, mixed_canon, filler). The episode load handler also called `.reduce()` to compute `freshMax`. That's two separate O(n) passes over the same array — the memo re-ran on every `episodes` state change, and the `.reduce()` ran in the load callback.
 
@@ -2087,7 +2087,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D178 — Settle pageSettled on show data, not episode load
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `pageSettled` state + actions bar reveal
+**Target:** `web/src/routes/ShowDetailPage.tsx` — `pageSettled` state + actions bar reveal
 
 **Problem:** `pageSettled` controlled the hover-reveal CSS animation for the actions bar (save/remove/episode controls). It was set in the episodes `.finally()` handler, meaning the actions bar stayed in "pre-settle" state (no transitions, no hover-reveal) until all 1200+ episodes finished loading. On in-app navigation with store data, the hero and tracking rules rendered instantly, but the actions bar was frozen until episodes completed.
 
@@ -2110,7 +2110,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D179 — useDeferredValue for filteredEpisodes on large lists
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `filteredEpisodes` → `groupedBySeason` → `EpisodeListSection`
+**Target:** `web/src/routes/ShowDetailPage.tsx` — `filteredEpisodes` → `groupedBySeason` → `EpisodeListSection`
 
 **Problem:** When a user clicks a filter button (e.g., "Filler (123)"), `filteredEpisodes` recomputes via `.filter()` over 1200+ episodes, then `groupedBySeason` regroups all results, then `EpisodeListSection` re-renders all season cards and episode ListItems. This all happens synchronously in one render pass, blocking the SegmentedControl's own visual update (the active highlight).
 
@@ -2140,7 +2140,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D180 — Pre-compute maxEpisode during load, eliminate memo
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — maxEpisode computation (~line 426)
+**Target:** `web/src/routes/ShowDetailPage.tsx` — maxEpisode computation (~line 426)
 
 **Problem:** `maxEpisode` was a `useMemo` that called `.reduce()` over all episodes to find the highest episode number. This was a third O(n) pass over the same 1200+ element array — the load handler already computed `freshMax` in its single-pass loop, and `epStats` was also computed there (D177). The memo re-ran on every `episodes` state change.
 
@@ -2164,7 +2164,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D181 — Memoize AppStore context value
 
-**Target:** `web-astryx/src/lib/store.tsx` — AppProvider context value
+**Target:** `web/src/lib/store.tsx` — AppProvider context value
 
 **Problem:** The `AppContext.Provider` value was a plain object literal created on every render. Since React uses referential equality to decide whether context consumers should re-render, every provider render — even ones where no store values actually changed — would trigger re-renders of all 5 consumers (ShowDetailPage, ShowsPage, SettingsPage, ActivityPage, ToastViewport). This is especially costly for ShowDetailPage which manages a 1200+ episode list.
 
@@ -2189,7 +2189,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D182 — Split notifications into separate context
 
-**Target:** `web-astryx/src/lib/store.tsx`, `web-astryx/src/components/ToastViewport.tsx`
+**Target:** `web/src/lib/store.tsx`, `web/src/components/ToastViewport.tsx`
 
 **Problem:** D181 memoized the context value, but `notifications` was still in the dependency array. Every toast appearance (4s auto-dismiss, error debounce, success sounds) changed `notifications`, which changed the memoized value, which re-rendered all 5 store consumers — including ShowDetailPage with its 1200+ episode list. This happened frequently: every save, every error, every artwork refresh triggered a toast.
 
@@ -2215,7 +2215,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D183 — Skip redundant getShows+getSettings in ShowsPage loadLanding
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx` — `loadLanding` callback
+**Target:** `web/src/routes/ShowsPage.tsx` — `loadLanding` callback
 
 **Problem:** The store (`AppProvider`) already fetches `getShows()` + `getSettings()` + `getArtworkProviders()` on mount via `Promise.allSettled`. But `loadLanding` in ShowsPage also called `getShows()` + `getSettings()` on every mount — duplicating the store's work. On in-app navigation back to ShowsPage, this fired 2 unnecessary API calls that the store had already resolved.
 
@@ -2241,7 +2241,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D184 — Lazy-load AddAnimeDialog to reduce initial bundle
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx` — AddAnimeDialog import
+**Target:** `web/src/routes/ShowsPage.tsx` — AddAnimeDialog import
 
 **Problem:** `ShowsPage` is the eager landing page (loaded on first visit). It imports `AddAnimeDialog` — a 700+ line wizard UI component — eagerly. The entire add-anime wizard (series search, AFL matching, manual match, confirmation flow) was bundled into the main chunk even though it's only needed when the user clicks "Add anime".
 
@@ -2266,7 +2266,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D185 — Prefetch AddAnimeDialog chunk on button hover
 
-**Target:** `web-astryx/src/lib/chunkPrefetch.ts`, `web-astryx/src/routes/ShowsPage.tsx`
+**Target:** `web/src/lib/chunkPrefetch.ts`, `web/src/routes/ShowsPage.tsx`
 
 **Problem:** After D184, the AddAnimeDialog chunk (152KB raw / 44KB gzipped) loads on-demand when the user clicks "Add anime". On slow connections, this causes a visible delay between clicking the button and seeing the dialog content.
 
@@ -2339,7 +2339,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D188 — Initialize openedSeasons in useState, skip useEffect round-trip
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `EpisodeListSection` openedSeasons initialization
+**Target:** `web/src/routes/ShowDetailPage.tsx` — `EpisodeListSection` openedSeasons initialization
 
 **Problem:** `openedSeasons` was initialized as an empty `Set`, then a `useEffect` ran after the first render to add the default-open season (the last one). This caused an extra render cycle: first render shows the last season collapsed (no episodes), then `useEffect` fires → `setOpenedSeasons` → second render shows the episodes. For 1200+ episodes, this meant the episode list appeared a frame later than necessary.
 
@@ -2361,7 +2361,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D189 — Memoized EpisodeListItem component
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list rendering inside `EpisodeListSection`
+**Target:** `web/src/routes/ShowDetailPage.tsx` — episode list rendering inside `EpisodeListSection`
 
 **Problem:** When a user toggled an episode's monitor state, `syncingEps` changed (new object), which triggered `EpisodeListSection` to re-render. Since all `ListItem` elements were created inline in a `.map()`, every visible episode (potentially 80+ in an expanded season) re-rendered — even though only one episode's `isSyncing` state actually changed. Each `ListItem` creates `HStack`, `Timestamp`, `Badge`, `Tooltip`, and `ToggleButton` components, making this expensive.
 
@@ -2386,7 +2386,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D190 — Lazy-load custom theme CSS
 
-**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/src/main.tsx` — theme CSS imports
+**Target:** `web/src/lib/themes.ts`, `web/src/main.tsx` — theme CSS imports
 
 **Problem:** All 6 themes' CSS files were imported eagerly in `themes.ts` (which is imported by `main.tsx`). The 4 custom themes (mizu-wintry, tokyo-night, flexoki, y2k-rounded) added ~130KB of CSS to the initial payload, even though only one theme is active at a time and the default theme is `neutral`.
 
@@ -2414,7 +2414,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D191 — Batch setEpisodesLoading with state updates, remove .finally() extra render
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode load effect (~line 544)
+**Target:** `web/src/routes/ShowDetailPage.tsx` — episode load effect (~line 544)
 
 **Problem:** `setEpisodesLoading(false)` was in a `.finally()` handler, which runs as a separate microtask after `.then()` or `.catch()`. This meant the loading state update was not batched with the other `setState` calls (setEpisodes, setEpStats, setMaxEpisode, etc.) in the success path — React would process the `.then()` state updates in one render, then the `.finally()` `setEpisodesLoading(false)` in a second render. For the error path, `addNotification` and `setEpisodesLoading(false)` were also split across `.catch()` and `.finally()`.
 
@@ -2438,7 +2438,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 
 ## D192 — Self-host Figtree font, eliminate render-blocking Google Fonts CDN
 
-**Target:** `web-astryx/index.html`, `web-astryx/src/fonts.css` (new), `web-astryx/src/main.tsx`, `web-astryx/public/fonts/` (new)
+**Target:** `web/index.html`, `web/src/fonts.css` (new), `web/src/main.tsx`, `web/public/fonts/` (new)
 
 **Problem:** The app loaded the Figtree font from Google Fonts CDN via a `<link rel="stylesheet">` in `index.html`. This created 3 render-blocking external requests:
 
@@ -2451,8 +2451,8 @@ These external requests added latency on every page load — DNS resolution, TLS
 **What changed:**
 
 - Downloaded the Figtree variable font woff2 files from Google's CDN (latin: 20KB, latin-ext: 10KB — same file for all weights since it's a variable font)
-- Placed them in `web-astryx/public/fonts/` so they're served as static assets from the same origin
-- Created `web-astryx/src/fonts.css` with `@font-face` declarations using `font-weight: 400 700` (variable font range) and `font-display: swap`
+- Placed them in `web/public/fonts/` so they're served as static assets from the same origin
+- Created `web/src/fonts.css` with `@font-face` declarations using `font-weight: 400 700` (variable font range) and `font-display: swap`
 - Replaced the 3 Google Fonts `<link>` tags in `index.html` with 2 `<link rel="preload">` tags for the woff2 files
 - Imported `fonts.css` in `main.tsx` before `index.css` so `@font-face` declarations are available when styles reference `Figtree`
 
@@ -2471,13 +2471,13 @@ These external requests added latency on every page load — DNS resolution, TLS
 
 ## D193 — Extract wizard helpers, fix AddAnimeDialog lazy-load
 
-**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx`, `web-astryx/src/routes/ShowsPage.tsx`, `web-astryx/src/routes/addWizardHelpers.ts` (new)
+**Target:** `web/src/routes/AddAnimeDialog.tsx`, `web/src/routes/ShowsPage.tsx`, `web/src/routes/addWizardHelpers.ts` (new)
 
 **Problem:** Since D184, `AddAnimeDialog` was supposed to be lazy-loaded via `React.lazy()`. However, `ShowsPage.tsx` also statically imported helper functions and types from `AddAnimeDialog.tsx` (`addWizardReducer`, `INITIAL_WIZARD`, `actionToTracked`, `getWizardSteps`, `START_FROM_CURRENT`, `AddWizardState`). This dual static+dynamic import meant the bundler couldn't split the module — the entire 700-line dialog was bundled into the main chunk. The build emitted `INEFFECTIVE_DYNAMIC_IMPORT` warning confirming this.
 
 **What changed:**
 
-- Created `web-astryx/src/routes/addWizardHelpers.ts` containing all the pure helper code: constants (`START_FROM_CURRENT`, `ADD_STEP_*`), types (`AddWizardState`, `AddWizardAction`), `INITIAL_WIZARD`, `addWizardReducer`, `actionToTracked`, `trackedToAction`, `getWizardSteps`
+- Created `web/src/routes/addWizardHelpers.ts` containing all the pure helper code: constants (`START_FROM_CURRENT`, `ADD_STEP_*`), types (`AddWizardState`, `AddWizardAction`), `INITIAL_WIZARD`, `addWizardReducer`, `actionToTracked`, `trackedToAction`, `getWizardSteps`
 - `AddAnimeDialog.tsx` now imports these from `addWizardHelpers.ts` instead of defining them inline
 - `ShowsPage.tsx` imports from `addWizardHelpers.ts` directly — no longer has any static import from `AddAnimeDialog.tsx`
 - The `React.lazy(() => import("./AddAnimeDialog"))` in ShowsPage is now a true dynamic import — the bundler creates a separate chunk
@@ -2496,7 +2496,7 @@ These external requests added latency on every page load — DNS resolution, TLS
 
 ## D194 — ETag-based episode caching on frontend
 
-**Target:** `web-astryx/src/lib/api.ts` — `getEpisodes` / `prefetchEpisodes`, `cmd/server/router.go` — CORS config
+**Target:** `web/src/lib/api.ts` — `getEpisodes` / `prefetchEpisodes`, `cmd/server/router.go` — CORS config
 
 **Problem:** The backend already computed and sent ETag headers for episode responses (since the episode cache was added). However, the frontend never sent `If-None-Match` headers, so every visit to a show's detail page re-downloaded the full episode payload (252KB raw / 37KB gzipped for 1200+ episodes). The in-memory `epCache` on the backend helped avoid DB queries, but the network transfer still happened. The consume-once `episodePrefetch` cache only helped within a single navigation session — hard refreshes or cross-session revisits always re-downloaded.
 
@@ -2547,7 +2547,7 @@ These external requests added latency on every page load — DNS resolution, TLS
 
 ## D196 — Memoize TrackingRuleCard, stabilize openShow with useCallback
 
-**Target:** `web-astryx/src/components/TrackingRuleCard.tsx`, `web-astryx/src/routes/ShowsPage.tsx`
+**Target:** `web/src/components/TrackingRuleCard.tsx`, `web/src/routes/ShowsPage.tsx`
 
 **Problem:** In ShowDetailPage, 3 `TrackingRuleCard` instances are rendered. When unrelated state changes (e.g., `markerValue` changes via NumberInput, `savedFlash` toggles, `artworkRefreshing` changes), all 3 TrackingRuleCards re-render even though their props (`variant`, `label`, `description`, `switchLabel`, `value`, `onChange`) haven't changed. The `onChange` handlers are stable `setState` functions, so memo would be effective.
 
@@ -2591,7 +2591,7 @@ In ShowsPage, `openShow` was an inline arrow function recreated on every render,
 
 ## D198 — Optimize episode monitor toggle, use slice+index instead of map
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `toggleEpisodeMonitor` callback (~line 783)
+**Target:** `web/src/routes/ShowDetailPage.tsx` — `toggleEpisodeMonitor` callback (~line 783)
 
 **Problem:** When toggling an episode's monitor state, `setEpisodes((prev) => prev.map(...))` was used to update a single episode in a 1200+ element array. `.map()` calls a JavaScript callback function for every element, performing a comparison (`e.sonarr_episode_id === sonarrEp.id`) 1200+ times. While the ternary preserves object references for non-matched elements, the callback overhead is unnecessary when only one element changes.
 
@@ -2643,7 +2643,7 @@ In ShowsPage, `openShow` was an inline arrow function recreated on every render,
 
 ## D200 — Fix loadLanding double-fire, eliminate redundant getSonarrSeries fetch
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx` — `loadLanding` callback and `handleCardHover`
+**Target:** `web/src/routes/ShowsPage.tsx` — `loadLanding` callback and `handleCardHover`
 
 **Problem:** `loadLanding` was a `useCallback` with `shows` in its dependency array. On initial mount:
 
@@ -2702,7 +2702,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D202 — Defer initSounds to requestIdleCallback
 
-**Target:** `web-astryx/src/main.tsx` — `initSounds()` call on mount
+**Target:** `web/src/main.tsx` — `initSounds()` call on mount
 
 **Problem:** `initSounds()` calls cuelume's `bind()` which wires up `data-cuelume-*` attribute listeners across the DOM. This runs synchronously in a `useEffect` on mount, competing with first paint and initial React hydration for main thread time.
 
@@ -2725,7 +2725,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D203 — Prefetch ShowDetailPage chunk on idle after first paint
 
-**Target:** `web-astryx/src/App.tsx` — `App` component
+**Target:** `web/src/App.tsx` — `App` component
 
 **Problem:** The ShowDetailPage chunk (34KB + dependencies: TrackingRuleCard 19KB, SegmentedControlItem 11KB, ListItem 2.6KB) is only loaded when the user navigates to a show detail page. Hover-based prefetch on show cards helps mouse users, but touch/keyboard users who click directly experience a loading delay while the chunks download. The `PageFallback` returns `null`, so the page appears blank during this time.
 
@@ -2772,7 +2772,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D205 — Render episode list skeleton immediately on hard refresh
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list rendering gate
+**Target:** `web/src/routes/ShowDetailPage.tsx` — episode list rendering gate
 
 **Problem:** The `EpisodeListSection` was gated behind `{show && (...)}`. On hard refresh (no store data yet), `show` is null until either `getShow()` resolves or the store adoption effect fires. This meant the episode list skeleton didn't appear during the initial load — the page showed the hero image and artwork/tracking-rule skeletons, but nothing below them. The user perceived this as "loads header, stays loading content right below."
 
@@ -2793,7 +2793,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D206 — Remove redundant filteredEpisodes prop, fix deferred flash
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — EpisodeListSection component
+**Target:** `web/src/routes/ShowDetailPage.tsx` — EpisodeListSection component
 
 **Problem:** Two issues:
 
@@ -2817,7 +2817,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D207 — Lazy-load custom theme definitions (32KB out of initial bundle)
 
-**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/src/main.tsx` — theme system
+**Target:** `web/src/lib/themes.ts`, `web/src/main.tsx` — theme system
 
 **Problem:** All 6 theme definitions (neutral, y2k, mizu-wintry, tokyo-night, flexoki, y2k-rounded) were imported eagerly in `themes.ts` → `main.tsx`. The `themeOptions` array referenced all theme objects, so Vite bundled all ~32KB of theme color tokens into the main JS chunk. Only neutral (default) and y2k are used on initial load — the other 4 are only needed when the user switches themes.
 
@@ -2841,7 +2841,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D208 — Lazy-load ShowsPage, let Vite code-split shared components
 
-**Target:** `web-astryx/src/App.tsx`, `web-astryx/src/main.tsx` — route splitting
+**Target:** `web/src/App.tsx`, `web/src/main.tsx` — route splitting
 
 **Problem:** ShowsPage was imported eagerly in App.tsx, which meant all its unique dependencies (ClickableCard, DropdownMenu, addWizardHelpers, fox, etc.) were bundled into the main JS chunk. This made the main bundle 499KB even though many of those components are only used on the landing page.
 
@@ -2864,7 +2864,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D209 — Bootstrap endpoint: combine 3 API calls into 1
 
-**Target:** `cmd/server/router.go`, `web-astryx/src/lib/api.ts`, `web-astryx/src/lib/store.tsx` — initial app load
+**Target:** `cmd/server/router.go`, `web/src/lib/api.ts`, `web/src/lib/store.tsx` — initial app load
 
 **Problem:** The store made 3 parallel API calls on mount: `getShows()` + `getSettings()` + `getArtworkProviders()`. While parallel, each call still incurs a full HTTP round-trip (connection setup, headers, response parsing). On remote servers with higher latency, 3 round-trips could add 100-400ms vs a single call.
 
@@ -2888,7 +2888,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D210 — Replace Tooltip with native title, reduce pageSettled delay
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list + actions bar
+**Target:** `web/src/routes/ShowDetailPage.tsx` — episode list + actions bar
 
 **Problem:** Two issues:
 
@@ -2915,7 +2915,7 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 
 ## D211 — Eager prefetch detail chunk + data on direct navigation
 
-**Target:** `web-astryx/src/main.tsx` — initial load on direct navigation to `/shows/:id`
+**Target:** `web/src/main.tsx` — initial load on direct navigation to `/shows/:id`
 
 **Problem:** On hard refresh of a detail page URL (e.g. `/shows/123`), the loading waterfall was sequential:
 
@@ -2947,7 +2947,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D212 — Lazy-load y2k theme (CSS + JS), remove unused import
 
-**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/src/main.tsx`, `web-astryx/src/routes/ShowDetailPage.tsx` — initial CSS + JS payload
+**Target:** `web/src/lib/themes.ts`, `web/src/main.tsx`, `web/src/routes/ShowDetailPage.tsx` — initial CSS + JS payload
 
 **Problem:** The y2k theme was loaded eagerly — both its CSS (`@astryxdesign/theme-y2k/theme.css`, 18KB) in main.tsx and its JS definition (`y2kTheme` from `@astryxdesign/theme-y2k`) in themes.ts. Most users use the neutral default theme, so this 18KB of CSS + ~8KB of JS was wasted bandwidth on every page load. Additionally, the y2k theme JS was pulling Tooltip-related code into the shared Tooltip chunk, inflating it from ~10KB to ~29KB.
 
@@ -3017,7 +3017,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D215 — Combined /detail endpoint: show + episodes in 1 request
 
-**Target:** `cmd/server/router.go`, `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/main.tsx` — hard refresh of detail page
+**Target:** `cmd/server/router.go`, `web/src/lib/api.ts`, `web/src/routes/ShowDetailPage.tsx`, `web/src/main.tsx` — hard refresh of detail page
 
 **Problem:** On hard refresh of `/shows/:id` (no store data), ShowDetailPage made 2 parallel HTTP requests: `getShow` (for show metadata) + `getEpisodes` (for episode list). While parallel, each call still incurs a full HTTP round-trip. On remote servers with 100-200ms latency, 2 round-trips add 100-200ms vs a single combined call.
 
@@ -3043,7 +3043,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D216 — Replace Timestamp component with toLocaleDateString in EpisodeListItem
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list items in expanded seasons
+**Target:** `web/src/routes/ShowDetailPage.tsx` — episode list items in expanded seasons
 
 **Problem:** Each `EpisodeListItem` rendered a `<Timestamp value={ep.air_date} format="date" />` component. The Timestamp component (479 lines) creates a `useRef`, `useState`, `useEffect`, a `lazy(() => import Tooltip)` + `Suspense` boundary, a `Text` wrapper, and a `<time>` element — all for a simple date string like "Mar 21, 2025". With 83 episodes in the largest expanded season, that's 83 unnecessary React component instances, 83 useRef/useState/useEffect hooks, and 83 lazy/Suspense boundaries. The tooltip is only shown for `relative`/`auto` formats, never for `format="date"`, so all that machinery is wasted.
 
@@ -3067,7 +3067,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D217 — Lazy-load AlertDialog in ShowDetailPage
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — delete confirmation dialog
+**Target:** `web/src/routes/ShowDetailPage.tsx` — delete confirmation dialog
 
 **Problem:** `AlertDialog` was eagerly imported at the top of ShowDetailPage, but it's only rendered when the user clicks "Remove" to delete an anime. AlertDialog imports Dialog (18KB source), Layout (10KB), LayoutContent (7KB), LayoutFooter (6KB) — ~41KB of source code pulled into the ShowDetailPage chunk despite being used only in a rare interaction. Additionally, AlertDialog's Dialog dependency was pulling the full Tooltip component (with its lazy import machinery) into the shared Tooltip chunk, inflating it to 10.35KB.
 
@@ -3091,7 +3091,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D218 — Progressive loading: defer episode rendering to next frame on hard refresh
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — hard refresh loading flow
+**Target:** `web/src/routes/ShowDetailPage.tsx` — hard refresh loading flow
 
 **Problem:** On hard refresh, `getShowDetail` returns show + episodes in a single response. `applyShowData` and `applyEpisodes` were called in the same `.then()` callback, so React 18's automatic batching combined all setState calls into one render. This meant the hero title, tracking rules, artwork card, and episode list all appeared simultaneously after the API resolved — no progressive loading. The user saw an empty page with skeletons, then everything popped in at once.
 
@@ -3113,7 +3113,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D219 — Consolidate episode badge info, eliminate fox chunk, simplify monitored check
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — EpisodeListItem per-item overhead
+**Target:** `web/src/routes/ShowDetailPage.tsx` — EpisodeListItem per-item overhead
 
 **Problem:** Each `EpisodeListItem` (83+ per expanded season) made redundant function calls:
 
@@ -3142,7 +3142,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D220 — Short-circuit epSyncKey when syncingEps is empty
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — EpisodeListSection render path
+**Target:** `web/src/routes/ShowDetailPage.tsx` — EpisodeListSection render path
 
 **Problem:** For every episode in every expanded season, `epSyncKey(group.season, ep)` was called to compute the `isSyncing` prop. `epSyncKey` calls `displayEpisodeNumber(ep)` and concatenates a template string. With 83+ episodes per expanded season, that's 83+ function calls + string allocations on every render — even though `syncingEps` is empty 99% of the time (only has entries during a brief monitor toggle).
 
@@ -3163,7 +3163,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D221 — Lazy-load Toast component in ToastViewport
 
-**Target:** `web-astryx/src/components/ToastViewport.tsx` — main bundle size
+**Target:** `web/src/components/ToastViewport.tsx` — main bundle size
 
 **Problem:** `ToastViewport` is rendered in `App.tsx` on every page. It eagerly imported `Toast` from `@astryxdesign/core/Toast`, which in turn imports a massive `useTranslator` i18n system (82KB) and `defineTheme` theme definition code (22KB). These were all bundled into the main index chunk — the largest chunk loaded on every page. However, `ToastViewport` returns `null` when there are no notifications, so the `Toast` component is never actually rendered on first paint. All 104KB of Toast + translator + theme definition code was dead weight on initial load.
 
@@ -3186,7 +3186,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D222 — Lazy-load cuelume sound library
 
-**Target:** `web-astryx/src/lib/store.tsx`, `web-astryx/src/lib/sounds.ts` — main bundle size
+**Target:** `web/src/lib/store.tsx`, `web/src/lib/sounds.ts` — main bundle size
 
 **Problem:** Cuelume (~17KB source) was eagerly imported by `store.tsx` (`play` for notification sounds) and `sounds.ts` (`bind`, `setEnabled`, `setVolume` for interaction sounds). Since `store.tsx` is eagerly imported by `App.tsx`, cuelume was bundled into the main index chunk. However, none of these functions are called on first paint: `play` is only called when a notification appears, `bind` runs on idle via `requestIdleCallback`, and `setEnabled` runs when bootstrap resolves (after first paint).
 
@@ -3208,7 +3208,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D223 — Synchronous prefetch cache for ShowDetailPage
 
-**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx` — skeleton flash on hard refresh
+**Target:** `web/src/lib/api.ts`, `web/src/routes/ShowDetailPage.tsx` — skeleton flash on hard refresh
 
 **Problem:** On hard refresh of `/shows/:id`, `main.tsx` fires `prefetchShowDetail(id)` before React mounts. The prefetch promise is cached, but `ShowDetailPage` still initializes all `useState` with `storeShow` (null on hard refresh), showing skeletons. Even if the prefetch resolves before the component mounts, the component doesn't know — it waits for the effect to call `getShowDetail()` which picks up the cached promise. This causes a visible skeleton flash even when data is already available.
 
@@ -3228,7 +3228,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D224 — Pre-JS API fetch via inline script in index.html
 
-**Target:** `web-astryx/index.html`, `web-astryx/src/lib/api.ts` — API request latency on all page loads
+**Target:** `web/index.html`, `web/src/lib/api.ts` — API request latency on all page loads
 
 **Problem:** `getBootstrap()` and `prefetchShowDetail()` only fire after the 324KB main JS bundle downloads, parses, and React mounts. On a typical connection, the bundle takes 50-200ms to download. During that time, the API could be fetching in parallel — but it's not, because the fetch calls are inside the JS bundle. This creates a sequential waterfall: HTML parse → JS download → JS parse → React mount → API fetch → API response → render.
 
@@ -3267,7 +3267,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D226 — Modulepreload ShowsPage chunk in HTML
 
-**Target:** `web-astryx/vite.config.ts` — first visit landing page load time
+**Target:** `web/vite.config.ts` — first visit landing page load time
 
 **Problem:** ShowsPage (14KB / 5.3KB gz) is the landing page — the first thing users see. Its import is fired via `void import("./routes/ShowsPage")` in `main.tsx`, but that only runs after the 324KB main bundle downloads and parses. This creates a sequential waterfall: main bundle download → parse → ShowsPage download → ShowsPage parse → render. The ShowsPage download could start in parallel with the main bundle.
 
@@ -3286,7 +3286,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D227 — Lazy-load DropdownMenu
 
-**Target:** `web-astryx/src/main.tsx` — main bundle size
+**Target:** `web/src/main.tsx` — main bundle size
 
 **Problem:** `DropdownMenu` was eagerly imported in `main.tsx` for the theme menu in the TopNav. DropdownMenu pulls in `usePopover` (13KB source), `useListFocus` (18KB source), `useTypeahead` (6KB source), and `layerAnimations` — all transitive deps that end up in the main bundle. The theme menu is only needed when the user clicks the palette button in the top-right corner, which never happens during first paint.
 
@@ -3307,7 +3307,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D228 — Conditional modulepreload ShowDetailPage chunk on /shows/:id
 
-**Target:** `web-astryx/vite.config.ts` — first visit detail page load time
+**Target:** `web/vite.config.ts` — first visit detail page load time
 
 **Problem:** ShowDetailPage chunk (33KB / 10.9KB gz) is prefetched via `void import("./routes/ShowDetailPage")` in `main.tsx` when on `/shows/:id`, but that only fires after the 317KB main bundle downloads and parses. On hard refresh of a detail page, this creates a sequential waterfall: main bundle download → parse → ShowDetailPage download → parse → mount. The 33KB chunk could start downloading in parallel with the main bundle.
 
@@ -3326,7 +3326,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D229 — Loading skeleton for lazy route fallback
 
-**Target:** `web-astryx/src/App.tsx` — perceived loading experience during route chunk load
+**Target:** `web/src/App.tsx` — perceived loading experience during route chunk load
 
 **Problem:** The `PageFallback` component returned `null`, so between React mount and the lazy route chunk (ShowsPage/ShowDetailPage) loading, the user saw the nav bar but a completely empty content area. Even though the chunk loads quickly (modulepreloaded in HTML), the brief gap looks like a broken page.
 
@@ -3344,7 +3344,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D230 — Eliminate redundant getShows+getSettings on first load
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx` — API round-trips on first load
+**Target:** `web/src/routes/ShowsPage.tsx` — API round-trips on first load
 
 **Problem:** When ShowsPage mounts with no store data (first load), `loadLanding()` fires `getShows()` + `getSettings()` as separate API calls. But the store (`AppProvider`) is already fetching `getBootstrap()` on mount, which returns shows + settings + providers in a single response. These are redundant — 2 extra API round-trips that duplicate data the store is already fetching.
 
@@ -3364,7 +3364,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D231 — Pre-JS fetch Sonarr series on library page
 
-**Target:** `web-astryx/index.html`, `web-astryx/src/lib/api.ts` — Sonarr series fetch latency on library page
+**Target:** `web/index.html`, `web/src/lib/api.ts` — Sonarr series fetch latency on library page
 
 **Problem:** `getSonarrSeries()` is called by ShowsPage after it mounts — which requires the main JS bundle to download, parse, React to mount, ShowsPage chunk to load, and the component to render. This creates a sequential waterfall for the Sonarr series data (needed for poster/banner URLs). The fetch could start much earlier.
 
@@ -3401,7 +3401,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D233 — Remove redundant prefetchShow on card hover
 
-**Target:** `web-astryx/src/routes/ShowsPage.tsx`, `web-astryx/src/main.tsx` — API round-trips on hover
+**Target:** `web/src/routes/ShowsPage.tsx`, `web/src/main.tsx` — API round-trips on hover
 
 **Problem:** `handleCardHover` in ShowsPage fired both `prefetchShow(showId)` and `prefetchEpisodes(showId)` on card hover. But `prefetchShow` fetches `/api/mappings/:id` — the show data is already in the store (from bootstrap). When the user navigates, ShowDetailPage uses the store's show data and only fetches episodes separately. The `prefetchShow` call is redundant — it wastes an API round-trip on every card hover.
 
@@ -3421,7 +3421,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D234 — Remove dead prefetchShow function and showPrefetch cache
 
-**Target:** `web-astryx/src/lib/api.ts` — dead code cleanup
+**Target:** `web/src/lib/api.ts` — dead code cleanup
 
 **Problem:** After D233 removed the `prefetchShow()` call from ShowsPage's hover handler, the `prefetchShow` function and its `showPrefetch` cache Map became dead code — nothing populates the cache, so `getShow()`'s cache check never finds anything. The function was still exported and the cache was still allocated.
 
@@ -3439,13 +3439,13 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D235 — Service worker for offline caching
 
-**Target:** `web-astryx/public/sw.js` (new), `web-astryx/index.html`, `internal/web/embed.go`
+**Target:** `web/public/sw.js` (new), `web/index.html`, `internal/web/embed.go`
 
 **Problem:** On repeat visits, the browser revalidates cached assets via conditional requests (304s) but still pays a network round-trip for every JS/CSS/font file. For API responses with SWR headers, the browser serves stale content but also makes a background request. A service worker eliminates the network round-trip entirely for immutable assets — they're served instantly from the SW cache with zero network activity. For API responses, stale-while-revalidate at the SW level provides the same benefit even when the browser's HTTP cache has been evicted.
 
 **What changed:**
 
-- Created `web-astryx/public/sw.js` — a lightweight service worker (2.5KB) with three strategies:
+- Created `web/public/sw.js` — a lightweight service worker (2.5KB) with three strategies:
   - **Cache-first** for `/assets/` and `/fonts/` — immutable hashed files are served from cache without any network request. On first visit, fetched and cached. On subsequent visits, instant from cache.
   - **Stale-while-revalidate** for `/api/` — serves cached response immediately, fetches fresh data in background and updates cache. Falls back to cached response if network fails (offline support).
   - **Network-first** for navigation requests — tries network first (always get latest HTML), falls back to cached `/index.html` if offline.
@@ -3468,7 +3468,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D236 — Parallel show-only + detail fetch on hard refresh
 
-**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/lib/api.ts`, `web-astryx/index.html`
+**Target:** `web/src/routes/ShowDetailPage.tsx`, `web/src/lib/api.ts`, `web/index.html`
 
 **Problem:** On hard refresh of `/shows/:id`, the page waited for the combined `/api/mappings/:id/detail` endpoint to resolve before rendering any show data. The detail endpoint returns show + episodes in one response — for Detective Conan (1000+ episodes), that's 252KB and takes ~14ms server-side. The show data itself (title, tracking rules, artwork source) is a simple DB query returning 583 bytes in ~0.5ms, but it was blocked behind the episode enrichment. This caused the hero title, tracking rules, and artwork card to stay in skeleton state until the full episode list was ready.
 
@@ -3495,7 +3495,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D237 — Replace detail endpoint with separate show + episodes (ETag) on hard refresh
 
-**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/index.html`
+**Target:** `web/src/lib/api.ts`, `web/src/routes/ShowDetailPage.tsx`, `web/index.html`
 
 **Problem:** D236 introduced parallel `getShow` + `getShowDetail` on hard refresh. But `getShowDetail` hit the combined `/api/mappings/:id/detail` endpoint which: (1) redundantly included show data that `getShow` already fetched, (2) lacked ETag support — the detail endpoint has no version tag, so repeat visits always re-download the full 252KB episode payload, and (3) the `getShowDetail` function was now only used for the prefetch cache path, not the main effect.
 
@@ -3521,7 +3521,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D238 — Clone prefetched Responses to prevent Body already read error
 
-**Target:** `web-astryx/src/lib/api.ts`
+**Target:** `web/src/lib/api.ts`
 
 **Problem:** D237 introduced a race condition: both `prefetchShowDetail()` and `getEpisodes()`/`getShow()` read the same prefetched `Response` object from `window.__mizuPrefetch`. `Response.json()` can only be called once per Response — if `prefetchShowDetail` reads it first (via `main.tsx` before React mounts), `getEpisodes` would throw `TypeError: Body already read` when the ShowDetailPage effect fires.
 
@@ -3541,7 +3541,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D239 — Clone in requestPrefetched for full Response safety
 
-**Target:** `web-astryx/src/lib/api.ts`
+**Target:** `web/src/lib/api.ts`
 
 **Problem:** D238 fixed `prefetchShowDetail` and `getEpisodes` to clone Responses before reading, but `requestPrefetched` (used by `getShow`, `getBootstrap`, `getSonarrSeries`) still called `res.json()` without cloning. If any other consumer reads the same prefetched Response first, `requestPrefetched` would throw `TypeError: Body already read`.
 
@@ -3559,7 +3559,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D240 — Move CSS stylesheet link before inline script in HTML head
 
-**Target:** `web-astryx/vite.config.ts` (preload-route-chunks plugin)
+**Target:** `web/vite.config.ts` (preload-route-chunks plugin)
 
 **Problem:** Vite places the `<link rel="stylesheet">` tag after the `<script type="module">` tag in the built HTML. This means the browser parses the script tag before it discovers the CSS link, delaying the start of the 168KB (29KB gz) CSS download. CSS is render-blocking — first paint can't happen until the CSS is downloaded and parsed.
 
@@ -3581,7 +3581,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D241 — Avoid double JSON parsing by checking detailDataCache in getShow/getEpisodes
 
-**Target:** `web-astryx/src/lib/api.ts`
+**Target:** `web/src/lib/api.ts`
 
 **Problem:** On hard refresh of `/shows/:id`, both `prefetchShowDetail()` (called in `main.tsx`) and the ShowDetailPage effect consume the same prefetched Responses from the inline script. Even with `.clone()`, the 252KB episodes JSON was parsed twice — once by `prefetchShowDetail` and once by `getEpisodes` in the effect. This wasted CPU time on large episode lists.
 
@@ -3601,7 +3601,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D242 — Clear detailDataCache after initial load to prevent stale data
 
-**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`
+**Target:** `web/src/lib/api.ts`, `web/src/routes/ShowDetailPage.tsx`
 
 **Problem:** D241 added `detailDataCache` checks in `getShow()` and `getEpisodes()` to avoid double JSON parsing. But `loadShowData()` (called after save/artwork refresh) also calls `getShow()` — it would return the stale cached show data instead of fetching fresh data from the server, meaning the UI wouldn't reflect the user's save.
 
@@ -3622,7 +3622,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D243 — Clean up detailPrefetch map and remove unnecessary Content-Type on GET episodes
 
-**Target:** `web-astryx/src/lib/api.ts`
+**Target:** `web/src/lib/api.ts`
 
 **What changed:**
 
@@ -3639,7 +3639,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D244 — Reuse in-flight prefetchShowDetail promise in getShow/getEpisodes to avoid double JSON parse
 
-**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`
+**Target:** `web/src/lib/api.ts`, `web/src/routes/ShowDetailPage.tsx`
 
 **Problem:** On hard refresh, `main.tsx` fires `prefetchShowDetail(id)` which reads the prefetched show + episodes Responses and creates a combined `ShowDetailResponse` promise stored in `detailPrefetch`. When the ShowDetailPage effect fires `getShow`/`getEpisodes`, D241 added a `detailDataCache` check (resolved data) but missed the case where the prefetch promise is still in-flight — the data hasn't resolved yet, so `detailDataCache` is empty. In that case, `getShow` and `getEpisodes` each independently called `requestPrefetched` which did `res.clone().json()` on the same Response — parsing the 252KB episodes JSON twice (once in `prefetchShowDetail`, once in `getEpisodes`).
 
@@ -3660,7 +3660,7 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 
 ## D245 — Split prefetch into individual show/episodes promises so getShow isn't blocked by episodes
 
-**Target:** `web-astryx/src/lib/api.ts`
+**Target:** `web/src/lib/api.ts`
 
 **Problem:** D244 stored a combined `Promise.all([showPromise, episodesPromise])` in `detailPrefetch`. When `getShow` extracted `.show` from it, `Promise.all` waits for the slowest input — the 252KB episodes fetch — before resolving. So the 583B show data (which resolves in ~1ms) was unnecessarily delayed by the episodes fetch (which can take 7-13ms+ for cached, much more for live Sonarr+AFL). This defeated the entire purpose of the parallel fetch architecture: show data should appear instantly, episodes fill in later.
 

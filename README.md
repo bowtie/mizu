@@ -54,7 +54,7 @@ The container listens on `0.0.0.0:8978` by default. Bare binaries default to
 
 ```bash
 # Build frontend
-cd web-astryx && bun install && bun run build && cd ..
+cd web && bun install && bun run build && cd ..
 
 # Build Go binary
 go build -o mizu ./cmd/server
@@ -120,7 +120,7 @@ internal/
   sync/sync.go         # Orchestrates scraper + matcher + Sonarr
   web/embed.go         # Embeds React SPA into Go binary
 
-web-astryx/            # React SPA frontend (Vite+ + StyleX)
+web/                  # React SPA frontend (Vite+ + StyleX)
   src/
     routes/            # ShowsPage, ShowDetailPage, SettingsPage, ActivityPage, AddAnimeDialog
     components/        # ToastViewport
@@ -210,7 +210,7 @@ bun run dev
 bun run dev:windows
 
 # Frontend (hot reload via Vite+)
-cd web-astryx && vp dev
+cd web && vp dev
 
 # Backend
 go run ./cmd/server
@@ -224,10 +224,10 @@ go test ./...
 CGO_ENABLED=1 go test -race ./...
 
 # Type-check
-cd web-astryx && bunx tsc --noEmit
+cd web && bunx tsc --noEmit
 
 # Production build
-cd web-astryx && bun run build
+cd web && bun run build
 ```
 
 `bun run dev` starts both processes in one terminal:

@@ -358,56 +358,56 @@ body {
 }
 
 /* Episode type filter — colored selected states for SegmentedControl */
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="all"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="all"] {
   color: var(--color-text-primary);
   background-color: var(--color-neutral);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="canon"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="canon"] {
   color: var(--color-border-blue);
   background-color: var(--color-background-blue);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="anime_canon"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="anime_canon"] {
   color: var(--color-border-purple);
   background-color: var(--color-background-purple);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="mixed_canon"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="mixed_canon"] {
   color: var(--color-border-yellow);
   background-color: var(--color-background-yellow);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="filler"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="filler"] {
   color: var(--color-border-red);
   background-color: var(--color-background-red);
   box-shadow: none;
 }
 
 /* Activity status filter — colored selected states for SegmentedControl */
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="running"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="running"] {
   color: var(--color-accent);
   background-color: color-mix(in srgb, var(--color-accent) 15%, transparent);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="success"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="success"] {
   color: var(--color-success);
   background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="partial"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="partial"] {
   color: var(--color-warning);
   background-color: color-mix(in srgb, var(--color-warning) 15%, transparent);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item:is(.selected, [data-selected="selected"])[data-value="failed"] {
+.astryx-segmented-control-item:is([data-selected="selected"])[data-value="failed"] {
   color: var(--color-error);
   background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
   box-shadow: none;

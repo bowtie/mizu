@@ -14,7 +14,7 @@ include_dir = ["cmd", "internal"]
 # Watch these files
 include_ext = ["go"]
 # Exclude these
-exclude_dir = [".air", "web-astryx", "artwork", "vendor"]
+exclude_dir = [".air", "web", "artwork", "vendor"]
 exclude_ext = ["tmp", "swp"]
 # Debounce — wait this long after last change before rebuilding
 delay = 2000

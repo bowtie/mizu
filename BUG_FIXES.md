@@ -35,7 +35,7 @@
 ## Fix Log
 
 ### F1 — Episode fetch error silently swallowed (Critical)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:728`
+**File:** `web/src/routes/ShowDetailPage.tsx:728`
 **Fix:** Removed the `if (!showApplied)` gate from the `getEpisodes` catch handler. Episode fetch errors now always show a notification instead of being swallowed when the show fetch succeeds.
 
 ### G1 — Episode monitor not saved to DB (Medium)
@@ -47,19 +47,19 @@
 **Fix:** Cache hit path now calls `cached.Public()` to match the cache miss path which already calls `series.Public()`. Both paths now return the same `SonarrSeriesPublic` shape.
 
 ### F4 — Stale settings in Add Anime dialog (Medium)
-**File:** `web-astryx/src/routes/ShowsPage.tsx:336`
+**File:** `web/src/routes/ShowsPage.tsx:336`
 **Fix:** `refreshSettings` now uses `queryClient.fetchQuery()` instead of `invalidateQueries()` + returning stale `settingsQuery.data`. The dialog now waits for fresh settings before applying default tracking rules.
 
 ### F3 — Duplicate polling timers in StrictMode (Medium)
-**File:** `web-astryx/src/routes/ActivityPage.tsx:156`
+**File:** `web/src/routes/ActivityPage.tsx:156`
 **Fix:** Moved the `setTimeout` call out of the `setLogs` state updater. Added a `logsRef` that tracks the latest logs so the polling logic can check for running status without scheduling side effects inside a reducer.
 
 ### F5 — Mobile filter count mismatch (Medium)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:534`
+**File:** `web/src/routes/ShowDetailPage.tsx:534`
 **Fix:** Added `isMobile` prop to `EpisodeListSection`. The "Manga" filter label now shows `epStats.canon + epStats.anime` on mobile (matching the actual filtered episodes) and `epStats.canon` on desktop.
 
 ### F6 — Static cuelume import (Medium)
-**File:** `web-astryx/src/components/TrackingRuleCard.tsx:6`
+**File:** `web/src/components/TrackingRuleCard.tsx:6`
 **Fix:** Replaced the static `import { play } from "cuelume"` with a lazy dynamic import + null guard, matching the defensive pattern already used in `store.ts`. Both call sites now check `if (cuelumePlay)` before calling.
 
 ### G3 — CompletedAt zero time serialization (Low)
@@ -67,19 +67,19 @@
 **Fix:** Changed `SyncLog.CompletedAt` from `time.Time` to `*time.Time` with `omitempty`. In-progress syncs now serialize as `"completed_at": null` instead of `"0001-01-01T00:00:00Z"`. Updated the DB conversion and the health check handler to handle the nil pointer.
 
 ### F8 — Stale openedSeasons on filter change (Low)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:226-245`
+**File:** `web/src/routes/ShowDetailPage.tsx:226-245`
 **Fix:** The `useEffect` that auto-opens the last season now also cleans up stale seasons that no longer exist in the filtered results. Empty filter results clear the set entirely.
 
 ### F9/F10 — Episode key collisions (Low)
-**Files:** `web-astryx/src/routes/ShowDetailPage.tsx:391`, `web-astryx/src/components/VirtualizedEpisodeList.tsx:156`
+**Files:** `web/src/routes/ShowDetailPage.tsx:391`, `web/src/components/VirtualizedEpisodeList.tsx:156`
 **Fix:** Added `ep.sonarr_episode_id` to the React key in both the standard and virtualized episode lists, preventing duplicate keys when episodes share the same display number.
 
 ### F11 — CSS typo `margininline` (Low)
-**File:** `web-astryx/src/index.css:469`
+**File:** `web/src/index.css:469`
 **Fix:** Changed `margininline` to `margin-inline`.
 
 ### F7 — Badge variant="info" validity (Low-Med)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:1276`
+**File:** `web/src/routes/ShowDetailPage.tsx:1276`
 **Result:** Verified against `@astryxdesign/core` — `"info"` is a valid Badge variant. No fix needed.
 
 ---
@@ -123,23 +123,23 @@
 ## Second-Pass Fixes (Frontend)
 
 ### F2-Bug1 — SW caches API responses containing full API keys (Critical)
-**File:** `web-astryx/public/sw.js:73-89`
+**File:** `web/public/sw.js:73-89`
 **Fix:** Excluded `/api/settings` and `/api/bootstrap` from the stale-while-revalidate cache strategy. These endpoints now use network-first (with cache fallback only on network failure), preventing API keys from being stored in Cache Storage.
 
 ### F2-Bug2 — RETURN_TO_SERIES_STEP doesn't clear selectedSonarr (Medium)
-**File:** `web-astryx/src/routes/addWizardHelpers.ts:136-147`
+**File:** `web/src/routes/addWizardHelpers.ts:136-147`
 **Fix:** Added `selectedSonarr: null` to the `RETURN_TO_SERIES_STEP` reducer case, preventing the stale "Continue" button from appearing after "Add another".
 
 ### F2-Bug3 — Unbounded episodeETags/episodeDataCache Maps (Medium)
-**File:** `web-astryx/src/lib/api.ts:189-193`
+**File:** `web/src/lib/api.ts:189-193`
 **Fix:** `clearCachedShowDetail` now also deletes entries from `episodeETags` and `episodeDataCache`, preventing unbounded memory growth in long sessions.
 
 ### F2-Bug5 — useMarkManualMatchPending doesn't invalidate queries (Medium)
-**File:** `web-astryx/src/lib/queries.ts:346-348`
+**File:** `web/src/lib/queries.ts:346-348`
 **Fix:** Added `onSuccess` handler that invalidates `["sonarrSeries"]` queries so the `manualMatchPending` flag is fresh.
 
 ### F2-Bug6 — useRefreshAllArtwork doesn't invalidate shows query (Medium)
-**File:** `web-astryx/src/lib/queries.ts:291-293`
+**File:** `web/src/lib/queries.ts:291-293`
 **Fix:** Added `onSuccess` handler that invalidates `shows` and `bootstrap` queries so stale artwork paths are refreshed.
 
 ---
@@ -194,37 +194,37 @@
 ### Frontend (9 bugs)
 
 #### F3-Bug1 — Stale show data when navigating between shows (High)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:763-779`
+**File:** `web/src/routes/ShowDetailPage.tsx:763-779`
 **Fix:** The store-adoption effect guarded with `if (storeShow && !show)`, which failed when navigating between two shows both in the TanStack Query store — `show` was still non-null from the previous show. Changed guard to `show?.id !== storeShow.id` so the state updates to the new show.
 
 #### F3-Bug2 — Race condition on show navigation (High)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:626-758`
+**File:** `web/src/routes/ShowDetailPage.tsx:626-758`
 **Fix:** Added a `cancelled` flag in the main `useEffect` cleanup. Previously, in-flight `getShow`/`getEpisodes` promises from a previous show could resolve after navigation and overwrite state with stale data. All `.then()` callbacks now check the flag before calling state setters.
 
 #### F3-Bug3 — Hero image error state not reset after artwork refresh (Medium)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:916-979`
+**File:** `web/src/routes/ShowDetailPage.tsx:916-979`
 **Fix:** Added `setHeroImgError(false)` and `setHeroFallbackFailed(false)` alongside every `setArtworkVersion` call in `handleRefreshArtwork` and `handleArtworkSourceChange`. Previously, if the local artwork had errored (causing the hero to fall back to Sonarr images), the hero would never try the new local artwork after a refresh.
 
 #### F3-Bug4 — "Saved" flash shows even on save failure (Medium)
-**File:** `web-astryx/src/routes/SettingsPage.tsx:357-364`
+**File:** `web/src/routes/SettingsPage.tsx:357-364`
 **Fix:** Moved `setSavedFlash(true)` and the timeout inside the `try` block, after the successful `mutateAsync` call. Previously it was after the catch block, so the green "Saved" indicator appeared even when the save failed.
 
 #### F3-Bug5 — "Load more" button can be double-clicked (Medium)
-**File:** `web-astryx/src/routes/ActivityPage.tsx:432-438`
+**File:** `web/src/routes/ActivityPage.tsx:432-438`
 **Fix:** Added `isDisabled={loadingMore}` to the "Load more" button. Without this, multiple clicks before the first request completed would fetch the same page twice and append duplicate log entries.
 
 #### F3-Bug6 — Uncancelled requestAnimationFrame on navigation (Medium)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:626-758`
+**File:** `web/src/routes/ShowDetailPage.tsx:626-758`
 **Fix:** All `requestAnimationFrame` calls now store their IDs in an array and are cancelled in the effect cleanup via `cancelAnimationFrame`. Previously, a rAF from a previous show's effect could fire after navigation and incorrectly set `pageSettled` to true before the new show's data loaded.
 
 #### F3-Bug7 — Stale episodes not cleared on navigation (Medium)
-**File:** `web-astryx/src/routes/ShowDetailPage.tsx:626-758`
+**File:** `web/src/routes/ShowDetailPage.tsx:626-758`
 **Fix:** Added `setEpisodes([])`, `setEpStats({...zeros})`, and `setMaxEpisode(0)` at the top of the main effect. Previously, the old show's episodes remained visible (with old season groupings and stats) until the new show's episodes loaded.
 
 #### F3-Bug8 — 304 response with empty cache causes error (Low)
-**File:** `web-astryx/src/lib/api.ts:341-348`
+**File:** `web/src/lib/api.ts:341-348`
 **Fix:** When the server returns 304 but `episodeDataCache` doesn't have the key (e.g., cache was cleared), the ETag is now deleted and the request is retried without conditional headers. Previously, the 304 fell through to the error path, and since 304 responses have no body, `res.json()` failed with a confusing "Not Modified" error.
 
 #### F3-Bug9 — Theme CSS load failure not retryable (Low)
-**File:** `web-astryx/src/lib/themes.ts:82-90`
+**File:** `web/src/lib/themes.ts:82-90`
 **Fix:** Moved `loadedThemeCSS.add(themeId)` to after the `await import(...)` succeeds. Previously, the themeId was added before the import, so a failed import (network error) would permanently prevent the theme CSS from loading on retry.

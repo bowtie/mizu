@@ -19,7 +19,7 @@ function Write-DevLog {
 function Start-FrontendProcess {
     Start-Process -FilePath "vp" -ArgumentList @(
         "dev"
-    ) -WorkingDirectory (Join-Path $root "web-astryx") -NoNewWindow -PassThru
+    ) -WorkingDirectory (Join-Path $root "web") -NoNewWindow -PassThru
 }
 
 Write-Host ""
@@ -29,14 +29,14 @@ Write-Host "Backend:  http://localhost:8978" -ForegroundColor DarkGray
 Write-Host ""
 
 if ($SeparateWindows) {
-    $frontendScript = "Set-Location '$root\web-astryx'; vp dev"
+    $frontendScript = "Set-Location '$root\web'; vp dev"
     $backendScript = "Set-Location '$root'; air"
 
     Start-Process -FilePath "powershell" -ArgumentList @(
         "-NoExit",
         "-ExecutionPolicy", "Bypass",
         "-Command", $frontendScript
-    ) -WorkingDirectory (Join-Path $root "web-astryx")
+    ) -WorkingDirectory (Join-Path $root "web")
 
     Start-Process -FilePath "powershell" -ArgumentList @(
         "-NoExit",

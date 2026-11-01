@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$frontendDir = Join-Path $root "web-astryx"
+$frontendDir = Join-Path $root "web"
 $embedDir = Join-Path $root "internal\web\dist"
 
 # Resolve the version stamp: an explicit -Version argument wins; otherwise read

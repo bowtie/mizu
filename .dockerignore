@@ -16,11 +16,8 @@ server.exe
 
 # Node / frontend tooling (frontend builds inside its own stage)
 node_modules/
-web-astryx/node_modules/
-web-astryx/dist/
-web/
-
-# Legacy Svelte frontend — superseded by web-astryx, not part of the image
+web/node_modules/
+web/dist/
 web/package-lock.json
 
 # Docs and local config

@@ -8,16 +8,16 @@ FROM oven/bun:1 AS frontend
 WORKDIR /frontend
 
 # Cache deps
-COPY web-astryx/package.json web-astryx/bun.lock ./
+COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 
 # Build (typecheck first so a type error fails the image build, matching the
 # local `bun run build` script)
-COPY web-astryx/ ./
+COPY web/ ./
 RUN bun run build
 
 # Stage 2: Build the Go binary
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 ARG VERSION=dev
 ARG COMMIT=unknown
