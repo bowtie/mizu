@@ -16,7 +16,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
-import { Plus, Search, Waves, CircleAlert, RefreshCw } from "lucide-react";
+import { Plus, Search, Waves, CircleAlert, RefreshCw, Check, ArrowDownUp } from "lucide-react";
 import { useAppStore } from "../lib/store";
 import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, getArtworkRefreshStatus, errorMessage } from "../lib/api";
 import type { SelectOption, Settings, Show, SonarrAddOptions, SonarrSeries } from "../lib/types";
@@ -384,7 +384,6 @@ export function ShowsPage() {
               icon={<RefreshCw size={16} className={artworkRefreshing ? "spin" : ""} />}
               onClick={handleRefreshAllArtwork}
               isDisabled={artworkRefreshing || loading}
-              isLoading={artworkRefreshing}
             />
             <Button
               label="Add anime"
@@ -413,9 +412,11 @@ export function ShowsPage() {
               button={{
                 label: sortOptions.find((o) => o.value === sortBy)?.label ?? "Sort",
                 size: "lg",
+                icon: <ArrowDownUp size={16} />,
               }}
               items={sortOptions.map((o) => ({
                 label: o.label,
+                icon: o.value === sortBy ? <Check size={14} /> : undefined,
                 onClick: () => setSortBy(o.value),
               }))}
             />
@@ -500,12 +501,18 @@ export function ShowsPage() {
                     {!img && (
                       <Section variant="transparent" padding={3}>
                         <VStack gap={1}>
-                          <Heading
-                            level={3}
-                            className="mizu-card-title"
-                          >
-                            {show.sonarr_title}
-                          </Heading>
+                          <HStack justify="between" align="center" wrap="nowrap">
+                            <Heading
+                              level={3}
+                              className="mizu-card-title"
+                            >
+                              {show.sonarr_title}
+                            </Heading>
+                            <Badge
+                              variant={show.enabled ? "success" : "neutral"}
+                              label={badge.label}
+                            />
+                          </HStack>
                           <Text type="supporting" size="sm">
                             #{show.sync_watermark > 0 ? show.sync_watermark : 0}
                           </Text>

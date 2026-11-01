@@ -176,10 +176,11 @@ export function ActivityPage() {
             icon={<Icon icon={History} size="lg" color="secondary" />}
             actions={
               <Button
-                label="Sync now"
+                label={syncing ? "Syncing..." : "Sync now"}
                 variant="primary"
                 icon={<RefreshCw size={16} />}
                 onClick={handleSync}
+                isLoading={syncing}
               />
             }
           />
@@ -343,7 +344,7 @@ export function ActivityPage() {
             )}
 
             {hasMore && filteredLogs.length > 0 && (
-              <HStack justify="center">
+              <HStack justify="center" className="load-more-bar">
                 <Button
                   label={loadingMore ? "Loading..." : "Load more"}
                   variant="secondary"

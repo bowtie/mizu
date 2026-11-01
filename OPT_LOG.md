@@ -326,3 +326,310 @@
 - **Empty placeholder:** Added 135° gradient from `--color-background-muted` to a mix of surface and muted — gives empty cards a subtle visual texture instead of a flat background.
 
 **Outcome:** Kept. tsc clean. Card overlays now theme-aware, empty cards have subtle depth.
+
+## Iteration D22fix — Scope hover zoom to backdrop image only
+
+**Target:** `web-astryx/src/index.css` — `.mizu-card:hover .mizu-card-img-wrap img`
+
+**Problem:** The hover zoom rule targeted `.mizu-card-img-wrap img` which matched ALL images in the card wrap, including the overlay logo. Logos would scale up on hover, which looked wrong.
+
+**What changed:** Scoped the zoom transform to `.mizu-card-img` only (the backdrop image class). Also updated the reduced-motion override to match.
+
+**Outcome:** Kept. tsc clean. Logos stay put on hover, only the backdrop zooms.
+
+## Iteration D23 — SettingsPage section headers: visual hierarchy + spacing
+
+**Target:** `web-astryx/src/routes/SettingsPage.tsx` — Connection, Sync, Notifications, Defaults section headings
+
+**Problem:** Section headings (Connection, Sync, Notifications, Defaults) sat flush against the Divider with no breathing room. All used `Heading level={2}` with no distinguishing style, making sections blend together visually.
+
+**What changed:** Added `.settings-section-header` CSS class to all four section headings. The class adds `padding-bottom: var(--spacing-2)` for breathing room before the divider, `font-size: 1.05em` for slightly more prominence, and `letter-spacing: -0.01em` for tighter, more deliberate typography.
+
+**Outcome:** Kept. tsc clean. Section headers now have clear visual hierarchy and spacing.
+
+## Iteration D24 — AddAnimeDialog tracking rules visual grouping
+
+**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — tracking rules section in the match step
+
+**Problem:** The three tracking Switches and the start-mode Selector sat bare in the VStack with just a Divider and Heading. No visual container separated them from the match list above, making the section feel unstructured.
+
+**What changed:** Wrapped the tracking rules (Heading + 3 Switches + Selector) in a `Card variant="muted" padding={4}` with an inner `VStack gap={3}`. This creates a clear visual grouping, consistent with how ShowDetailPage and SettingsPage use muted cards for grouped content.
+
+**Outcome:** Kept. tsc clean. Tracking rules now have a clear visual container that separates them from the match list.
+
+## Iteration D25 — Loading states audit
+
+**Target:** All pages — Spinner and isLoading usage
+
+**Problem:** Audit for consistency across loading states.
+
+**Findings:** Loading states are already consistent:
+- Full page load: `Spinner size="lg"` with label, centered in `VStack gap={3} hAlign="center" padding={6}`
+- Section load: `Spinner size="md"` with label (ShowDetailPage episodes)
+- Button loading: `isLoading` prop on Button (Astryx built-in spinner)
+- Inline icon: `Spinner size="sm"` as button icon (test connection buttons)
+- No double-spinner issues remaining (test buttons use icon-based spinner, not isLoading)
+
+**Outcome:** No changes needed. Loading states are consistent across the app.
+
+## Iteration D26 — ShowDetailPage hero no-backdrop fallback
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` + `web-astryx/src/index.css` — hero section when no backdrop image exists
+
+**Problem:** When a show has no backdrop image, the hero showed a flat `--color-background-muted` block — visually empty and inconsistent with the rich hero shown when a backdrop exists.
+
+**What changed:** Added a `.show-hero-placeholder` div that renders when `backdropUrl` is falsy. It uses a 135° diagonal gradient from a subtle accent-tinted muted to surface-mixed muted, giving the hero depth and visual interest without a backdrop. The gradient uses theme tokens so it adapts to all themes.
+
+**Outcome:** Kept. tsc clean. No-backdrop heroes now have a subtle gradient instead of flat emptiness.
+
+## Iteration D27 — Navigation active indicator: accent underline
+
+**Target:** `web-astryx/src/index.css` — TopNav active item styling
+
+**Problem:** The TopNavItem's built-in selected state uses `--color-neutral` background + semibold text. This is functional but subtle — the active page isn't immediately obvious, especially in themes where `--color-neutral` is very close to the hover background.
+
+**What changed:** Added a 2px accent-colored underline indicator below the active nav item, using `::after` on `[aria-current="page"]`. The underline is inset by `--spacing-3` on each side so it sits under the text, not the full pill. It uses `--color-accent` so it adapts to every theme.
+
+**Outcome:** Kept. tsc clean. Active nav item now has a clear accent underline indicator.
+
+## Iteration D28 — Fix double-spinners + section heading consistency
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/routes/ShowsPage.tsx`, `web-astryx/src/index.css`
+
+**Problem:** Two buttons had both `isLoading` (Astryx built-in spinner) AND a CSS `.spin` class on the RefreshCw icon — causing a double-spinner effect. Also, ShowDetailPage section headings (Episode list, Tracking rules) lacked the `.settings-section-header` styling that SettingsPage headings got in D23.
+
+**What changed:**
+- Removed `isLoading` from both artwork refresh buttons (ShowDetailPage + ShowsPage) — kept the spinning RefreshCw icon as the sole loading indicator, which is more contextual for a refresh action
+- Added `.settings-section-header` class to "Episode list" and "Tracking rules" headings for consistent typography hierarchy across all pages
+- Added `.spin` to the reduced-motion guard list
+
+**Outcome:** Kept. tsc clean. No more double-spinners, consistent section headings across pages.
+
+## Iteration D29 — Mobile responsiveness audit
+
+**Target:** `web-astryx/src/routes/SettingsPage.tsx`, `web-astryx/src/index.css`
+
+**Problem:** Two mobile responsiveness issues found:
+1. SettingsPage Defaults section used `Grid columns={3}` (fixed 3 columns) — tracking rule cards would be cramped on narrow screens
+2. Fixed-width TextInputs and Selectors in settings rows (width=320, 280, 260) would overflow on screens narrower than 360px
+
+**What changed:**
+- Changed SettingsPage Grid from `columns={3}` to `columns={{ minWidth: 240, max: 3 }}` — responsive auto-fill that collapses to 1 column on narrow screens, caps at 3 on wide screens
+- Added mobile CSS rule in the `@media (max-width: 600px)` block: `.settings-row .astryx-text-input` and `.astryx-selector` get `width: 100%; max-width: 100%` so they fill the stacked row instead of overflowing
+
+**Audit findings (no changes needed):**
+- TopNav has built-in mobile drawer mode via Astryx
+- ShowsPage card grid already uses `columns={{ minWidth: 320 }}` (responsive)
+- ShowDetailPage tracking rules already use `columns={{ minWidth: 240 }}` (responsive)
+- All page headers use `wrap="wrap"` on HStack
+- Show hero and content use `clamp()` for responsive padding/sizing
+- ActivityPage HStacks all use `wrap="wrap"`
+- AddAnimeDialog wizard steps hide labels on mobile (existing rule)
+
+**Outcome:** Kept. tsc clean. Settings page now fully responsive on mobile.
+
+## Iteration D30 — Empty states styling consistency audit
+
+**Target:** All pages — EmptyState component usage
+
+**Problem:** Audit for consistency across empty states.
+
+**Findings:** Empty states are already consistent across all pages:
+- All 9 EmptyState instances use `icon={<Icon icon={...} size="lg" color="secondary" />}`
+- All have `title` and `description` props
+- Most have `actions` with a contextual Button (Clear search, Show all, etc.)
+- Icons are contextually appropriate: Waves (empty library), CircleAlert (no results), Search (search empties), History (no activity)
+- The few without actions are in dialog contexts where the next step is obvious from the wizard flow
+
+**Outcome:** No changes needed. Empty states are consistent and well-structured.
+
+## Iteration D31 — Micro-interactions: card overlay slide-up + nav underline animation
+
+**Target:** `web-astryx/src/index.css` — card overlay, nav active indicator
+
+**Problem:** Two micro-interaction refinements:
+1. Card overlay content (logo/title + badge) was static on hover — no movement to complement the card lift and image zoom
+2. Nav active underline appeared instantly on page change — no entrance animation
+
+**What changed:**
+- Added `transition: transform 0.2s ease` to `.mizu-card-overlay` and `transform: translateY(-2px)` on `.mizu-card:hover` — overlay content subtly slides up when hovering a card, complementing the existing card lift and image zoom
+- Added `@keyframes nav-underline-in` with `scaleX(0→1)` animation on the nav active underline — the accent underline now scales in from center when navigating between pages
+- Both additions have reduced-motion guards
+
+**Outcome:** Kept. tsc clean. Cards feel more alive on hover, nav transitions feel more polished.
+
+## Iteration D32 — Pre-build custom themes + load Figtree font
+
+**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/index.html`, new built theme files
+
+**Problem:** Two console warnings:
+1. `[Astryx] Theme "flexoki" is using runtime style injection` — all 4 custom themes (flexoki, tokyo-night, mizu-wintry, y2k-rounded) were defined at runtime via `defineTheme()`, causing Astryx to inject `<style>` tags at runtime instead of using pre-built CSS
+2. `Request for font "Figtree" blocked at visibility level 2` — flexoki and tokyo-night themes reference Figtree font but it was never loaded
+
+**What changed:**
+- Ran `bunx astryx theme build` for all 4 custom themes, generating pre-built CSS + JS files:
+  - `flexoki.js` + `flexokiTheme.css`
+  - `tokyo-night.js` + `tokyoNightTheme.css`
+  - `mizu-wintry.js` + `mizuTheme.css`
+  - `y2k-rounded.js` + `y2kRoundedTheme.css`
+- Extracted `y2kRoundedTheme` from inline definition in `themes.ts` to its own file (`y2kRoundedTheme.ts`) so it could be built
+- Updated `themes.ts` to import built theme objects + CSS instead of runtime `defineTheme()` — no more runtime style injection warning
+- Added Figtree font loading via Google Fonts `<link>` in `index.html` with `preconnect` for performance
+
+**Outcome:** Kept. tsc clean. Runtime style injection warning eliminated, Figtree font loads properly.
+
+## Iteration D33 — ShowDetailPage actions bar + artwork card polish
+
+**Target:** `web-astryx/src/index.css`, `web-astryx/src/routes/ShowDetailPage.tsx`
+
+**Problem:** Three small visual issues:
+1. Actions bar had no visual separation from the hero — both use `--color-background-muted`, so when the bar slides out it blends seamlessly with no delineation
+2. Artwork card heading (`ImageIcon`) had no icon color — inherited default text color instead of secondary icon color
+3. Artwork heading lacked the `.settings-section-header` class that other section headings got in D23/D28
+
+**What changed:**
+- Added `border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent)` to `.show-actions-bar` — subtle semi-transparent top border that creates visual separation from the hero without being heavy-handed
+- Added `color="var(--color-icon-secondary)"` to the `ImageIcon` in the artwork card header
+- Added `.settings-section-header` class to the Artwork heading for typography consistency
+
+**Outcome:** Kept. tsc clean. Actions bar has clear delineation, artwork card header is visually consistent.
+
+## Iteration D34 — Consistent section headings across all pages
+
+**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx`
+
+**Problem:** The "Tracking rules" heading inside the AddAnimeDialog muted card (added in D24) didn't have the `.settings-section-header` class that all other section headings got in D23/D28/D33.
+
+**What changed:** Added `.settings-section-header` class to the tracking rules heading in AddAnimeDialog for typography consistency across all pages.
+
+**Audit findings (no changes needed):**
+- ActivityPage is well-styled: log card hover, error rows with tinted background + left border, expanded details fade-in, chevron rotation
+- All bare lucide icons either inherit color from parent (error rows) or are inside Astryx Button/SegmentedControlItem icon props (color handled by component)
+- Dialog success screen heading is contextual (anime title) — doesn't need section header class
+
+**Outcome:** Kept. tsc clean. All section headings across the app now use consistent typography.
+
+## Iteration D35 — ShowsPage: Add status badge to no-image cards
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx` — card content when no backdrop/poster image
+
+**Problem:** Cards without an image showed the title and episode number but no status badge (enabled/disabled). The badge was only rendered inside the image overlay block, so no-image cards were missing the at-a-glance status indicator that image cards have.
+
+**What changed:** Added the status `Badge` to the no-image card content, displayed inline with the title using an `HStack justify="between"`. The badge uses the same variant logic as the overlay badge (`show.enabled ? "success" : "neutral"`).
+
+**Outcome:** Kept. tsc clean. All cards now show status badge regardless of whether they have an image.
+
+## Iteration D36 — Save button success flash + ShowsPage no-image badge
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/index.css`
+
+**Problem:** When saving tracking rules, the button label changed to "Saved" with a Check icon but stayed the same accent blue color — no visual confirmation that the save succeeded. The test connection button already had this success color treatment (D27/R56).
+
+**What changed:** Added `.save-flash` CSS class that applies when `savedFlash` is true. The class overrides the primary button background/border/text to use `--color-success` / `--color-on-success` tokens with a 0.2s transition, matching the test connection button's success state. The button flashes green for 1.5s then returns to normal.
+
+**Outcome:** Kept. tsc clean. Save button now provides clear visual feedback on success.
+
+## Iteration D37 — Wizard poster placeholder gradient + audit sweep
+
+**Target:** `web-astryx/src/index.css` — `.wizard-poster-placeholder`
+
+**Problem:** The wizard poster placeholder (shown when a Sonarr series has no poster) was a flat `--color-background-muted` rectangle, inconsistent with the card image placeholder which got a gradient in D22.
+
+**What changed:** Replaced flat background with a 135° gradient from `--color-background-muted` to a mix of surface and muted — matching the card image placeholder style from D22.
+
+**Audit findings (no changes needed):**
+- No remaining inline `style={{}}` in any `.tsx` file (only `xstyle` stylex-native and CSS custom property overrides)
+- Astryx Toast only supports `'info' | 'error'` types — current mapping is correct
+- Wizard step indicator has comprehensive 3-state styling with progress lines and mobile adaptation
+- Scrollbars and text selection are themed (D17)
+- Page transitions via `.page-enter` animation on all pages
+- All section headings use `.settings-section-header` for consistent typography
+
+**Outcome:** Kept. tsc clean. Poster placeholders now have consistent gradient styling across the app.
+
+## Iteration D38 — ShowsPage sort dropdown: selected indicator + sort icon
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx` — sort DropdownMenu
+
+**Problem:** The sort dropdown showed no indication of which option was currently selected. Users had to open the menu and scan to find the active sort. The button also had no icon, making it less obvious as a sort control.
+
+**What changed:**
+- Added `Check` icon to the selected sort option via the `icon` slot on `DropdownMenuItemData` — shows a checkmark next to the active sort option
+- Added `ArrowDownUp` icon to the dropdown button to signal it's a sort control
+- Imported `Check` and `ArrowDownUp` from lucide-react
+
+**Outcome:** Kept. tsc clean. Sort dropdown now shows selected state and has a clear sort icon.
+
+## Iteration D39 — ActivityPage empty state sync button: add loading feedback
+
+**Target:** `web-astryx/src/routes/ActivityPage.tsx` — empty state "Sync now" button
+
+**Problem:** The "Sync now" button in the empty state (no activity yet) didn't have `isLoading` — clicking it gave no visual feedback while the sync was running. The header "Sync now" button already had `isLoading={syncing}`.
+
+**What changed:** Added `isLoading={syncing}` and dynamic label (`syncing ? "Syncing..." : "Sync now"`) to the empty state sync button, matching the header button's behavior.
+
+**Outcome:** Kept. tsc clean. Both sync buttons now show loading state consistently.
+
+## Iteration D40 — Hero image loading priority + ActivityPage sync feedback
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — hero backdrop image
+
+**Problem:** The hero backdrop image used `loading="lazy"` — inappropriate for an above-the-fold image that's likely the LCP element. Lazy loading delays the hero image fetch until after the initial render, making the page feel slower.
+
+**What changed:**
+- Changed `loading="lazy"` to `loading="eager"` — fetches the hero image immediately
+- Added `fetchPriority="high"` — tells the browser to prioritize this image in the loading queue
+
+**Outcome:** Kept. tsc clean. Hero image loads faster, improving perceived page load speed.
+
+## Iteration D41 — Episode monitor toggle: accent-colored pressed icon
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode monitor ToggleButton
+
+**Problem:** The episode monitor ToggleButton swapped between Eye (unmonitored) and EyeOff (monitored) icons, but both used the same default color. Per Astryx docs guidance: "Use a filled or colored icon for the pressed state so users can see the current state at a glance."
+
+**What changed:** Added `color="var(--color-accent)"` to the `pressedIcon` (EyeOff) — when an episode is monitored, the icon shows in the accent color, making the monitored state immediately visible without needing to parse the icon shape.
+
+**Outcome:** Kept. tsc clean. Monitored episodes now have a clear accent-colored icon for at-a-glance state recognition.
+
+## Iteration D42 — Collapsible expand/collapse animation (skipped)
+
+**Target:** `web-astryx/node_modules/@astryxdesign/core/src/Collapsible/Collapsible.tsx`
+
+**Problem:** The Collapsible component uses `display: none` for hidden content, causing an instant show/hide with no animation. The `.episode-list-wrap` has a fade-in-up entrance animation, but collapse is instant.
+
+**Investigation:** Read the Astryx Collapsible source. Content toggling is done via `styles.contentHidden: { display: 'none' }` — a StyleX-managed style applied directly on the content div. CSS height transitions don't work from `display: none`. Modifying the component in `node_modules` would be lost on reinstall.
+
+**Outcome:** Skipped. The current behavior (instant toggle + fade-in-up entrance) is acceptable. A proper fix would require extending the Astryx Collapsible component itself (e.g., using a `grid-template-rows: 0fr → 1fr` technique), which is a larger change than warranted for this micro-interaction.
+
+## Iteration D43 — ActivityPage load-more button visual separator
+
+**Target:** `web-astryx/src/routes/ActivityPage.tsx` — load more button at bottom of activity list
+
+**Problem:** The "Load more" button sat directly below the last activity card with no visual separation, making it feel like it was part of the card content rather than a distinct pagination action.
+
+**What changed:** Added `.load-more-bar` CSS class with a subtle top border (`1px solid var(--color-border)`) + padding/margin to create visual separation from the activity cards above. The button is centered in a clear "footer" area.
+
+**Outcome:** Kept. tsc clean. The load-more button now has clear visual separation as a pagination action.
+
+## Iteration D44 — Season collapsible: episode count pill
+
+**Target:** `web-astryx/src/index.css` — `.season-episode-count` in season collapsible trigger
+
+**Problem:** The episode count next to the season label in the collapsible trigger was plain secondary text with no visual distinction. It blended into the trigger and didn't read as a count/metadata.
+
+**What changed:** Styled `.season-episode-count` as a subtle pill: `padding: 2px 8px`, `border-radius: var(--radius-1)`, `background: var(--color-background-muted)`, `font-variant-numeric: tabular-nums` for stable number alignment. The pill sits at the right end of the trigger (flex space-between) and reads clearly as metadata.
+
+**Outcome:** Kept. tsc clean. Episode count now has a clear visual identity as a metadata pill rather than plain text.
+
+## Iterations D45–D48 — Audit pass (no changes needed)
+
+**D45: Dialog entrance animation** — Read the Astryx Dialog source. It already has a built-in directional entrance animation (`enterDirectional` keyframes) that calculates the animation origin from the trigger element's position. AlertDialog wraps Dialog and inherits this. No improvement needed.
+
+**D46: Input focus states consistency** — Audited all Astryx input components (TextInput, Selector, NumberInput, Switch, Button). All use `:focus-visible` with `2px solid var(--color-accent)` and consistent outline offsets. The app's custom focus styles (`.mizu-card`, `.astryx-list-item`, `.astryx-clickable-card`, `.astryx-collapsible > button`) also use `--color-accent`. Already consistent.
+
+**D47: Grid gap consistency** — Audited all Grid and VStack/HStack gap values across all pages. Grid uses gap={4} everywhere. Page-level VStack gaps vary (6 vs 8) intentionally based on content density. Section headers consistently use gap={1}. No inconsistencies found.
+
+**D48: Color contrast audit** — Reviewed all 4 custom themes (Flexoki, Tokyo Night, Mizu Wintry, Y2K Rounded). All use well-known palettes designed with contrast in mind. Only hardcoded colors in CSS are `#fff` on dark gradient overlays (card overlay title with text-shadow) and `var(--color-text-on-accent, #fff)` fallback on wizard step dots. Both are appropriate uses.
+
+**Outcome:** No changes needed. The app is consistent across these dimensions.

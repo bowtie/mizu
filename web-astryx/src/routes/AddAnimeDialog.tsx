@@ -12,6 +12,7 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Switch } from "@astryxdesign/core/Switch";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Divider } from "@astryxdesign/core/Divider";
+import { Card } from "@astryxdesign/core/Card";
 import { Search, Check, X, CircleAlert } from "lucide-react";
 import {
   addSonarrSeries,
@@ -859,31 +860,35 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
 
               {/* Tracking rules */}
               <Divider />
-              <Heading level={3}>Tracking rules</Heading>
-              <Switch
-                label="Track filler"
-                description="Monitor filler episodes in Sonarr"
-                value={w.addTrackFiller}
-                onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
-              />
-              <Switch
-                label="Track mixed canon"
-                description="Monitor mixed canon/filler episodes"
-                value={w.addTrackMixed}
-                onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
-              />
-              <Switch
-                label="Track anime canon"
-                description="Monitor anime-original episodes"
-                value={w.addTrackAnimeCanon}
-                onChange={(v) => dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })}
-              />
-              <Selector
-                label="Start tracking from"
-                options={startModeOptions}
-                value={w.addStartMode}
-                onChange={(v) => dispatch({ type: "SET", payload: { addStartMode: v } })}
-              />
+              <Card variant="muted" padding={4}>
+                <VStack gap={3}>
+                  <Heading level={3} className="settings-section-header">Tracking rules</Heading>
+                  <Switch
+                    label="Track filler"
+                    description="Monitor filler episodes in Sonarr"
+                    value={w.addTrackFiller}
+                    onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
+                  />
+                  <Switch
+                    label="Track mixed canon"
+                    description="Monitor mixed canon/filler episodes"
+                    value={w.addTrackMixed}
+                    onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
+                  />
+                  <Switch
+                    label="Track anime canon"
+                    description="Monitor anime-original episodes"
+                    value={w.addTrackAnimeCanon}
+                    onChange={(v) => dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })}
+                  />
+                  <Selector
+                    label="Start tracking from"
+                    options={startModeOptions}
+                    value={w.addStartMode}
+                    onChange={(v) => dispatch({ type: "SET", payload: { addStartMode: v } })}
+                  />
+                </VStack>
+              </Card>
 
               {w.addStep === ADD_STEP_UNSAFE_MATCH ? (
                 <Button

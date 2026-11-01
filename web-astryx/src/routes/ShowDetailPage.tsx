@@ -552,18 +552,21 @@ export function ShowDetailPage() {
         <div className="show-shell">
           {/* Hero header with backdrop */}
           <div className="show-hero">
-            {backdropUrl && (
+            {backdropUrl ? (
               <>
                 <img
                   src={backdropUrl}
                   alt=""
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
+                  fetchPriority="high"
                   className="show-hero-img"
                   onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
                 />
                 <div className="show-hero-gradient" />
               </>
+            ) : (
+              <div className="show-hero-placeholder" />
             )}
             <div className="show-hero-content">
               <VStack gap={4}>
@@ -671,6 +674,7 @@ export function ShowDetailPage() {
                     onClick={handleSave}
                     isDisabled={saving || !rulesDirty}
                     isLoading={saving}
+                    className={savedFlash ? "save-flash" : undefined}
                   />
                 </HStack>
               </div>
@@ -686,8 +690,8 @@ export function ShowDetailPage() {
           <Card padding={4} variant="muted" className="artwork-card">
             <VStack gap={3}>
               <HStack gap={3} align="center">
-                <ImageIcon size={16} />
-                <Heading level={3}>Artwork</Heading>
+                <ImageIcon size={16} color="var(--color-icon-secondary)" />
+                <Heading level={3} className="settings-section-header">Artwork</Heading>
                 <Divider xstyle={{ flex: 1 }} />
                 <Button
                   label={artworkRefreshing ? "Refreshing..." : "Refresh"}
@@ -696,7 +700,6 @@ export function ShowDetailPage() {
                   icon={<RefreshCw size={14} className={artworkRefreshing ? "spin" : ""} />}
                   onClick={() => handleRefreshArtwork()}
                   isDisabled={artworkRefreshing}
-                  isLoading={artworkRefreshing}
                 />
               </HStack>
               <HStack gap={3} align="center" wrap="wrap">
@@ -721,7 +724,7 @@ export function ShowDetailPage() {
           {/* Tracking rules */}
           <VStack gap={4}>
             <HStack gap={3} align="center">
-              <Heading level={2}>Tracking rules</Heading>
+              <Heading level={2} className="settings-section-header">Tracking rules</Heading>
               <Divider xstyle={{ flex: 1 }} />
               {rulesDirty && <Badge variant="warning" label="Unsaved changes" />}
             </HStack>
@@ -757,7 +760,7 @@ export function ShowDetailPage() {
           {/* Episode list */}
           <VStack gap={4}>
             <HStack gap={3} align="center">
-              <Heading level={2}>Episode list</Heading>
+              <Heading level={2} className="settings-section-header">Episode list</Heading>
               <Divider xstyle={{ flex: 1 }} />
             </HStack>
 
@@ -873,7 +876,7 @@ export function ShowDetailPage() {
                                       isIconOnly
                                       size="sm"
                                       icon={<Eye size={14} />}
-                                      pressedIcon={<EyeOff size={14} />}
+                                      pressedIcon={<EyeOff size={14} color="var(--color-accent)" />}
                                       isPressed={monitored}
                                       isDisabled={isSyncing || !ep.sonarr_episode_id}
                                       isLoading={isSyncing}

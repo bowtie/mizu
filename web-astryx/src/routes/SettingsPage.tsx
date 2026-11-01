@@ -462,7 +462,7 @@ export function SettingsPage() {
 
         {/* Connection */}
         <VStack gap={0}>
-          <Heading level={2}>Connection</Heading>
+          <Heading level={2} className="settings-section-header">Connection</Heading>
           <Divider />
 
           <SettingsRow
@@ -559,7 +559,7 @@ export function SettingsPage() {
 
         {/* Sync */}
         <VStack gap={0}>
-          <Heading level={2}>Sync</Heading>
+          <Heading level={2} className="settings-section-header">Sync</Heading>
           <Divider />
 
           <SettingsRow
@@ -657,7 +657,7 @@ export function SettingsPage() {
 
         {/* Notifications */}
         <VStack gap={0}>
-          <Heading level={2}>Notifications</Heading>
+          <Heading level={2} className="settings-section-header">Notifications</Heading>
           <Divider />
 
           <SettingsRow
@@ -770,14 +770,14 @@ export function SettingsPage() {
         {/* Defaults */}
         <VStack gap={4}>
           <VStack gap={1}>
-            <Heading level={2}>Defaults</Heading>
+            <Heading level={2} className="settings-section-header">Defaults</Heading>
             <Text type="supporting" color="secondary" display="block">
               These tracking rules are applied automatically when you add a new anime mapping. You
               can override them per anime.
             </Text>
           </VStack>
 
-          <Grid columns={3} gap={4} align="start">
+          <Grid columns={{ minWidth: 240, max: 3 }} gap={4} align="start">
             <TrackingRuleCard
               variant="green"
               label="Canon"
