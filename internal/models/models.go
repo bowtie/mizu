@@ -60,8 +60,8 @@ type ShowMapping struct {
 	SonarrTitle       string        `json:"sonarr_title"`
 	AFLSlug           string        `json:"afl_slug"` // e.g., "naruto-shippuden"
 	AFLTitle          string        `json:"afl_title"`
-	AutoMatched       bool          `json:"auto_matched"`
-	MatchConfidence   float64       `json:"match_confidence"` // 0.0 - 1.0
+	AutoMatched       bool          `json:"-"` // internal only, not used by frontend
+	MatchConfidence   float64       `json:"-"` // internal only, not used by frontend
 	FillerAction      FillerAction  `json:"filler_action"`    // per-show override
 	MixedAction       FillerAction  `json:"mixed_action"`     // per-show override
 	AnimeCanonAction  FillerAction  `json:"anime_canon_action"`
@@ -74,8 +74,8 @@ type ShowMapping struct {
 	ArtworkBannerPath string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file
 	ArtworkLogoPath   string        `json:"artwork_logo_path,omitempty"`   // relative path to local logo file
 	Overview          string        `json:"overview,omitempty"`            // series synopsis (cached from Sonarr)
-	CreatedAt         time.Time     `json:"created_at"`
-	UpdatedAt         time.Time     `json:"updated_at"`
+	CreatedAt         time.Time     `json:"-"` // internal only, not used by frontend
+	UpdatedAt         time.Time     `json:"-"` // internal only, not used by frontend
 }
 
 // EpisodeInfo holds filler data for a single episode.
@@ -83,7 +83,7 @@ type EpisodeInfo struct {
 	ID                    int64       `json:"-"`
 	MappingID             int64       `json:"-"`
 	EpisodeNum            int         `json:"episode_num"` // UI identity/display number
-	AFLEpisodeNumber      int         `json:"afl_episode_number,omitempty"`
+	AFLEpisodeNumber      int         `json:"-"` // internal only, not used by frontend
 	Title                 string      `json:"title"`
 	Type                  EpisodeType `json:"type"`
 	LastScraped           time.Time   `json:"-"`
@@ -154,6 +154,41 @@ type SonarrSeries struct {
 	Statistics         *SonarrStats     `json:"statistics,omitempty"`
 	AlternateTitles    []SonarrAltTitle `json:"alternateTitles,omitempty"`
 	ManualMatchPending bool             `json:"manualMatchPending,omitempty"`
+}
+
+// SonarrSeriesPublic is the trimmed version of SonarrSeries sent to the
+// frontend. It omits fields only used in Go (sortTitle, tvdbId, imdbId,
+// path, seasonFolder, seasonCount, alternateTitles) to reduce the JSON
+// payload by ~30% for series lists.
+type SonarrSeriesPublic struct {
+	ID                 int           `json:"id"`
+	Title              string        `json:"title"`
+	Year               int           `json:"year,omitempty"`
+	Overview           string        `json:"overview,omitempty"`
+	SeriesType         string        `json:"seriesType,omitempty"`
+	Monitored          bool          `json:"monitored"`
+	RootFolderPath     string        `json:"rootFolderPath,omitempty"`
+	QualityProfileID   int           `json:"qualityProfileId,omitempty"`
+	Images             []SonarrImage `json:"images,omitempty"`
+	Statistics         *SonarrStats  `json:"statistics,omitempty"`
+	ManualMatchPending bool          `json:"manualMatchPending,omitempty"`
+}
+
+// Public returns a trimmed copy suitable for frontend JSON serialization.
+func (s SonarrSeries) Public() SonarrSeriesPublic {
+	return SonarrSeriesPublic{
+		ID:                 s.ID,
+		Title:              s.Title,
+		Year:               s.Year,
+		Overview:           s.Overview,
+		SeriesType:         s.SeriesType,
+		Monitored:          s.Monitored,
+		RootFolderPath:     s.RootFolderPath,
+		QualityProfileID:   s.QualityProfileID,
+		Images:             s.Images,
+		Statistics:         s.Statistics,
+		ManualMatchPending: s.ManualMatchPending,
+	}
 }
 
 // SonarrEpisode represents an episode from the Sonarr API.

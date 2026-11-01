@@ -372,7 +372,11 @@ func ServeImage(w http.ResponseWriter, r *http.Request, path string) {
 	// replaces the file on disk with a new provider's image.
 	etag := fmt.Sprintf(`"%x-%x"`, info.ModTime().Unix(), info.Size())
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "max-age=300, must-revalidate")
+	// Long cache with ETag revalidation — artwork only changes on explicit
+	// refresh (which busts the browser cache via ?v=N query param) or
+	// source switch. The ETag from mod-time ensures correctness if the
+	// file is replaced without the frontend knowing.
+	w.Header().Set("Cache-Control", "max-age=86400, must-revalidate")
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

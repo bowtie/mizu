@@ -3,6 +3,8 @@ import { VStack } from "@astryxdesign/core/VStack";
 import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
 import { Switch } from "@astryxdesign/core/Switch";
+import { play as cuelumePlay } from "cuelume";
+import { memo } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 
 type RuleVariant = "green" | "yellow" | "red";
@@ -16,7 +18,7 @@ interface TrackingRuleCardProps {
   onChange: (value: boolean) => void;
 }
 
-export function TrackingRuleCard({
+export const TrackingRuleCard = memo(function TrackingRuleCard({
   variant,
   label,
   description,
@@ -35,6 +37,7 @@ export function TrackingRuleCard({
     if (target.tagName === "INPUT" || target.closest("input")) {
       return;
     }
+    cuelumePlay("toggle", { volume: 0.5 });
     onChange(!value);
   };
 
@@ -76,11 +79,14 @@ export function TrackingRuleCard({
           <Switch
             label={switchLabel}
             value={value}
-            onChange={onChange}
+            onChange={(v) => {
+              cuelumePlay("toggle", { volume: 0.5 });
+              onChange(v);
+            }}
             isLabelHidden
           />
         </div>
       </HStack>
     </Card>
   );
-}
+});

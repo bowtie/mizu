@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect } from "react";
+import { StrictMode, useState, useEffect, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
@@ -18,9 +18,10 @@ import "@astryxdesign/core/astryx.css";
 import "@astryxdesign/theme-neutral/theme.css";
 import "@astryxdesign/theme-y2k/theme.css";
 
+import "./fonts.css";
 import "./index.css";
 import { App } from "./App";
-import { themeOptions, defaultTheme } from "./lib/themes";
+import { themeOptions, defaultTheme, loadThemeCSS } from "./lib/themes";
 import type { ThemeOption } from "./lib/themes";
 
 const STORAGE_KEY = "mizu-theme";
@@ -109,16 +110,32 @@ function Root() {
     return themeOptions.find((t) => t.id === saved) ?? defaultTheme;
   });
 
+  // Load CSS for the saved theme on mount (if it's a custom theme
+  // whose CSS isn't bundled eagerly).
+  useEffect(() => {
+    loadThemeCSS(selected.id);
+  }, []);
+
+  // Persist theme choice and load CSS when the user switches themes.
+  const handleSelect = useCallback((t: ThemeOption) => {
+    loadThemeCSS(t.id);
+    setSelected(t);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, selected.id);
   }, [selected.id]);
 
-  // Wire cuelume interaction sounds once on mount.
+  // Wire cuelume interaction sounds once on mount — deferred to idle
+  // time so it doesn't compete with first paint.
   useEffect(() => {
-    initSounds();
+    const ric = "requestIdleCallback" in window
+      ? (cb: () => void) => (window as Window).requestIdleCallback(cb, { timeout: 2000 })
+      : (cb: () => void) => setTimeout(cb, 100);
+    ric(() => initSounds());
   }, []);
 
-  const menu = <ThemeMenu selected={selected} onSelect={setSelected} />;
+  const menu = <ThemeMenu selected={selected} onSelect={handleSelect} />;
 
   return (
     <StrictMode>

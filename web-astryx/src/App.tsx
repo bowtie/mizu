@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider } from "./lib/store";
 import { ToastViewport } from "./components/ToastViewport";
 import { ShowsPage } from "./routes/ShowsPage";
+import { prefetchDetailChunk } from "./lib/chunkPrefetch";
 
 // Route-based code splitting — ShowsPage (landing) loads eagerly,
 // other pages are lazy-loaded on first navigation.
@@ -29,6 +30,17 @@ function PageFallback() {
 }
 
 export function App() {
+  // Prefetch the ShowDetailPage chunk during idle time after first
+  // paint. The detail page is the most likely next navigation from
+  // the landing page — prefetching it eliminates the chunk load delay
+  // for users who click without hovering first.
+  useEffect(() => {
+    const ric = "requestIdleCallback" in window
+      ? (cb: () => void) => (window as Window).requestIdleCallback(cb, { timeout: 3000 })
+      : (cb: () => void) => setTimeout(cb, 500);
+    ric(() => prefetchDetailChunk());
+  }, []);
+
   return (
     <AppProvider>
       <ScrollToTop />

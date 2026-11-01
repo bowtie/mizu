@@ -147,6 +147,13 @@ export function searchAFL(
 // doesn't go stale.
 const episodePrefetch = new Map<string, Promise<Episode[]>>();
 
+// ETag cache for episode responses — the backend sends an ETag header
+// based on episode count, monitored sum, and last-scraped timestamp.
+// On repeat visits, we send If-None-Match and get a 304 instead of
+// re-downloading the full payload (252KB for 1200+ episodes).
+const episodeETags = new Map<string, string>();
+const episodeDataCache = new Map<string, Episode[]>();
+
 export function getEpisodes(showId: string | number): Promise<Episode[]> {
   const key = String(showId);
   const cached = episodePrefetch.get(key);
@@ -154,7 +161,31 @@ export function getEpisodes(showId: string | number): Promise<Episode[]> {
     episodePrefetch.delete(key);
     return cached;
   }
-  return request<Episode[]>("GET", "/mappings/" + showId + "/episodes");
+  return requestEpisodesWithETag(key);
+}
+
+async function requestEpisodesWithETag(key: string): Promise<Episode[]> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const etag = episodeETags.get(key);
+  if (etag) headers["If-None-Match"] = etag;
+
+  const res = await fetch(BASE + "/mappings/" + key + "/episodes", { headers });
+  if (res.status === 304 && episodeDataCache.has(key)) {
+    return episodeDataCache.get(key)!;
+  }
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+    throw new Error(err.error || res.statusText);
+  }
+  const newEtag = res.headers.get("ETag");
+  if (newEtag) {
+    episodeETags.set(key, newEtag);
+  }
+  const data = (await res.json()) as Episode[];
+  if (newEtag) {
+    episodeDataCache.set(key, data);
+  }
+  return data;
 }
 
 /** Prefetch episodes for a show without consuming the result. The cached
@@ -163,7 +194,7 @@ export function getEpisodes(showId: string | number): Promise<Episode[]> {
 export function prefetchEpisodes(showId: string | number): void {
   const key = String(showId);
   if (episodePrefetch.has(key)) return;
-  episodePrefetch.set(key, request<Episode[]>("GET", "/mappings/" + showId + "/episodes"));
+  episodePrefetch.set(key, requestEpisodesWithETag(key));
 }
 
 // --- Artwork (multi-provider, locally stored) ---

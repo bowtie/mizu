@@ -28,8 +28,8 @@ import {
   actionToTracked,
   getWizardSteps,
   START_FROM_CURRENT,
-} from "./AddAnimeDialog";
-import type { AddWizardState } from "./AddAnimeDialog";
+} from "./addWizardHelpers";
+import type { AddWizardState } from "./addWizardHelpers";
 
 // Lazy-load the AddAnimeDialog component — it's 700+ lines of wizard UI
 // that's only needed when the user opens the "Add anime" dialog. The
@@ -216,12 +216,16 @@ export function ShowsPage() {
 
   // ── Data loading ──
 
+  const showsRef = useRef(shows);
+  showsRef.current = shows;
+
   const loadLanding = useCallback(async (forceRefresh: boolean = false) => {
     // If the store already has shows and we're not forcing a refresh,
     // skip the redundant getShows + getSettings round-trip — only
     // SonarrSeries (for poster/banner URLs) needs fetching since it's
     // not in the store.
-    if (!forceRefresh && shows && shows.length > 0) {
+    const currentShows = showsRef.current;
+    if (!forceRefresh && currentShows && currentShows.length > 0) {
       setLoading(false);
       getSonarrSeries()
         .then((nextSeries) => {
@@ -261,7 +265,7 @@ export function ShowsPage() {
       .catch((err: unknown) => {
         addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
       });
-  }, [shows, setShows, setSettings, addNotification]);
+  }, [setShows, setSettings, addNotification]);
 
   useEffect(() => {
     loadLanding();
@@ -377,9 +381,15 @@ export function ShowsPage() {
     dispatch({ type: "SET", payload: { sonarrLoading: false } });
   };
 
-  const openShow = (showId: string | number) => {
+  const openShow = useCallback((showId: string | number) => {
     navigate(`/shows/${showId}`);
-  };
+  }, [navigate]);
+
+  const handleCardHover = useCallback((showId: string | number) => {
+    prefetchDetailChunk();
+    prefetchShow(showId);
+    prefetchEpisodes(showId);
+  }, []);
 
   const openExistingMapping = (seriesId: string | number) => {
     const mapped = (shows || []).find((s: Show) => s.sonarr_series_id === seriesId);
@@ -503,7 +513,7 @@ export function ShowsPage() {
                     onClick={() => openShow(show.id)}
                     padding={0}
                     className="mizu-card"
-                    onMouseEnter={() => { prefetchDetailChunk(); prefetchShow(show.id); prefetchEpisodes(show.id); }}
+                    onMouseEnter={() => handleCardHover(show.id)}
                   >
                     <div className={`mizu-card-img-wrap${img ? "" : " is-empty"}`}>
                       {img ? (

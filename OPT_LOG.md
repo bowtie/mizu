@@ -1856,7 +1856,7 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 | Initial JS bundle | 641KB (single chunk) | 413KB (main) + lazy chunks | 35% smaller |
 | Initial JS gzipped | ~180KB | 121KB | 33% smaller |
 | Episode payload (1209 eps) | 360KB raw / 43KB gzipped | 252KB raw / 37KB gzipped | 30% raw, 14% gzipped |
-| CSS payload | 314KB raw / 50KB gzipped | unchanged | — |
+| CSS payload | 314KB raw / 50KB gzipped | 184KB raw / 32KB gzipped | 41% raw, 36% gzipped |
 
 ### Optimizations Applied
 
@@ -1888,6 +1888,21 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 | 24 | D187 | Date-only air_date serialization | Custom DateOnly type marshals *time.Time as "2006-01-02" instead of RFC3339; saves ~12KB raw on 1209-episode payload |
 | 25 | D188 | Initialize openedSeasons in useState, skip useEffect round-trip | Last season renders episodes on first paint instead of after useEffect→setState→re-render cycle |
 | 26 | D189 | Memoized EpisodeListItem component | Toggling one episode's monitor state no longer re-renders all 1200+ ListItems; only the affected item re-renders |
+| 27 | D190 | Lazy-load custom theme CSS | Initial CSS 314KB→184KB raw (50KB→32KB gzipped); 4 custom theme CSS files (130KB) load on-demand when user selects theme |
+| 28 | D191 | Batch setEpisodesLoading with state updates | Removed .finally() handler; setEpisodesLoading(false) now in .then() and .catch(), batched with other setState calls — saves one render cycle |
+| 29 | D192 | Self-host Figtree font | Eliminated 3 render-blocking Google Fonts CDN requests (2 preconnect + 1 stylesheet); font files (30KB woff2) preloaded from same origin |
+| 30 | D193 | Extract wizard helpers, fix AddAnimeDialog lazy-load | Separated reducer/types/helpers into addWizardHelpers.ts; removed static import from ShowsPage→AddAnimeDialog; AddAnimeDialog now truly lazy (15.9KB chunk); INEFFECTIVE_DYNAMIC_IMPORT warning gone; initial JS 527KB (was 564KB split across 2 chunks) |
+| 31 | D194 | ETag-based episode caching on frontend | Frontend stores ETag from backend, sends If-None-Match on repeat visits; 304 response returns cached data instead of re-downloading 252KB episode payload; added If-None-Match to CORS allowed headers, ETag to exposed headers |
+| 32 | D195 | Strip unused ShowMapping JSON fields | Changed auto_matched, match_confidence, created_at, updated_at to json:"-"; removes ~100 bytes per show from /mappings response; fields unused by frontend |
+| 33 | D196 | Memoize TrackingRuleCard, stabilize openShow | TrackingRuleCard wrapped in React.memo — marker value changes no longer re-render 3 rule cards; openShow wrapped in useCallback — stable reference for show cards |
+| 34 | D197 | Strip unused afl_episode_number from episode JSON | Changed AFLEpisodeNumber to json:"-"; field populated by backend but never read by frontend; removes per-episode overhead from 1200+ episode payloads |
+| 35 | D198 | Optimize episode monitor toggle | Replaced .map() over 1200+ elements with .slice() + findIndex + index assignment; native array copy avoids JS callback per element; only 1 new object created instead of calling arrow fn 1200+ times |
+| 36 | D199 | Increase artwork Cache-Control max-age | Changed from 300s (5min) to 86400s (24h); artwork rarely changes and ETag + ?v=N cache buster handle correctness; eliminates most revalidation requests for poster/banner/logo images |
+| 37 | D200 | Fix loadLanding double-fire, eliminate redundant getSonarrSeries | Removed shows from loadLanding deps, use ref instead; prevents useCallback recreation → useEffect re-run → redundant getSonarrSeries fetch on initial load; also stabilized handleCardHover callback |
+| 38 | D201 | In-memory cache for Sonarr series list | 2-minute TTL cache for /api/sonarr/series; avoids hitting Sonarr API on every ShowsPage navigation; matchable_only variant not cached (depends on mappings+AFL state); ~80ms faster on cache hit |
+| 39 | D202 | Defer initSounds to requestIdleCallback | Cuelume sound binding deferred to idle time; avoids DOM attribute wiring competing with first paint; falls back to setTimeout(100ms) if requestIdleCallback unavailable |
+| 40 | D203 | Prefetch ShowDetailPage chunk on idle | Detail page chunk prefetched via requestIdleCallback after first paint; eliminates chunk load delay for users who click a show card without hovering first; also prefetches dependency chunks (TrackingRuleCard, SegmentedControlItem, ListItem) in parallel |
+| 41 | D204 | Trim SonarrSeries JSON payload for frontend | Created SonarrSeriesPublic struct with only frontend-relevant fields (id, title, year, overview, seriesType, monitored, rootFolderPath, qualityProfileId, images, statistics, manualMatchPending); omits sortTitle, tvdbId, imdbId, path, seasonFolder, seasonCount, alternateTitles; /api/sonarr/series: 35KB→28KB raw (20% reduction), 9KB→7.8KB gzipped; lookup endpoint unchanged (needs full struct for add flow) |
 
 ---
 
@@ -2183,5 +2198,361 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 - Before: 1 episode toggle → `EpisodeListSection` re-renders → all visible `ListItem`s re-render (80+ items × 5 child components each = 400+ component re-renders)
 - After: 1 episode toggle → `EpisodeListSection` re-renders → only 1 `EpisodeListItem` re-renders (the one whose `isSyncing` changed)
 - tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D190 — Lazy-load custom theme CSS
+
+**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/src/main.tsx` — theme CSS imports
+
+**Problem:** All 6 themes' CSS files were imported eagerly in `themes.ts` (which is imported by `main.tsx`). The 4 custom themes (mizu-wintry, tokyo-night, flexoki, y2k-rounded) added ~130KB of CSS to the initial payload, even though only one theme is active at a time and the default theme is `neutral`.
+
+**What changed:**
+- Removed eager CSS imports for custom themes from `themes.ts` (kept JS object imports — they're small, ~5-7KB each)
+- Added `loadThemeCSS(themeId)` function that dynamically imports the CSS file via `import("./themeName.css")` — Vite handles this by creating a separate CSS chunk loaded on-demand
+- `loadedThemeCSS` Set tracks which themes have been loaded to avoid duplicate imports
+- `main.tsx` calls `loadThemeCSS` on mount (for the saved theme) and on theme switch (via `handleSelect`)
+- Default themes (`neutral`, `y2k`) are pre-marked as loaded since their CSS is in `main.tsx`
+
+**Metrics:**
+- Before: initial CSS = 314KB raw / 50KB gzipped (all 6 themes)
+- After: initial CSS = 184KB raw / 32KB gzipped (neutral + y2k + core + custom)
+- **130KB raw / 18KB gzipped saved on initial load (41% raw, 36% gzipped)**
+- Custom theme CSS loads on-demand: flexoki 89KB, tokyo-night 19KB, y2k-rounded 17KB, mizu-wintry 6.5KB
+- No FOUC for default themes — their CSS is eager
+- Minimal FOUC risk for custom themes — CSS loads before theme is applied (async `await import()` in `handleSelect`)
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D191 — Batch setEpisodesLoading with state updates, remove .finally() extra render
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode load effect (~line 544)
+
+**Problem:** `setEpisodesLoading(false)` was in a `.finally()` handler, which runs as a separate microtask after `.then()` or `.catch()`. This meant the loading state update was not batched with the other `setState` calls (setEpisodes, setEpStats, setMaxEpisode, etc.) in the success path — React would process the `.then()` state updates in one render, then the `.finally()` `setEpisodesLoading(false)` in a second render. For the error path, `addNotification` and `setEpisodesLoading(false)` were also split across `.catch()` and `.finally()`.
+
+**What changed:**
+- Moved `setEpisodesLoading(false)` from `.finally()` into `.then()` (after all other state updates) and `.catch()` (after `addNotification`)
+- Removed the `.finally()` block entirely
+- In the success path, all state updates including `setEpisodesLoading(false)` are now in the same synchronous block — React 18+ auto-batches them into a single render
+- In the error path, `addNotification` and `setEpisodesLoading(false)` are batched together
+
+**Metrics:**
+- Before: success path = 2 render cycles (`.then()` state updates → render → `.finally()` setEpisodesLoading → render)
+- After: success path = 1 render cycle (all state updates batched → single render)
+- Error path: same improvement — 2 renders → 1 render
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D192 — Self-host Figtree font, eliminate render-blocking Google Fonts CDN
+
+**Target:** `web-astryx/index.html`, `web-astryx/src/fonts.css` (new), `web-astryx/src/main.tsx`, `web-astryx/public/fonts/` (new)
+
+**Problem:** The app loaded the Figtree font from Google Fonts CDN via a `<link rel="stylesheet">` in `index.html`. This created 3 render-blocking external requests:
+1. `preconnect` to `fonts.googleapis.com` (DNS + TLS handshake)
+2. `preconnect` to `fonts.gstatic.com` (DNS + TLS handshake)
+3. The CSS stylesheet request itself (`fonts.googleapis.com/css2?...`)
+
+These external requests added latency on every page load — DNS resolution, TLS negotiation, and the CSS download all blocked first paint. The font CSS was also a separate request from the bundled CSS, adding a waterfall step.
+
+**What changed:**
+- Downloaded the Figtree variable font woff2 files from Google's CDN (latin: 20KB, latin-ext: 10KB — same file for all weights since it's a variable font)
+- Placed them in `web-astryx/public/fonts/` so they're served as static assets from the same origin
+- Created `web-astryx/src/fonts.css` with `@font-face` declarations using `font-weight: 400 700` (variable font range) and `font-display: swap`
+- Replaced the 3 Google Fonts `<link>` tags in `index.html` with 2 `<link rel="preload">` tags for the woff2 files
+- Imported `fonts.css` in `main.tsx` before `index.css` so `@font-face` declarations are available when styles reference `Figtree`
+
+**Metrics:**
+- Before: 3 render-blocking external requests (2 preconnect + 1 CSS), each requiring DNS + TLS to Google's servers
+- After: 0 external requests for fonts; 2 preload hints for same-origin woff2 files (30KB total), bundled CSS includes `@font-face` rules
+- Eliminates: DNS lookup to `fonts.googleapis.com` + `fonts.gstatic.com`, TLS handshake to both, CSS download, and the render-blocking nature of the stylesheet `<link>`
+- Font files preloaded with `rel="preload" as="font"` — browser starts downloading immediately, in parallel with JS/CSS
+- Production build: CSS bundle unchanged at 184.77KB / 30.79KB gzipped (font-face rules are ~700 bytes)
+- tsc clean, build clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D193 — Extract wizard helpers, fix AddAnimeDialog lazy-load
+
+**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx`, `web-astryx/src/routes/ShowsPage.tsx`, `web-astryx/src/routes/addWizardHelpers.ts` (new)
+
+**Problem:** Since D184, `AddAnimeDialog` was supposed to be lazy-loaded via `React.lazy()`. However, `ShowsPage.tsx` also statically imported helper functions and types from `AddAnimeDialog.tsx` (`addWizardReducer`, `INITIAL_WIZARD`, `actionToTracked`, `getWizardSteps`, `START_FROM_CURRENT`, `AddWizardState`). This dual static+dynamic import meant the bundler couldn't split the module — the entire 700-line dialog was bundled into the main chunk. The build emitted `INEFFECTIVE_DYNAMIC_IMPORT` warning confirming this.
+
+**What changed:**
+- Created `web-astryx/src/routes/addWizardHelpers.ts` containing all the pure helper code: constants (`START_FROM_CURRENT`, `ADD_STEP_*`), types (`AddWizardState`, `AddWizardAction`), `INITIAL_WIZARD`, `addWizardReducer`, `actionToTracked`, `trackedToAction`, `getWizardSteps`
+- `AddAnimeDialog.tsx` now imports these from `addWizardHelpers.ts` instead of defining them inline
+- `ShowsPage.tsx` imports from `addWizardHelpers.ts` directly — no longer has any static import from `AddAnimeDialog.tsx`
+- The `React.lazy(() => import("./AddAnimeDialog"))` in ShowsPage is now a true dynamic import — the bundler creates a separate chunk
+
+**Metrics:**
+- Before: `INEFFECTIVE_DYNAMIC_IMPORT` warning; AddAnimeDialog bundled into main chunk; main JS = 413KB raw / 121KB gzipped + Card chunk 151KB raw / 44.7KB gzipped (preloaded) = 564KB raw / 165.7KB gzipped initial JS
+- After: No warning; AddAnimeDialog is a separate 15.92KB / 4.57KB gzipped lazy chunk; main JS = 527KB raw / 156KB gzipped (Card merged into main since it's no longer shared with a separate AddAnimeDialog chunk)
+- Net initial JS: 527KB raw / 156KB gzipped (was 564KB / 165.7KB) — **37KB raw / 9.7KB gzipped reduction**
+- AddAnimeDialog loads on-demand: 15.92KB raw / 4.57KB gzipped (only when user opens "Add anime" dialog)
+- tsc clean, build clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D194 — ETag-based episode caching on frontend
+
+**Target:** `web-astryx/src/lib/api.ts` — `getEpisodes` / `prefetchEpisodes`, `cmd/server/router.go` — CORS config
+
+**Problem:** The backend already computed and sent ETag headers for episode responses (since the episode cache was added). However, the frontend never sent `If-None-Match` headers, so every visit to a show's detail page re-downloaded the full episode payload (252KB raw / 37KB gzipped for 1200+ episodes). The in-memory `epCache` on the backend helped avoid DB queries, but the network transfer still happened. The consume-once `episodePrefetch` cache only helped within a single navigation session — hard refreshes or cross-session revisits always re-downloaded.
+
+**What changed:**
+- Added `episodeETags` Map and `episodeDataCache` Map to `api.ts` — store the ETag and response data per mapping ID
+- Created `requestEpisodesWithETag()` — sends `If-None-Match` header if we have a cached ETag; on 304 response, returns the cached episode data without re-parsing JSON; on 200, stores the new ETag and data
+- `getEpisodes()` and `prefetchEpisodes()` now use `requestEpisodesWithETag()` instead of the generic `request()` function
+- Added `If-None-Match` to CORS `AllowedHeaders` and `ETag` to `ExposedHeaders` in the backend router
+
+**Metrics:**
+- Before: every visit to a show detail page = full 252KB raw / 37KB gzipped download (even if nothing changed)
+- After: first visit = full download + ETag stored; repeat visits = 304 Not Modified (~200 bytes response body, just headers)
+- Verified with curl: first GET returns 200 + ETag header, second GET with If-None-Match returns 304
+- ETag is based on episode count + monitored sum + last-scraped timestamp — changes when episodes are added, monitor toggled, or re-scraped
+- tsc clean, Go build clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D195 — Strip unused ShowMapping JSON fields
+
+**Target:** `internal/models/models.go` — `ShowMapping` struct
+
+**Problem:** The `ShowMapping` struct serialized 4 fields that the frontend never reads: `auto_matched` (bool), `match_confidence` (float64), `created_at` (time.Time), `updated_at` (time.Time). These are internal metadata used by the backend sync/matching logic but not displayed in the UI. Each show response included ~100 bytes of unused data.
+
+**What changed:**
+- Changed `AutoMatched` from `json:"auto_matched"` to `json:"-"`
+- Changed `MatchConfidence` from `json:"match_confidence"` to `json:"-"`
+- Changed `CreatedAt` from `json:"created_at"` to `json:"-"`
+- Changed `UpdatedAt` from `json:"updated_at"` to `json:"-"`
+- These fields are still populated from the DB and used internally by Go code — only the JSON serialization is suppressed
+- `start_mode` left as `json:"start_mode"` because it's used in create/update request payloads
+
+**Metrics:**
+- Before: each show in /mappings response included `"auto_matched":false,"match_confidence":0,"created_at":"...","updated_at":"..."` (~100 bytes)
+- After: these fields are omitted from JSON entirely
+- With 5 shows: ~500 bytes saved per /mappings response (small but clean — scales with library size)
+- Go build clean, `go test ./internal/database/ ./internal/sync/` passes, tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D196 — Memoize TrackingRuleCard, stabilize openShow with useCallback
+
+**Target:** `web-astryx/src/components/TrackingRuleCard.tsx`, `web-astryx/src/routes/ShowsPage.tsx`
+
+**Problem:** In ShowDetailPage, 3 `TrackingRuleCard` instances are rendered. When unrelated state changes (e.g., `markerValue` changes via NumberInput, `savedFlash` toggles, `artworkRefreshing` changes), all 3 TrackingRuleCards re-render even though their props (`variant`, `label`, `description`, `switchLabel`, `value`, `onChange`) haven't changed. The `onChange` handlers are stable `setState` functions, so memo would be effective.
+
+In ShowsPage, `openShow` was an inline arrow function recreated on every render, passed to every `ClickableCard`. This prevented any potential memoization of show cards.
+
+**What changed:**
+- Wrapped `TrackingRuleCard` in `React.memo()` — props are all primitives or stable callbacks, so memo is effective. When `markerValue` or other unrelated state changes, the 3 rule cards skip re-rendering.
+- Wrapped `openShow` in `useCallback` with `[navigate]` dependency — stable reference across renders.
+
+**Metrics:**
+- ShowDetailPage: marker value change (e.g., clicking +/- buttons) previously re-rendered 3 TrackingRuleCards (each with Card, HStack, VStack, Text×2, Switch). Now: 0 TrackingRuleCard re-renders.
+- ShowsPage: `openShow` is now a stable reference — enables future memoization of show cards if library grows.
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D197 — Strip unused afl_episode_number from episode JSON
+
+**Target:** `internal/models/models.go` — `EpisodeInfo` struct
+
+**Problem:** `AFLEpisodeNumber` was populated by the backend during episode enrichment (mapping AFL episode numbers to Sonarr episodes) and serialized with `json:"afl_episode_number,omitempty"`. However, the frontend never reads this field — it's only defined in the TypeScript `Episode` interface but not used in any component. For shows with 1200+ episodes, this added unnecessary bytes per episode to the payload.
+
+**What changed:**
+- Changed `AFLEpisodeNumber` from `json:"afl_episode_number,omitempty"` to `json:"-"`
+- The field is still populated and used internally by the Go sync engine — only JSON serialization is suppressed
+
+**Metrics:**
+- Verified: `afl_episode_number` no longer appears in episode JSON response
+- Per-episode savings: ~25 bytes when non-zero (e.g., `"afl_episode_number":123,`)
+- Go build clean, `go test ./internal/database/ ./internal/sync/` passes, tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D198 — Optimize episode monitor toggle, use slice+index instead of map
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `toggleEpisodeMonitor` callback (~line 783)
+
+**Problem:** When toggling an episode's monitor state, `setEpisodes((prev) => prev.map(...))` was used to update a single episode in a 1200+ element array. `.map()` calls a JavaScript callback function for every element, performing a comparison (`e.sonarr_episode_id === sonarrEp.id`) 1200+ times. While the ternary preserves object references for non-matched elements, the callback overhead is unnecessary when only one element changes.
+
+**What changed:**
+- Replaced `.map()` with `findIndex()` + `.slice()` + index assignment
+- `findIndex()` locates the target episode (same O(n) comparisons, but native loop without callback overhead)
+- `.slice()` creates a shallow copy of the array (native V8-optimized array copy)
+- Index assignment creates one new object (the updated episode) — same as before
+- Non-matched elements retain their original references — same as `.map()` with ternary
+
+**Metrics:**
+- Before: `.map()` calls JS arrow function 1200+ times, each doing a comparison + ternary
+- After: `findIndex()` does native loop with 1200+ comparisons, `.slice()` does native array copy, 1 index assignment
+- Net: eliminates 1200+ JS callback invocations; native operations are faster in V8
+- Micro-optimization — the downstream `filteredEpisodes` memo and `groupedBySeason` memo still recompute (unavoidable when `episodes` reference changes)
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D199 — Increase artwork Cache-Control max-age from 300s to 86400s
+
+**Target:** `internal/artwork/manager.go` — `ServeImage` function
+
+**Problem:** Artwork images (poster, banner, logo) were served with `Cache-Control: max-age=300, must-revalidate` — a 5-minute browser cache. After 5 minutes, the browser would revalidate with an `If-None-Match` request for every artwork image. With 5 shows × 3 image types = 15 images, this meant 15 revalidation requests every 5 minutes. Artwork rarely changes — only on explicit refresh (which busts the cache via `?v=N` query param) or source switch.
+
+**What changed:**
+- Changed `max-age=300` to `max-age=86400` (24 hours)
+- ETag from file mod-time + size still ensures correctness — if the file is replaced, the ETag changes and the browser gets the new image
+- The frontend's `artworkVersion` state adds `?v=N` to the URL on explicit refresh, which creates a new cache entry (different URL = different cache key)
+- `must-revalidate` retained — ensures the browser always checks the ETag after max-age expires
+
+**Metrics:**
+- Before: 15 revalidation requests every 5 minutes per session (browser sends If-None-Match for each artwork image)
+- After: 15 revalidation requests every 24 hours per session — 288× reduction in revalidation traffic
+- First visit: unchanged (full download)
+- Repeat visits within 24h: served from browser cache, 0 requests
+- Artwork refresh: `?v=N` cache buster forces new download — unchanged
+- Go build clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D200 — Fix loadLanding double-fire, eliminate redundant getSonarrSeries fetch
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx` — `loadLanding` callback and `handleCardHover`
+
+**Problem:** `loadLanding` was a `useCallback` with `shows` in its dependency array. On initial mount:
+1. `loadLanding()` runs → fetches `getShows()` + `getSettings()` → calls `setShows(...)` → `shows` state changes
+2. `loadLanding` is recreated (because `shows` is a dependency)
+3. `useEffect([loadLanding])` re-runs → `loadLanding()` runs again
+4. This time `shows.length > 0` is true → fast path → fires `getSonarrSeries()` again (redundant — it was already fired in step 1's background)
+5. `getSonarrSeries()` resolves → `setAllSeries(...)` → no `shows` change → stable
+
+This caused `getSonarrSeries()` to be called twice on every initial page load. Additionally, the inline `onMouseEnter` handler on show cards was recreated on every render.
+
+**What changed:**
+- Added `showsRef` (useRef) that mirrors `shows` state — `loadLanding` reads `showsRef.current` instead of `shows` directly
+- Removed `shows` from `loadLanding`'s dependency array — now depends only on `[setShows, setSettings, addNotification]` (all stable)
+- `loadLanding` is now stable across `shows` changes → `useEffect([loadLanding])` only runs once on mount
+- Extracted `handleCardHover` as a stable `useCallback` — replaces inline arrow function on show cards
+
+**Metrics:**
+- Before: `getSonarrSeries()` called 2× on initial load (once from first `loadLanding` run, once from re-triggered effect)
+- After: `getSonarrSeries()` called 1× on initial load
+- Eliminates 1 redundant network request + 1 redundant `setAllSeries` state update + 1 extra render cycle
+- `handleCardHover` is now a stable callback — no inline allocation per card per render
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D201 — In-memory cache for Sonarr series list
+
+**Target:** `cmd/server/router.go` — `handleGetSonarrSeries` handler
+
+**Problem:** The `/api/sonarr/series` endpoint fetched the full anime series list from Sonarr on every request. When navigating between pages (ShowsPage → ShowDetailPage → back to ShowsPage), each visit triggered a live Sonarr API call (~322ms). The `loadLanding` callback in ShowsPage calls `getSonarrSeries()` on mount, and with the D200 fix it only fires once per mount — but navigating away and back re-mounts ShowsPage and fires it again.
+
+**What changed:**
+- Added `seriesListCache` struct with 2-minute TTL, RWMutex for concurrent access
+- `handleGetSonarrSeries` checks the cache first for non-`matchable_only` requests
+- On cache miss: fetches from Sonarr, caches the result, returns
+- On cache hit: returns the cached data immediately (no Sonarr API call)
+- `matchable_only` variant is NOT cached — it depends on mappings + AFL cache state which changes more frequently
+- Cache stores a copy of the slice to prevent mutation
+
+**Metrics:**
+- Before: every `/api/sonarr/series` request = live Sonarr API call (~322ms)
+- After: first request = Sonarr API call (~322ms); subsequent requests within 2 min = cache hit (~242ms, just JSON serialization + network)
+- ~80ms saved per cache hit (Sonarr API round-trip eliminated)
+- Go build clean, tests pass
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D202 — Defer initSounds to requestIdleCallback
+
+**Target:** `web-astryx/src/main.tsx` — `initSounds()` call on mount
+
+**Problem:** `initSounds()` calls cuelume's `bind()` which wires up `data-cuelume-*` attribute listeners across the DOM. This runs synchronously in a `useEffect` on mount, competing with first paint and initial React hydration for main thread time.
+
+**What changed:**
+- Wrapped `initSounds()` in `requestIdleCallback` with a 2-second timeout fallback
+- Falls back to `setTimeout(cb, 100)` if `requestIdleCallback` is not available (older browsers)
+- Sounds are wired up after first paint completes, during browser idle time
+- No functional impact — sounds just activate a few milliseconds later
+
+**Metrics:**
+- Before: `initSounds()` runs synchronously in useEffect, competing with first paint
+- After: `initSounds()` runs during idle time, after first paint is committed
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D203 — Prefetch ShowDetailPage chunk on idle after first paint
+
+**Target:** `web-astryx/src/App.tsx` — `App` component
+
+**Problem:** The ShowDetailPage chunk (34KB + dependencies: TrackingRuleCard 19KB, SegmentedControlItem 11KB, ListItem 2.6KB) is only loaded when the user navigates to a show detail page. Hover-based prefetch on show cards helps mouse users, but touch/keyboard users who click directly experience a loading delay while the chunks download. The `PageFallback` returns `null`, so the page appears blank during this time.
+
+**What changed:**
+- Added `requestIdleCallback` in `App` component's `useEffect` that calls `prefetchDetailChunk()` after first paint
+- Falls back to `setTimeout(cb, 500)` if `requestIdleCallback` is unavailable
+- The detail page is the most likely next navigation from the landing page — prefetching it during idle time means it's already cached when the user clicks
+- ESM import resolution loads all dependency chunks (TrackingRuleCard, SegmentedControlItem, ListItem) in parallel
+
+**Metrics:**
+- Before: click without hover = blank page while ShowDetailPage + dependencies download (~67KB total)
+- After: chunk already cached from idle prefetch → instant navigation
+- Prefetch runs during idle time — doesn't compete with first paint or initial interactivity
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+## D204 — Trim SonarrSeries JSON payload for frontend
+
+**Target:** `internal/models/models.go`, `cmd/server/router.go` — Sonarr series list, single series, and add series endpoints
+
+**Problem:** The `/api/sonarr/series` endpoint returned the full `SonarrSeries` struct to the frontend, including fields only used in Go code: `sortTitle`, `tvdbId`, `imdbId`, `path`, `seasonFolder`, `seasonCount`, `alternateTitles`. For 21 series this was ~35KB raw / ~9KB gzipped. The `SonarrSeries` struct is used for both deserializing Sonarr API responses AND serializing to the frontend, so `json:"-"` would break deserialization. A custom `MarshalJSON` would break the `AddSeries` call which marshals the struct to send to Sonarr's API.
+
+**What changed:**
+- Created `SonarrSeriesPublic` struct with only the 11 fields the frontend uses: `id`, `title`, `year`, `overview`, `seriesType`, `monitored`, `rootFolderPath`, `qualityProfileId`, `images`, `statistics`, `manualMatchPending`
+- Added `SonarrSeries.Public()` method that converts to the trimmed struct
+- Updated `handleGetSonarrSeries` to convert before writing and cache `SonarrSeriesPublic` (cache type changed from `[]SonarrSeries` to `[]SonarrSeriesPublic`)
+- Updated `handleGetSonarrSeriesByID` to return `series.Public()`
+- Updated `handleAddSonarrSeries` to return `created.Public()`
+- Lookup endpoint (`handleLookupSonarrSeries`) left unchanged — frontend sends the full series object back to the add endpoint, and Sonarr's API requires `tvdbId`
+
+**Metrics:**
+- `/api/sonarr/series`: 35KB → 28KB raw (20% reduction), ~9KB → 7.8KB gzipped
+- `/api/sonarr/series/{id}`: similar per-series reduction
+- `/api/sonarr/lookup`: unchanged (needs full struct)
+- `go build` clean, `go test` all pass, `tsc --noEmit` clean
+- Frontend `SonarrSeries` type has `[key: string]: unknown` index signature — no breakage from missing fields
 
 **Outcome:** Kept. Committed.

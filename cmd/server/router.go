@@ -93,6 +93,47 @@ func (c *episodeCache) invalidate(mappingID int64) {
 	delete(c.entries, mappingID)
 }
 
+// seriesListCache provides a short-lived in-memory cache for the full
+// Sonarr series list. Avoids hitting the Sonarr API on every ShowsPage
+// navigation within the same session. Stores SonarrSeriesPublic so cached
+// responses are ready to serialize without re-converting.
+type seriesListCache struct {
+	mu        stdsync.RWMutex
+	data      []models.SonarrSeriesPublic
+	expiresAt time.Time
+	ttl       time.Duration
+}
+
+func newSeriesListCache(ttl time.Duration) *seriesListCache {
+	return &seriesListCache{ttl: ttl}
+}
+
+func (c *seriesListCache) get() ([]models.SonarrSeriesPublic, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if time.Now().After(c.expiresAt) {
+		return nil, false
+	}
+	cp := make([]models.SonarrSeriesPublic, len(c.data))
+	copy(cp, c.data)
+	return cp, true
+}
+
+func (c *seriesListCache) set(data []models.SonarrSeriesPublic) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data = make([]models.SonarrSeriesPublic, len(data))
+	copy(c.data, data)
+	c.expiresAt = time.Now().Add(c.ttl)
+}
+
+func (c *seriesListCache) invalidate() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data = nil
+	c.expiresAt = time.Time{}
+}
+
 func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, scheduler *schedulerController, appCtx context.Context, bgWG *stdsync.WaitGroup) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -101,12 +142,14 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Content-Type", "If-None-Match"},
+		ExposedHeaders:   []string{"ETag"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 
 	epCache := newEpisodeCache(2 * time.Minute)
+	seriesCache := newSeriesListCache(2 * time.Minute)
 
 	// Artwork manager — "sonarr" (default) uses Sonarr images directly;
 	// other providers download artwork locally for offline browsing.
@@ -177,7 +220,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Get("/settings", handleGetSettings(cfg, db))
 		r.Put("/settings", handleUpdateSettings(cfg, db, scheduler, syncEngine, artworkMgr))
 		r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db))
-		r.Get("/sonarr/series", handleGetSonarrSeries(db, syncEngine))
+		r.Get("/sonarr/series", handleGetSonarrSeries(db, syncEngine, seriesCache))
 		r.Get("/sonarr/series/{id}", handleGetSonarrSeriesByID(db, syncEngine))
 		r.Post("/sonarr/series", handleAddSonarrSeries(cfg, syncEngine))
 		r.Get("/sonarr/lookup", handleLookupSonarrSeries(syncEngine))
@@ -1424,6 +1467,8 @@ func handleLookupSonarrSeries(syncEngine *sync.Engine) http.HandlerFunc {
 				anime = append(anime, item)
 			}
 		}
+		// Lookup results must include all fields (tvdbId, etc.) because the
+		// frontend sends the selected series back to the add endpoint.
 		writeJSON(w, http.StatusOK, anime)
 	}
 }
@@ -1509,7 +1554,7 @@ func handleAddSonarrSeries(cfg *config.Config, syncEngine *sync.Engine) http.Han
 			writeError(w, http.StatusBadGateway, "failed to add Sonarr series: "+err.Error())
 			return
 		}
-		writeJSON(w, http.StatusCreated, created)
+		writeJSON(w, http.StatusCreated, created.Public())
 	}
 }
 
@@ -1607,12 +1652,23 @@ func handleGetSonarrSeriesByID(db *database.DB, syncEngine *sync.Engine) http.Ha
 			}
 		}
 
-		writeJSON(w, http.StatusOK, series)
+		writeJSON(w, http.StatusOK, series.Public())
 	}
 }
 
-func handleGetSonarrSeries(db *database.DB, engine *sync.Engine) http.HandlerFunc {
+func handleGetSonarrSeries(db *database.DB, engine *sync.Engine, cache *seriesListCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Serve from in-memory cache if available and fresh.
+		// The matchable_only variant is not cached since it depends on
+		// mappings + AFL cache state which changes more frequently.
+		matchableOnly := r.URL.Query().Get("matchable_only") == "true"
+		if !matchableOnly {
+			if cached, ok := cache.get(); ok {
+				writeJSON(w, http.StatusOK, cached)
+				return
+			}
+		}
+
 		c := engine.SonarrClient()
 		series, err := c.GetAnimeSeries(r.Context())
 		if err != nil {
@@ -1620,7 +1676,7 @@ func handleGetSonarrSeries(db *database.DB, engine *sync.Engine) http.HandlerFun
 			return
 		}
 
-		if r.URL.Query().Get("matchable_only") == "true" {
+		if matchableOnly {
 			mappings, err := db.GetAllMappings(r.Context())
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
@@ -1642,7 +1698,17 @@ func handleGetSonarrSeries(db *database.DB, engine *sync.Engine) http.HandlerFun
 			series = filterSeriesForAddModal(r.Context(), series, mappings, pendingManualMatchIDs, engine.MatcherClient(), cachedShows)
 		}
 
-		writeJSON(w, http.StatusOK, series)
+		public := make([]models.SonarrSeriesPublic, len(series))
+		for i := range series {
+			public[i] = series[i].Public()
+		}
+
+		if !matchableOnly {
+			// Cache the unfiltered public series list for 2 minutes.
+			cache.set(public)
+		}
+
+		writeJSON(w, http.StatusOK, public)
 	}
 }
 

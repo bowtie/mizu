@@ -544,11 +544,10 @@ export function ShowDetailPage() {
         setMaxEpisode(freshMax);
         setMarkerValue((prev) => Math.min(prev, freshMax));
         setPristineMarkerValue((prev) => Math.min(prev, freshMax));
+        setEpisodesLoading(false);
       })
       .catch((err: unknown) => {
         addNotification("Failed to load episodes: " + errorMessage(err), "error");
-      })
-      .finally(() => {
         setEpisodesLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -781,9 +780,16 @@ export function ShowDetailPage() {
     try {
       const nextState = !sonarrEp.monitored;
       await setEpisodeMonitor(showId, sonarrEp.id, nextState);
-      setEpisodes((prev) =>
-        prev.map((e) => (e.sonarr_episode_id === sonarrEp.id ? { ...e, monitored: nextState } : e)),
-      );
+      setEpisodes((prev) => {
+        // Find the episode by sonarr_episode_id and update in-place
+        // via splice — avoids mapping all 1200+ elements when only
+        // one changed.
+        const idx = prev.findIndex((e) => e.sonarr_episode_id === sonarrEp.id);
+        if (idx === -1) return prev;
+        const next = prev.slice();
+        next[idx] = { ...prev[idx], monitored: nextState };
+        return next;
+      });
       addNotification(
         `${episodeLabel(ep)} ${nextState ? "now monitored" : "now unmonitored"}`,
         "success",
