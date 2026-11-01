@@ -17,7 +17,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Plus, Search, Waves, CircleAlert, RefreshCw, Check, ArrowDownUp } from "lucide-react";
 import { useAppStore } from "../lib/store";
-import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, getArtworkRefreshStatus, prefetchEpisodes, prefetchShow, errorMessage } from "../lib/api";
+import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, getArtworkRefreshStatus, prefetchEpisodes, errorMessage } from "../lib/api";
 import { prefetchDetailChunk, prefetchAddDialogChunk } from "../lib/chunkPrefetch";
 import type { SelectOption, Settings, Show, SonarrAddOptions, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
@@ -415,7 +415,8 @@ export function ShowsPage() {
 
   const handleCardHover = useCallback((showId: string | number) => {
     prefetchDetailChunk();
-    prefetchShow(showId);
+    // Only prefetch episodes — the show data is already in the store
+    // (from bootstrap), so prefetchShow() would be a redundant API call.
     prefetchEpisodes(showId);
   }, []);
 

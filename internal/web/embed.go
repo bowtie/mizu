@@ -62,6 +62,12 @@ func SPAHandler() http.Handler {
 			if strings.HasPrefix(path, "/assets/") || strings.HasPrefix(path, "/fonts/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			}
+			// Service worker must always be revalidated so the browser
+			// picks up updates promptly. Without this, heuristic caching
+			// could serve a stale SW for up to 24h.
+			if path == "/sw.js" {
+				w.Header().Set("Cache-Control", "no-cache")
+			}
 			// File exists, serve it directly
 			fileServer.ServeHTTP(w, r)
 			return

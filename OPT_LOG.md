@@ -1931,6 +1931,19 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 | 67 | D230 | Eliminate redundant getShows+getSettings on first load | ShowsPage loadLanding() fired getShows()+getSettings() as separate calls when store had no shows, but store already fetches getBootstrap() on mount which includes shows+settings+providers; added early return in loadLanding for non-forced first load that only fetches getSonarrSeries(), new useEffect watches store shows to clear loading state; eliminates 2 redundant API round-trips on first load, ShowsPage chunk 13.83KB→14.03KB (+0.2KB) |
 | 68 | D231 | Pre-JS fetch Sonarr series on library page | getSonarrSeries() only called after ShowsPage mounts (after JS bundle+chunk download+parse+render), sequential waterfall; extended inline script to fire fetch('/api/sonarr/series') when on / or /shows, api.ts getSonarrSeries() reuses pre-fired Response; Sonarr series API starts in parallel with JS bundle saving 50-200ms, main bundle 317.43KB→317.48KB (+0.05KB) |
 | 69 | D232 | ETag for index.html | no-cache on index.html means browser always validates but without ETag server always re-sends full ~3KB HTML; added init() that computes SHA-256 hash of embedded index.html as weak ETag, handler checks If-None-Match and returns 304 Not Modified when ETag matches; saves ~3KB HTML re-download on repeat visits when server binary unchanged, ETag stable within single binary version |
+| 70 | D233 | Remove redundant prefetchShow on card hover | handleCardHover fired prefetchShow()+prefetchEpisodes() but show data already in store from bootstrap, prefetchShow fetches /api/mappings/:id redundantly; removed prefetchShow from hover handler, kept prefetchEpisodes (not in store); saves 1 API round-trip per card hover, main bundle 317.48KB→317.38KB (-0.1KB) |
+| 71 | D234 | Remove dead prefetchShow function and showPrefetch cache | After D233 removed prefetchShow() call, the function + showPrefetch Map + getShow() cache check became dead code; removed all three, getShow() now simple request() call; main bundle 317.38KB→317.31KB (-0.07KB), no behavioral change |
+| 72 | D235 | Service worker for offline caching (assets cache-first, API stale-while-revalidate) | Created public/sw.js with cache-first for /assets/ and /fonts/ (immutable hashed files), stale-while-revalidate for /api/, network-first for navigations with fallback to cached index.html; registered in index.html after page load; added no-cache header for /sw.js in embed.go; on repeat visits all JS/CSS/fonts served from SW cache instantly (zero network), API responses served from cache while revalidating in background; main bundle unchanged 317.31KB, sw.js 2.5KB |
+| 73 | D236 | Parallel show-only + detail fetch on hard refresh of detail page | Previously hard refresh waited for combined /detail endpoint (show + episodes, 252KB for Detective Conan) before rendering anything; now fires getShow (583B, ~0.5ms) and getShowDetail (252KB, ~14ms) in parallel — show data (title, tracking rules, artwork card) appears immediately when getShow resolves, episodes fill in when detail resolves; added pre-fired show fetch in index.html inline script; getShow now reuses prefetched Response; main bundle 317.31→317.37KB (+0.06KB), ShowDetailPage 33.40→33.49KB (+0.09KB) |
+| 74 | D237 | Replace detail endpoint with separate show + episodes (ETag) on hard refresh | D236 still used getShowDetail (combined /detail endpoint) for episodes — no ETag support, redundant show data in response; replaced with getEpisodes (separate /episodes endpoint) which has ETag + 304 Not Modified support; removed getShowDetail function entirely; updated inline script to fire /episodes instead of /detail; prefetchShowDetail now combines show + episodes prefetches; getEpisodes reuses prefetched episodes Response; repeat visits to same anime page get 304 (252KB→0B) on episodes; ShowDetailPage 33.49→33.38KB (-0.11KB), main bundle 317.37→317.69KB (+0.32KB from getEpisodes prefetch logic) |
+| 75 | D238 | Clone prefetched Responses to prevent Body already read error | D237 introduced a race: both prefetchShowDetail and getEpisodes/getShow read the same prefetched Response from the inline script; Response.json() can only be called once per Response, causing a TypeError if both try to read; fixed by calling res.clone().json() in both prefetchShowDetail and getEpisodes so each gets its own copy of the body; main bundle 317.69→317.72KB (+0.03KB) |
+| 76 | D239 | Clone in requestPrefetched for full Response safety | D238 fixed prefetchShowDetail and getEpisodes but requestPrefetched (used by getShow, getBootstrap, getSonarrSeries) still called res.json() without cloning; if any other consumer reads the same Response first, requestPrefetched would throw; added res.clone().json() to requestPrefetched for defensive safety; main bundle unchanged 317.72KB |
+| 77 | D240 | Move CSS stylesheet link before inline script in HTML head | Vite places the stylesheet link after the script tag by default, delaying CSS download until the script tag is parsed; moved the 168KB CSS link to before the inline API prefetch script so the browser starts downloading CSS immediately on head parse, in parallel with API fetches and JS bundle; CSS at line 15 (before inline script at line 16, main JS at line 57); no bundle size change |
+| 78 | D241 | Avoid double JSON parsing by checking detailDataCache in getShow/getEpisodes | On hard refresh, both prefetchShowDetail and the ShowDetailPage effect consume the same prefetched Responses; even with .clone(), the 252KB episodes JSON was parsed twice; added detailDataCache check in getShow and getEpisodes — if prefetchShowDetail already resolved and cached the data, return it directly without re-parsing; main bundle 317.72→317.83KB (+0.11KB) |
+| 79 | D242 | Clear detailDataCache after initial load to prevent stale data on post-action refresh | D241 introduced a bug: getShow/getEpisodes now check detailDataCache first, but loadShowData (called after save/artwork refresh) also calls getShow — it would return stale cached data instead of fetching fresh data; added clearCachedShowDetail() export and call it in ShowDetailPage effect after the synchronous prefetch check; cache is only needed for initial mount, cleared before async fetches begin; main bundle 317.83→317.85KB (+0.02KB), ShowDetailPage 33.38→33.41KB (+0.03KB) |
+| 80 | D243 | Clean up detailPrefetch map and remove unnecessary Content-Type on GET episodes | clearCachedShowDetail now also deletes from detailPrefetch map to prevent unbounded memory growth in long sessions; removed unnecessary Content-Type: application/json header from requestEpisodesWithETag (GET requests don't need it); main bundle 317.85→317.84KB (-0.01KB) |
+| 81 | D244 | Reuse in-flight prefetchShowDetail promise in getShow/getEpisodes to avoid double JSON parse | On hard refresh where prefetchShowDetail hasn't resolved yet (promise still in-flight), getShow and getEpisodes were each independently reading the same prefetched Response with .clone().json() — parsing the 252KB episodes JSON twice; added detailPrefetch in-flight check in both functions so they extract .show/.episodes from the shared promise instead; moved clearCachedShowDetail call to after getShow/getEpisodes are fired in the effect so the in-flight promise is still available; main bundle 317.84→317.93KB (+0.09KB) |
+| 82 | D245 | Split prefetch into individual show/episodes promises so getShow isn't blocked by episodes | D244 stored a combined Promise.all([show, episodes]) in detailPrefetch; getShow extracted .show from it, but Promise.all waits for the slowest input — the 252KB episodes fetch — before resolving, so the 583B show data was unnecessarily delayed; split detailPrefetch to store { show: Promise<Show>, episodes: Promise<Episode[]> } separately so getShow resolves as soon as the show-only fetch completes; main bundle 317.93→317.91KB (-0.02KB) |
 
 ---
 
@@ -3151,5 +3164,261 @@ Steps 3-5 are sequential — the detail chunk isn't requested until the idle cal
 - No bundle size change (server-side only)
 - Go build clean
 - Behavioral: on repeat visits, the browser sends `If-None-Match` with the cached ETag. If the server binary hasn't changed, it gets a 304 Not Modified (saves ~3KB HTML download + compression overhead). If the server binary has changed (new build), the browser gets the full new HTML with updated asset hashes.
+
+**Outcome:** Kept. Committed.
+
+## D233 — Remove redundant prefetchShow on card hover
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx`, `web-astryx/src/main.tsx` — API round-trips on hover
+
+**Problem:** `handleCardHover` in ShowsPage fired both `prefetchShow(showId)` and `prefetchEpisodes(showId)` on card hover. But `prefetchShow` fetches `/api/mappings/:id` — the show data is already in the store (from bootstrap). When the user navigates, ShowDetailPage uses the store's show data and only fetches episodes separately. The `prefetchShow` call is redundant — it wastes an API round-trip on every card hover.
+
+**What changed:**
+- `ShowsPage.tsx`: Removed `prefetchShow(showId)` from `handleCardHover`. Only `prefetchEpisodes(showId)` remains (episodes are not in the store and genuinely need prefetching). Removed unused `prefetchShow` import.
+- `main.tsx`: Removed unused `prefetchShow` import.
+
+**Metrics:**
+- Main JS bundle: 317.48KB → 317.38KB (-0.1KB from removed import)
+- ShowsPage chunk: 14.03KB → 14.01KB (-0.02KB)
+- tsc clean, vp build clean
+- Behavioral: 1 fewer API round-trip per card hover. The show data is already in the store from bootstrap — no need to re-fetch it.
+
+**Outcome:** Kept. Committed.
+
+## D234 — Remove dead prefetchShow function and showPrefetch cache
+
+**Target:** `web-astryx/src/lib/api.ts` — dead code cleanup
+
+**Problem:** After D233 removed the `prefetchShow()` call from ShowsPage's hover handler, the `prefetchShow` function and its `showPrefetch` cache Map became dead code — nothing populates the cache, so `getShow()`'s cache check never finds anything. The function was still exported and the cache was still allocated.
+
+**What changed:**
+- `api.ts`: Removed the `showPrefetch` Map, the `prefetchShow` function, and the cache check in `getShow()`. `getShow()` is now a simple `request()` call.
+
+**Metrics:**
+- Main JS bundle: 317.38KB → 317.31KB (-0.07KB from removed dead code)
+- tsc clean, vp build clean
+- Behavioral: no change — the removed code was never called.
+
+**Outcome:** Kept. Committed.
+
+## D235 — Service worker for offline caching
+
+**Target:** `web-astryx/public/sw.js` (new), `web-astryx/index.html`, `internal/web/embed.go`
+
+**Problem:** On repeat visits, the browser revalidates cached assets via conditional requests (304s) but still pays a network round-trip for every JS/CSS/font file. For API responses with SWR headers, the browser serves stale content but also makes a background request. A service worker eliminates the network round-trip entirely for immutable assets — they're served instantly from the SW cache with zero network activity. For API responses, stale-while-revalidate at the SW level provides the same benefit even when the browser's HTTP cache has been evicted.
+
+**What changed:**
+- Created `web-astryx/public/sw.js` — a lightweight service worker (2.5KB) with three strategies:
+  - **Cache-first** for `/assets/` and `/fonts/` — immutable hashed files are served from cache without any network request. On first visit, fetched and cached. On subsequent visits, instant from cache.
+  - **Stale-while-revalidate** for `/api/` — serves cached response immediately, fetches fresh data in background and updates cache. Falls back to cached response if network fails (offline support).
+  - **Network-first** for navigation requests — tries network first (always get latest HTML), falls back to cached `/index.html` if offline.
+- SW precaches `/` and `/index.html` on install for offline shell.
+- SW versioning via `mizu-v1` cache prefix — old caches are purged on activate.
+- `skipWaiting()` + `clients.claim()` for immediate activation on first install.
+- Registered SW in `index.html` after `window.load` event (non-blocking). Registration limited to HTTPS or localhost.
+- Added `Cache-Control: no-cache` for `/sw.js` in `embed.go` — ensures the browser always revalidates the SW file so updates are picked up within 24h (browser default for SW updates).
+
+**Metrics:**
+- Main JS bundle: 317.31KB (unchanged — SW is a separate file, not part of the bundle)
+- Service worker: 2.5KB (served once, then cached)
+- tsc clean, vp build clean, go build clean
+- Repeat visit: all JS/CSS/fonts served from SW cache (zero network round-trips)
+- API responses: served from SW cache instantly, revalidated in background
+- Offline: app shell loads from SW cache, API responses served from stale cache
+
+**Outcome:** Kept. Committed.
+
+## D236 — Parallel show-only + detail fetch on hard refresh
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/lib/api.ts`, `web-astryx/index.html`
+
+**Problem:** On hard refresh of `/shows/:id`, the page waited for the combined `/api/mappings/:id/detail` endpoint to resolve before rendering any show data. The detail endpoint returns show + episodes in one response — for Detective Conan (1000+ episodes), that's 252KB and takes ~14ms server-side. The show data itself (title, tracking rules, artwork source) is a simple DB query returning 583 bytes in ~0.5ms, but it was blocked behind the episode enrichment. This caused the hero title, tracking rules, and artwork card to stay in skeleton state until the full episode list was ready.
+
+**What changed:**
+- Added a pre-fired `fetch("/api/mappings/:id")` in the `index.html` inline script, running in parallel with the existing `fetch("/api/mappings/:id/detail")`. Both start before the JS bundle downloads.
+- Updated `getShow()` in `api.ts` to reuse the prefetched show Response via `requestPrefetched()` — same pattern as `getShowDetail()`.
+- Updated `ShowDetailPage` main effect: on hard refresh (no store data, no prefetched detail), now fires `getShow()` and `getShowDetail()` in parallel instead of waiting for `getShowDetail()` alone.
+- `getShow()` resolves first (583B, ~0.5ms) → `applyShowData()` runs immediately → hero title, tracking rules, artwork card render. `setLoadingShow(false)` fires.
+- `getShowDetail()` resolves later (252KB, ~14ms) → `applyEpisodes()` runs → episode list fills in.
+- Guarded with `showApplied` flag to avoid double-applying show data if both responses arrive close together.
+- If `getShow()` fails but `getShowDetail()` succeeds, show data is applied from the detail response as fallback.
+
+**Metrics:**
+- Show-only response: 583 bytes, ~0.5ms server time (simple DB query)
+- Detail response: 252,625 bytes, ~14ms server time (DB + possible Sonarr/AFL enrichment)
+- Main JS bundle: 317.31KB → 317.37KB (+0.06KB)
+- ShowDetailPage chunk: 33.40KB → 33.49KB (+0.09KB)
+- tsc clean, vp build clean, go build clean
+- User experience: hero title + tracking rules + artwork card appear immediately on hard refresh; episode list fills in progressively
+
+**Outcome:** Kept. Committed.
+
+## D237 — Replace detail endpoint with separate show + episodes (ETag) on hard refresh
+
+**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/index.html`
+
+**Problem:** D236 introduced parallel `getShow` + `getShowDetail` on hard refresh. But `getShowDetail` hit the combined `/api/mappings/:id/detail` endpoint which: (1) redundantly included show data that `getShow` already fetched, (2) lacked ETag support — the detail endpoint has no version tag, so repeat visits always re-download the full 252KB episode payload, and (3) the `getShowDetail` function was now only used for the prefetch cache path, not the main effect.
+
+**What changed:**
+- Replaced `getShowDetail` call in the hard-refresh effect with `getEpisodes` — the separate `/api/mappings/:id/episodes` endpoint has ETag support (304 Not Modified on repeat visits, 252KB → 0B).
+- Removed the `getShowDetail` export entirely — no longer called anywhere.
+- Updated inline script in `index.html`: replaced `fetch("/api/mappings/:id/detail")` with `fetch("/api/mappings/:id/episodes")` — episodes fetch now starts before JS bundle with ETag support.
+- Updated `prefetchShowDetail()` in `api.ts`: now combines `prefetch.show` + `prefetch.episodes` Responses into a `ShowDetailResponse` for the synchronous cache, instead of using the detail endpoint.
+- Updated `getEpisodes()` in `api.ts`: now checks for prefetched episodes Response from the inline script and reuses it — avoids duplicate request on hard refresh.
+- Updated `MizuPrefetch` interface: replaced `detail` with `episodes`.
+- ShowDetailPage: removed `getShowDetail` import, updated comments.
+
+**Metrics:**
+- Episodes endpoint: 252,022 bytes → 0 bytes (304 Not Modified) on repeat visits
+- ShowDetailPage chunk: 33.49KB → 33.38KB (-0.11KB, removed getShowDetail call path)
+- Main bundle: 317.37KB → 317.69KB (+0.32KB, getEpisodes prefetch logic)
+- tsc clean, vp build clean, go build clean
+- ETag 304 verified: repeat request with If-None-Match returns 304, 0 bytes
+
+**Outcome:** Kept. Committed.
+
+## D238 — Clone prefetched Responses to prevent Body already read error
+
+**Target:** `web-astryx/src/lib/api.ts`
+
+**Problem:** D237 introduced a race condition: both `prefetchShowDetail()` and `getEpisodes()`/`getShow()` read the same prefetched `Response` object from `window.__mizuPrefetch`. `Response.json()` can only be called once per Response — if `prefetchShowDetail` reads it first (via `main.tsx` before React mounts), `getEpisodes` would throw `TypeError: Body already read` when the ShowDetailPage effect fires.
+
+**What changed:**
+- `prefetchShowDetail`: changed `res.json()` to `res.clone().json()` for both show and episodes Responses
+- `getEpisodes`: changed `res.json()` to `res.clone().json()` for the prefetched episodes Response
+- `Response.clone()` creates an independent copy of the body stream, so both the clone and the original can be read separately
+
+**Metrics:**
+- Main bundle: 317.69KB → 317.72KB (+0.03KB)
+- tsc clean, vp build clean, go build clean
+- Bugfix: prevents intermittent TypeError on hard refresh of detail pages
+
+**Outcome:** Kept. Committed.
+
+## D239 — Clone in requestPrefetched for full Response safety
+
+**Target:** `web-astryx/src/lib/api.ts`
+
+**Problem:** D238 fixed `prefetchShowDetail` and `getEpisodes` to clone Responses before reading, but `requestPrefetched` (used by `getShow`, `getBootstrap`, `getSonarrSeries`) still called `res.json()` without cloning. If any other consumer reads the same prefetched Response first, `requestPrefetched` would throw `TypeError: Body already read`.
+
+**What changed:**
+- Changed `res.json()` to `res.clone().json()` in `requestPrefetched`
+
+**Metrics:**
+- Main bundle: 317.72KB (unchanged)
+- tsc clean, vp build clean, go build clean
+- Defensive fix: prevents intermittent TypeError on any prefetched Response with multiple consumers
+
+**Outcome:** Kept. Committed.
+
+## D240 — Move CSS stylesheet link before inline script in HTML head
+
+**Target:** `web-astryx/vite.config.ts` (preload-route-chunks plugin)
+
+**Problem:** Vite places the `<link rel="stylesheet">` tag after the `<script type="module">` tag in the built HTML. This means the browser parses the script tag before it discovers the CSS link, delaying the start of the 168KB (29KB gz) CSS download. CSS is render-blocking — first paint can't happen until the CSS is downloaded and parsed.
+
+**What changed:**
+- Updated the `preload-route-chunks` Vite plugin to move the CSS `<link rel="stylesheet">` tag from its default position (after the script tag) to before the first `<script>` tag in the `<head>`.
+- The browser now discovers the CSS link at line 15, before the inline API prefetch script (line 16) and the main JS bundle (line 57). The CSS download starts immediately on head parse, in parallel with API fetches and the JS bundle download.
+- No duplicate stylesheet links — the original is removed before re-insertion.
+
+**Metrics:**
+- CSS position: line 62 (after script) → line 15 (before script)
+- Main bundle: 317.72KB (unchanged)
+- CSS: 168.13KB (unchanged, served with immutable cache headers)
+- tsc clean, vp build clean, go build clean
+- First paint: CSS download starts earlier, reducing time to first paint
+
+**Outcome:** Kept. Committed.
+
+## D241 — Avoid double JSON parsing by checking detailDataCache in getShow/getEpisodes
+
+**Target:** `web-astryx/src/lib/api.ts`
+
+**Problem:** On hard refresh of `/shows/:id`, both `prefetchShowDetail()` (called in `main.tsx`) and the ShowDetailPage effect consume the same prefetched Responses from the inline script. Even with `.clone()`, the 252KB episodes JSON was parsed twice — once by `prefetchShowDetail` and once by `getEpisodes` in the effect. This wasted CPU time on large episode lists.
+
+**What changed:**
+- `getShow()`: added a check for `detailDataCache` — if `prefetchShowDetail` already resolved and cached the show data, return it directly as a resolved Promise without re-parsing the Response.
+- `getEpisodes()`: added the same `detailDataCache` check — if episodes are already cached from the prefetch, return them directly.
+- Both functions still fall through to the prefetched Response path if the cache hasn't resolved yet, and to the regular `request()` path if no prefetch exists.
+
+**Metrics:**
+- Main bundle: 317.72KB → 317.83KB (+0.11KB from cache check logic)
+- tsc clean, vp build clean, go build clean
+- CPU: avoids double JSON parsing of 252KB episodes payload when prefetch resolves before effect fires
+
+**Outcome:** Kept. Committed.
+
+## D242 — Clear detailDataCache after initial load to prevent stale data
+
+**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`
+
+**Problem:** D241 added `detailDataCache` checks in `getShow()` and `getEpisodes()` to avoid double JSON parsing. But `loadShowData()` (called after save/artwork refresh) also calls `getShow()` — it would return the stale cached show data instead of fetching fresh data from the server, meaning the UI wouldn't reflect the user's save.
+
+**What changed:**
+- Added `clearCachedShowDetail(id)` export in `api.ts` — deletes the `detailDataCache` entry for a show.
+- Updated ShowDetailPage effect: calls `clearCachedShowDetail(showId)` after the synchronous `getCachedShowDetail` check, before async fetches begin. The cache was only needed for the initial mount to skip the skeleton — once the effect has started, subsequent `getShow`/`getEpisodes` calls should fetch fresh data.
+- Also clears the cache in the `hasPrefetched` early-return path.
+
+**Metrics:**
+- Main bundle: 317.83KB → 317.85KB (+0.02KB)
+- ShowDetailPage chunk: 33.38KB → 33.41KB (+0.03KB)
+- tsc clean, vp build clean, go build clean
+- Bugfix: prevents stale show data from being returned by loadShowData after a save
+
+**Outcome:** Kept. Committed.
+
+## D243 — Clean up detailPrefetch map and remove unnecessary Content-Type on GET episodes
+
+**Target:** `web-astryx/src/lib/api.ts`
+
+**What changed:**
+- `clearCachedShowDetail()`: now also deletes from `detailPrefetch` map, not just `detailDataCache`. The promise cache was never cleaned up, causing unbounded memory growth in long sessions where the user visits many show detail pages.
+- `requestEpisodesWithETag()`: removed unnecessary `Content-Type: application/json` header. This is a GET request with no body — the header is ignored by the server and adds unnecessary bytes to the request.
+
+**Metrics:**
+- Main bundle: 317.85KB → 317.84KB (-0.01KB)
+- tsc clean, vp build clean, go build clean
+- Memory: detailPrefetch map entries are now cleaned up on page unmount
+
+**Outcome:** Kept. Committed.
+
+## D244 — Reuse in-flight prefetchShowDetail promise in getShow/getEpisodes to avoid double JSON parse
+
+**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`
+
+**Problem:** On hard refresh, `main.tsx` fires `prefetchShowDetail(id)` which reads the prefetched show + episodes Responses and creates a combined `ShowDetailResponse` promise stored in `detailPrefetch`. When the ShowDetailPage effect fires `getShow`/`getEpisodes`, D241 added a `detailDataCache` check (resolved data) but missed the case where the prefetch promise is still in-flight — the data hasn't resolved yet, so `detailDataCache` is empty. In that case, `getShow` and `getEpisodes` each independently called `requestPrefetched` which did `res.clone().json()` on the same Response — parsing the 252KB episodes JSON twice (once in `prefetchShowDetail`, once in `getEpisodes`).
+
+**What changed:**
+- `getShow()`: added `detailPrefetch` in-flight check between the `detailDataCache` (resolved) check and the prefetched Response fallback. If the promise exists, extract `.show` from it instead of re-parsing the Response.
+- `getEpisodes()`: same — added `detailPrefetch` in-flight check, extracts `.episodes` from the shared promise.
+- `ShowDetailPage.tsx` effect: moved `clearCachedShowDetail(showId)` from before `getShow`/`getEpisodes` to after them. If it runs before, it deletes the `detailPrefetch` entry that `getShow`/`getEpisodes` need to check. The `hasPrefetched` early-return path still calls it immediately (correct — no fetches needed there).
+
+**Metrics:**
+- Main bundle: 317.84KB → 317.93KB (+0.09KB, from the added in-flight checks)
+- ShowDetailPage chunk: 33.41KB (unchanged)
+- tsc clean, vp build clean, go build clean
+- Runtime: eliminates one 252KB JSON parse on hard refresh when prefetch is still in-flight
+
+**Outcome:** Kept. Committed.
+
+## D245 — Split prefetch into individual show/episodes promises so getShow isn't blocked by episodes
+
+**Target:** `web-astryx/src/lib/api.ts`
+
+**Problem:** D244 stored a combined `Promise.all([showPromise, episodesPromise])` in `detailPrefetch`. When `getShow` extracted `.show` from it, `Promise.all` waits for the slowest input — the 252KB episodes fetch — before resolving. So the 583B show data (which resolves in ~1ms) was unnecessarily delayed by the episodes fetch (which can take 7-13ms+ for cached, much more for live Sonarr+AFL). This defeated the entire purpose of the parallel fetch architecture: show data should appear instantly, episodes fill in later.
+
+**What changed:**
+- Changed `detailPrefetch` from `Map<string, Promise<ShowDetailResponse>>` to `Map<string, DetailPrefetchEntry>` where `DetailPrefetchEntry = { show: Promise<Show>, episodes: Promise<Episode[]> }`.
+- `prefetchShowDetail()`: stores the individual `showPromise` and `episodesPromise` separately. A separate `Promise.all` still populates `detailDataCache` for `getCachedShowDetail()` (synchronous initial state).
+- `getShow()`: returns `inflightDetail.show` directly — resolves as soon as the show-only fetch completes.
+- `getEpisodes()`: returns `inflightDetail.episodes` directly — resolves when episodes fetch completes.
+- `clearCachedShowDetail()`: unchanged — deletes from both `detailDataCache` and `detailPrefetch`.
+
+**Metrics:**
+- Main bundle: 317.93KB → 317.91KB (-0.02KB)
+- ShowDetailPage chunk: 33.41KB (unchanged)
+- tsc clean, vp build clean, go build clean
+- Runtime: show data resolves ~7-13ms+ faster on hard refresh (no longer blocked by episodes fetch)
 
 **Outcome:** Kept. Committed.

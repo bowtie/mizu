@@ -42,9 +42,9 @@ import {
   deleteShow,
   getArtworkBannerUrl,
   getCachedShowDetail,
+  clearCachedShowDetail,
   getEpisodes,
   getShow,
-  getShowDetail,
   refreshArtwork,
   setArtworkSource,
   setEpisodeMonitor,
@@ -497,10 +497,14 @@ export function ShowDetailPage() {
   // Fetch show data + episodes. If the store already has show data,
   // we skip the getShow call entirely — the store data is fresh enough
   // (fetched on app mount). Episodes always need fetching since they're
-  // not in the store. On hard refresh (no store data), we use the
-  // combined /detail endpoint to fetch show + episodes in one request.
+  // not in the store. On hard refresh (no store data), we fire two
+  // parallel requests: getShow (simple DB query, resolves fast) and
+  // getEpisodes (may need Sonarr + AFL enrichment, resolves slower).
+  // Show data is applied as soon as getShow resolves — the hero title,
+  // tracking rules, and artwork card appear immediately. Episodes fill
+  // in when getEpisodes resolves.
   // If the prefetched detail data was already resolved (fired in
-  // main.tsx before React mounted), we skip the fetch entirely.
+  // main.tsx before React mounted), we skip all fetching.
   useEffect(() => {
     if (!showId) return;
     const hasStoreData = !!storeShow;
@@ -509,8 +513,18 @@ export function ShowDetailPage() {
     // If we already have all data from prefetch, just settle — no fetch needed.
     if (hasPrefetched) {
       requestAnimationFrame(() => setPageSettled(true));
+      // Clear the cache so subsequent getShow/getEpisodes calls (e.g.
+      // loadShowData after a save) fetch fresh data instead of returning
+      // the stale prefetch.
+      clearCachedShowDetail(showId);
       return;
     }
+
+    // Note: clearCachedShowDetail is called AFTER getShow/getEpisodes
+    // below, so they can still reuse the in-flight prefetch promise.
+    // The cache is only needed for the initial mount — clearing it
+    // after the fetches are fired ensures subsequent calls (e.g.
+    // loadShowData after a save) fetch fresh data.
 
     setLoadingShow(!hasStoreData);
     setEpisodesLoading(true);
@@ -562,33 +576,37 @@ export function ShowDetailPage() {
     };
 
     if (!hasStoreData) {
-      // Hard refresh — fetch show + episodes in a single request.
-      // Split the response handling into two ticks: apply show data
-      // first (title, tracking rules, artwork card) so the page fills
-      // in immediately, then apply episodes in the next frame so the
-      // episode list renders in a separate pass. This gives users a
-      // progressive loading experience instead of everything appearing
-      // at once after the API resolves.
-      getShowDetail(showId)
-        .then((res) => {
-          if (!res.show) {
-            addNotification("Anime not found", "error");
-            navigate("/shows");
-            return;
-          }
-          applyShowData(res.show);
-          // Defer episode rendering to the next frame so React commits
-          // the show data (hero title, tracking rules, artwork) first.
-          requestAnimationFrame(() => {
-            applyEpisodes((res.episodes as Episode[]) || []);
-          });
+      // Hard refresh — fire show-only and episodes requests in parallel.
+      // getShow is a simple DB query and resolves much faster than
+      // getEpisodes (which may need to enrich from Sonarr + AFL). Show
+      // data is applied as soon as it arrives so the hero title,
+      // tracking rules, and artwork card appear immediately.
+      // Episodes fill in when getEpisodes resolves — the episodes
+      // endpoint has ETag support so repeat visits get 304 Not Modified.
+      let showApplied = false;
+      getShow(showId)
+        .then((showRes) => {
+          showApplied = true;
+          applyShowData(showRes);
         })
         .catch((err: unknown) => {
-          addNotification("Failed to load anime: " + errorMessage(err), "error");
-          setEpisodesLoading(false);
+          if (!showApplied) {
+            addNotification("Failed to load anime: " + errorMessage(err), "error");
+          }
         })
         .finally(() => {
           setLoadingShow(false);
+        });
+
+      getEpisodes(showId)
+        .then((episodesRes) => {
+          applyEpisodes((episodesRes as Episode[]) || []);
+        })
+        .catch((err: unknown) => {
+          if (!showApplied) {
+            addNotification("Failed to load anime: " + errorMessage(err), "error");
+          }
+          setEpisodesLoading(false);
         });
     } else {
       // Store has show data — only fetch episodes.
@@ -601,6 +619,12 @@ export function ShowDetailPage() {
           setEpisodesLoading(false);
         });
     }
+
+    // Clear the prefetch caches after getShow/getEpisodes have been fired.
+    // This ensures subsequent calls (e.g. loadShowData after a save) fetch
+    // fresh data instead of returning stale prefetch data.
+    clearCachedShowDetail(showId);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showId]);
 

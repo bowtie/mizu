@@ -35,7 +35,17 @@
         var m = path.match(/^\/shows\/(\d+)/);
         if (m) {
           p.detailId = m[1];
-          p.detail = fetch("/api/mappings/" + m[1] + "/detail", {
+          // Fire show-only and episodes fetches in parallel before the
+          // JS bundle downloads. The show endpoint is a simple DB query
+          // (583B, ~0.5ms) and resolves much faster than the episodes
+          // endpoint (which may need Sonarr + AFL enrichment). This lets
+          // the page show the title and tracking rules immediately.
+          // The episodes endpoint has ETag support for 304 Not Modified
+          // on repeat visits.
+          p.show = fetch("/api/mappings/" + m[1], {
+            headers: { Accept: "application/json" },
+          });
+          p.episodes = fetch("/api/mappings/" + m[1] + "/episodes", {
             headers: { Accept: "application/json" },
           });
         }
@@ -47,5 +57,15 @@
       <noscript>Mizu requires JavaScript to run.</noscript>
     </div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register the service worker for offline caching. In dev the SW
+      // file is served from /sw.js by Vite's static middleware (public/).
+      // In production it's embedded in dist/ and served at /sw.js.
+      if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>

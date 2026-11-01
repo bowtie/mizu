@@ -2,7 +2,7 @@ import { StrictMode, useState, useEffect, useCallback, lazy, Suspense } from "re
 import { createRoot } from "react-dom/client";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
-import { prefetchEpisodes, prefetchShow, prefetchShowDetail } from "./lib/api";
+import { prefetchEpisodes, prefetchShowDetail } from "./lib/api";
 import { Theme } from "@astryxdesign/core/theme";
 import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";

@@ -21,8 +21,9 @@ const BASE = "/api";
 // so API requests start in parallel with the 324KB bundle download.
 interface MizuPrefetch {
   bootstrap?: Promise<Response>;
-  detail?: Promise<Response>;
   detailId?: string;
+  episodes?: Promise<Response>;
+  show?: Promise<Response>;
   series?: Promise<Response>;
 }
 const prefetch = (window as unknown as { __mizuPrefetch?: MizuPrefetch }).__mizuPrefetch;
@@ -51,7 +52,7 @@ async function requestPrefetched<T>(
 ): Promise<T> {
   if (prefetched) {
     const res = await prefetched;
-    if (res.ok) return res.json() as Promise<T>;
+    if (res.ok) return res.clone().json() as Promise<T>;
     // If the prefetched response failed, fall through to a fresh request.
     if (res.status === 404) throw new Error("not found");
   }
@@ -126,58 +127,48 @@ export function getBootstrap(): Promise<BootstrapResponse> {
   return requestPrefetched<BootstrapResponse>(prefetch?.bootstrap, "/bootstrap");
 }
 
-// In-memory cache for show prefetches — when the user hovers a show
-// card, we fire getShow early and cache the promise. When they navigate
-// to the detail page, the promise is already resolving (or resolved).
-const showPrefetch = new Map<string, Promise<Show>>();
-
 export function getShow(id: string | number): Promise<Show> {
   const key = String(id);
-  const cached = showPrefetch.get(key);
-  if (cached) {
-    showPrefetch.delete(key);
-    return cached;
+  // If prefetchShowDetail already resolved and cached the show data,
+  // return it directly — avoids double JSON parsing.
+  const cachedDetail = detailDataCache.get(key);
+  if (cachedDetail?.show) {
+    return Promise.resolve(cachedDetail.show);
   }
-  return request<Show>("GET", "/mappings/" + id);
+  // If prefetchShowDetail has an in-flight show promise, use it
+  // directly — resolves as soon as the 583B show fetch completes
+  // without waiting for the 252KB episodes fetch.
+  const inflightDetail = detailPrefetch.get(key);
+  if (inflightDetail) {
+    return inflightDetail.show;
+  }
+  // Use the pre-fired Response from the inline script if available.
+  const preFired = prefetch?.show && prefetch.detailId === key ? prefetch.show : undefined;
+  return requestPrefetched<Show>(preFired, "/mappings/" + key);
 }
 
-/** Prefetch show data without consuming the result. The cached promise
- *  is picked up by getShow() when the user navigates to the detail page. */
-export function prefetchShow(id: string | number): void {
-  const key = String(id);
-  if (showPrefetch.has(key)) return;
-  showPrefetch.set(key, request<Show>("GET", "/mappings/" + id));
-}
-
-// Combined detail response — show + episodes in one round-trip.
+// Combined detail response — show + episodes. Used internally by
+// the prefetch system to provide initial state for ShowDetailPage.
 interface ShowDetailResponse {
   show: Show;
   episodes: Episode[];
 }
 
+// Individual in-flight promises from prefetchShowDetail — stored
+// separately so getShow can resolve as soon as the show-only fetch
+// completes without waiting for the (much slower) episodes fetch.
+interface DetailPrefetchEntry {
+  show: Promise<Show>;
+  episodes: Promise<Episode[]>;
+}
+
 // In-memory cache for combined detail prefetches — used on direct
 // navigation to /shows/:id to avoid 2 separate round-trips.
-const detailPrefetch = new Map<string, Promise<ShowDetailResponse>>();
+const detailPrefetch = new Map<string, DetailPrefetchEntry>();
 // Synchronous cache for resolved detail data — allows ShowDetailPage
 // to initialize with data that was prefetched before the component
 // mounted, eliminating the skeleton flash on hard refresh.
 const detailDataCache = new Map<string, ShowDetailResponse>();
-
-/** Fetch show + episodes in a single request. Used on hard refresh
- *  of the detail page to eliminate 1 HTTP round-trip. Reuses the
- *  pre-fired fetch from the inline script in index.html if the ID
- *  matches — the request started before the JS bundle downloaded. */
-export function getShowDetail(id: string | number): Promise<ShowDetailResponse> {
-  const key = String(id);
-  const cached = detailPrefetch.get(key);
-  if (cached) {
-    detailPrefetch.delete(key);
-    return cached;
-  }
-  // Use the pre-fired Response from the inline script if available.
-  const preFired = prefetch?.detail && prefetch.detailId === key ? prefetch.detail : undefined;
-  return requestPrefetched<ShowDetailResponse>(preFired, "/mappings/" + key + "/detail");
-}
 
 /** Synchronously check if prefetched detail data is already resolved.
  *  Returns the data if available, null otherwise. Used by ShowDetailPage
@@ -187,27 +178,54 @@ export function getCachedShowDetail(id: string | number): ShowDetailResponse | n
   return detailDataCache.get(String(id)) ?? null;
 }
 
-/** Prefetch combined show + episodes data. Used in main.tsx on direct
- *  navigation to /shows/:id. The cached promise is picked up by
- *  getShowDetail() when ShowDetailPage mounts. Resolved data is also
- *  stored synchronously so the component can initialize with it.
- *  If the inline script in index.html already fired the fetch, we
- *  reuse that Response instead of making a duplicate request. */
+/** Clear the cached detail data for a show. Called after ShowDetailPage
+ *  consumes the initial prefetch — subsequent getShow/getEpisodes calls
+ *  (e.g. loadShowData after a save) should fetch fresh data, not return
+ *  stale cached data. Also clears the promise cache to prevent
+ *  unbounded memory growth in long sessions. */
+export function clearCachedShowDetail(id: string | number): void {
+  const key = String(id);
+  detailDataCache.delete(key);
+  detailPrefetch.delete(key);
+}
+
+/** Prefetch show + episodes data. Used in main.tsx on direct
+ *  navigation to /shows/:id. Reuses the pre-fired show + episodes
+ *  fetches from the inline script in index.html. Resolved data is
+ *  stored synchronously so ShowDetailPage can initialize with it
+ *  (zero skeleton flash when the prefetch completes before mount).
+ *  The individual show and episodes promises are stored separately
+ *  so getShow can resolve without waiting for the slower episodes
+ *  fetch (583B show vs 252KB episodes). */
 export function prefetchShowDetail(id: string | number): void {
   const key = String(id);
   if (detailPrefetch.has(key)) return;
-  // Reuse the pre-fired Response from the inline script if available.
-  const preFired = prefetch?.detail && prefetch.detailId === key ? prefetch.detail : undefined;
-  const promise = preFired
-    ? preFired.then((res) => {
+  // Reuse the pre-fired Responses from the inline script if available.
+  const showPreFired = prefetch?.show && prefetch.detailId === key ? prefetch.show : undefined;
+  const episodesPreFired = prefetch?.episodes && prefetch.detailId === key ? prefetch.episodes : undefined;
+
+  const showPromise = showPreFired
+    ? showPreFired.then((res) => { if (!res.ok) throw new Error("prefetch failed"); return res.clone().json() as Promise<Show>; })
+    : request<Show>("GET", "/mappings/" + key);
+  const episodesPromise = episodesPreFired
+    ? episodesPreFired.then(async (res) => {
         if (!res.ok) throw new Error("prefetch failed");
-        return res.json() as Promise<ShowDetailResponse>;
+        const newEtag = res.headers.get("ETag");
+        if (newEtag) episodeETags.set(key, newEtag);
+        const data = (await res.clone().json()) as Episode[];
+        if (newEtag) episodeDataCache.set(key, data);
+        return data;
       })
-    : request<ShowDetailResponse>("GET", "/mappings/" + key + "/detail");
-  detailPrefetch.set(key, promise);
-  promise.then((data) => {
-    detailDataCache.set(key, data);
-  }).catch(() => { /* ignore — getShowDetail will re-fetch */ });
+    : requestEpisodesWithETag(key);
+
+  detailPrefetch.set(key, { show: showPromise, episodes: episodesPromise });
+
+  // When both resolve, populate the synchronous cache for getCachedShowDetail.
+  Promise.all([showPromise, episodesPromise])
+    .then(([show, episodes]) => {
+      detailDataCache.set(key, { show, episodes });
+    })
+    .catch(() => { /* ignore — effect will re-fetch */ });
 }
 
 export function createShow(data: MappingCreate): Promise<Show> {
@@ -266,11 +284,44 @@ export function getEpisodes(showId: string | number): Promise<Episode[]> {
     episodePrefetch.delete(key);
     return cached;
   }
+  // If prefetchShowDetail already resolved and cached the episodes,
+  // return them directly — avoids double JSON parsing of the 252KB
+  // episodes payload when both prefetchShowDetail and the effect
+  // consume the same prefetched Response.
+  const cachedDetail = detailDataCache.get(key);
+  if (cachedDetail?.episodes) {
+    return Promise.resolve(cachedDetail.episodes);
+  }
+  // If prefetchShowDetail has an in-flight episodes promise, use it
+  // directly — avoids parsing the same Response body twice.
+  const inflightDetail = detailPrefetch.get(key);
+  if (inflightDetail) {
+    return inflightDetail.episodes;
+  }
+  // Use the pre-fired Response from the inline script if available.
+  // The inline script fires fetch("/api/mappings/:id/episodes") before
+  // the JS bundle downloads, so the request is already in-flight.
+  // Clone the Response in case prefetchShowDetail also reads it —
+  // Response.json() can only be called once per Response.
+  const preFired = prefetch?.episodes && prefetch.detailId === key ? prefetch.episodes : undefined;
+  if (preFired) {
+    return preFired.then(async (res) => {
+      if (!res.ok) {
+        // Fall through to ETag request
+        return requestEpisodesWithETag(key);
+      }
+      const newEtag = res.headers.get("ETag");
+      if (newEtag) episodeETags.set(key, newEtag);
+      const data = (await res.clone().json()) as Episode[];
+      if (newEtag) episodeDataCache.set(key, data);
+      return data;
+    });
+  }
   return requestEpisodesWithETag(key);
 }
 
 async function requestEpisodesWithETag(key: string): Promise<Episode[]> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {};
   const etag = episodeETags.get(key);
   if (etag) headers["If-None-Match"] = etag;
 

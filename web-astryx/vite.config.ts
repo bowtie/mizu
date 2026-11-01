@@ -51,10 +51,27 @@ export default defineConfig({
           if (!ctx.bundle) return html;
           let showsPageUrl = "";
           let detailPageUrl = "";
+          let cssUrl = "";
           for (const chunk of Object.values(ctx.bundle)) {
             if (chunk.name === "ShowsPage") showsPageUrl = "/" + chunk.fileName;
             if (chunk.name === "ShowDetailPage") detailPageUrl = "/" + chunk.fileName;
+            // The main CSS chunk doesn't have a name — detect by .css extension.
+            if (!cssUrl && chunk.fileName.endsWith(".css")) cssUrl = "/" + chunk.fileName;
           }
+
+          // Move the CSS stylesheet link to before the inline API prefetch
+          // script so the browser starts downloading the 168KB stylesheet
+          // immediately, in parallel with the JS bundle. Vite places the
+          // stylesheet after the script tag by default, which delays CSS
+          // download by the time it takes to parse the script tag.
+          if (cssUrl) {
+            const stylesheetLink = `<link rel="stylesheet" crossorigin href="${cssUrl}">`;
+            // Remove the stylesheet from its current position (after script tag)
+            html = html.replace(stylesheetLink, "");
+            // Insert it before the first <script> tag in the head
+            html = html.replace("<script>", `${stylesheetLink}\n    <script>`);
+          }
+
           let extra = "";
           if (showsPageUrl) {
             extra += `  <link rel="modulepreload" crossorigin href="${showsPageUrl}">\n`;
