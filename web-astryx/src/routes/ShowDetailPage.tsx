@@ -538,9 +538,9 @@ export function ShowDetailPage() {
     <>
       <Section
         variant="transparent"
-        padding={0}
+        padding={4}
         maxWidth={900}
-        className="section-centered show-hero-section"
+        className="section-centered"
       >
         <div className={`show-shell${pageSettled ? " is-settled" : ""}`}>
           {/* Hero header with backdrop */}
@@ -677,8 +677,8 @@ export function ShowDetailPage() {
       </Section>
 
       {/* Page content — constrained width */}
-      <Section variant="transparent" padding={0} maxWidth={900} className="section-centered page-enter">
-        <VStack gap={6} className="show-content-padded">
+      <Section variant="transparent" padding={4} maxWidth={900} className="section-centered page-enter">
+        <VStack gap={6}>
           {/* Artwork controls */}
           <Card padding={4} variant="muted" className="artwork-card">
             <VStack gap={3}>

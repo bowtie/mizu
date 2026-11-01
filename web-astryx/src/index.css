@@ -105,32 +105,14 @@ body {
   margin-inline: auto;
 }
 
-/* Constrain main content area and center it — replaces per-Section !important hack */
+/* Constrain main content area and center it — replaces per-Section !important hack.
+   Override LayoutContent's height:100% + overflow:clip which prevents the AppShell
+   root from growing past 100dvh in auto mode, causing body background to show below. */
 #astryx-app-shell-main {
   max-width: 900px;
   margin-inline: auto;
-}
-
-/* Active nav item — accent underline indicator */
-.astryx-top-nav-item[aria-current="page"] {
-  position: relative;
-}
-.astryx-top-nav-item[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: var(--spacing-3);
-  right: var(--spacing-3);
-  height: 2px;
-  border-radius: 1px;
-  background: var(--color-accent);
-  transform: scaleX(0);
-  transform-origin: center;
-  animation: nav-underline-in 0.2s ease-out forwards;
-}
-
-@keyframes nav-underline-in {
-  to { transform: scaleX(1); }
+  height: auto !important;
+  overflow: visible !important;
 }
 
 /* Toast viewport — fixed bottom-right notification stack */
@@ -393,11 +375,6 @@ body {
   marginInline: auto;
 }
 
-.show-hero-section {
-  margin-top: var(--spacing-4);
-  margin-bottom: var(--spacing-6);
-}
-
 /* Show detail hero — backdrop image with gradient overlay */
 .show-shell {
   position: relative;
@@ -406,6 +383,8 @@ body {
   overflow: visible;
   background-color: transparent;
   box-sizing: border-box;
+  /* Match the visual top spacing other pages get from their headings */
+  margin-top: var(--spacing-2);
 }
 
 .show-hero {
@@ -492,7 +471,6 @@ body {
 .show-actions-bar {
   position: relative;
   width: 100%;
-  margin-top: calc(-1 * var(--radius-container));
   margin-bottom: 0;
   padding: calc(var(--radius-container) + var(--spacing-2)) clamp(12px, 4vw, 32px) var(--spacing-2);
   display: flex;
@@ -508,9 +486,12 @@ body {
 
 .controls-reveal {
   display: grid;
-  grid-template-rows: 1fr;
+  grid-template-rows: 0fr;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
+  /* Tuck the reveal container up behind the hero's rounded bottom corners
+     so the actions bar background continues seamlessly (no corner gaps). */
+  margin-top: calc(-1 * var(--radius-container));
 }
 
 /* Before page settles: collapsed, no transition (no flash) */
@@ -562,6 +543,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .astryx-top-nav-item::before {
+    transition: none;
+    animation: none;
+  }
   .controls-reveal,
   .show-actions-bar,
   .mizu-card,
@@ -750,12 +735,6 @@ body {
   .artwork-card:hover {
     border-color: var(--color-border-emphasized);
   }
-}
-
-/* Show detail content — responsive horizontal padding + vertical padding */
-.show-content-padded {
-  paddingInline: clamp(12px, 4vw, 32px);
-  paddingBlock: var(--spacing-4);
 }
 
 /* Show hero title overflow */

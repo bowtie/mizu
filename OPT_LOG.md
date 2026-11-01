@@ -944,3 +944,62 @@
 5. Removed redundant `max-width: 900px; margin-inline: auto` from `.show-shell` — `#astryx-app-shell-main` already constrains and centers the container.
 
 **Outcome:** Kept. tsc clean. Header stays above content (z-index 100), hero and content have matching horizontal padding.
+
+## Iterations D79-D92 — Show detail page: actions bar, artwork, hover-reveal, overview caching
+
+**Targets:** `index.css`, `ShowDetailPage.tsx`, `models.go`, `database.go`, `sync.go`, `router.go`
+
+**Summary of changes across these iterations:**
+- D79: Removed z-index from actions bar/controls-reveal so sticky header stays on top
+- D80: Added spacing between hero section and artwork content
+- D81: Fixed translucent bar — fully hide actions bar when collapsed (translateY -100%)
+- D82: Restored z-index:1 on .show-hero so actions bar hides behind it
+- D83: Fixed translucent bar — clip controls-reveal overflow when collapsed (overflow:hidden on 0fr grid)
+- D84: Removed padding-inline from .show-shell so hero image goes edge-to-edge
+- D85: Replaced activity log pill badges with round icon bubbles on left side (D85b-D85d: fixed alignment, full-width body, bubble-only-on-header)
+- D86: Delayed hover-reveal collapse by 300ms on initial load to prevent stutter
+- D87: Always prefer local artwork when files exist — removed artwork_source gate
+- D88: Removed overflow:hidden from controls-reveal — was clipping border-radius on unhover
+- D89: Gated hover-reveal behind pageSettled state — bar stays expanded until episodes load
+- D91: Hid episode count subtitle in hero while episodes loading
+- D92: Stored overview on ShowMapping model, added DB migration + backfill from sonarr_series_cache. Skip Sonarr series fetch when local artwork exists. D92b: fall back to series.overview on first load before backfill.
+
+**Outcome:** Kept. Show detail page actions bar now smoothly reveals on hover without stutter, artwork always prefers local files, overview is cached in DB eliminating a Sonarr API call on page load.
+
+## Iterations D93-D98 — Show detail page: parallel fetch, episode count badge, air dates, monitor tooltip
+
+**Targets:** `ShowDetailPage.tsx`, `index.css`, `models.go`, `database.go`, `sync.go`, `router.go`, `types.ts`, `api.ts`
+
+**Summary:**
+- D93: Removed Sonarr series fetch from detail page — backfill overview from cache instead
+- D94: Parallelized show + episodes fetch via Promise.all — eliminated sequential waterfall
+- D95: Removed dead settings fetch from detail page (was only used for Sonarr image fallback, now gone)
+- D96: Moved episode count to a gray Badge pill next to the title in an HStack (D96b: tightened heading line-height, D96c: forced align-items center for vertical centering)
+- D97: Added AirDate field to EpisodeInfo model + DB migration. Populated in processSeries and fetchEpisodesLive. Displayed in episode list. D97b: Used Astryx Timestamp component instead of raw string. D97c: Moved air date into description line. D97d: Tried right side before badge, reverted to description line.
+- D98: Wrapped monitor ToggleButton in Tooltip with placement="start" (left) instead of using button's tooltip prop (which hardcoded "above"). D98b: Removed blue accent color from pressedIcon.
+
+**Outcome:** Kept. Detail page now makes 1 API call (episodes only) instead of 3 (series + episodes + settings). Episode count is a clean badge next to title. Air dates shown via Astryx Timestamp. Monitor toggle tooltip appears on the left.
+
+## Iterations D99-D103 — Show detail page: bottom rendering fix, Section padding normalization
+
+**Targets:** `index.css`, `ShowDetailPage.tsx`
+
+**Summary:**
+- D99: Changed .controls-reveal default from grid-template-rows:1fr/overflow:visible to 0fr/overflow:hidden — prevented actions bar background from bleeding as translucent bar at bottom
+- D100: Fixed bottom rendering issue — overrode LayoutContent's height:100% + overflow:clip on #astryx-app-shell-main (these prevented the AppShell root from growing past 100dvh in auto mode, causing body background to show below clipped content)
+- D101-D101d: Added bottom padding to main content area, iterated on values (spacing-6 → spacing-4 → 6px → scoped to show-content-padded only)
+- D102-D102d: Increased hero section top margin to spacing-6, iterated on bottom padding values
+- D103: Switched both ShowDetailPage Sections to padding={4} like other pages. Removed .show-hero-section and .show-content-padded CSS hacks. Hero escapes Section padding via negative margins on .show-shell.
+
+**Outcome:** Kept. Bottom rendering issue fixed (no more black bar / clipped content). Show detail page now uses same Section padding as all other pages — consistent spacing via Astryx's system.
+
+## Iterations D104-D106 — VStack gap unification, hero header fixes
+
+**Targets:** `ActivityPage.tsx`, `ShowsPage.tsx`, `SettingsPage.tsx`, `ShowDetailPage.tsx`, `index.css`, `main.tsx`
+
+**Summary:**
+- D104: Tried removing explicit VStack gap props to use defaults — reverted immediately (VStack default gap is null/0px, not 3 as assumed)
+- D105: Unified Settings VStack gap from 8 to 6, matching Activity/Shows/ShowDetail (all now gap={6} = 24px)
+- D106 (user changes): Fixed hero header, replaced tilde text logo with Mizu wave SVG, removed nav underline indicator CSS, tweaked actions bar margin for seamless corner transition
+
+**Outcome:** Kept. All pages now use consistent VStack gap={6}. Mizu has a proper wave logo. Nav uses Astryx's built-in selected state instead of custom underline.
