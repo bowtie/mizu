@@ -1,10 +1,10 @@
-// Mizu Service Worker — v1
+// Mizu Service Worker — v2
 // Strategies:
 //   /assets/, /fonts/  → cache-first (immutable hashed files)
-//   /api/              → stale-while-revalidate
+//   /api/              → stale-while-revalidate (except auth + sensitive)
 //   navigation         → network-first, fallback to cached index.html
 
-const CACHE_VERSION = "mizu-v1";
+const CACHE_VERSION = "mizu-v2";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const API_CACHE = CACHE_VERSION + "-api";
 
@@ -73,9 +73,18 @@ self.addEventListener("fetch", (event) => {
   // Skip caching for endpoints that return sensitive data (API keys).
   if (url.pathname.startsWith("/api/")) {
     // Never cache settings or bootstrap — they contain full API keys.
+    // Never handle /api/auth/* at all (no cache read, no write, no
+    // offline fallback): a stale auth status makes the login page see
+    // {authenticated: true} after logout or a password change and
+    // bounce straight back — a redirect loop. Login state must be live.
     const isSensitive = url.pathname === "/api/settings" || url.pathname === "/api/bootstrap";
+    const isAuth = url.pathname.startsWith("/api/auth/");
     if (isSensitive) {
       event.respondWith(fetch(req).catch(() => caches.match(req)));
+      return;
+    }
+    if (isAuth) {
+      event.respondWith(fetch(req));
       return;
     }
     event.respondWith(

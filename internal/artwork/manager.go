@@ -211,6 +211,15 @@ func (m *Manager) fetchAndStore(ctx context.Context, mappingID int64, series mod
 		return &FetchResult{Source: source, Found: false}, nil
 	}
 
+	return m.storeArtworkLocked(ctx, mappingID, art, source, capturedIntent)
+}
+
+// storeArtworkLocked downloads the URLs in `art` into the mapping's artwork
+// directory and writes the local file paths to the DB. The caller must hold
+// the per-mapping lock and pass the intent captured when the fetch/selection
+// was decided; if a newer intent landed while downloading, the just-written
+// files are removed and no DB write happens.
+func (m *Manager) storeArtworkLocked(ctx context.Context, mappingID int64, art *Artwork, source string, capturedIntent int64) (*FetchResult, error) {
 	dir := filepath.Join(m.artDir, fmt.Sprintf("%d", mappingID))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("create artwork dir: %w", err)
@@ -254,23 +263,175 @@ func (m *Manager) fetchAndStore(ctx context.Context, mappingID int64, series mod
 		}
 	}
 
-	// Supersede guard (late): a newer per-show refresh or source switch may
-	// have landed while this fetch was downloading — skip the DB write-back
-	// and remove the just-downloaded files, so the stale fetch leaves no
-	// trace that could render over the newer choice (the newer fetch, queued
-	// on the per-mapping lock, rewrites both).
+	// Supersede guard (late): a newer per-show refresh, source switch, or
+	// explicit pick may have landed while these images were downloading —
+	// skip the DB write-back and remove the just-downloaded files, so the
+	// stale fetch leaves no trace that could render over the newer choice
+	// (the newer operation, queued on the per-mapping lock, rewrites both).
 	if m.captureIntent(mappingID) != capturedIntent {
 		m.deleteArtworkUnlocked(mappingID)
 		return &FetchResult{Source: source, Found: false}, nil
 	}
 
-	// Store relative paths in DB (relative to artDir).
-	// Only update the file paths, not the source override — the override
+	// Store relative paths and their source URLs in DB (relative to artDir).
+	// Only update the file paths/URLs, not the source override — the override
 	// is managed separately via UpdateArtworkSource.
 	relPoster := relPath(m.artDir, result.PosterPath)
 	relBanner := relPath(m.artDir, result.BannerPath)
 	relLogo := relPath(m.artDir, result.LogoPath)
-	if err := m.db.UpdateArtworkFiles(ctx, mappingID, relPoster, relBanner, relLogo); err != nil {
+	if err := m.db.UpdateArtwork(ctx, mappingID, relPoster, relBanner, relLogo, art.PosterURL, art.BannerURL, art.LogoURL); err != nil {
+		log.Error().Err(err).Int64("mapping_id", mappingID).Msg("failed to update artwork file paths in DB")
+	}
+
+	return result, nil
+}
+
+// ListCandidates returns every candidate image a provider offers for a
+// series. Sources that don't implement CandidatesProvider (sonarr, anilist,
+// kitsu) return an empty set — the caller can then hide the picker.
+func (m *Manager) ListCandidates(ctx context.Context, series models.SonarrSeries, source string) (*ArtworkOptions, error) {
+	if source == "" || source == "sonarr" || source == "auto" {
+		return &ArtworkOptions{}, nil
+	}
+
+	m.mu.RLock()
+	p, ok := m.providers[source]
+	m.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("unknown artwork source: %s", source)
+	}
+
+	cp, ok := p.(CandidatesProvider)
+	if !ok {
+		// The source has a single best pick and nothing to browse.
+		return &ArtworkOptions{}, nil
+	}
+	if !p.Available() {
+		return nil, fmt.Errorf("provider %s is not configured (missing API key?)", source)
+	}
+	return cp.Candidates(ctx, series)
+}
+
+// SelectArtwork downloads specific user-picked image URLs for a mapping and
+// persists them, replacing any auto-fetched artwork. It records newer intent
+// (like a per-show refresh) so an in-flight refresh-all skips its write-back
+// instead of clobbering the pick.
+func (m *Manager) SelectArtwork(ctx context.Context, mappingID int64, source, posterURL, bannerURL, logoURL string) (*FetchResult, error) {
+	m.BumpIntent(mappingID)
+	captured := m.captureIntent(mappingID)
+
+	m.lockMapping(mappingID).Lock()
+	defer m.lockMapping(mappingID).Unlock()
+
+	// Same existence/override guards as fetchAndStore: a delete or a switch
+	// to "sonarr" that landed before this pick must not resurrect files.
+	current, err := m.db.GetMappingByID(ctx, mappingID)
+	if err != nil {
+		return nil, fmt.Errorf("load mapping for artwork select: %w", err)
+	}
+	if current == nil {
+		return &FetchResult{Source: source, Found: false}, nil
+	}
+	if current.ArtworkSource == "sonarr" {
+		if err := m.clearArtworkForSonarrUnlocked(ctx, mappingID); err != nil {
+			log.Warn().Err(err).Int64("mapping_id", mappingID).Msg("failed to clear artwork file paths")
+		}
+		return &FetchResult{Source: source, Found: false}, nil
+	}
+
+	// An all-empty selection is a no-op (nothing to pick) — never clear the
+	// user's existing artwork just because a slot was left empty.
+	if posterURL == "" && bannerURL == "" && logoURL == "" {
+		return &FetchResult{Source: source, Found: false}, nil
+	}
+
+	dir := filepath.Join(m.artDir, fmt.Sprintf("%d", mappingID))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("create artwork dir: %w", err)
+	}
+
+	result := &FetchResult{Source: source, Found: true}
+	// Track the files this pick wrote so a superseded pick can remove exactly
+	// its own writes without disturbing the untouched slots.
+	var downloaded []string
+
+	if posterURL != "" {
+		path, err := m.downloadImage(ctx, posterURL, filepath.Join(dir, "poster.jpg"))
+		if err == nil {
+			result.PosterPath = path
+			downloaded = append(downloaded, path)
+		} else {
+			log.Warn().Err(err).Str("url", posterURL).Int64("mapping_id", mappingID).Msg("failed to download poster")
+		}
+	}
+	if bannerURL != "" {
+		path, err := m.downloadImage(ctx, bannerURL, filepath.Join(dir, "banner.jpg"))
+		if err == nil {
+			result.BannerPath = path
+			downloaded = append(downloaded, path)
+		} else {
+			log.Warn().Err(err).Str("url", bannerURL).Int64("mapping_id", mappingID).Msg("failed to download banner")
+		}
+	}
+	if logoURL != "" {
+		// Remove any previous logo first — the new one may have a different
+		// extension (png vs svg), and LogoPath() would otherwise keep
+		// preferring the stale file.
+		for _, name := range []string{"logo.png", "logo.svg"} {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+		ext := "logo.png"
+		if isSVGURL(logoURL) {
+			ext = "logo.svg"
+		}
+		path, err := m.downloadImage(ctx, logoURL, filepath.Join(dir, ext))
+		if err == nil {
+			result.LogoPath = path
+			downloaded = append(downloaded, path)
+		} else {
+			log.Warn().Err(err).Str("url", logoURL).Int64("mapping_id", mappingID).Msg("failed to download logo")
+		}
+	}
+
+	// Supersede guard: a newer refresh/switch/pick may have landed while this
+	// pick was downloading. Skip the DB write-back and remove only the files
+	// this pick wrote so the stale pick leaves no trace.
+	if m.captureIntent(mappingID) != captured {
+		for _, p := range downloaded {
+			_ = os.Remove(p)
+		}
+		// Remove the dir only if this pick left it empty (untouched slots'
+		// files keep it non-empty, so this no-ops for partial picks).
+		_ = os.Remove(dir)
+		return &FetchResult{Source: source, Found: false}, nil
+	}
+
+	// Partial write-back: empty slots keep the mapping's existing paths/URLs.
+	relPoster := relPath(m.artDir, result.PosterPath)
+	if relPoster == "" {
+		relPoster = current.ArtworkPosterPath
+	}
+	relBanner := relPath(m.artDir, result.BannerPath)
+	if relBanner == "" {
+		relBanner = current.ArtworkBannerPath
+	}
+	relLogo := relPath(m.artDir, result.LogoPath)
+	if relLogo == "" {
+		relLogo = current.ArtworkLogoPath
+	}
+	// Same preserve-empty rule for the source URLs: a partial pick that
+	// leaves a slot untouched keeps the existing URL (needed by the picker
+	// to ring the tile that is currently in use).
+	if posterURL == "" {
+		posterURL = current.ArtworkPosterURL
+	}
+	if bannerURL == "" {
+		bannerURL = current.ArtworkBannerURL
+	}
+	if logoURL == "" {
+		logoURL = current.ArtworkLogoURL
+	}
+	if err := m.db.UpdateArtwork(ctx, mappingID, relPoster, relBanner, relLogo, posterURL, bannerURL, logoURL); err != nil {
 		log.Error().Err(err).Int64("mapping_id", mappingID).Msg("failed to update artwork file paths in DB")
 	}
 
@@ -347,6 +508,14 @@ func (m *Manager) downloadImage(ctx context.Context, url, destPath string) (stri
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("download %s: status %d", url, resp.StatusCode)
+	}
+
+	// Only store actual images: the URL can be user-supplied (artwork
+	// picker), and this origin serves whatever lands in the artwork dir.
+	// image/svg+xml is allowed here but served sandboxed (see ServeImage)
+	// because SVGs can carry scripts.
+	if ct := resp.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(strings.ToLower(ct), "image/") {
+		return "", fmt.Errorf("download %s: unexpected content type %q", url, ct)
 	}
 
 	out, err := os.Create(destPath)
@@ -493,7 +662,7 @@ func (m *Manager) ClearArtworkForSonarr(ctx context.Context, mappingID int64) er
 // calls it directly because it already holds the lock for the same mapping.
 func (m *Manager) clearArtworkForSonarrUnlocked(ctx context.Context, mappingID int64) error {
 	m.deleteArtworkUnlocked(mappingID)
-	return m.db.UpdateArtworkFiles(ctx, mappingID, "", "", "")
+	return m.db.UpdateArtwork(ctx, mappingID, "", "", "", "", "", "")
 }
 
 // BannerPath returns the on-disk path for a mapping's banner, or "" if none.
@@ -537,6 +706,11 @@ func ServeImage(w http.ResponseWriter, r *http.Request, path string) {
 	// replaces the file on disk with a new provider's image.
 	etag := fmt.Sprintf(`"%x-%x"`, info.ModTime().Unix(), info.Size())
 	w.Header().Set("ETag", etag)
+	// Sandboxed serving: SVGs (and any mis-typed file) loaded as a
+	// top-level document must not run scripts or ride this origin's
+	// identity — "sandbox" denies both, nosniff blocks MIME confusion.
+	w.Header().Set("Content-Security-Policy", "sandbox")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// Long cache with ETag revalidation — artwork only changes on explicit
 	// refresh (which busts the browser cache via ?v=N query param) or
 	// source switch. The ETag from mod-time ensures correctness if the

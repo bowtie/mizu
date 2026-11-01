@@ -38,14 +38,31 @@ func TestInitialWatermarkForEpisodesIgnoresMonitoredOnlyEpisodes(t *testing.T) {
 
 func TestInitialWatermarkForEpisodesIgnoresFutureAndSpecialDownloads(t *testing.T) {
 	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
+	future := 8
+	downloaded := 5
 
 	episodes := []models.SonarrEpisode{
 		{SeasonNumber: 0, EpisodeNumber: 1, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
-		{SeasonNumber: 1, EpisodeNumber: 8, HasFile: true, AirDateUTC: now.Add(time.Hour)},
-		{SeasonNumber: 1, EpisodeNumber: 5, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
+		{SeasonNumber: 1, EpisodeNumber: 8, AbsoluteEpisodeNumber: &future, HasFile: true, AirDateUTC: now.Add(time.Hour)},
+		{SeasonNumber: 1, EpisodeNumber: 5, AbsoluteEpisodeNumber: &downloaded, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
 	assert.Equal(t, 5, initialWatermarkForEpisodes(episodes, now))
+}
+
+// A mainline episode without an absolute number must not contribute its
+// season-relative number to the watermark (S23E17 would otherwise look
+// like absolute episode 17).
+func TestInitialWatermarkForEpisodesSkipsMissingAbsoluteNumbers(t *testing.T) {
+	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
+	watched := 1116
+
+	episodes := []models.SonarrEpisode{
+		{SeasonNumber: 23, EpisodeNumber: 17, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
+		{SeasonNumber: 23, EpisodeNumber: 16, AbsoluteEpisodeNumber: &watched, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
+	}
+
+	assert.Equal(t, 1116, initialWatermarkForEpisodes(episodes, now))
 }
 
 func TestNormalizeWatermarkModeDefaults(t *testing.T) {
@@ -64,8 +81,9 @@ func TestNextAutoWatermarkNeverShrinks(t *testing.T) {
 
 func TestNextAutoWatermarkAdvances(t *testing.T) {
 	now := time.Date(2026, time.March, 8, 12, 0, 0, 0, time.UTC)
+	absolute := 12
 	episodes := []models.SonarrEpisode{
-		{SeasonNumber: 1, EpisodeNumber: 12, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
+		{SeasonNumber: 1, EpisodeNumber: 12, AbsoluteEpisodeNumber: &absolute, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
 	assert.Equal(t, 12, nextAutoWatermark(5, episodes, now))
@@ -296,4 +314,28 @@ func TestIsWithinAFLCoverageKeepsMatchedSpecial(t *testing.T) {
 	}
 
 	assert.True(t, IsWithinAFLCoverage(sonarrEp, 1076, true, 1076))
+}
+
+func TestShouldNotify(t *testing.T) {
+	tests := []struct {
+		mode            string
+		status          string
+		episodesUpdated int
+		want            bool
+	}{
+		{"always", "success", 0, true},
+		{"always", "failed", 0, true},
+		{"changes", "success", 0, false},
+		{"changes", "success", 3, true},
+		{"changes", "partial", 0, true},
+		{"changes", "failed", 0, true},
+		{"failures", "success", 5, false},
+		{"failures", "partial", 0, true},
+		{"failures", "failed", 0, true},
+		{"", "success", 0, true}, // unknown mode falls back to always
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, shouldNotify(tt.mode, tt.status, tt.episodesUpdated),
+			"mode=%q status=%q updated=%d", tt.mode, tt.status, tt.episodesUpdated)
+	}
 }

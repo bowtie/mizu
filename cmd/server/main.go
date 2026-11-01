@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"mizu/internal/auth"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	syncengine "mizu/internal/sync"
@@ -60,6 +61,7 @@ func main() {
 	log.Info().Str("path", cfg.DBPath).Msg("database initialized")
 
 	applyRuntimeSettings(context.Background(), db, cfg)
+	seedAuthFromEnv(db)
 	scheduler := newSchedulerController(cfg.ScanInterval)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -115,6 +117,13 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	// Always-apply keys (API keys, topics) skip when the row is entirely
 	// missing, which is strictly safer than the old behavior of clobbering
 	// config.Load() defaults with "" on a fresh database.
+	//
+	// Mutations take the config write lock: startup calls this before the
+	// server is listening, but config import calls it from a request
+	// handler where concurrent readers hold the read lock.
+	cfg.Lock()
+	defer cfg.Unlock()
+
 	if value, ok := settings["sonarr_url"]; ok && value != "" {
 		cfg.SonarrURL = strings.TrimRight(value, "/")
 	}
@@ -161,6 +170,9 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	if value, ok := settings["ntfy_token"]; ok {
 		cfg.NtfyToken = value
 	}
+	if value, ok := settings["ntfy_notify_on"]; ok && config.IsValidNtfyNotifyOn(value) {
+		cfg.NtfyNotifyOn = value
+	}
 	if value, ok := settings["artwork_default_source"]; ok && value != "" {
 		// Migrate legacy "auto" to "sonarr".
 		if value == "auto" {
@@ -182,6 +194,41 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	}
 }
 
+func seedAuthFromEnv(db *database.DB) {
+	ctx := context.Background()
+
+	// Drop sessions that expired while the server was down.
+	if n, err := db.DeleteExpiredSessions(ctx, time.Now()); err == nil && n > 0 {
+		log.Info().Int64("count", n).Msg("removed expired sessions")
+	}
+
+	// Mark sync logs stuck in 'running' by a previous shutdown as failed —
+	// they can never complete and would skew the next-sync estimate.
+	if n, err := db.SweepStaleRunningSyncLogs(ctx); err == nil && n > 0 {
+		log.Info().Int64("count", n).Msg("marked interrupted sync logs as failed")
+	}
+
+	envPassword := os.Getenv("MIZU_PASSWORD")
+	if envPassword == "" {
+		return
+	}
+	mgr := auth.NewManager(db)
+	configured, err := mgr.IsConfigured(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to check auth configuration; skipping MIZU_PASSWORD seeding")
+		return
+	}
+	if configured {
+		log.Info().Msg("MIZU_PASSWORD set but a password is already configured; ignoring")
+		return
+	}
+	if _, _, err := mgr.Setup(ctx, envPassword); err != nil {
+		log.Error().Err(err).Msg("failed to seed password from MIZU_PASSWORD")
+		return
+	}
+	log.Info().Msg("initial dashboard password seeded from MIZU_PASSWORD")
+}
+
 func startScheduler(ctx context.Context, scheduler *schedulerController, syncEngine *syncengine.Engine) {
 	ticker := time.NewTicker(scheduler.Interval())
 	defer ticker.Stop()
@@ -192,6 +239,13 @@ func startScheduler(ctx context.Context, scheduler *schedulerController, syncEng
 			log.Info().Msg("scheduler stopped")
 			return
 		case interval := <-scheduler.updates:
+			// Reset doesn't drain the channel: a tick that fired just
+			// before the interval change would otherwise be delivered
+			// immediately, running an unscheduled extra sync.
+			select {
+			case <-ticker.C:
+			default:
+			}
 			ticker.Reset(interval)
 			log.Info().Dur("scan_interval", interval).Msg("scheduler interval updated")
 		case <-ticker.C:

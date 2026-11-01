@@ -195,12 +195,18 @@ export function ActivityPage() {
   // Refresh when the tab regains focus/visibility: browsers throttle
   // background timers, and a scheduled sync may have started (or a manual
   // sync finished) while the page was hidden — reload immediately and
-  // resume polling if a sync is still running.
+  // resume polling if a sync is still running. The running-log check must
+  // wait for the refetch: logsRef only updates once loadActivity resolves,
+  // so a synchronous check read the pre-refresh snapshot and never resumed
+  // polling for a sync that started while hidden.
   useEffect(() => {
-    const onVisible = () => {
+    let generation = 0;
+    const onVisible = async () => {
       if (!isMounted.current) return;
       if (document.visibilityState !== "visible") return;
-      void loadActivity(true);
+      const gen = ++generation;
+      await loadActivity(true);
+      if (!isMounted.current || gen !== generation) return;
       if (logsRef.current.some((l) => l.status === "running")) {
         startPolling();
       }
@@ -422,7 +428,7 @@ export function ActivityPage() {
 
                         {isExpanded && hasDetails(log) && (
                           <VStack gap={2} className="activity-details-expanded">
-                            {log.items?.length && (
+                            {!!log.items?.length && (
                               <VStack gap={2}>
                                 {log.items.map((item, idx) => {
                                   const si = itemStatusIcon(item.status);

@@ -33,3 +33,32 @@ type ProviderInfo struct {
 	NeedsKey  bool   `json:"needs_key"`
 	Available bool   `json:"available"`
 }
+
+// ArtworkOption is a single candidate image a provider can offer. The
+// picker shows the thumbnail and, when chosen, downloads the full-size URL.
+type ArtworkOption struct {
+	URL      string `json:"url"`
+	ThumbURL string `json:"thumb_url,omitempty"`
+	Lang     string `json:"lang,omitempty"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	Likes    int    `json:"likes,omitempty"`
+}
+
+// ArtworkOptions is the full set of candidate images for one series. A
+// provider that only has a single best pick per slot simply returns one
+// entry per list; multi-image sources (fanart, tmdb) return all of them.
+type ArtworkOptions struct {
+	Posters []ArtworkOption `json:"posters"`
+	Banners []ArtworkOption `json:"banners"`
+	Logos   []ArtworkOption `json:"logos"`
+}
+
+// CandidatesProvider is an optional extension a Provider can implement to
+// expose every candidate image it found instead of only the single best one.
+// Sources like fanart.tv and TMDB return many posters/banners/logos; the
+// artwork picker lists them so the user can choose which one is stored.
+type CandidatesProvider interface {
+	Provider
+	Candidates(ctx context.Context, series models.SonarrSeries) (*ArtworkOptions, error)
+}

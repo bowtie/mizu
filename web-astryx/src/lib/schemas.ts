@@ -28,6 +28,7 @@ export const SettingsSchema = v.object({
   ntfy_server_url: v.optional(v.string()),
   ntfy_topic: v.optional(v.string()),
   ntfy_token_set: v.optional(v.boolean()),
+  ntfy_notify_on: v.optional(v.picklist(["always", "changes", "failures"])),
   ui_sounds_enabled: v.optional(v.boolean()),
 });
 
@@ -53,6 +54,7 @@ export const SettingsFormSchema = v.object({
   ntfyServerUrl: v.string(),
   ntfyTopic: v.string(),
   ntfyToken: v.string(),
+  notifyOn: v.picklist(["always", "changes", "failures"]),
   soundsEnabled: v.boolean(),
 });
 
@@ -70,6 +72,9 @@ export const ShowSchema = v.object({
   artwork_poster_path: v.optional(v.string()),
   artwork_banner_path: v.optional(v.string()),
   artwork_logo_path: v.optional(v.string()),
+  artwork_poster_url: v.optional(v.string()),
+  artwork_banner_url: v.optional(v.string()),
+  artwork_logo_url: v.optional(v.string()),
   overview: v.optional(v.string()),
   poster: v.optional(v.string()),
   sync_watermark: v.number(),

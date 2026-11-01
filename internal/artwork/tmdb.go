@@ -73,52 +73,9 @@ type tmdbImagesResp struct {
 }
 
 func (p *TMDBProvider) Fetch(ctx context.Context, series models.SonarrSeries) (*Artwork, error) {
-	client := p.httpClient
 	titles := searchTitles(series)
 
-	var bestID int
-	var bestConf float64
-
-	// Phase 1: search to find the best-matching TMDB TV ID.
-	for _, title := range titles {
-		u := fmt.Sprintf("%s/search/tv?query=%s&language=en-US&page=1&include_adult=false",
-			tmdbBase, url.QueryEscape(title))
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			continue
-		}
-		req.Header.Set("Authorization", "Bearer "+p.apiKey)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			continue
-		}
-
-		var decoded tmdbSearchResp
-		err = json.NewDecoder(resp.Body).Decode(&decoded)
-		resp.Body.Close()
-		if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 || decoded.TotalResults == 0 {
-			continue
-		}
-
-		for _, r := range decoded.Results {
-			candidates := uniqueStrings(r.Name, r.OriginalName)
-			conf, _ := bestTitleMatch(titles, candidates)
-			if conf < 0.80 || conf <= bestConf {
-				continue
-			}
-			bestID = r.ID
-			bestConf = conf
-			if bestConf >= 0.96 {
-				break
-			}
-		}
-		if bestConf >= 0.96 {
-			break
-		}
-	}
-
+	bestID := p.searchTMDBID(ctx, titles)
 	if bestID == 0 {
 		return nil, nil
 	}
@@ -137,7 +94,7 @@ func (p *TMDBProvider) Fetch(ctx context.Context, series models.SonarrSeries) (*
 				continue
 			}
 			req.Header.Set("Authorization", "Bearer "+p.apiKey)
-			resp, err := client.Do(req)
+			resp, err := p.httpClient.Do(req)
 			if err != nil {
 				continue
 			}
@@ -174,6 +131,135 @@ func (p *TMDBProvider) Fetch(ctx context.Context, series models.SonarrSeries) (*
 		LogoURL:   logo,
 		Source:    "tmdb",
 	}, nil
+}
+
+// searchTMDBID finds the best-matching TMDB TV ID for a series by searching
+// each candidate title and scoring the results. Returns 0 when no match
+// clears the confidence threshold.
+func (p *TMDBProvider) searchTMDBID(ctx context.Context, titles []string) int {
+	var bestID int
+	var bestConf float64
+
+	for _, title := range titles {
+		u := fmt.Sprintf("%s/search/tv?query=%s&language=en-US&page=1&include_adult=false",
+			tmdbBase, url.QueryEscape(title))
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+		resp, err := p.httpClient.Do(req)
+		if err != nil {
+			continue
+		}
+
+		var decoded tmdbSearchResp
+		err = json.NewDecoder(resp.Body).Decode(&decoded)
+		resp.Body.Close()
+		if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 || decoded.TotalResults == 0 {
+			continue
+		}
+
+		for _, r := range decoded.Results {
+			candidates := uniqueStrings(r.Name, r.OriginalName)
+			conf, _ := bestTitleMatch(titles, candidates)
+			if conf < 0.80 || conf <= bestConf {
+				continue
+			}
+			bestID = r.ID
+			bestConf = conf
+			if bestConf >= 0.96 {
+				break
+			}
+		}
+		if bestConf >= 0.96 {
+			break
+		}
+	}
+	return bestID
+}
+
+// Candidates returns every backdrop, poster, and logo TMDB has for the
+// matched show so the picker can let the user choose. Thumbnails use the
+// sized TMDB image variants (w780 backdrops, w342 posters) while the
+// download URL is the original.
+func (p *TMDBProvider) Candidates(ctx context.Context, series models.SonarrSeries) (*ArtworkOptions, error) {
+	titles := searchTitles(series)
+	bestID := p.searchTMDBID(ctx, titles)
+	if bestID == 0 {
+		return nil, nil
+	}
+	return p.fetchAllImages(ctx, bestID)
+}
+
+// fetchAllImages calls /tv/{id}/images and converts every result into
+// candidate options with sized thumbnails.
+func (p *TMDBProvider) fetchAllImages(ctx context.Context, tmdbID int) (*ArtworkOptions, error) {
+	u := fmt.Sprintf("%s/tv/%d/images?include_image_language=en,null", tmdbBase, tmdbID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("tmdb images returned %d", resp.StatusCode)
+	}
+
+	var decoded tmdbImagesResp
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return nil, err
+	}
+
+	opts := &ArtworkOptions{}
+	for _, b := range decoded.Backdrops {
+		if b.FilePath == "" {
+			continue
+		}
+		opts.Banners = append(opts.Banners, ArtworkOption{
+			URL:      tmdbImageBase + b.FilePath,
+			ThumbURL: "https://image.tmdb.org/t/p/w780" + b.FilePath,
+			Lang:     b.Language,
+			Width:    b.Width,
+			Height:   b.Height,
+			Likes:    b.VoteCount,
+		})
+	}
+	for _, img := range decoded.Posters {
+		if img.FilePath == "" {
+			continue
+		}
+		opts.Posters = append(opts.Posters, ArtworkOption{
+			URL:      tmdbImageBase + img.FilePath,
+			ThumbURL: "https://image.tmdb.org/t/p/w342" + img.FilePath,
+			Lang:     img.Language,
+			Width:    img.Width,
+			Height:   img.Height,
+			Likes:    img.VoteCount,
+		})
+	}
+	for _, l := range decoded.Logos {
+		if l.FilePath == "" {
+			continue
+		}
+		opts.Logos = append(opts.Logos, ArtworkOption{
+			URL:      tmdbImageBase + l.FilePath,
+			ThumbURL: "https://image.tmdb.org/t/p/w500" + l.FilePath,
+			Lang:     l.Language,
+			Width:    l.Width,
+			Height:   l.Height,
+			Likes:    l.VoteCount,
+		})
+	}
+	return opts, nil
 }
 
 // fetchBestImages calls /tv/{id}/images and picks the highest-voted

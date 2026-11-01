@@ -115,6 +115,38 @@ func TestHandleCreateMappingRejectsInvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestHandleCreateMappingConflictsWithExistingMapping(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	cfg := config.DefaultConfig()
+	mapping := &models.ShowMapping{SonarrSeriesID: 7, AFLSlug: "naruto", AFLTitle: "Naruto"}
+	require.NoError(t, db.UpsertMapping(context.Background(), mapping))
+
+	// Duplicate create without overwrite → 409, existing mapping untouched.
+	req := httptest.NewRequest(http.MethodPost, "/api/mappings", strings.NewReader(`{"sonarr_series_id":7,"sonarr_title":"Naruto","afl_slug":"one-piece"}`))
+	rec := httptest.NewRecorder()
+	handleCreateMapping(cfg, db, nil, nil, context.Background(), &sync.WaitGroup{})(rec, req)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+
+	kept, err := db.GetMappingBySonarrID(context.Background(), 7)
+	require.NoError(t, err)
+	require.NotNil(t, kept)
+	assert.Equal(t, "naruto", kept.AFLSlug)
+
+	// overwrite=true proceeds and replaces the mapping.
+	req2 := httptest.NewRequest(http.MethodPost, "/api/mappings", strings.NewReader(`{"sonarr_series_id":7,"sonarr_title":"Naruto","afl_slug":"one-piece","overwrite":true}`))
+	rec2 := httptest.NewRecorder()
+	handleCreateMapping(cfg, db, nil, nil, context.Background(), &sync.WaitGroup{})(rec2, req2)
+	assert.Equal(t, http.StatusCreated, rec2.Code)
+
+	kept, err = db.GetMappingBySonarrID(context.Background(), 7)
+	require.NoError(t, err)
+	require.NotNil(t, kept)
+	assert.Equal(t, "one-piece", kept.AFLSlug)
+}
+
 // --- Logs handler ---
 
 func TestHandleGetLogsReturnsEmptyOnEmptyDB(t *testing.T) {

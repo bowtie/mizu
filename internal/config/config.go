@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -48,6 +49,10 @@ type Config struct {
 	NtfyServerURL string
 	NtfyTopic     string
 	NtfyToken     string
+	// NtfyNotifyOn controls which sync results trigger a notification:
+	// "always" (default), "changes" (episodes updated or any failure),
+	// or "failures".
+	NtfyNotifyOn string
 
 	// Artwork
 	ArtworkDefaultSource string // "sonarr" (default), "anilist", "tmdb", "fanart", "kitsu"
@@ -101,6 +106,7 @@ func DefaultConfig() *Config {
 		NtfyServerURL:             "https://ntfy.sh",
 		NtfyTopic:                 "",
 		NtfyToken:                 "",
+		NtfyNotifyOn:              "always",
 		ArtworkDefaultSource:      "sonarr",
 		TMDBAPIKey:                "",
 		FanartAPIKey:              "",
@@ -109,11 +115,18 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Load returns configuration with defaults applied.
+// Load returns configuration with defaults applied. The MIZU_ADDR
+// environment variable overrides the listen address — the 127.0.0.1
+// default stays safe for bare processes behind a same-host proxy, while
+// containers set MIZU_ADDR=0.0.0.0:8978 (a loopback bind inside a
+// container is unreachable through published ports or reverse proxies).
 // Runtime values are overlaid from the SQLite database by the caller
 // (see applyRuntimeSettings in cmd/server/main.go).
 func Load() (*Config, error) {
 	cfg := DefaultConfig()
+	if addr := os.Getenv("MIZU_ADDR"); addr != "" {
+		cfg.ListenAddr = addr
+	}
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}
@@ -151,7 +164,21 @@ func (c *Config) validate() error {
 	if !IsValidSonarrMonitorMode(c.SonarrAddMonitorMode) {
 		return fmt.Errorf("invalid sonarr_add_monitor_mode: %s", c.SonarrAddMonitorMode)
 	}
+	if !IsValidNtfyNotifyOn(c.NtfyNotifyOn) {
+		return fmt.Errorf("invalid ntfy_notify_on: %s", c.NtfyNotifyOn)
+	}
 	return nil
+}
+
+// IsValidNtfyNotifyOn returns true if the value is a valid notification
+// filter mode.
+func IsValidNtfyNotifyOn(value string) bool {
+	switch value {
+	case "always", "changes", "failures":
+		return true
+	default:
+		return false
+	}
 }
 
 // IsValidSonarrMonitorMode returns true if the value is a valid Sonarr monitor mode.

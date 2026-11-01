@@ -15,21 +15,27 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
-import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff, FileDown, FileUp } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
 import { useSettings, useArtworkProviders, useUpdateSettings } from "../lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { applySoundsEnabled } from "../lib/sounds";
 import { SettingsRow } from "../components/SettingsRow";
 import { TrackingRuleCard } from "../components/TrackingRuleCard";
+import { SecuritySettingsCard } from "../components/SecuritySettingsCard";
 import {
   getSettings,
   refreshAflCache,
+  getAflCacheRefreshStatus,
+  type AflCacheRefreshStatus,
   refreshAllArtwork,
   testNtfyConnection,
   testSonarrConnection,
+  exportConfig,
+  importConfig,
   errorMessage,
 } from "../lib/api";
+import { queryKeys } from "../lib/queries";
 import { SettingsFormSchema, type SettingsForm } from "../lib/schemas";
 import type { Settings as SettingsType, SelectOption } from "../lib/types";
 
@@ -47,6 +53,15 @@ const syncIntervalOptions: SelectOption[] = [
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+const notifyOnOptions: SelectOption[] = [
+  { value: "always", label: "Every sync" },
+  { value: "changes", label: "Changes or failures" },
+  { value: "failures", label: "Failures only" },
+];
+
+const isNotifyOn = (value: unknown): value is "always" | "changes" | "failures" =>
+  value === "always" || value === "changes" || value === "failures";
+
 export function SettingsPage() {
   const addNotification = useNotificationStore((s) => s.addNotification);
   const queryClient = useQueryClient();
@@ -59,6 +74,8 @@ export function SettingsPage() {
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
+  const [importingConfig, setImportingConfig] = useState(false);
+  const importFileRef = useRef<HTMLInputElement | null>(null);
   const [testPhase, setTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
 
   // ── API key UI state (visibility, masked display, dirty tracking) ──
@@ -93,6 +110,10 @@ export function SettingsPage() {
 
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ntfyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cancels the AFL refresh status poll when the component unmounts —
+  // without it the poll loop kept hitting the status endpoint for up to
+  // ~15 minutes after leaving the page.
+  const aflPollCancelled = useRef(false);
 
   // ── React Hook Form ──
   const {
@@ -117,6 +138,7 @@ export function SettingsPage() {
       ntfyServerUrl: "",
       ntfyTopic: "",
       ntfyToken: "",
+      notifyOn: "always",
       soundsEnabled: true,
     },
     mode: "onChange",
@@ -151,6 +173,7 @@ export function SettingsPage() {
       if (resetTimer.current) clearTimeout(resetTimer.current);
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
       if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+      aflPollCancelled.current = true;
     };
   }, []);
 
@@ -158,14 +181,17 @@ export function SettingsPage() {
     (data: SettingsType | null) => {
       if (!data || (data as { error?: string }).error) return;
 
-      // Reset form fields
+      // Reset form fields. Key fields start empty — the stored (masked)
+      // key shows in the placeholder. Prefilling the field with the
+      // masked template meant any keystroke (even fixing a stray char)
+      // saved something like "abcd...wxyz" as the real key.
       reset({
         sonarrUrl: data.sonarr_url || "",
-        sonarrApiKey: data.sonarr_api_key_masked || "",
+        sonarrApiKey: "",
         syncInterval: data.sync_interval || "6h",
         artworkDefaultSource: data.artwork_default_source || "sonarr",
-        tmdbApiKey: data.tmdb_api_key_masked || "",
-        fanartApiKey: data.fanart_api_key_masked || "",
+        tmdbApiKey: "",
+        fanartApiKey: "",
         trackFillerDefault: actionToTracked(data.default_filler_action, false),
         trackMixedDefault: actionToTracked(data.default_mixed_canon_action, true),
         trackAnimeCanonDefault: actionToTracked(data.default_anime_canon_action, true),
@@ -173,6 +199,7 @@ export function SettingsPage() {
         ntfyServerUrl: data.ntfy_server_url || "",
         ntfyTopic: data.ntfy_topic || "",
         ntfyToken: "",
+        notifyOn: isNotifyOn(data.ntfy_notify_on) ? data.ntfy_notify_on : "always",
         soundsEnabled: data.ui_sounds_enabled !== false,
       });
 
@@ -220,13 +247,16 @@ export function SettingsPage() {
 
   // If the store already has settings (fetched on app mount), populate
   // immediately and skip the loading spinner. Still do a background
-  // refresh to pick up any changes.
+  // refresh to pick up any changes. A later refetch (staleTime +
+  // refetchOnWindowFocus) must not wipe in-progress edits, so only
+  // apply while the form is pristine.
   useEffect(() => {
-    if (storeSettings) {
+    if (!storeSettings) return;
+    if (!settingsDirty) {
       applySettings(storeSettings);
       setLoading(false);
     }
-  }, [storeSettings, applySettings]);
+  }, [storeSettings, applySettings, settingsDirty]);
 
   useEffect(() => {
     loadSettings();
@@ -258,7 +288,7 @@ export function SettingsPage() {
     if (apiKeyVisible) {
       setApiKeyVisible(false);
       if (!apiKeyDirty && hasSavedApiKey) {
-        reset({ ...getValues(), sonarrApiKey: savedApiKeyMasked });
+        reset({ ...getValues(), sonarrApiKey: "" });
       }
       return;
     }
@@ -280,7 +310,7 @@ export function SettingsPage() {
     if (tmdbApiKeyVisible) {
       setTmdbApiKeyVisible(false);
       if (!tmdbApiKeyDirty && tmdbApiKeySet) {
-        reset({ ...getValues(), tmdbApiKey: savedTmdbApiKeyMasked });
+        reset({ ...getValues(), tmdbApiKey: "" });
       }
     } else {
       if (!tmdbApiKeyDirty && tmdbApiKeySet) {
@@ -294,7 +324,7 @@ export function SettingsPage() {
     if (fanartApiKeyVisible) {
       setFanartApiKeyVisible(false);
       if (!fanartApiKeyDirty && fanartApiKeySet) {
-        reset({ ...getValues(), fanartApiKey: savedFanartApiKeyMasked });
+        reset({ ...getValues(), fanartApiKey: "" });
       }
     } else {
       if (!fanartApiKeyDirty && fanartApiKeySet) {
@@ -333,6 +363,7 @@ export function SettingsPage() {
       payload.ntfy_enabled = formData.ntfyEnabled;
       payload.ntfy_server_url = formData.ntfyServerUrl;
       payload.ntfy_topic = formData.ntfyTopic;
+      payload.ntfy_notify_on = formData.notifyOn;
       if (ntfyTokenDirty) {
         payload.ntfy_token = formData.ntfyToken;
       }
@@ -405,16 +436,110 @@ export function SettingsPage() {
     }
   };
 
+  // The refresh runs server-side in the background (a full scrape
+  // rate-limits at 2s/show and outlives any HTTP request), so the UI
+  // polls the status endpoint until the flag clears. Capped at ~15 min
+  // to avoid polling forever if the server died mid-scrape.
+  const AFL_REFRESH_POLL_MS = 2000;
+  const AFL_REFRESH_MAX_POLLS = 450;
+
+  const pollAflRefreshStatus = useCallback(async (): Promise<AflCacheRefreshStatus> => {
+    for (let i = 0; i < AFL_REFRESH_MAX_POLLS; i++) {
+      if (aflPollCancelled.current) return { refreshing: false };
+      const status = await getAflCacheRefreshStatus();
+      if (aflPollCancelled.current) return { refreshing: false };
+      if (!status.refreshing) return status;
+      await sleep(AFL_REFRESH_POLL_MS);
+    }
+    return { refreshing: false, last_error: "Refresh timed out — check the Activity page" };
+  }, []);
+
+  // Resume the spinner if a refresh is already in flight (e.g. the page
+  // was reloaded mid-scrape).
+  useEffect(() => {
+    let cancelled = false;
+    getAflCacheRefreshStatus()
+      .then((status) => {
+        if (!cancelled && status.refreshing) setRefreshingCache(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleRefreshCache = async () => {
+    if (refreshingCache) return;
     setRefreshingCache(true);
+    aflPollCancelled.current = false;
     try {
-      await refreshAflCache();
-      addNotification("AFL show list refreshed", "success");
+      try {
+        await refreshAflCache();
+      } catch (err: unknown) {
+        // A refresh triggered from another tab/device is fine — just watch it.
+        if (!errorMessage(err).includes("already in progress")) throw err;
+      }
+      const status = await pollAflRefreshStatus();
+      if (aflPollCancelled.current) return; // unmounted — skip state updates
       await loadSettings();
+      if (status.last_error) {
+        addNotification("AFL cache refresh failed: " + status.last_error, "error");
+      } else {
+        addNotification("AFL show list refreshed", "success");
+      }
     } catch (err: unknown) {
       addNotification("Failed to refresh AFL cache: " + errorMessage(err), "error");
     }
     setRefreshingCache(false);
+  };
+
+  // ── Config backup ──
+
+  const handleExportConfig = async () => {
+    try {
+      const blob = await exportConfig();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mizu-config-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      addNotification("Failed to export config: " + errorMessage(err), "error");
+    }
+  };
+
+  const handleImportConfigFile = async (file: File) => {
+    setImportingConfig(true);
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        addNotification("That file isn't valid JSON — pick a Mizu config export", "error");
+        return;
+      }
+      const proceed = window.confirm(
+        "Import this config? Shows with the same Sonarr series are replaced, " +
+          "and imported settings overwrite the current ones.",
+      );
+      if (!proceed) return;
+      const result = await importConfig(parsed);
+      addNotification(
+        `Imported ${result.mappings_imported} show${result.mappings_imported === 1 ? "" : "s"} ` +
+          `and ${result.settings_imported} setting${result.settings_imported === 1 ? "" : "s"}`,
+        "success",
+      );
+      await loadSettings();
+      queryClient.invalidateQueries({ queryKey: queryKeys.shows });
+      queryClient.invalidateQueries({ queryKey: queryKeys.bootstrap });
+    } catch (err: unknown) {
+      addNotification("Failed to import config: " + errorMessage(err), "error");
+    } finally {
+      setImportingConfig(false);
+      if (importFileRef.current) importFileRef.current.value = "";
+    }
   };
 
   const handleTestNtfy = async () => {
@@ -622,7 +747,7 @@ export function SettingsPage() {
                         setApiKeyDirty(true);
                         clearTestResult();
                       }}
-                      placeholder={hasSavedApiKey ? "Saved API key" : "Your Sonarr API key"}
+                      placeholder={hasSavedApiKey ? savedApiKeyMasked || "Saved API key" : "Your Sonarr API key"}
                       isLabelHidden
                       width={280}
                     />
@@ -744,7 +869,7 @@ export function SettingsPage() {
                         field.onChange(v);
                         setTmdbApiKeyDirty(true);
                       }}
-                      placeholder={tmdbApiKeySet ? "Saved API key" : "Enter TMDB API key"}
+                      placeholder={tmdbApiKeySet ? savedTmdbApiKeyMasked || "Saved API key" : "Enter TMDB API key"}
                       isLabelHidden
                       width={260}
                     />
@@ -781,7 +906,7 @@ export function SettingsPage() {
                         field.onChange(v);
                         setFanartApiKeyDirty(true);
                       }}
-                      placeholder={fanartApiKeySet ? "Saved API key" : "Enter Fanart.tv API key"}
+                      placeholder={fanartApiKeySet ? savedFanartApiKeyMasked || "Saved API key" : "Enter Fanart.tv API key"}
                       isLabelHidden
                       width={260}
                     />
@@ -837,6 +962,27 @@ export function SettingsPage() {
                     onChange={field.onChange}
                     isLabelHidden
                     data-cuelume-toggle
+                  />
+                )}
+              />
+            </SettingsRow>
+            <Divider />
+
+            <SettingsRow
+              label="Notify on"
+              description="Which sync results should send a notification."
+            >
+              <Controller
+                control={control}
+                name="notifyOn"
+                render={({ field }) => (
+                  <Selector
+                    label="Notify on"
+                    value={field.value}
+                    options={notifyOnOptions}
+                    onChange={(v) => field.onChange(v as "always" | "changes" | "failures")}
+                    isLabelHidden
+                    width={220}
                   />
                 )}
               />
@@ -946,6 +1092,50 @@ export function SettingsPage() {
           </VStack>
         </Card>
 
+        {/* Backup */}
+        <Card variant="muted" padding={4}>
+          <VStack gap={3}>
+            <Heading level={2}>Backup</Heading>
+            <Divider />
+            <SettingsRow
+              label="Export config"
+              description="Download all shows and settings as a JSON file for backup or migration."
+            >
+              <Button
+                label="Export"
+                variant="secondary"
+                icon={<FileDown size={16} />}
+                onClick={() => void handleExportConfig()}
+                data-cuelume-press
+              />
+            </SettingsRow>
+            <Divider />
+            <SettingsRow
+              label="Import config"
+              description="Restore shows and settings from an exported file. Existing shows with the same series are replaced."
+            >
+              <Button
+                label={importingConfig ? "Importing..." : "Import"}
+                variant="secondary"
+                icon={<FileUp size={16} />}
+                isLoading={importingConfig}
+                onClick={() => importFileRef.current?.click()}
+                data-cuelume-press
+              />
+            </SettingsRow>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept="application/json,.json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportConfigFile(file);
+              }}
+            />
+          </VStack>
+        </Card>
+
         {/* Interface */}
         <Card variant="muted" padding={4}>
           <VStack gap={3}>
@@ -971,6 +1161,9 @@ export function SettingsPage() {
             </SettingsRow>
           </VStack>
         </Card>
+
+        {/* Security */}
+        <SecuritySettingsCard />
 
         {/* Defaults */}
         <VStack gap={4}>

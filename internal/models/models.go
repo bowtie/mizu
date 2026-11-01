@@ -73,6 +73,9 @@ type ShowMapping struct {
 	ArtworkPosterPath string        `json:"artwork_poster_path,omitempty"` // relative path to local poster file
 	ArtworkBannerPath string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file
 	ArtworkLogoPath   string        `json:"artwork_logo_path,omitempty"`   // relative path to local logo file
+	ArtworkPosterURL  string        `json:"artwork_poster_url,omitempty"`  // source URL of the current poster
+	ArtworkBannerURL  string        `json:"artwork_banner_url,omitempty"`  // source URL of the current banner
+	ArtworkLogoURL    string        `json:"artwork_logo_url,omitempty"`    // source URL of the current logo
 	Overview          string        `json:"overview,omitempty"`            // series synopsis (cached from Sonarr)
 	CreatedAt         time.Time     `json:"-"`                             // internal only, not used by frontend
 	UpdatedAt         time.Time     `json:"-"`                             // internal only, not used by frontend

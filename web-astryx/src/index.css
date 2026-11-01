@@ -351,61 +351,61 @@ body {
 }
 
 /* SegmentedControl items — press feedback (Astryx has hover but no active state) */
-.astryx-segmented-control-item:not(.selected):not([disabled]):active {
+.astryx-segmented-control-item:not(:is(.selected,[data-selected="selected"])):not([disabled]):active {
   background-color: var(--color-overlay-pressed);
 }
 
 /* Episode type filter — colored selected states for SegmentedControl */
-.astryx-segmented-control-item.selected[data-value="all"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="all"] {
   color: var(--color-text-primary);
   background-color: var(--color-neutral);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item.selected[data-value="canon"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="canon"] {
   color: var(--color-border-blue);
   background-color: var(--color-background-blue);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item.selected[data-value="anime_canon"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="anime_canon"] {
   color: var(--color-border-purple);
   background-color: var(--color-background-purple);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item.selected[data-value="mixed_canon"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="mixed_canon"] {
   color: var(--color-border-yellow);
   background-color: var(--color-background-yellow);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item.selected[data-value="filler"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="filler"] {
   color: var(--color-border-red);
   background-color: var(--color-background-red);
   box-shadow: none;
 }
 
 /* Activity status filter — colored selected states for SegmentedControl */
-.astryx-segmented-control-item.selected[data-value="running"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="running"] {
   color: var(--color-accent);
   background-color: color-mix(in srgb, var(--color-accent) 15%, transparent);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item.selected[data-value="success"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="success"] {
   color: var(--color-success);
   background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item.selected[data-value="partial"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="partial"] {
   color: var(--color-warning);
   background-color: color-mix(in srgb, var(--color-warning) 15%, transparent);
   box-shadow: none;
 }
 
-.astryx-segmented-control-item.selected[data-value="failed"] {
+.astryx-segmented-control-item:is(.selected,[data-selected="selected"])[data-value="failed"] {
   color: var(--color-error);
   background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
   box-shadow: none;
@@ -947,6 +947,68 @@ body {
   .artwork-card:hover,
   .tracking-rule-card:hover {
     border-color: var(--color-border-emphasized);
+  }
+}
+
+/* Artwork picker dialog — candidate thumbnail grid. The grid layout, per-slot
+   aspect ratios, and object-fit live on astryx Grid/AspectRatio; this is just
+   the scroll container and logo breathing room. */
+.artwork-picker-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-height: 58vh;
+  overflow-y: auto;
+}
+
+/* Logos are transparent PNGs — inset them inside the 3:1 box. */
+.artwork-picker-logo {
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+/* Artwork picker — ring the tile that is currently set on the show so the
+   active choice is visible while browsing candidates. The ring sits outside
+   the image (outline) so it stays crisp against any artwork, and a check
+   badge pins to the corner as a secondary cue. */
+.artwork-picker-item {
+  position: relative;
+}
+.artwork-picker-item.is-selected {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.artwork-picker-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background-color: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  z-index: 1;
+}
+
+/* Mobile — the picker runs full-screen (variant="fullscreen"); let the tab
+   strips scroll instead of clipping when labels don't fit a narrow screen.
+   The denser poster grid is driven by the component's isMobile flag. */
+@media (max-width: 600px) {
+  .artwork-picker-dialog .astryx-tab-list {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .artwork-picker-dialog .astryx-tab-list::-webkit-scrollbar {
+    display: none;
   }
 }
 

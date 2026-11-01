@@ -12,6 +12,7 @@ import (
 	"mizu/internal/config"
 	"mizu/internal/database"
 	matcherpkg "mizu/internal/matcher"
+	"mizu/internal/metrics"
 	"mizu/internal/models"
 	"mizu/internal/notifier"
 	"mizu/internal/scraper"
@@ -145,10 +146,37 @@ func (e *Engine) UpdateClients() {
 	}
 }
 
-func (e *Engine) RunSync(ctx context.Context, trigger string) error {
+// TryAcquireRun atomically claims the engine's single-run slot without
+// starting work. It closes the check-then-act gap in HTTP handlers:
+// checking IsRunning and then spawning a goroutine that CASes again
+// could return 202 for a sync that instantly no-ops. Callers that claim
+// the slot MUST eventually call done — normally deferred in the spawned
+// goroutine around a RunSyncClaimed/RunResyncClaimed call.
+func (e *Engine) TryAcquireRun() (done func(), ok bool) {
 	if !e.running.CompareAndSwap(false, true) {
+		return func() {}, false
+	}
+	var once sync.Once
+	return func() { once.Do(func() { e.running.Store(false) }) }, true
+}
+
+func (e *Engine) RunSync(ctx context.Context, trigger string) error {
+	done, ok := e.TryAcquireRun()
+	if !ok {
 		return fmt.Errorf("sync already in progress")
 	}
+	defer done()
+	return e.runSyncClaimed(ctx, trigger)
+}
+
+// RunSyncClaimed runs a sync while already holding the claim from
+// TryAcquireRun; it does not release the slot — the caller's done func
+// stays responsible for that.
+func (e *Engine) RunSyncClaimed(ctx context.Context, trigger string) error {
+	return e.runSyncClaimed(ctx, trigger)
+}
+
+func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 	e.cfg.RLock()
 	apiKey := e.cfg.SonarrAPIKey
 	e.cfg.RUnlock()
@@ -157,8 +185,6 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		log.Warn().Msg("skipping sync: no Sonarr API key configured")
 		return fmt.Errorf("sonarr API key not configured")
 	}
-
-	defer func() { e.running.Store(false) }()
 
 	log.Info().Str("trigger", trigger).Msg("starting sync cycle")
 	startTime := time.Now()
@@ -271,7 +297,11 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 	e.completeSyncLog(ctx, logID, status, showsProcessed, episodesUpdated, errorsStr)
 
 	log.Info().Str("status", status).Int("shows", showsProcessed).Int("episodes_updated", episodesUpdated).Int("errors", len(syncErrors)).Msg("sync cycle complete")
-	if n := e.notifierClient(); n != nil && n.Enabled() {
+
+	e.cfg.RLock()
+	notifyOn := e.cfg.NtfyNotifyOn
+	e.cfg.RUnlock()
+	if n := e.notifierClient(); n != nil && n.Enabled() && shouldNotify(notifyOn, status, episodesUpdated) {
 		result := notifier.SyncResult{
 			Status:          status,
 			ShowsProcessed:  showsProcessed,
@@ -360,11 +390,17 @@ func (e *Engine) processMappingsConcurrent(ctx context.Context, mappings []model
 }
 
 func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
-	if !e.running.CompareAndSwap(false, true) {
+	done, ok := e.TryAcquireRun()
+	if !ok {
 		return fmt.Errorf("sync already in progress")
 	}
-	defer func() { e.running.Store(false) }()
+	defer done()
+	return e.RunResyncClaimed(ctx, mappingID)
+}
 
+// RunResyncClaimed runs a resync while already holding the claim from
+// TryAcquireRun; it does not release the slot.
+func (e *Engine) RunResyncClaimed(ctx context.Context, mappingID int64) error {
 	e.cfg.RLock()
 	apiKey := e.cfg.SonarrAPIKey
 	e.cfg.RUnlock()
@@ -1044,7 +1080,16 @@ func initialWatermarkForEpisodes(episodes []models.SonarrEpisode, now time.Time)
 		if !ep.HasFile {
 			continue
 		}
-		aflNum := matcherpkg.MapEpisodeNumber(ep, 0)
+		// Same guard as SelectAFLEpisodeForSonarr: without an absolute
+		// episode number, MapEpisodeNumber falls back to the season-relative
+		// number, which would collide with early AFL entries (S23E17 → 17)
+		// and compute a watermark far below actual progress. Skip instead —
+		// the watermark then only advances on episodes with real absolute
+		// numbers.
+		if ep.AbsoluteEpisodeNumber == nil || *ep.AbsoluteEpisodeNumber <= 0 {
+			continue
+		}
+		aflNum := *ep.AbsoluteEpisodeNumber
 		if aflNum > maxWatermark {
 			maxWatermark = aflNum
 		}
@@ -1063,11 +1108,33 @@ func clampWatermarkToCoverage(watermark, coverageMax int) int {
 }
 
 func (e *Engine) completeSyncLog(ctx context.Context, logID int64, status string, showsProcessed, episodesUpdated int, errors string) {
+	metrics.Add("mizu_sync_cycles_total", status)
+	if episodesUpdated > 0 {
+		metrics.AddN("mizu_sync_episodes_updated_total", uint64(episodesUpdated))
+	}
+	if status == "success" || status == "partial" {
+		metrics.SetGauge("mizu_sync_last_success_timestamp_seconds", "", float64(time.Now().Unix()))
+	}
 	if logID == 0 {
 		return
 	}
 	if err := e.db.CompleteSyncLog(ctx, logID, status, showsProcessed, episodesUpdated, errors); err != nil {
 		log.Error().Err(err).Msg("failed to complete sync log")
+	}
+}
+
+// shouldNotify reports whether a sync result should trigger an ntfy
+// notification under the configured filter: "always" sends every run,
+// "changes" sends when episodes changed or the run failed, and
+// "failures" sends only for failed/partial runs.
+func shouldNotify(mode, status string, episodesUpdated int) bool {
+	switch mode {
+	case "failures":
+		return status == "failed" || status == "partial"
+	case "changes":
+		return episodesUpdated > 0 || status == "failed" || status == "partial"
+	default:
+		return true
 	}
 }
 

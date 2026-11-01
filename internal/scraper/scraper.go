@@ -3,6 +3,7 @@ package scraper
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,6 +22,11 @@ const (
 	baseURL                 = "https://www.animefillerlist.com"
 	userAgent               = "Mizu/1.0"
 	showListRefreshInterval = 30 * 24 * time.Hour
+
+	// maxResponseBytes caps how much HTML is parsed per page. AFL pages
+	// are well under 1 MB; anything larger means a hostile or broken
+	// mirror, and parsing it unbounded could exhaust memory.
+	maxResponseBytes = 8 << 20 // 8 MiB
 )
 
 type Scraper struct {
@@ -105,7 +111,7 @@ func (s *Scraper) fetch(ctx context.Context, url string) (*goquery.Document, err
 		return nil, fmt.Errorf("unexpected status %d for %s", resp.StatusCode, url)
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	doc, err := goquery.NewDocumentFromReader(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("parsing HTML from %s: %w", url, err)
 	}
@@ -125,6 +131,19 @@ func (s *Scraper) GetAllShows(ctx context.Context) ([]models.AFLShow, error) {
 	}
 
 	shows, _, err := s.RefreshAllShows(ctx)
+	if err != nil && s.db != nil {
+		// The refresh failed (AFL down, redesigned, rate-limiting us...).
+		// Fall back to the stale cache rather than failing auto-match
+		// outright — an out-of-date show list beats no show list.
+		stale, refreshedAt, cacheErr := s.db.GetCachedAFLShows(ctx)
+		if cacheErr == nil && len(stale) > 0 {
+			log.Warn().Err(err).
+				Int("count", len(stale)).
+				Time("cache_refreshed_at", refreshedAt).
+				Msg("AFL refresh failed; serving stale cache")
+			return stale, nil
+		}
+	}
 	return shows, err
 }
 
@@ -177,6 +196,13 @@ func (s *Scraper) doRefreshAllShows(ctx context.Context) ([]models.AFLShow, []st
 			shows = append(shows, models.AFLShow{Title: title, Slug: slug, URL: s.baseURL + href})
 		}
 	})
+
+	// A zero-count parse means the page no longer matches the expected
+	// structure (redesign, bot-block interstitial) — treat it as an error
+	// instead of writing an empty cache that would wipe coverage.
+	if len(shows) == 0 {
+		return nil, nil, fmt.Errorf("parsed 0 shows from %s — AnimeFillerList layout may have changed", s.baseURL+"/shows")
+	}
 
 	log.Info().Int("count", len(shows)).Msg("fetched show list")
 
@@ -237,6 +263,14 @@ func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []m
 		epType := parseEpisodeType(typeStr)
 		episodes = append(episodes, models.AFLEpisode{Number: num, Title: title, Type: epType})
 	})
+
+	// A missing EpisodeList table means structural breakage (redesign,
+	// bot-block) — error so sync marks the show failed and the stored
+	// episode types survive. A table that parses to zero rows is left
+	// alone; that's unusual but not structurally impossible.
+	if doc.Find("table.EpisodeList").Length() == 0 {
+		return "", nil, fmt.Errorf("episode list table not found for %s — AnimeFillerList layout may have changed", slug)
+	}
 
 	log.Info().Str("show", showTitle).Int("episodes", len(episodes)).Msg("parsed episode data")
 	return showTitle, episodes, nil

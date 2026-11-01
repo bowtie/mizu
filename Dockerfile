@@ -45,7 +45,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     ./cmd/server
 
 # Stage 3: Minimal runtime image
-FROM alpine:3.19
+FROM alpine:3.24
 
 # Install ca-certificates for HTTPS requests + tzdata for timezone support
 RUN apk add --no-cache ca-certificates tzdata
@@ -59,6 +59,10 @@ RUN mkdir -p /config && chown afg:afg /config
 
 # Copy binary from builder
 COPY --from=builder /mizu /usr/local/bin/mizu
+
+# Bind all interfaces: a loopback bind inside the container is unreachable
+# through the published port or a reverse proxy. Override with -e MIZU_ADDR=...
+ENV MIZU_ADDR=0.0.0.0:8978
 
 # Timezone only — all app config lives in SQLite (app_settings table)
 ENV TZ=UTC

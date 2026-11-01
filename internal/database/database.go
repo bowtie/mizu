@@ -142,6 +142,9 @@ func sqlcMappingToModel(s sqlcgen.ShowMapping) models.ShowMapping {
 		ArtworkPosterPath: s.ArtworkPosterPath,
 		ArtworkBannerPath: s.ArtworkBannerPath,
 		ArtworkLogoPath:   s.ArtworkLogoPath,
+		ArtworkPosterURL:  s.ArtworkPosterUrl,
+		ArtworkBannerURL:  s.ArtworkBannerUrl,
+		ArtworkLogoURL:    s.ArtworkLogoUrl,
 		Overview:          s.Overview,
 		CreatedAt:         s.CreatedAt,
 		UpdatedAt:         s.UpdatedAt,
@@ -291,11 +294,14 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 	return nil
 }
 
-func (db *DB) UpdateArtworkFiles(ctx context.Context, mappingID int64, posterPath, bannerPath, logoPath string) error {
-	return db.q.UpdateArtworkFiles(ctx, sqlcgen.UpdateArtworkFilesParams{
+func (db *DB) UpdateArtwork(ctx context.Context, mappingID int64, posterPath, bannerPath, logoPath, posterURL, bannerURL, logoURL string) error {
+	return db.q.UpdateArtwork(ctx, sqlcgen.UpdateArtworkParams{
 		ArtworkPosterPath: posterPath,
 		ArtworkBannerPath: bannerPath,
 		ArtworkLogoPath:   logoPath,
+		ArtworkPosterUrl:  posterURL,
+		ArtworkBannerUrl:  bannerURL,
+		ArtworkLogoUrl:    logoURL,
 		ID:                mappingID,
 	})
 }
@@ -426,6 +432,15 @@ func (db *DB) CreateSyncLog(ctx context.Context, triggerType string) (int64, err
 	if err != nil {
 		return 0, err
 	}
+	// Retention: bound the activity feed by dropping logs past the keep
+	// window. Done here so every log-producing path (sync, resync, AFL
+	// cache refresh) is covered automatically. Best-effort — a failed
+	// prune must not fail the log creation.
+	if n, perr := db.q.PruneSyncLogs(ctx, SyncLogRetentionCount); perr != nil {
+		log.Warn().Err(perr).Msg("failed to prune old sync logs")
+	} else if n > 0 {
+		log.Debug().Int64("pruned", n).Msg("pruned old sync logs")
+	}
 	return row.ID, nil
 }
 
@@ -442,6 +457,18 @@ func (db *DB) CompleteSyncLog(ctx context.Context, id int64, status string, show
 		Errors:          errors,
 		ID:              id,
 	})
+}
+
+// SyncLogRetentionCount is how many recent sync logs to keep. Older
+// rows are pruned automatically as new logs are created.
+const SyncLogRetentionCount = 200
+
+// SweepStaleRunningSyncLogs marks logs still in 'running' state as
+// failed. Called at startup: any row left running by a previous
+// process's shutdown can never complete, and a stuck 'running' row also
+// breaks the dashboard's next-sync estimate.
+func (db *DB) SweepStaleRunningSyncLogs(ctx context.Context) (int64, error) {
+	return db.q.FailStaleRunningSyncLogs(ctx)
 }
 
 func (db *DB) ReplaceSyncLogItems(ctx context.Context, logID int64, items []models.SyncLogItem) error {

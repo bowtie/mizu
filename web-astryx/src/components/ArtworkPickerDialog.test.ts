@@ -1,0 +1,223 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, createElement, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
+
+// ── Module mocks ──
+// The astryx Dialog is a native <dialog> element that needs showModal();
+// happy-dom doesn't drive it, so stub Dialog/DialogHeader to render children
+// inline. The candidate fetch goes through getArtworkCandidates. TabList/Tab
+// render as real <nav>/<button> elements, so the tests can click them.
+const { getArtworkCandidatesMock } = vi.hoisted(() => ({
+  getArtworkCandidatesMock: vi.fn(),
+}));
+
+vi.mock("../lib/api", () => ({
+  getArtworkCandidates: getArtworkCandidatesMock,
+}));
+
+vi.mock("@astryxdesign/core/Dialog", () => ({
+  Dialog: ({ isOpen, children }: { isOpen: boolean; children: ReactNode }) =>
+    isOpen ? createElement("div", { "data-testid": "dialog" }, children) : null,
+  DialogHeader: ({ title }: { title: string }) =>
+    createElement("div", { "data-testid": "dialog-header" }, title),
+}));
+
+import { ArtworkPickerDialog, type ArtworkPickerSource } from "./ArtworkPickerDialog";
+import type { ArtworkOptions } from "../lib/types";
+
+const SOURCES: ArtworkPickerSource[] = [
+  { id: "fanart", label: "Fanart.tv" },
+  { id: "tmdb", label: "TMDB" },
+];
+
+const OPTIONS: ArtworkOptions = {
+  posters: [
+    { url: "https://example.com/p1.jpg", thumb_url: "https://example.com/p1_t.jpg", likes: 5 },
+  ],
+  banners: [{ url: "https://example.com/b1.jpg" }],
+  logos: [{ url: "https://example.com/logo.svg" }],
+};
+
+const TMDB_OPTIONS: ArtworkOptions = {
+  posters: [{ url: "https://example.com/tmdb-p1.jpg" }],
+  banners: [],
+  logos: [],
+};
+
+let container: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  getArtworkCandidatesMock.mockReset();
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  vi.clearAllMocks();
+});
+
+async function flush() {
+  for (let i = 0; i < 6; i++) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+}
+
+async function renderPicker(
+  onSelect: (source: string, slot: string, url: string) => void,
+  initialSource = "fanart",
+  currentArtwork?: Partial<Record<string, string>>,
+) {
+  await act(async () => {
+    root.render(
+      createElement(ArtworkPickerDialog, {
+        isOpen: true,
+        onOpenChange: () => {},
+        showId: 1,
+        sources: SOURCES,
+        initialSource,
+        currentArtwork,
+        onSelect,
+      }),
+    );
+  });
+  await flush();
+}
+
+/** Only the active slot's thumbnails are rendered at a time. */
+function pickTiles(): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(".artwork-picker-item"));
+}
+
+function tab(value: string): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>(`button[data-tab-value="${value}"]`);
+}
+
+describe("ArtworkPickerDialog", () => {
+  it("fetches the initial source and emits a selection with source and slot", async () => {
+    getArtworkCandidatesMock.mockResolvedValue(OPTIONS);
+    const onSelect = vi.fn();
+    await renderPicker(onSelect);
+
+    expect(getArtworkCandidatesMock).toHaveBeenCalledWith(1, "fanart");
+
+    // Poster is the default slot, so only its thumbnails are shown.
+    const tiles = pickTiles();
+    expect(tiles.length).toBe(1);
+
+    await act(async () => {
+      tiles[0].click();
+    });
+    expect(onSelect).toHaveBeenCalledWith("fanart", "poster", "https://example.com/p1.jpg");
+  });
+
+  it("switches slot tabs to reveal banners and logos with their own aspect slots", async () => {
+    getArtworkCandidatesMock.mockResolvedValue(OPTIONS);
+    const onSelect = vi.fn();
+    await renderPicker(onSelect);
+
+    await act(async () => {
+      tab("banner")?.click();
+    });
+    expect(pickTiles()).toHaveLength(1);
+    expect(pickTiles()[0].dataset.slot).toBe("banner");
+
+    await act(async () => {
+      pickTiles()[0].click();
+    });
+    expect(onSelect).toHaveBeenCalledWith("fanart", "banner", "https://example.com/b1.jpg");
+
+    await act(async () => {
+      tab("logo")?.click();
+    });
+    expect(pickTiles()[0].dataset.slot).toBe("logo");
+  });
+
+  it("switches source tabs and caches each source's results", async () => {
+    getArtworkCandidatesMock.mockResolvedValueOnce(OPTIONS).mockResolvedValueOnce(TMDB_OPTIONS);
+    await renderPicker(() => {});
+
+    expect(getArtworkCandidatesMock).toHaveBeenCalledTimes(1);
+    expect(getArtworkCandidatesMock).toHaveBeenCalledWith(1, "fanart");
+
+    // Switch to TMDB: a second fetch fires.
+    await act(async () => {
+      tab("tmdb")?.click();
+    });
+    await flush();
+    expect(getArtworkCandidatesMock).toHaveBeenCalledTimes(2);
+    expect(getArtworkCandidatesMock).toHaveBeenCalledWith(1, "tmdb");
+    expect(pickTiles()[0].querySelector("img")?.src).toContain("tmdb-p1.jpg");
+
+    // Switch back and forth: both sources are now cached, no new fetches.
+    await act(async () => {
+      tab("fanart")?.click();
+    });
+    await act(async () => {
+      tab("tmdb")?.click();
+    });
+    expect(getArtworkCandidatesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the thumbnail URL and documents the slot in the image alt text", async () => {
+    getArtworkCandidatesMock.mockResolvedValue(OPTIONS);
+    await renderPicker(() => {});
+
+    const img = container.querySelector<HTMLImageElement>("img");
+    expect(img).not.toBeNull();
+    expect(img!.src).toContain("p1_t.jpg");
+    expect(img!.alt).toBe("Posters 1");
+  });
+
+  it("shows an error message when the candidates fetch fails", async () => {
+    getArtworkCandidatesMock.mockRejectedValue(new Error("fanart is not configured"));
+    await renderPicker(() => {});
+
+    expect(container.textContent).toContain("fanart is not configured");
+    expect(pickTiles().length).toBe(0);
+  });
+
+  it("shows an empty message when the source returns no candidates", async () => {
+    getArtworkCandidatesMock.mockResolvedValue({ posters: [], banners: [], logos: [] });
+    await renderPicker(() => {});
+
+    expect(container.textContent).toContain("no selectable images");
+    expect(pickTiles().length).toBe(0);
+  });
+
+  it("rings the tile matching the show's currently-set artwork", async () => {
+    getArtworkCandidatesMock.mockResolvedValue(OPTIONS);
+    await renderPicker(() => {}, "fanart", { poster: "https://example.com/p1.jpg" });
+
+    const tiles = pickTiles();
+    expect(tiles).toHaveLength(1);
+    expect(tiles[0].classList.contains("is-selected")).toBe(true);
+    expect(tiles[0].dataset.selected).toBe("true");
+    expect(tiles[0].querySelector(".artwork-picker-check")).not.toBeNull();
+  });
+
+  it("does not ring tiles when the current artwork is from another source/slot", async () => {
+    getArtworkCandidatesMock.mockResolvedValue(OPTIONS);
+    // Banner is set on the show; poster tab is active, so no poster matches.
+    await renderPicker(() => {}, "fanart", { banner: "https://example.com/b1.jpg" });
+    expect(pickTiles()[0].classList.contains("is-selected")).toBe(false);
+
+    // Switching to the banner tab rings the matching banner.
+    await act(async () => {
+      tab("banner")?.click();
+    });
+    expect(pickTiles()[0].classList.contains("is-selected")).toBe(true);
+  });
+
+  it("renders without a ring when the dialog has no current artwork prop", async () => {
+    getArtworkCandidatesMock.mockResolvedValue(OPTIONS);
+    await renderPicker(() => {});
+    expect(pickTiles()[0].classList.contains("is-selected")).toBe(false);
+    expect(pickTiles()[0].dataset.selected).toBeUndefined();
+  });
+});

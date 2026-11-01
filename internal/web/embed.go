@@ -52,25 +52,33 @@ func SPAHandler() http.Handler {
 			cleanPath = "index.html"
 		}
 
-		// Try to open the file from the embedded FS
+		// Try to open the file from the embedded FS. A directory (e.g.
+		// /assets) counts as a miss — otherwise http.FileServer would
+		// render a listing of embedded file names.
 		f, err := sub.Open(cleanPath)
 		if err == nil {
+			isDir := false
+			if st, serr := f.Stat(); serr == nil {
+				isDir = st.IsDir()
+			}
 			f.Close()
-			// Hashed assets in /assets/ are safe to cache forever —
-			// their filenames change when content changes (Vite hash).
-			// Fonts are also immutable.
-			if strings.HasPrefix(path, "/assets/") || strings.HasPrefix(path, "/fonts/") {
-				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			if !isDir {
+				// Hashed assets in /assets/ are safe to cache forever —
+				// their filenames change when content changes (Vite hash).
+				// Fonts are also immutable.
+				if strings.HasPrefix(path, "/assets/") || strings.HasPrefix(path, "/fonts/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				}
+				// Service worker must always be revalidated so the browser
+				// picks up updates promptly. Without this, heuristic caching
+				// could serve a stale SW for up to 24h.
+				if path == "/sw.js" {
+					w.Header().Set("Cache-Control", "no-cache")
+				}
+				// File exists, serve it directly
+				fileServer.ServeHTTP(w, r)
+				return
 			}
-			// Service worker must always be revalidated so the browser
-			// picks up updates promptly. Without this, heuristic caching
-			// could serve a stale SW for up to 24h.
-			if path == "/sw.js" {
-				w.Header().Set("Cache-Control", "no-cache")
-			}
-			// File exists, serve it directly
-			fileServer.ServeHTTP(w, r)
-			return
 		}
 
 		// File doesn't exist -- serve index.html for SPA client-side routing.

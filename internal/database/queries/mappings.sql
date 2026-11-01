@@ -4,7 +4,8 @@ SELECT
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-    overview, created_at, updated_at
+    overview, created_at, updated_at,
+    artwork_poster_url, artwork_banner_url, artwork_logo_url
 FROM show_mappings
 ORDER BY sonarr_title ASC;
 
@@ -14,7 +15,8 @@ SELECT
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-    overview, created_at, updated_at
+    overview, created_at, updated_at,
+    artwork_poster_url, artwork_banner_url, artwork_logo_url
 FROM show_mappings
 WHERE id = ?;
 
@@ -24,7 +26,8 @@ SELECT
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-    overview, created_at, updated_at
+    overview, created_at, updated_at,
+    artwork_poster_url, artwork_banner_url, artwork_logo_url
 FROM show_mappings
 WHERE sonarr_series_id = ?;
 
@@ -57,9 +60,11 @@ ON CONFLICT(sonarr_series_id) DO UPDATE SET
 -- name: GetMappingIDBySonarrID :one
 SELECT id FROM show_mappings WHERE sonarr_series_id = ?;
 
--- name: UpdateArtworkFiles :exec
+-- name: UpdateArtwork :exec
 UPDATE show_mappings
-SET artwork_poster_path = ?, artwork_banner_path = ?, artwork_logo_path = ?, updated_at = CURRENT_TIMESTAMP
+SET artwork_poster_path = ?, artwork_banner_path = ?, artwork_logo_path = ?,
+    artwork_poster_url = ?, artwork_banner_url = ?, artwork_logo_url = ?,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;
 
 -- name: UpdateArtworkSource :exec

@@ -1,0 +1,33 @@
+# VCS
+.git
+.gitattributes
+.gitignore
+
+# Databases — contain plaintext API keys/tokens; must never enter image layers
+*.db
+*.db-shm
+*.db-wal
+
+# Local build artifacts
+server.exe
+.gocache/
+.gotmp/
+.worktrees/
+
+# Node / frontend tooling (frontend builds inside its own stage)
+node_modules/
+web-astryx/node_modules/
+web-astryx/dist/
+web/
+
+# Legacy Svelte frontend — superseded by web-astryx, not part of the image
+web/package-lock.json
+
+# Docs and local config
+docs/
+scripts/
+.air.toml
+.golangci.yml
+.agents/
+.freebuff/
+.impeccable.md

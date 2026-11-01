@@ -67,6 +67,25 @@ func (q *Queries) DeleteSyncLogItemsByLog(ctx context.Context, syncLogID int64) 
 	return err
 }
 
+const failStaleRunningSyncLogs = `-- name: FailStaleRunningSyncLogs :execrows
+UPDATE sync_logs
+SET status = 'failed',
+    completed_at = datetime('now'),
+    errors = CASE WHEN errors = '' THEN 'interrupted by restart'
+                  ELSE errors || '; interrupted by restart' END
+WHERE status = 'running'
+`
+
+// Startup sweep: a shutdown mid-sync cancels the context before
+// CompleteSyncLog runs, leaving rows stuck in 'running' forever.
+func (q *Queries) FailStaleRunningSyncLogs(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, failStaleRunningSyncLogs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getLatestSyncLog = `-- name: GetLatestSyncLog :one
 SELECT id, started_at, completed_at, status, shows_processed,
        episodes_updated, errors, trigger_type
@@ -213,4 +232,19 @@ func (q *Queries) InsertSyncLogItem(ctx context.Context, arg InsertSyncLogItemPa
 		arg.Error,
 	)
 	return err
+}
+
+const pruneSyncLogs = `-- name: PruneSyncLogs :execrows
+DELETE FROM sync_logs WHERE id NOT IN (
+    SELECT id FROM sync_logs ORDER BY started_at DESC, id DESC LIMIT ?
+)
+`
+
+// Keeps the newest `?` logs (by start time); sync_log_items rows cascade.
+func (q *Queries) PruneSyncLogs(ctx context.Context, limit int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneSyncLogs, limit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

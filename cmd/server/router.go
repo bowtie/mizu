@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"mizu/internal/artwork"
+	"mizu/internal/auth"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	matcherpkg "mizu/internal/matcher"
+	"mizu/internal/metrics"
 	"mizu/internal/models"
 	"mizu/internal/notifier"
 	"mizu/internal/sonarr"
@@ -138,6 +140,18 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
+	r.Use(instrumentRequests)
+	// Cap request bodies: every handler decodes JSON without an individual
+	// limit, so an oversized body could balloon memory. 1 MiB is far above
+	// the largest legitimate payload (settings, add-series).
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -146,6 +160,9 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+
+	authMgr := auth.NewManager(db)
+	registerBuildInfo()
 
 	epCache := newEpisodeCache(2 * time.Minute)
 	seriesCache := newSeriesListCache(2 * time.Minute)
@@ -159,78 +176,95 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 	artworkMgr.Register(artwork.NewKitsuProvider(cfg.RequestTimeout))
 
 	r.Route("/api", func(r chi.Router) {
-		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-			status := "ok"
-			cfg.RLock()
-			sonarrURL := cfg.SonarrURL
-			cfg.RUnlock()
-			if sonarrURL != "" {
-				if _, err := syncEngine.SonarrClient().TestConnection(r.Context()); err != nil {
-					status = "degraded"
-				}
-			}
-			payload := map[string]interface{}{"status": status, "version": version}
-			if latest, err := db.GetLatestSyncLog(r.Context()); err == nil {
-				payload["last_sync_at"] = latest.CompletedAt
-				interval := scheduler.Interval()
-				if interval > 0 && latest.CompletedAt != nil {
-					next := latest.CompletedAt.Add(interval)
-					if next.Before(time.Now()) {
-						next = time.Now().Add(interval)
-					}
-					payload["next_sync_at"] = next
-				}
-			}
-			writeJSON(w, http.StatusOK, payload)
-		})
+		// CSRF/DNS-rebinding guard for cookie-authed mutations.
+		r.Use(sameOriginGuard)
+
+		// ── Public: monitoring + authentication ──
+		sonarrStatus := newSonarrStatusCache(healthSonarrTTL)
+		r.Get("/health", handleHealth(cfg, db, scheduler, syncEngine, sonarrStatus))
 
 		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]interface{}{"version": version, "commit": commit, "build_date": buildDate})
 		})
-		r.Get("/bootstrap", handleBootstrap(cfg, db, artworkMgr))
 
-		r.Get("/stats", handleGetStats(db))
+		// Prometheus-style metrics. Public by convention; exposes only
+		// counters/gauges, never request payloads.
+		r.Handle("/metrics", metrics.Handler())
 
-		// Artwork — serve locally stored images (works offline)
-		r.Get("/artwork/providers", handleGetArtworkProviders(artworkMgr))
-		r.Get("/artwork/{mappingId}/poster", handleServeArtwork(artworkMgr, "poster"))
-		r.Get("/artwork/{mappingId}/banner", handleServeArtwork(artworkMgr, "banner"))
-		r.Get("/artwork/{mappingId}/logo", handleServeArtwork(artworkMgr, "logo"))
-		r.Post("/artwork/refresh-all", handleRefreshAllArtwork(cfg, db, artworkMgr, syncEngine, appCtx, bgWG))
-		r.Get("/artwork/refresh-status", handleArtworkRefreshStatus)
-
-		r.Route("/mappings", func(r chi.Router) {
-			r.Get("/", handleGetMappings(db))
-			r.Post("/", handleCreateMapping(cfg, db, syncEngine, artworkMgr, appCtx, bgWG))
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", handleGetMapping(db))
-				r.Get("/detail", handleGetMappingDetail(db, syncEngine, epCache))
-				r.Put("/", handleUpdateMapping(syncEngine, db))
-				r.Delete("/", handleDeleteMapping(db, artworkMgr, epCache))
-				r.Post("/artwork/refresh", handleRefreshArtwork(cfg, db, artworkMgr, syncEngine))
-				r.Put("/artwork/source", handleSetArtworkSource(db, artworkMgr))
-				r.Get("/episodes", handleGetEpisodes(db, syncEngine, epCache))
-				r.Get("/episodes/sonarr", handleGetSonarrEpisodes(db, syncEngine))
-				r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(db, syncEngine, epCache))
-				r.Post("/resync", handleResyncMapping(syncEngine, appCtx, bgWG, epCache))
-			})
+		r.Route("/auth", func(r chi.Router) {
+			r.Get("/status", handleAuthStatus(authMgr))
+			// Login and setup are the password-guessing surfaces — bound
+			// by a per-source and a global fixed window so neither a
+			// single client nor a key-rotating one can brute-force freely.
+			authLimiter := newRateLimiter()
+			wrapLimited := func(h http.HandlerFunc) http.HandlerFunc {
+				return func(w http.ResponseWriter, r *http.Request) {
+					limitMiddleware(authLimiter, h).ServeHTTP(w, r)
+				}
+			}
+			r.Post("/setup", wrapLimited(handleAuthSetup(authMgr)))
+			r.Post("/login", wrapLimited(handleAuthLogin(authMgr)))
+			r.Post("/logout", handleAuthLogout(authMgr))
 		})
 
-		r.Post("/sync", handleTriggerSync(syncEngine, appCtx, bgWG, epCache))
-		r.Get("/logs", handleGetLogs(db))
-		r.Get("/settings", handleGetSettings(cfg, db))
-		r.Put("/settings", handleUpdateSettings(cfg, db, scheduler, syncEngine, artworkMgr))
-		r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db))
-		r.Get("/sonarr/series", handleGetSonarrSeries(db, syncEngine, seriesCache))
-		r.Get("/sonarr/series/{id}", handleGetSonarrSeriesByID(db, syncEngine))
-		r.Post("/sonarr/series", handleAddSonarrSeries(cfg, syncEngine))
-		r.Get("/sonarr/lookup", handleLookupSonarrSeries(syncEngine))
-		r.Get("/sonarr/add-options", handleGetSonarrAddOptions(syncEngine))
-		r.Post("/sonarr/manual-match-pending", handleMarkManualMatchPending(db))
-		r.Post("/sonarr/test", handleTestSonarr())
-		r.Post("/ntfy/test", handleTestNtfy(cfg))
-		r.Get("/afl/search", handleAFLSearch(syncEngine, db))
-		r.Get("/afl/suggest", handleAFLSuggest(syncEngine, db))
+		// ── Protected: everything below requires a valid session ──
+		r.Group(func(r chi.Router) {
+			r.Use(requireSession(authMgr))
+
+			r.Post("/auth/change-password", handleAuthChangePassword(authMgr))
+			r.Get("/bootstrap", handleBootstrap(cfg, db, artworkMgr))
+
+			r.Get("/stats", handleGetStats(db))
+
+			// Artwork — serve locally stored images (works offline)
+			r.Get("/artwork/providers", handleGetArtworkProviders(artworkMgr))
+			r.Get("/artwork/{mappingId}/poster", handleServeArtwork(artworkMgr, "poster"))
+			r.Get("/artwork/{mappingId}/banner", handleServeArtwork(artworkMgr, "banner"))
+			r.Get("/artwork/{mappingId}/logo", handleServeArtwork(artworkMgr, "logo"))
+			r.Post("/artwork/refresh-all", handleRefreshAllArtwork(cfg, db, artworkMgr, syncEngine, appCtx, bgWG))
+			r.Get("/artwork/refresh-status", handleArtworkRefreshStatus)
+
+			r.Route("/mappings", func(r chi.Router) {
+				r.Get("/", handleGetMappings(db))
+				r.Post("/", handleCreateMapping(cfg, db, syncEngine, artworkMgr, appCtx, bgWG))
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", handleGetMapping(db))
+					r.Get("/detail", handleGetMappingDetail(db, syncEngine, epCache))
+					r.Put("/", handleUpdateMapping(syncEngine, db))
+					r.Delete("/", handleDeleteMapping(db, artworkMgr, epCache))
+					r.Post("/artwork/refresh", handleRefreshArtwork(cfg, db, artworkMgr, syncEngine))
+					r.Put("/artwork/source", handleSetArtworkSource(db, artworkMgr))
+					r.Get("/artwork/candidates", handleListArtworkCandidates(cfg, db, artworkMgr, syncEngine))
+					r.Put("/artwork/select", handleSelectArtwork(db, artworkMgr))
+					r.Get("/episodes", handleGetEpisodes(db, syncEngine, epCache))
+					r.Get("/episodes/sonarr", handleGetSonarrEpisodes(db, syncEngine))
+					r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(db, syncEngine, epCache))
+					r.Post("/resync", handleResyncMapping(syncEngine, appCtx, bgWG, epCache))
+				})
+			})
+
+			r.Post("/sync", handleTriggerSync(syncEngine, appCtx, bgWG, epCache))
+			r.Get("/logs", handleGetLogs(db))
+			r.Get("/settings", handleGetSettings(cfg, db))
+			r.Put("/settings", handleUpdateSettings(cfg, db, scheduler, syncEngine, artworkMgr))
+			r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db, appCtx, bgWG))
+			r.Get("/settings/afl-cache/status", handleAFLCacheRefreshStatus)
+			r.Get("/sonarr/series", handleGetSonarrSeries(db, syncEngine, seriesCache))
+			r.Get("/sonarr/series/{id}", handleGetSonarrSeriesByID(db, syncEngine))
+			r.Post("/sonarr/series", handleAddSonarrSeries(cfg, syncEngine))
+			r.Get("/sonarr/lookup", handleLookupSonarrSeries(syncEngine))
+			r.Get("/sonarr/add-options", handleGetSonarrAddOptions(syncEngine))
+			r.Post("/sonarr/manual-match-pending", handleMarkManualMatchPending(db))
+			r.Post("/sonarr/test", handleTestSonarr())
+			r.Post("/ntfy/test", handleTestNtfy(cfg))
+			r.Get("/afl/search", handleAFLSearch(syncEngine, db))
+			r.Get("/afl/suggest", handleAFLSuggest(syncEngine, db))
+
+			// Config backup — session-protected like the settings endpoints
+			// it mirrors (the export includes API keys by design).
+			r.Get("/backup/export", handleExportConfig(db))
+			r.Post("/backup/import", handleImportConfig(cfg, db, scheduler, syncEngine, artworkMgr))
+		})
 	})
 
 	r.NotFound(web.SPAHandler().ServeHTTP)
@@ -392,9 +426,13 @@ const manualMatchPendingSeriesIDsKey = "manual_match_pending_series_ids"
 var manualMatchMu stdsync.Mutex
 
 // aflCacheRefreshing prevents concurrent AFL cache refreshes — two
-// simultaneous calls would both scrape AFL and race on ReplaceCachedAFLShows,
-// corrupting the "new shows" detection.
+// overlapping scrapes would double-hammer AnimeFillerList for no benefit.
 var aflCacheRefreshing atomic.Bool
+
+// aflCacheLastError holds the failure message from the most recent
+// background cache refresh, surfaced via the status endpoint so the UI
+// can report failures that no longer have an HTTP response to ride on.
+var aflCacheLastError atomic.Pointer[string]
 
 // artworkRefreshing prevents concurrent background artwork refreshes —
 // two simultaneous refreshes waste bandwidth and race on file writes.
@@ -415,6 +453,7 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			StartMode        *string `json:"start_mode"`
 			WatermarkMode    *string `json:"watermark_mode"`
 			SyncWatermark    *int    `json:"sync_watermark"`
+			Overwrite        bool    `json:"overwrite"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -423,6 +462,17 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 		if req.SonarrSeriesID == 0 {
 			writeError(w, http.StatusBadRequest, "sonarr_series_id is required")
 			return
+		}
+
+		// Refuse to silently overwrite: UpsertMapping is an update on
+		// conflict, so a double-submit or stale tab would otherwise reset
+		// another session's per-show config. Clients confirm with
+		// overwrite=true to proceed.
+		if !req.Overwrite {
+			if existing, err := db.GetMappingBySonarrID(r.Context(), req.SonarrSeriesID); err == nil && existing != nil {
+				writeError(w, http.StatusConflict, "a mapping for this series already exists")
+				return
+			}
 		}
 
 		if req.AutoMatch && req.AFLSlug == "" {
@@ -489,7 +539,7 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 
 		sonarrTitle := req.SonarrTitle
 		var sonarrOverview string
-		if sonarrTitle == "" {
+		if sonarrTitle == "" && syncEngine != nil {
 			sonarrSeries, err := syncEngine.SonarrClient().GetSeries(r.Context(), req.SonarrSeriesID)
 			if err == nil && sonarrSeries != nil {
 				sonarrTitle = sonarrSeries.Title
@@ -624,7 +674,11 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 			return
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
-		if err != nil || mapping == nil {
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
 			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
@@ -668,14 +722,11 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 			mapping.Enabled = *update.Enabled
 		}
 		if update.AFLSlug != nil {
-			slug := *update.AFLSlug
-			for _, ch := range slug {
-				if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
-					writeError(w, http.StatusBadRequest, "invalid afl_slug: only letters, numbers, hyphens, and underscores are allowed")
-					return
-				}
+			if !validAFLSlug(*update.AFLSlug) {
+				writeError(w, http.StatusBadRequest, "invalid afl_slug: only letters, numbers, hyphens, and underscores are allowed")
+				return
 			}
-			mapping.AFLSlug = slug
+			mapping.AFLSlug = *update.AFLSlug
 		}
 		if update.StartMode != nil {
 			mapping.StartMode = startModeOrDefault(update.StartMode)
@@ -709,7 +760,12 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 
 		// Mark the mapping user-modified so an in-flight sync skips its stale
 		// write-backs (watermark, episodes, monitor changes) instead of
-		// reverting this edit.
+		// reverting this edit. This must stay BEFORE UpsertMapping: bumping
+		// after the write would let a sync that already passed its supersede
+		// check land its stale write-back in between and clobber the new
+		// state. The cost is that a failed UpsertMapping leaves the epoch
+		// bumped, so in-flight syncs skip that mapping once — harmless, the
+		// next sync picks up its state.
 		if syncEngine != nil {
 			syncEngine.BumpMappingEpoch(id)
 		}
@@ -900,7 +956,11 @@ func handleGetSonarrEpisodes(db *database.DB, syncEngine *sync.Engine) http.Hand
 			return
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
-		if err != nil || mapping == nil {
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
 			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
@@ -932,11 +992,15 @@ func handleSetEpisodeMonitor(db *database.DB, syncEngine *sync.Engine, epCache *
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
+		if syncEngine == nil {
+			writeError(w, http.StatusInternalServerError, "sync engine unavailable")
+			return
+		}
 		id, idErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		// Mark the mapping user-modified before the Sonarr write so an
 		// in-flight sync skips its stale write-backs instead of reverting
 		// this toggle.
-		if syncEngine != nil && idErr == nil {
+		if idErr == nil {
 			syncEngine.BumpMappingEpoch(id)
 		}
 		if err := syncEngine.SonarrClient().SetEpisodeMonitored(r.Context(), epID, req.Monitored); err != nil {
@@ -959,14 +1023,18 @@ func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stds
 			writeError(w, http.StatusBadRequest, "invalid mapping ID")
 			return
 		}
-		if engine.IsRunning() {
+		// Claim the run slot before answering so a lost race is reported
+		// as 409 here instead of a 202 for a sync that instantly no-ops.
+		done, ok := engine.TryAcquireRun()
+		if !ok {
 			writeError(w, http.StatusConflict, "sync already in progress")
 			return
 		}
 		bgWG.Add(1)
 		go func() {
 			defer bgWG.Done()
-			if err := engine.RunResync(appCtx, id); err != nil {
+			defer done()
+			if err := engine.RunResyncClaimed(appCtx, id); err != nil {
 				log.Error().Err(err).Int64("mapping_id", id).Msg("resync failed")
 			}
 			epCache.invalidate(id)
@@ -977,14 +1045,16 @@ func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stds
 
 func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup, epCache *episodeCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if engine.IsRunning() {
+		done, ok := engine.TryAcquireRun()
+		if !ok {
 			writeError(w, http.StatusConflict, "sync already in progress")
 			return
 		}
 		bgWG.Add(1)
 		go func() {
 			defer bgWG.Done()
-			if err := engine.RunSync(appCtx, "manual"); err != nil {
+			defer done()
+			if err := engine.RunSyncClaimed(appCtx, "manual"); err != nil {
 				log.Error().Err(err).Msg("manual sync failed")
 			}
 			epCache.invalidateAll()
@@ -1042,6 +1112,7 @@ func handleBootstrap(cfg *config.Config, db *database.DB, mgr *artwork.Manager) 
 			"ntfy_server_url":               cfg.NtfyServerURL,
 			"ntfy_topic":                    cfg.NtfyTopic,
 			"ntfy_token_set":                cfg.NtfyToken != "",
+			"ntfy_notify_on":                cfg.NtfyNotifyOn,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"tmdb_api_key_masked":           maskedTmdbKey,
@@ -1103,6 +1174,7 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"ntfy_server_url":               cfg.NtfyServerURL,
 			"ntfy_topic":                    cfg.NtfyTopic,
 			"ntfy_token_set":                cfg.NtfyToken != "",
+			"ntfy_notify_on":                cfg.NtfyNotifyOn,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"tmdb_api_key_masked":           maskedTmdbKey,
@@ -1143,6 +1215,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			NtfyServerURL             *string `json:"ntfy_server_url"`
 			NtfyTopic                 *string `json:"ntfy_topic"`
 			NtfyToken                 *string `json:"ntfy_token"`
+			NtfyNotifyOn              *string `json:"ntfy_notify_on"`
 			ArtworkDefaultSource      *string `json:"artwork_default_source"`
 			TMDBAPIKey                *string `json:"tmdb_api_key"`
 			FanartAPIKey              *string `json:"fanart_api_key"`
@@ -1180,6 +1253,10 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		}
 		if update.SonarrAddMonitorMode != nil && !config.IsValidSonarrMonitorMode(*update.SonarrAddMonitorMode) {
 			writeError(w, http.StatusBadRequest, "invalid Sonarr monitor mode")
+			return
+		}
+		if update.NtfyNotifyOn != nil && !config.IsValidNtfyNotifyOn(*update.NtfyNotifyOn) {
+			writeError(w, http.StatusBadRequest, "invalid ntfy_notify_on")
 			return
 		}
 		// Compute effective ntfy values to validate without mutating cfg.
@@ -1259,6 +1336,9 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		if update.NtfyToken != nil {
 			cfg.NtfyToken = *update.NtfyToken
 		}
+		if update.NtfyNotifyOn != nil {
+			cfg.NtfyNotifyOn = *update.NtfyNotifyOn
+		}
 		if update.ArtworkDefaultSource != nil {
 			cfg.ArtworkDefaultSource = *update.ArtworkDefaultSource
 		}
@@ -1288,6 +1368,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			"ntfy_server_url":               cfg.NtfyServerURL,
 			"ntfy_topic":                    cfg.NtfyTopic,
 			"ntfy_token":                    cfg.NtfyToken,
+			"ntfy_notify_on":                cfg.NtfyNotifyOn,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"fanart_api_key":                cfg.FanartAPIKey,
@@ -1315,81 +1396,125 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 
 		// Recreate artwork providers so new API keys take effect immediately.
 		if artworkMgr != nil {
-			artworkMgr.UpdateProviders([]artwork.Provider{
-				artwork.NewAniListProvider(requestTimeout),
-				artwork.NewTMDBProvider(tmdbKey, requestTimeout),
-				artwork.NewFanartProvider(fanartKey, requestTimeout),
-				artwork.NewKitsuProvider(requestTimeout),
-			})
+			rebuildArtworkProviders(requestTimeout, tmdbKey, fanartKey, artworkMgr)
 		}
 
 		writeJSON(w, http.StatusOK, map[string]string{"status": "settings updated"})
 	}
 }
 
-func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFunc {
+// rebuildArtworkProviders recreates the artwork provider set from the
+// current config values. Shared by settings updates and config import.
+func rebuildArtworkProviders(requestTimeout time.Duration, tmdbKey, fanartKey string, artworkMgr *artwork.Manager) {
+	artworkMgr.UpdateProviders([]artwork.Provider{
+		artwork.NewAniListProvider(requestTimeout),
+		artwork.NewTMDBProvider(tmdbKey, requestTimeout),
+		artwork.NewFanartProvider(fanartKey, requestTimeout),
+		artwork.NewKitsuProvider(requestTimeout),
+	})
+}
+
+func handleRefreshAFLCache(engine *sync.Engine, db *database.DB, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !aflCacheRefreshing.CompareAndSwap(false, true) {
 			writeError(w, http.StatusConflict, "AFL cache refresh already in progress")
 			return
 		}
-		defer aflCacheRefreshing.Store(false)
+		// Ownership of the CAS flag transfers to the goroutine — it clears
+		// the flag when the scrape finishes. The scrape runs on the app
+		// context (not the request) so it survives client disconnects and
+		// the server's WriteTimeout; a full pass rate-limits at 2s per show
+		// and routinely outlives both.
+		bgWG.Add(1)
+		go func() {
+			defer bgWG.Done()
+			defer aflCacheRefreshing.Store(false)
+			runAFLCacheRefresh(appCtx, engine, db)
+		}()
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "refreshing"})
+	}
+}
 
-		shows, newSlugs, err := engine.ScraperClient().RefreshAllShows(r.Context())
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "failed to refresh AFL show list: "+err.Error())
-			return
-		}
+func handleAFLCacheRefreshStatus(w http.ResponseWriter, r *http.Request) {
+	resp := map[string]interface{}{"refreshing": aflCacheRefreshing.Load()}
+	if errPtr := aflCacheLastError.Load(); errPtr != nil {
+		resp["last_error"] = *errPtr
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
 
-		// Log the cache refresh to the activity feed.
-		logID, err := db.CreateSyncLog(r.Context(), "afl_cache_refresh")
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to create AFL cache refresh log")
-		}
-		items := make([]models.SyncLogItem, 0, len(newSlugs))
-		for _, slug := range newSlugs {
-			// Find the title for this slug from the fetched shows.
-			title := slug
-			for _, s := range shows {
-				if s.Slug == slug {
-					title = s.Title
-					break
-				}
-			}
-			items = append(items, models.SyncLogItem{
-				SonarrTitle: title,
-				Status:      "new_in_cache",
-				Summary:     "New anime detected in AFL cache",
-			})
-		}
-		if len(items) > 0 {
-			if err := db.ReplaceSyncLogItems(r.Context(), logID, items); err != nil {
-				log.Warn().Err(err).Int64("log_id", logID).Msg("failed to store AFL cache refresh log items")
-			}
-		}
-		status := "success"
-		// "partial" is reserved for partial failures. A successful refresh
-		// that detects new shows is still a success — the new items are
-		// logged individually with "new_in_cache" status.
-		if logID > 0 {
-			if err := db.CompleteSyncLog(r.Context(), logID, status, len(newSlugs), 0, ""); err != nil {
-				log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
-			}
-		}
+// runAFLCacheRefresh performs the actual scrape and records the outcome
+// in the activity feed. It runs in the background: failures can't be
+// returned over HTTP, so they land in the sync log (status "failed")
+// and in aflCacheLastError for the status endpoint.
+func runAFLCacheRefresh(ctx context.Context, engine *sync.Engine, db *database.DB) {
+	aflCacheLastError.Store(nil)
 
-		count, refreshedAt, err := db.GetAFLShowCacheStatus(r.Context())
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+	shows, newSlugs, err := engine.ScraperClient().RefreshAllShows(ctx)
+	if err != nil {
+		msg := err.Error()
+		aflCacheLastError.Store(&msg)
+		metrics.Add("mizu_afl_cache_refresh_total", "failed")
+		log.Error().Err(err).Msg("AFL cache refresh failed")
+		// WithoutCancel so a shutdown-cancelled scrape still leaves a
+		// failed log row instead of an orphaned "running" entry.
+		logCtx := context.WithoutCancel(ctx)
+		if logID, logErr := db.CreateSyncLog(logCtx, "afl_cache_refresh"); logErr == nil {
+			if cerr := db.CompleteSyncLog(logCtx, logID, "failed", 0, 0, msg); cerr != nil {
+				log.Warn().Err(cerr).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
+			}
+		} else {
+			log.Warn().Err(logErr).Msg("failed to create AFL cache refresh failure log")
 		}
-		if count == 0 {
-			count = len(shows)
+		return
+	}
+
+	// Log the cache refresh to the activity feed.
+	logID, err := db.CreateSyncLog(ctx, "afl_cache_refresh")
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to create AFL cache refresh log")
+	}
+	items := make([]models.SyncLogItem, 0, len(newSlugs))
+	for _, slug := range newSlugs {
+		// Find the title for this slug from the fetched shows.
+		title := slug
+		for _, s := range shows {
+			if s.Slug == slug {
+				title = s.Title
+				break
+			}
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"status": "refreshed", "count": count, "refreshed_at": refreshedAt,
-			"new_shows": len(newSlugs),
+		items = append(items, models.SyncLogItem{
+			SonarrTitle: title,
+			Status:      "new_in_cache",
+			Summary:     "New anime detected in AFL cache",
 		})
 	}
+	if len(items) > 0 {
+		if err := db.ReplaceSyncLogItems(ctx, logID, items); err != nil {
+			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to store AFL cache refresh log items")
+		}
+	}
+	status := "success"
+	// "partial" is reserved for partial failures. A successful refresh
+	// that detects new shows is still a success — the new items are
+	// logged individually with "new_in_cache" status.
+	if logID > 0 {
+		if err := db.CompleteSyncLog(ctx, logID, status, len(newSlugs), 0, ""); err != nil {
+			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
+		}
+	}
+
+	count, _, err := db.GetAFLShowCacheStatus(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to read AFL cache status after refresh")
+		return
+	}
+	if count == 0 {
+		count = len(shows)
+	}
+	metrics.Add("mizu_afl_cache_refresh_total", "success")
+	log.Info().Int("shows", count).Int("new_shows", len(newSlugs)).Msg("AFL cache refresh complete")
 }
 
 func handleTestSonarr() http.HandlerFunc {
@@ -2175,7 +2300,11 @@ func handleRefreshArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Mana
 			return
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
-		if err != nil || mapping == nil {
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
 			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
@@ -2329,5 +2458,121 @@ func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerF
 			}
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "source updated"})
+	}
+}
+
+// resolveArtworkSeries loads full Sonarr series metadata (TVDB ID, alternate
+// titles) for a mapping so providers can search/fetch artwork for it. Falls
+// back to the mapping's own title and series ID when Sonarr isn't configured
+// or reachable.
+func resolveArtworkSeries(ctx context.Context, cfg *config.Config, syncEngine *sync.Engine, mapping *models.ShowMapping) models.SonarrSeries {
+	series := models.SonarrSeries{
+		ID:    mapping.SonarrSeriesID,
+		Title: mapping.SonarrTitle,
+	}
+	cfg.RLock()
+	sonarrURL := cfg.SonarrURL
+	cfg.RUnlock()
+	if sonarrURL != "" && syncEngine != nil {
+		if fetched, ferr := syncEngine.SonarrClient().GetSeries(ctx, mapping.SonarrSeriesID); ferr == nil && fetched != nil {
+			series = *fetched
+		} else if ferr != nil {
+			log.Warn().Err(ferr).Int("sonarr_series_id", mapping.SonarrSeriesID).Msg("failed to fetch Sonarr series for artwork")
+		}
+	}
+	// AFL slug is a clean, normalized title — add it as an alternate title so
+	// providers can use it for matching when the Sonarr title is corrupted.
+	if mapping.AFLSlug != "" {
+		series.AlternateTitles = append(series.AlternateTitles, models.SonarrAltTitle{Title: mapping.AFLSlug})
+	}
+	return series
+}
+
+// handleListArtworkCandidates returns every candidate image a source offers
+// for a mapping so the frontend picker can present them.
+func handleListArtworkCandidates(cfg *config.Config, db *database.DB, mgr *artwork.Manager, syncEngine *sync.Engine) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid mapping ID")
+			return
+		}
+		mapping, err := db.GetMappingByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
+			writeError(w, http.StatusNotFound, "mapping not found")
+			return
+		}
+
+		source := r.URL.Query().Get("source")
+		if source == "" {
+			writeError(w, http.StatusBadRequest, "source query parameter is required")
+			return
+		}
+
+		series := resolveArtworkSeries(r.Context(), cfg, syncEngine, mapping)
+		opts, err := mgr.ListCandidates(r.Context(), series, source)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to list artwork candidates: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, opts)
+	}
+}
+
+// handleSelectArtwork persists a user-picked image set for a mapping: it
+// downloads the chosen URLs to disk, writes the local paths, and sets the
+// per-show source override so future refreshes use the same source.
+func handleSelectArtwork(db *database.DB, mgr *artwork.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid mapping ID")
+			return
+		}
+		var body struct {
+			Source    string `json:"source"`
+			PosterURL string `json:"poster_url"`
+			BannerURL string `json:"banner_url"`
+			LogoURL   string `json:"logo_url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+		if body.Source == "" || body.Source == "sonarr" || body.Source == "auto" {
+			writeError(w, http.StatusBadRequest, "a concrete artwork source is required")
+			return
+		}
+		valid := false
+		for _, p := range mgr.Providers() {
+			if p.ID == body.Source {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			writeError(w, http.StatusBadRequest, "unknown artwork source: "+body.Source)
+			return
+		}
+
+		result, err := mgr.SelectArtwork(r.Context(), id, body.Source, body.PosterURL, body.BannerURL, body.LogoURL)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to save artwork: "+err.Error())
+			return
+		}
+		// Persist the per-show override so the pick sticks on future refreshes.
+		// Only when the pick actually landed: a superseded pick (Found=false)
+		// must not overwrite the override set by the newer operation.
+		if result.Found {
+			if err := db.UpdateArtworkSource(r.Context(), id, body.Source); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, result)
 	}
 }

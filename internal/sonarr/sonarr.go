@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"mizu/internal/models"
@@ -15,11 +19,32 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	// defaultRetryMaxAttempts is the total number of attempts (including
+	// the first) per request.
+	defaultRetryMaxAttempts = 3
+
+	// Error bodies are only used for diagnostics — cap them so a
+	// pathological response can't balloon memory.
+	maxErrorBodyBytes = 8 << 10
+
+	// Successful JSON responses are streamed into the decoder; cap the
+	// read so a broken/malicious mirror can't exhaust memory. Real
+	// libraries with thousands of series stay well under this.
+	maxResponseBodyBytes = 32 << 20
+)
+
 // Client communicates with the Sonarr API v3.
 type Client struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
+
+	// Retry policy. Fields rather than constants so tests can shorten
+	// backoff and attempt counts.
+	retryMaxAttempts int
+	retryBaseBackoff time.Duration
+	retryMaxBackoff  time.Duration
 }
 
 type AddSeriesOptions struct {
@@ -38,25 +63,123 @@ func New(baseURL, apiKey string, timeout time.Duration) *Client {
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		retryMaxAttempts: defaultRetryMaxAttempts,
+		retryBaseBackoff: 500 * time.Millisecond,
+		retryMaxBackoff:  4 * time.Second,
 	}
 }
 
-// doRequest performs an authenticated HTTP request to the Sonarr API.
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
-	url := fmt.Sprintf("%s/api/v3%s", c.baseURL, path)
+// httpStatusError is returned for non-2xx responses. It carries the
+// status and any server-provided Retry-After hint so the retry loop can
+// decide whether and when to try again.
+type httpStatusError struct {
+	Method     string
+	Path       string
+	Status     int
+	RetryAfter time.Duration
+	Body       string
+}
 
-	var bodyReader io.Reader
+func (e *httpStatusError) Error() string {
+	if e.Body != "" {
+		return fmt.Sprintf("%s %s returned %d: %s", e.Method, e.Path, e.Status, e.Body)
+	}
+	return fmt.Sprintf("%s %s returned %d", e.Method, e.Path, e.Status)
+}
+
+func (e *httpStatusError) transient() bool {
+	return e.Status == http.StatusTooManyRequests || e.Status >= 500
+}
+
+// sentNothing reports whether a transport error occurred before the
+// request reached the wire (dial/DNS failure). Only then is it safe to
+// blindly resend even a non-idempotent POST.
+func sentNothing(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "dial"
+}
+
+// doRequest performs an authenticated request to the Sonarr API,
+// retrying transient failures:
+//
+//   - GET/PUT/DELETE are retried on transport errors, 429, and 5xx
+//     (idempotent against the Sonarr v3 API).
+//   - POST is only retried on dial-level failures where the request
+//     provably never reached the server — retrying after an ambiguous
+//     timeout could double-add a series.
+//
+// Retry-After on 429/503 overrides the computed backoff (capped).
+func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
+	var payload []byte
 	if body != nil {
-		jsonData, err := json.Marshal(body)
+		var err error
+		payload, err = json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshaling request body: %w", err)
 		}
-		bodyReader = bytes.NewReader(jsonData)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	idempotent := method != http.MethodPost
+
+	var lastErr error
+	for attempt := 0; attempt < c.retryMaxAttempts; attempt++ {
+		resp, notSent, err := c.attempt(ctx, method, path, payload)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+
+		var retryable bool
+		var hint time.Duration
+		var statusErr *httpStatusError
+		if errors.As(err, &statusErr) {
+			retryable = idempotent && statusErr.transient()
+			hint = statusErr.RetryAfter
+		} else {
+			// Transport failure: any error is fair game for idempotent
+			// verbs; non-idempotent ones only when nothing hit the wire.
+			retryable = notSent || idempotent
+		}
+		if !retryable || attempt == c.retryMaxAttempts-1 {
+			break
+		}
+		if ctx.Err() != nil {
+			// Cancelled during/after the failed attempt — report that
+			// rather than dressing it up as a request failure.
+			return nil, fmt.Errorf("%s %s: %w", method, path, ctx.Err())
+		}
+
+		wait := c.retryBaseBackoff << attempt // 500ms, 1s, 2s...
+		if wait > c.retryMaxBackoff {
+			wait = c.retryMaxBackoff
+		}
+		if hint > wait && hint <= c.retryMaxBackoff {
+			wait = hint
+		}
+		log.Debug().Str("method", method).Str("path", path).Int("attempt", attempt+1).
+			Dur("retry_in", wait).Msg("Sonarr request failed; retrying")
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+	return nil, lastErr
+}
+
+// attempt performs one request round-trip. notSent marks transport
+// failures that occurred before anything reached the server.
+func (c *Client) attempt(ctx context.Context, method, path string, payload []byte) (*http.Response, bool, error) {
+	reqURL := fmt.Sprintf("%s/api/v3%s", c.baseURL, path)
+
+	var bodyReader io.Reader
+	if payload != nil {
+		bodyReader = bytes.NewReader(payload) // fresh reader each attempt
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+		return nil, false, fmt.Errorf("creating request: %w", err)
 	}
 
 	req.Header.Set("X-Api-Key", c.apiKey)
@@ -65,23 +188,34 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s %s: %w", method, path, err)
+		return nil, sentNothing(err), fmt.Errorf("%s %s: %w", method, path, err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
-		errBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%s %s returned %d: %s", method, path, resp.StatusCode, string(errBody))
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		statusErr := &httpStatusError{
+			Method: method,
+			Path:   path,
+			Status: resp.StatusCode,
+			Body:   strings.TrimSpace(string(errBody)),
+		}
+		if ra := resp.Header.Get("Retry-After"); ra != "" {
+			if secs, perr := strconv.Atoi(ra); perr == nil && secs > 0 {
+				statusErr.RetryAfter = time.Duration(secs) * time.Second
+			}
+		}
+		return nil, false, statusErr
 	}
 
-	return resp, nil
+	return resp, false, nil
 }
 
 // decodeResponse reads and decodes a JSON response body.
 func decodeResponse[T any](resp *http.Response) (T, error) {
 	var result T
 	defer resp.Body.Close()
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&result); err != nil {
 		return result, fmt.Errorf("decoding response: %w", err)
 	}
 	return result, nil

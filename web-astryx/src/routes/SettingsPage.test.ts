@@ -49,6 +49,7 @@ const SETTINGS = {
 vi.mock("../lib/api", () => ({
   getSettings: vi.fn(),
   refreshAflCache: vi.fn(),
+  getAflCacheRefreshStatus: vi.fn().mockResolvedValue({ refreshing: false }),
   refreshAllArtwork: vi.fn(),
   testNtfyConnection: vi.fn(),
   testSonarrConnection: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("../lib/queries", () => ({
   useSettings: () => ({ data: SETTINGS, isPending: false, isFetched: true }),
   useArtworkProviders: () => ({ data: EMPTY_PROVIDERS, isPending: false, isFetched: true }),
   useUpdateSettings: () => ({ mutateAsync: updateSettingsMock }),
+  useAuthStatus: () => ({ data: { configured: false, authenticated: false } }),
 }));
 
 vi.mock("../lib/store", () => ({
@@ -67,6 +69,10 @@ vi.mock("../lib/store", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClient,
+}));
+
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock("../lib/sounds", () => ({

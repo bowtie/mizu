@@ -4,16 +4,19 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
-import { prefetchShowDetail } from "./lib/api";
+import { prefetchShowDetail, logout } from "./lib/api";
 import { queryClient } from "./lib/queryClient";
+import { useAuthStatus } from "./lib/queries";
 import { Theme } from "@astryxdesign/core/theme";
 import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { TopNavHeading } from "@astryxdesign/core/TopNav";
 import { TopNavItem } from "@astryxdesign/core/TopNav";
 import { NavIcon } from "@astryxdesign/core/NavIcon";
-import { Check, Palette } from "lucide-react";
-import { BrowserRouter, useLocation, Link } from "react-router-dom";
+import { Button } from "@astryxdesign/core/Button";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Check, Palette, LogOut } from "lucide-react";
+import { BrowserRouter, useLocation, useNavigate, Link } from "react-router-dom";
 
 // Lazy-load DropdownMenu — it pulls in usePopover, useListFocus,
 // useTypeahead, and layerAnimations (~53KB source). The theme menu
@@ -137,6 +140,37 @@ function MizuLogo() {
   );
 }
 
+function LogoutButton() {
+  const { data: status } = useAuthStatus();
+  const navigate = useNavigate();
+
+  if (!status?.authenticated) return null;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // Session may already be gone — clearing local state is enough.
+    } finally {
+      queryClient.clear();
+      navigate("/login", { replace: true });
+    }
+  };
+
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      isIconOnly
+      label="Sign out"
+      icon={<LogOut size={16} />}
+      aria-label="Sign out"
+      tooltip="Sign out"
+      onClick={() => void handleLogout()}
+    />
+  );
+}
+
 function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
   const location = useLocation();
   const currentPath = location.pathname;
@@ -175,7 +209,12 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
           />
         </>
       }
-      endContent={themeMenu}
+      endContent={
+        <HStack gap={2} align="center">
+          <LogoutButton />
+          {themeMenu}
+        </HStack>
+      }
     />
   );
 }

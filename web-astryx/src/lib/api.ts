@@ -1,8 +1,10 @@
 import ky, { HTTPError } from "ky";
 import type {
   AFLMatch,
+  ArtworkOptions,
   ArtworkProvider,
   ArtworkRefreshResult,
+  ArtworkSelectPayload,
   Episode,
   MappingCreate,
   Settings,
@@ -39,6 +41,20 @@ const api = ky.create({
   headers: { "Content-Type": "application/json" },
   retry: 0, // TanStack Query handles retries at a higher level
   hooks: {
+    afterResponse: [
+      ({ response }) => {
+        // Session expired or revoked — bounce to the login page.
+        // Auth endpoints are exempt so the login flow itself never loops.
+        if (
+          response.status === 401 &&
+          !response.url.includes("/auth/") &&
+          location.pathname !== "/login"
+        ) {
+          const from = encodeURIComponent(location.pathname + location.search);
+          location.assign(`/login?from=${from}`);
+        }
+      },
+    ],
     beforeError: [
       async (state) => {
         const { error } = state;
@@ -140,10 +156,13 @@ export function getShow(id: string | number): Promise<Show> {
   }
   // If prefetchShowDetail has an in-flight show promise, use it
   // directly — resolves as soon as the 583B show fetch completes
-  // without waiting for the 252KB episodes fetch.
+  // without waiting for the 252KB episodes fetch. If the prefetch
+  // fails (e.g. a 401 on a hard refresh before login), fall back to
+  // a fresh request instead of handing out a permanently rejected
+  // promise.
   const inflightDetail = detailPrefetch.get(key);
   if (inflightDetail) {
-    return inflightDetail.show;
+    return inflightDetail.show.catch(() => request<Show>("GET", "/mappings/" + key));
   }
   // Use the pre-fired Response from the inline script if available.
   const preFired = prefetch?.show && prefetch.detailId === key ? prefetch.show : undefined;
@@ -240,6 +259,7 @@ export function prefetchShowDetail(id: string | number): void {
       if (newEtag && episodeFetchGen.get(key) === gen) {
         episodeETags.set(key, newEtag);
         episodeDataCache.set(key, data);
+        pruneEpisodeCaches();
       }
       return data;
     });
@@ -251,6 +271,20 @@ export function prefetchShowDetail(id: string | number): void {
   // in-flight prefetch can't write back to the cache after the page has moved on.
   const entry: DetailPrefetchEntry = { show: showPromise, episodes: episodesPromise };
   detailPrefetch.set(key, entry);
+
+  // Evict on failure: a prefetch that rejects (401 on a hard refresh
+  // before login, transient network error) must not stay in the map —
+  // otherwise getShow/getEpisodes would hand out the same rejected
+  // promise forever and the detail page would wedge until a full
+  // reload. The handlers swallow the rejection so these side-effect
+  // chains themselves never become unhandled rejections; consumers of
+  // the entry's promises get the real error and fall back to fresh
+  // requests (see getShow/getEpisodes).
+  const evictIfCurrent = () => {
+    if (detailPrefetch.get(key) === entry) detailPrefetch.delete(key);
+  };
+  showPromise.catch(evictIfCurrent);
+  episodesPromise.catch(evictIfCurrent);
 
   // When both resolve, populate the synchronous cache for getCachedShowDetail.
   // Only write if this prefetch is still the current entry for the key: the
@@ -283,10 +317,6 @@ export function updateShow(id: string | number, data: ShowUpdate): Promise<Show>
 
 export function deleteShow(id: string | number): Promise<unknown> {
   return request<unknown>("DELETE", "/mappings/" + id);
-}
-
-export function autoMatch(sonarrSeriesId: string | number): Promise<Show> {
-  return request<Show>("POST", "/mappings", { sonarr_series_id: sonarrSeriesId, auto_match: true });
 }
 
 export function confirmMatch(data: MappingCreate): Promise<Show> {
@@ -330,6 +360,22 @@ const episodeDataCache = new Map<string, Episode[]>();
 // newer ETag keeps validating on 304 while the older data is served forever.
 const episodeFetchGen = new Map<string, number>();
 
+// Bound the per-show episode caches: hovering a large library without
+// visiting would otherwise retain a full episode array per show for the
+// whole session. Maps keep insertion order, so evicting from the front is
+// a simple FIFO cap — a 304 for an evicted key just re-fetches.
+const EPISODE_CACHE_MAX = 50;
+
+function pruneEpisodeCaches(): void {
+  for (const map of [episodeETags, episodeDataCache]) {
+    while (map.size > EPISODE_CACHE_MAX) {
+      const oldest = map.keys().next().value;
+      if (oldest === undefined) break;
+      map.delete(oldest);
+    }
+  }
+}
+
 export function getEpisodes(showId: string | number): Promise<Episode[]> {
   const key = String(showId);
   const cached = episodePrefetch.get(key);
@@ -346,10 +392,12 @@ export function getEpisodes(showId: string | number): Promise<Episode[]> {
     return Promise.resolve(cachedDetail.episodes);
   }
   // If prefetchShowDetail has an in-flight episodes promise, use it
-  // directly — avoids parsing the same Response body twice.
+  // directly — avoids parsing the same Response body twice. On prefetch
+  // failure, fall back to a fresh ETag-aware request rather than
+  // returning a permanently rejected promise.
   const inflightDetail = detailPrefetch.get(key);
   if (inflightDetail) {
-    return inflightDetail.episodes;
+    return inflightDetail.episodes.catch(() => requestEpisodesWithETag(key));
   }
   // Use the pre-fired Response from the inline script if available.
   // The inline script fires fetch("/api/mappings/:id/episodes") before
@@ -373,6 +421,7 @@ export function getEpisodes(showId: string | number): Promise<Episode[]> {
       if (newEtag && episodeFetchGen.get(key) === gen) {
         episodeETags.set(key, newEtag);
         episodeDataCache.set(key, data);
+        pruneEpisodeCaches();
       }
       return data;
     });
@@ -414,6 +463,7 @@ async function requestEpisodesWithETag(key: string): Promise<Episode[]> {
   if (newEtag && episodeFetchGen.get(key) === gen) {
     episodeETags.set(key, newEtag);
     episodeDataCache.set(key, data);
+    pruneEpisodeCaches();
   }
   return data;
 }
@@ -460,6 +510,23 @@ export function setArtworkSource(
   return request<{ status: string }>("PUT", `/mappings/${showId}/artwork/source`, { source });
 }
 
+export function getArtworkCandidates(
+  showId: string | number,
+  source: string,
+): Promise<ArtworkOptions> {
+  return request<ArtworkOptions>(
+    "GET",
+    `/mappings/${showId}/artwork/candidates?source=${encodeURIComponent(source)}`,
+  );
+}
+
+export function selectArtwork(
+  showId: string | number,
+  payload: ArtworkSelectPayload,
+): Promise<ArtworkRefreshResult> {
+  return request<ArtworkRefreshResult>("PUT", `/mappings/${showId}/artwork/select`, payload);
+}
+
 export function refreshAllArtwork(): Promise<{ status: string }> {
   return request<{ status: string }>("POST", "/artwork/refresh-all");
 }
@@ -501,8 +568,32 @@ export function updateSettings(data: Settings | Partial<Settings>): Promise<{ st
   return request<{ status: string }>("PUT", "/settings", data);
 }
 
-export function refreshAflCache(): Promise<unknown> {
-  return request<unknown>("POST", "/settings/afl-cache/refresh");
+export function refreshAflCache(): Promise<{ status: string }> {
+  return request<{ status: string }>("POST", "/settings/afl-cache/refresh");
+}
+
+// ── Config backup ──
+
+/** Downloads the full config (mappings + settings) as a JSON blob. */
+export function exportConfig(): Promise<Blob> {
+  return api("backup/export").blob();
+}
+
+/** Restores a config file previously produced by exportConfig. */
+export function importConfig(data: unknown): Promise<{
+  settings_imported: number;
+  mappings_imported: number;
+}> {
+  return request("POST", "/backup/import", data);
+}
+
+export interface AflCacheRefreshStatus {
+  refreshing: boolean;
+  last_error?: string;
+}
+
+export function getAflCacheRefreshStatus(): Promise<AflCacheRefreshStatus> {
+  return request<AflCacheRefreshStatus>("GET", "/settings/afl-cache/status");
 }
 
 export function testNtfyConnection(data: {
@@ -511,6 +602,54 @@ export function testNtfyConnection(data: {
   token?: string;
 }): Promise<TestConnectionResult> {
   return request<TestConnectionResult>("POST", "/ntfy/test", data);
+}
+
+// ── Auth ──
+
+export interface AuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+}
+
+export function getAuthStatus(): Promise<AuthStatus> {
+  return request<AuthStatus>("GET", "/auth/status");
+}
+
+export function login(password: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("POST", "/auth/login", { password });
+}
+
+export function setupPassword(password: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("POST", "/auth/setup", { password });
+}
+
+export function logout(): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("POST", "/auth/logout").then((res) => {
+    // Evict the service worker's stale-while-revalidate API cache so
+    // library data fetched under this session can't be served to the
+    // next one. Best-effort — the SW may not be registered or supported.
+    if (typeof caches !== "undefined") {
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(keys.filter((k) => k.endsWith("-api")).map((k) => caches.delete(k))),
+        )
+        .catch(() => {
+          /* non-fatal */
+        });
+    }
+    return res;
+  });
+}
+
+export function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("POST", "/auth/change-password", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
 }
 
 /** Safely extract a human-readable message from an unknown catch value. */

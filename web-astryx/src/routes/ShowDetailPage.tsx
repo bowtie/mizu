@@ -67,6 +67,7 @@ import {
   getShow,
   refreshArtwork,
   setArtworkSource,
+  selectArtwork,
   setEpisodeMonitor,
   updateShow,
   errorMessage,
@@ -74,9 +75,18 @@ import {
 import type { Episode, SelectOption, Show, ShowUpdate, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { TrackingRuleCard } from "../components/TrackingRuleCard";
+import {
+  ArtworkPickerDialog,
+  type ArtworkPickerSource,
+  type ArtworkSlot,
+} from "../components/ArtworkPickerDialog";
 
 const WATERMARK_AUTO = "auto";
 const WATERMARK_MANUAL = "manual";
+
+// Providers that expose many candidate images (the artwork picker).
+// Sonarr/anilist/kitsu have a single best pick and no candidates endpoint.
+const PICKER_SOURCES = new Set(["fanart", "tmdb"]);
 
 const actionToTracked = (action: string | undefined, fallback: boolean = true): boolean =>
   (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
@@ -454,6 +464,7 @@ export function ShowDetailPage() {
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [show, setShow] = useState<Show | null>(initialShow);
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const [artworkVersion, setArtworkVersion] = useState(0);
@@ -918,6 +929,47 @@ export function ShowDetailPage() {
     };
   }, []);
 
+  // Effective artwork source for the picker: the per-show override if set,
+  // otherwise the global default. The picker only appears for sources that
+  // expose candidate images.
+  const resolvedArtworkSource =
+    show?.artwork_source || settings?.artwork_default_source || "sonarr";
+  const canPickArtwork = PICKER_SOURCES.has(resolvedArtworkSource);
+  // Candidate-capable sources to tab between in the picker dialog.
+  const pickerSources = useMemo<ArtworkPickerSource[]>(
+    () =>
+      artworkProviders
+        .filter((p) => PICKER_SOURCES.has(p.id))
+        .map((p) => ({ id: p.id, label: p.label })),
+    [artworkProviders],
+  );
+
+  const handleArtworkPick = async (source: string, slot: ArtworkSlot, url: string) => {
+    if (!showId) return;
+    setArtworkRefreshing(true);
+    try {
+      // Partial pick: only the chosen slot is sent; the backend preserves
+      // the other slots' existing files and paths.
+      await selectArtwork(showId, {
+        source,
+        poster_url: slot === "poster" ? url : "",
+        banner_url: slot === "banner" ? url : "",
+        logo_url: slot === "logo" ? url : "",
+      });
+      const refreshed = await loadShowData();
+      if (refreshed) {
+        setHeroImgError(false);
+        setHeroFallbackFailed(false);
+        setArtworkVersion((v) => v + 1);
+      }
+      setPickerOpen(false);
+      addNotification(`Artwork ${slot} updated`, "success");
+    } catch (err: unknown) {
+      addNotification("Failed to save artwork: " + errorMessage(err), "error");
+    }
+    setArtworkRefreshing(false);
+  };
+
   const handleRefreshArtwork = async (source?: string) => {
     if (!showId) return;
     setArtworkRefreshing(true);
@@ -1311,6 +1363,17 @@ export function ShowDetailPage() {
                     <ImageIcon size={16} color="var(--color-icon-secondary)" />
                     <Heading level={3}>Artwork</Heading>
                     <div style={{ flex: 1 }} />
+                    {canPickArtwork && (
+                      <Button
+                        label="Choose"
+                        variant="secondary"
+                        size="sm"
+                        icon={<ImageIcon size={14} />}
+                        onClick={() => setPickerOpen(true)}
+                        isDisabled={artworkRefreshing}
+                        data-cuelume-press
+                      />
+                    )}
                     <Button
                       label={artworkRefreshing ? "Refreshing..." : "Refresh"}
                       variant="ghost"
@@ -1409,6 +1472,22 @@ export function ShowDetailPage() {
             onAction={handleDelete}
           />
         </Suspense>
+      )}
+
+      {showId && (
+        <ArtworkPickerDialog
+          isOpen={pickerOpen}
+          onOpenChange={setPickerOpen}
+          showId={showId}
+          sources={pickerSources}
+          initialSource={resolvedArtworkSource}
+          currentArtwork={{
+            poster: show?.artwork_poster_url || undefined,
+            banner: show?.artwork_banner_url || undefined,
+            logo: show?.artwork_logo_url || undefined,
+          }}
+          onSelect={handleArtworkPick}
+        />
       )}
     </>
   );

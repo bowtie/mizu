@@ -20,6 +20,12 @@ type AppSetting struct {
 	Value string
 }
 
+type AuthSession struct {
+	TokenHash string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
 type EpisodeInfo struct {
 	ID                    int64
 	MappingID             int64
@@ -57,6 +63,9 @@ type ShowMapping struct {
 	Overview          string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	ArtworkPosterUrl  string
+	ArtworkBannerUrl  string
+	ArtworkLogoUrl    string
 }
 
 type SonarrSeriesCache struct {

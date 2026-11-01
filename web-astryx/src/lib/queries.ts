@@ -18,7 +18,6 @@ import {
   createShow,
   updateShow,
   deleteShow,
-  autoMatch,
   confirmMatch,
   updateSettings,
   triggerSync,
@@ -31,6 +30,7 @@ import {
   testNtfyConnection,
   addSonarrSeries,
   markManualMatchPending,
+  getAuthStatus,
 } from "./api";
 import {
   BootstrapSchema,
@@ -62,6 +62,7 @@ export const queryKeys = {
   show: (id: string | number) => ["show", id] as const,
   episodes: (showId: string | number) => ["episodes", showId] as const,
   settings: ["settings"] as const,
+  authStatus: ["authStatus"] as const,
   sonarrSeries: (matchableOnly?: boolean) => ["sonarrSeries", matchableOnly ?? false] as const,
   sonarrAddOptions: ["sonarrAddOptions"] as const,
   syncLogs: (limit: number, offset: number) => ["syncLogs", limit, offset] as const,
@@ -158,6 +159,17 @@ export function useBootstrap() {
   return useQuery({
     queryKey: queryKeys.bootstrap,
     queryFn: async () => v.parse(BootstrapSchema, await getBootstrap()),
+  });
+}
+
+// Auth status is cheap and gates the whole app, so keep it fresh for a
+// minute; LoginPage writes the post-login state directly via setQueryData.
+export function useAuthStatus() {
+  return useQuery({
+    queryKey: queryKeys.authStatus,
+    queryFn: getAuthStatus,
+    staleTime: 60_000,
+    retry: false,
   });
 }
 
@@ -268,21 +280,6 @@ export function useDeleteShow() {
       qc.removeQueries({ queryKey: queryKeys.episodes(showId) });
       qc.invalidateQueries({ queryKey: queryKeys.shows });
       qc.invalidateQueries({ queryKey: queryKeys.bootstrap });
-    },
-  });
-}
-
-export function useAutoMatch() {
-  const qc = useQueryClient();
-  const scheduleArtworkRefetch = useShowArtworkRefetch();
-  return useMutation({
-    mutationFn: autoMatch,
-    onSuccess: (show) => {
-      qc.invalidateQueries({ queryKey: queryKeys.show(show.id) });
-      qc.invalidateQueries({ queryKey: queryKeys.episodes(show.id) });
-      qc.invalidateQueries({ queryKey: queryKeys.shows });
-      qc.invalidateQueries({ queryKey: queryKeys.bootstrap });
-      scheduleArtworkRefetch(show.id);
     },
   });
 }

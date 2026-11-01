@@ -25,7 +25,8 @@ SELECT
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-    overview, created_at, updated_at
+    overview, created_at, updated_at,
+    artwork_poster_url, artwork_banner_url, artwork_logo_url
 FROM show_mappings
 ORDER BY sonarr_title ASC
 `
@@ -61,6 +62,9 @@ func (q *Queries) GetAllMappings(ctx context.Context) ([]ShowMapping, error) {
 			&i.Overview,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ArtworkPosterUrl,
+			&i.ArtworkBannerUrl,
+			&i.ArtworkLogoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -81,7 +85,8 @@ SELECT
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-    overview, created_at, updated_at
+    overview, created_at, updated_at,
+    artwork_poster_url, artwork_banner_url, artwork_logo_url
 FROM show_mappings
 WHERE id = ?
 `
@@ -111,6 +116,9 @@ func (q *Queries) GetMappingByID(ctx context.Context, id int64) (ShowMapping, er
 		&i.Overview,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ArtworkPosterUrl,
+		&i.ArtworkBannerUrl,
+		&i.ArtworkLogoUrl,
 	)
 	return i, err
 }
@@ -121,7 +129,8 @@ SELECT
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-    overview, created_at, updated_at
+    overview, created_at, updated_at,
+    artwork_poster_url, artwork_banner_url, artwork_logo_url
 FROM show_mappings
 WHERE sonarr_series_id = ?
 `
@@ -151,6 +160,9 @@ func (q *Queries) GetMappingBySonarrID(ctx context.Context, sonarrSeriesID int64
 		&i.Overview,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ArtworkPosterUrl,
+		&i.ArtworkBannerUrl,
+		&i.ArtworkLogoUrl,
 	)
 	return i, err
 }
@@ -166,24 +178,32 @@ func (q *Queries) GetMappingIDBySonarrID(ctx context.Context, sonarrSeriesID int
 	return id, err
 }
 
-const updateArtworkFiles = `-- name: UpdateArtworkFiles :exec
+const updateArtwork = `-- name: UpdateArtwork :exec
 UPDATE show_mappings
-SET artwork_poster_path = ?, artwork_banner_path = ?, artwork_logo_path = ?, updated_at = CURRENT_TIMESTAMP
+SET artwork_poster_path = ?, artwork_banner_path = ?, artwork_logo_path = ?,
+    artwork_poster_url = ?, artwork_banner_url = ?, artwork_logo_url = ?,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 `
 
-type UpdateArtworkFilesParams struct {
+type UpdateArtworkParams struct {
 	ArtworkPosterPath string
 	ArtworkBannerPath string
 	ArtworkLogoPath   string
+	ArtworkPosterUrl  string
+	ArtworkBannerUrl  string
+	ArtworkLogoUrl    string
 	ID                int64
 }
 
-func (q *Queries) UpdateArtworkFiles(ctx context.Context, arg UpdateArtworkFilesParams) error {
-	_, err := q.db.ExecContext(ctx, updateArtworkFiles,
+func (q *Queries) UpdateArtwork(ctx context.Context, arg UpdateArtworkParams) error {
+	_, err := q.db.ExecContext(ctx, updateArtwork,
 		arg.ArtworkPosterPath,
 		arg.ArtworkBannerPath,
 		arg.ArtworkLogoPath,
+		arg.ArtworkPosterUrl,
+		arg.ArtworkBannerUrl,
+		arg.ArtworkLogoUrl,
 		arg.ID,
 	)
 	return err

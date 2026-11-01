@@ -27,6 +27,8 @@ vi.mock("../lib/api", () => ({
   clearCachedShowDetail: vi.fn(),
   refreshArtwork: vi.fn(),
   setArtworkSource: vi.fn(),
+  selectArtwork: vi.fn(),
+  getArtworkCandidates: vi.fn(),
   setEpisodeMonitor: vi.fn(),
   updateShow: vi.fn(),
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
@@ -52,7 +54,35 @@ vi.mock("../components/TrackingRuleCard", () => ({
   TrackingRuleCard: () => null,
 }));
 
-import { getShow, getEpisodes, updateShow, setEpisodeMonitor } from "../lib/api";
+// Stub the picker dialog: render a button that emits a poster pick when the
+// dialog is open, so the page-level test can drive handleArtworkPick without
+// the astryx native <dialog> element (unsupported under happy-dom).
+vi.mock("../components/ArtworkPickerDialog", () => ({
+  ArtworkPickerDialog: (props: {
+    isOpen: boolean;
+    initialSource?: string;
+    currentArtwork?: { poster?: string; banner?: string; logo?: string };
+    onSelect: (source: string, slot: string, url: string) => void;
+  }) => {
+    if (!props.isOpen) return null;
+    return createElement(
+      "button",
+      {
+        "data-testid": "picker-pick",
+        "data-current-poster": props.currentArtwork?.poster ?? "",
+        onClick: () =>
+          props.onSelect(
+            props.initialSource ?? "fanart",
+            "poster",
+            "https://example.com/picked.jpg",
+          ),
+      },
+      "Pick",
+    );
+  },
+}));
+
+import { getShow, getEpisodes, updateShow, setEpisodeMonitor, selectArtwork } from "../lib/api";
 import type { Show, Episode } from "../lib/types";
 import { ShowDetailPage } from "./ShowDetailPage";
 
@@ -60,6 +90,7 @@ const mockedGetShow = vi.mocked(getShow);
 const mockedGetEpisodes = vi.mocked(getEpisodes);
 const mockedUpdateShow = vi.mocked(updateShow);
 const mockedSetEpisodeMonitor = vi.mocked(setEpisodeMonitor);
+const mockedSelectArtwork = vi.mocked(selectArtwork);
 
 const SHOW: Show = {
   id: 1,
@@ -97,6 +128,7 @@ beforeEach(() => {
   mockedGetEpisodes.mockReset();
   mockedUpdateShow.mockReset();
   mockedSetEpisodeMonitor.mockReset();
+  mockedSelectArtwork.mockReset();
   addNotificationMock.mockClear();
 });
 
@@ -189,6 +221,65 @@ describe("ShowDetailPage", () => {
       expect.stringContaining("Saved tracking rules"),
       "success",
     );
+  });
+
+  it("opens the picker for a multi-image source and persists a partial pick", async () => {
+    mockedGetShow.mockResolvedValue({ ...SHOW, artwork_source: "fanart" });
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    mockedSelectArtwork.mockResolvedValue({ source: "fanart", found: true });
+    await renderPage();
+
+    // The "Choose" button only appears when the resolved source supports
+    // candidate browsing (fanart/tmdb).
+    const choose = findButton("Choose");
+    expect(choose).toBeDefined();
+    await act(async () => {
+      choose!.click();
+    });
+    await flush(2);
+
+    const pick = container.querySelector<HTMLButtonElement>('[data-testid="picker-pick"]');
+    expect(pick).not.toBeNull();
+    await act(async () => {
+      pick!.click();
+    });
+    await flush(3);
+
+    // Only the picked slot is sent; the other slots stay empty so the
+    // backend preserves their existing artwork.
+    expect(mockedSelectArtwork).toHaveBeenCalledWith("1", {
+      source: "fanart",
+      poster_url: "https://example.com/picked.jpg",
+      banner_url: "",
+      logo_url: "",
+    });
+    expect(addNotificationMock).toHaveBeenCalledWith(expect.stringContaining("updated"), "success");
+  });
+
+  it("passes the show's current artwork URLs to the picker", async () => {
+    mockedGetShow.mockResolvedValue({
+      ...SHOW,
+      artwork_source: "fanart",
+      artwork_poster_url: "https://example.com/current-poster.jpg",
+    });
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    await renderPage();
+
+    await act(async () => {
+      findButton("Choose")!.click();
+    });
+    await flush(2);
+
+    const pick = container.querySelector<HTMLButtonElement>('[data-testid="picker-pick"]');
+    expect(pick?.dataset.currentPoster).toBe("https://example.com/current-poster.jpg");
+  });
+
+  it("hides the picker for a source without candidate browsing", async () => {
+    mockedGetShow.mockResolvedValue({ ...SHOW, artwork_source: "kitsu" });
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    await renderPage();
+
+    expect(findButton("Choose")).toBeUndefined();
   });
 
   it("toggles an episode's monitor state via setEpisodeMonitor", async () => {

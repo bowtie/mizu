@@ -31,6 +31,7 @@ export interface Settings {
   ntfy_server_url?: string;
   ntfy_topic?: string;
   ntfy_token_set?: boolean;
+  ntfy_notify_on?: string;
   ui_sounds_enabled?: boolean;
   [key: string]: unknown;
 }
@@ -73,6 +74,9 @@ export interface Show {
   artwork_poster_path?: string;
   artwork_banner_path?: string;
   artwork_logo_path?: string;
+  artwork_poster_url?: string;
+  artwork_banner_url?: string;
+  artwork_logo_url?: string;
   overview?: string;
   poster?: string;
   sync_watermark: number;
@@ -95,6 +99,9 @@ export interface MappingCreate {
   mixed_action?: string;
   anime_canon_action?: string;
   start_mode?: string;
+  /** Explicitly replace an existing mapping for the same series — the
+   *  backend returns 409 without it. */
+  overwrite?: boolean;
   [key: string]: unknown;
 }
 
@@ -138,6 +145,28 @@ export interface ArtworkRefreshResult {
   poster_path?: string;
   banner_path?: string;
   logo_path?: string;
+}
+
+export interface ArtworkOption {
+  url: string;
+  thumb_url?: string;
+  lang?: string;
+  width?: number;
+  height?: number;
+  likes?: number;
+}
+
+export interface ArtworkOptions {
+  posters: ArtworkOption[];
+  banners: ArtworkOption[];
+  logos: ArtworkOption[];
+}
+
+export interface ArtworkSelectPayload {
+  source: string;
+  poster_url: string;
+  banner_url: string;
+  logo_url: string;
 }
 
 export interface SelectOption {

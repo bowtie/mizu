@@ -7,8 +7,11 @@ sql:
       - "internal/database/queries/episodes.sql"
       - "internal/database/queries/sync_logs.sql"
       - "internal/database/queries/cache.sql"
+      - "internal/database/queries/auth.sql"
     schema:
       - "internal/database/migrations/001_initial_schema.sql"
+      - "internal/database/migrations/002_artwork_urls.sql"
+      - "internal/database/migrations/003_auth_sessions.sql"
     gen:
       go:
         package: "sqlcgen"

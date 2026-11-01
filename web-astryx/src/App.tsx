@@ -2,6 +2,8 @@ import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ToastViewport } from "./components/ToastViewport";
 import { prefetchDetailChunk } from "./lib/chunkPrefetch";
+import { useAuthStatus, useBootstrap } from "./lib/queries";
+import { applySoundsEnabled } from "./lib/sounds";
 
 // Route-based code splitting — all pages are lazy-loaded. ShowsPage
 // (landing) is also lazy but its import is fired immediately in
@@ -17,6 +19,7 @@ const ActivityPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("./routes/SettingsPage").then((m) => ({ default: m.SettingsPage })),
 );
+const LoginPage = lazy(() => import("./routes/LoginPage").then((m) => ({ default: m.LoginPage })));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -61,6 +64,42 @@ function PageFallback() {
   );
 }
 
+// Applies the persisted "interaction sounds" preference whenever the
+// bootstrap settings load or change. Without this, cuelume keeps its
+// built-in enabled default after every reload while the Settings toggle
+// still shows the saved "off" state. Mounted inside the authenticated
+// tree only, so it never fires bootstrap on the login page.
+function SoundsPreference() {
+  const { data } = useBootstrap();
+  useEffect(() => {
+    const enabled = data?.settings?.ui_sounds_enabled;
+    if (typeof enabled === "boolean") applySoundsEnabled(enabled);
+  }, [data]);
+  return null;
+}
+
+// Gate every content route behind auth. While the status request is in
+// flight we render a neutral fallback rather than flashing the app; once
+// resolved, unauthenticated visitors are bounced to /login with a
+// return path. When no password is configured (fresh install) the app
+// stays open — matching the *arr first-run behavior.
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { data: status, isLoading } = useAuthStatus();
+  const location = useLocation();
+
+  if (isLoading) return <PageFallback />;
+  if (status?.configured && !status.authenticated) {
+    const from = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?from=${from}`} replace />;
+  }
+  return (
+    <>
+      <SoundsPreference />
+      {children}
+    </>
+  );
+}
+
 export function App() {
   // Prefetch the ShowDetailPage chunk during idle time after first
   // paint. The detail page is the most likely next navigation from
@@ -78,44 +117,59 @@ export function App() {
     <>
       <ScrollToTop />
       <Routes>
+        <Route path="/login" element={
+          <Suspense fallback={<PageFallback />}>
+            <LoginPage />
+          </Suspense>
+        } />
         <Route
           path="/"
           element={
-            <Suspense fallback={<PageFallback />}>
-              <ShowsPage />
-            </Suspense>
+            <RequireAuth>
+              <Suspense fallback={<PageFallback />}>
+                <ShowsPage />
+              </Suspense>
+            </RequireAuth>
           }
         />
         <Route
           path="/shows"
           element={
-            <Suspense fallback={<PageFallback />}>
-              <ShowsPage />
-            </Suspense>
+            <RequireAuth>
+              <Suspense fallback={<PageFallback />}>
+                <ShowsPage />
+              </Suspense>
+            </RequireAuth>
           }
         />
         <Route
           path="/shows/:id"
           element={
-            <Suspense fallback={<PageFallback />}>
-              <ShowDetailPage />
-            </Suspense>
+            <RequireAuth>
+              <Suspense fallback={<PageFallback />}>
+                <ShowDetailPage />
+              </Suspense>
+            </RequireAuth>
           }
         />
         <Route
           path="/activity"
           element={
-            <Suspense fallback={<PageFallback />}>
-              <ActivityPage />
-            </Suspense>
+            <RequireAuth>
+              <Suspense fallback={<PageFallback />}>
+                <ActivityPage />
+              </Suspense>
+            </RequireAuth>
           }
         />
         <Route
           path="/settings"
           element={
-            <Suspense fallback={<PageFallback />}>
-              <SettingsPage />
-            </Suspense>
+            <RequireAuth>
+              <Suspense fallback={<PageFallback />}>
+                <SettingsPage />
+              </Suspense>
+            </RequireAuth>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -14,6 +14,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Search, Check, X, CircleAlert, Info } from "lucide-react";
+import { HTTPError } from "ky";
 import { TrackingRuleCard } from "../components/TrackingRuleCard";
 import {
   addSonarrSeries,
@@ -185,7 +186,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     }
   };
 
-  const handleConfirmMatch = async (overrideAfl?: AFLMatch | null) => {
+  const handleConfirmMatch = async (overrideAfl?: AFLMatch | null, overwrite = false) => {
     const afl = overrideAfl ?? w.selectedAfl;
     if (!w.selectedSonarr || !afl) return;
     dispatch({ type: "SET", payload: { confirming: true } });
@@ -199,6 +200,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         mixed_action: trackedToAction(w.addTrackMixed),
         anime_canon_action: trackedToAction(w.addTrackAnimeCanon),
         start_mode: w.addStartMode,
+        ...(overwrite ? { overwrite: true } : {}),
       });
       addNotification(`Added "${w.selectedSonarr.title}" to Mizu`, "success");
       dispatch({
@@ -214,6 +216,26 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       });
       await loadLanding(true);
     } catch (err: unknown) {
+      // The backend refuses to silently overwrite an existing mapping
+      // (409) so a stale tab can't reset another session's config. Ask
+      // the user to confirm replacing it, then retry once.
+      if (
+        !overwrite &&
+        err instanceof HTTPError &&
+        err.response.status === 409 &&
+        w.selectedSonarr
+      ) {
+        const replace = window.confirm(
+          `"${w.selectedSonarr.title}" already has a mapping in Mizu. ` +
+            "Overwrite it with this match? Its tracking rules and progress will be replaced.",
+        );
+        if (replace) {
+          dispatch({ type: "SET", payload: { confirming: false } });
+          await handleConfirmMatch(overrideAfl, true);
+          return;
+        }
+        return; // declined — no error toast
+      }
       addNotification("Failed to sync anime: " + errorMessage(err), "error");
     } finally {
       dispatch({ type: "SET", payload: { confirming: false } });

@@ -8,6 +8,7 @@ Automatically manage filler episodes in Sonarr using data from [AnimeFillerList]
 - **Fuzzy matching** -- Jaro-Winkler algorithm matches Sonarr series to AFL entries, even with title variations
 - **Configurable actions** -- Per-show rules: unmonitor or keep (monitor) filler episodes
 - **Mixed canon support** -- Separate rules for mixed canon/filler episodes
+- **Dashboard password** -- Optional single-password protection with session cookies (*arr-style first-run setup)
 - **Push notifications** -- Get notified on sync results via [ntfy.sh](https://ntfy.sh) (self-hosted or public)
 - **Web dashboard** -- Dark-themed UI for managing mappings, viewing episodes, and configuring settings
 - **Scheduled sync** -- Automatic periodic sync with configurable intervals
@@ -45,6 +46,10 @@ docker run -d \
   mizu:latest
 ```
 
+The container listens on `0.0.0.0:8978` by default. Bare binaries default to
+`127.0.0.1:8978` (safe behind a same-host proxy) and can be overridden with the
+`MIZU_ADDR` environment variable, e.g. `MIZU_ADDR=0.0.0.0:8978 ./mizu`.
+
 ### Build from Source
 
 ```bash
@@ -74,6 +79,7 @@ All settings are stored in the embedded SQLite database and managed through the 
 | `ntfy_server_url`            | `https://ntfy.sh`       | ntfy server URL                                                           |
 | `ntfy_topic`                 | _(empty)_               | ntfy topic name                                                           |
 | `ntfy_token`                 | _(empty)_               | ntfy access token (optional)                                              |
+| `ntfy_notify_on`             | `always`                | When to notify: `always`, `changes` (episodes updated or failures), or `failures` only |
 
 ### Filler Actions
 
@@ -81,6 +87,20 @@ All settings are stored in the embedded SQLite database and managed through the 
 | ----------- | -------------------------------------------------------------------- |
 | `unmonitor` | Marks filler episodes as unmonitored in Sonarr (won't be downloaded) |
 | `monitor`   | Keeps episodes monitored (no change)                                 |
+
+### Dashboard Password
+
+Until a password is set, the dashboard (and API) is open to anyone who can reach it. On first launch the UI prompts you to create one; it is stored bcrypt-hashed in SQLite and can be changed later in Settings. The initial password can also be seeded non-interactively:
+
+```bash
+MIZU_PASSWORD=your-password ./mizu
+```
+
+The env var only applies while no password is configured; rotate via Settings afterwards. Sessions last 30 days, and changing the password revokes all existing sessions. Health and version endpoints stay public for monitoring.
+
+### Metrics
+
+Mizu exposes Prometheus-style metrics at `/metrics` (public, like `/api/health`): request counts by method/route/status, sync cycle outcomes, episodes updated, AFL cache refresh outcomes, and Go runtime gauges. Point any scraper at it — no service discovery or extra config required.
 
 ## Architecture
 
@@ -136,9 +156,10 @@ All endpoints are under `/api`.
 
 | Method   | Path                                        | Description                                             |
 | -------- | ------------------------------------------- | ------------------------------------------------------- |
-| `GET`    | `/api/health`                               | Health check with Sonarr connectivity                   |
+| `GET`    | `/api/health`                               | Health check (503 when Sonarr is unreachable)           |
 | `GET`    | `/api/version`                              | Version info                                            |
 | `GET`    | `/api/stats`                                | Dashboard statistics                                    |
+| `GET`    | `/metrics`                                  | Prometheus-style metrics                                |
 | `GET`    | `/api/artwork/providers`                    | List available artwork providers                        |
 | `GET`    | `/api/artwork/{id}/poster`                  | Serve poster artwork for a mapping                      |
 | `GET`    | `/api/artwork/{id}/banner`                  | Serve banner artwork for a mapping                      |
@@ -160,7 +181,8 @@ All endpoints are under `/api`.
 | `GET`    | `/api/settings`                             | Get current settings                                    |
 | `GET`    | `/api/settings/sonarr-api-key`              | Get stored Sonarr API key                               |
 | `PUT`    | `/api/settings`                             | Update settings                                         |
-| `POST`   | `/api/settings/afl-cache/refresh`           | Refresh AFL cache                                       |
+| `POST`   | `/api/settings/afl-cache/refresh`           | Trigger background AFL cache refresh                    |
+| `GET`    | `/api/settings/afl-cache/status`            | Get AFL cache refresh status                            |
 | `GET`    | `/api/sonarr/series`                        | List Sonarr series                                      |
 | `GET`    | `/api/sonarr/series/:id`                    | Get a single Sonarr series                              |
 | `POST`   | `/api/sonarr/series`                        | Add a series to Sonarr                                  |
@@ -196,8 +218,9 @@ go run ./cmd/server
 # Tests
 go test ./...
 
-# Tests with the race detector (requires cgo + a C compiler; on Windows add
-# MinGW gcc to PATH, e.g. /c/msys64/mingw64/bin)
+# Tests with the race detector. -race needs CGO + a C compiler: MinGW gcc
+# from PATH, or the default LLVM/clang install on Windows (Go 1.26+ handles
+# MSVC-targeting clang). scripts/race-test.ps1 finds one automatically.
 CGO_ENABLED=1 go test -race ./...
 
 # Type-check
