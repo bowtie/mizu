@@ -38,14 +38,14 @@ const syncRaceAFLEpisodeHTML = `<!DOCTYPE html><html><body>
 // write can land mid-fetch; later episode GETs (e.g. a hydrate's) serve
 // immediately, mirroring the AFL seam's blockFirst pattern.
 type syncRaceSonarr struct {
-	mu                sync.Mutex
-	series            models.SonarrSeries
-	episodes          []models.SonarrEpisode
-	monitored         map[int]bool
+	mu                 sync.Mutex
+	series             models.SonarrSeries
+	episodes           []models.SonarrEpisode
+	monitored          map[int]bool
 	blockEpisodesFirst bool
-	episodesBlocked   bool
-	episodesEntered   chan struct{}
-	episodesRelease   chan struct{}
+	episodesBlocked    bool
+	episodesEntered    chan struct{}
+	episodesRelease    chan struct{}
 }
 
 func (f *syncRaceSonarr) ServeHTTP(w http.ResponseWriter, r *http.Request) {

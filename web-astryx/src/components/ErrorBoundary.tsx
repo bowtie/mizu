@@ -43,8 +43,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             </div>
             <h2 className="error-boundary-title">Something went wrong</h2>
             <p className="error-boundary-desc">
-              An unexpected error occurred while rendering this page. Your data is safe — try
-              again, or reload the app to start fresh.
+              An unexpected error occurred while rendering this page. Your data is safe — try again,
+              or reload the app to start fresh.
             </p>
             <div className="error-boundary-actions">
               <button type="button" className="error-boundary-btn" onClick={this.reset}>

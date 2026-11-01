@@ -1,0 +1,5 @@
+# Keep Go sources as LF in the working tree even on Windows checkouts, where
+# core.autocrlf would otherwise give them CRLF endings. gofmt (and therefore
+# golangci-lint) treats CRLF line endings as a formatting difference, so a
+# CRLF working tree makes the formatter gate fail on every Go file.
+*.go text eol=lf

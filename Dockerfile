@@ -11,9 +11,10 @@ WORKDIR /frontend
 COPY web-astryx/package.json web-astryx/bun.lock ./
 RUN bun install --frozen-lockfile
 
-# Build
+# Build (typecheck first so a type error fails the image build, matching the
+# local `bun run build` script)
 COPY web-astryx/ ./
-RUN bunx vp build
+RUN bun run build
 
 # Stage 2: Build the Go binary
 FROM golang:1.26-alpine AS builder

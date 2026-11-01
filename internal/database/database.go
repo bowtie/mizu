@@ -185,19 +185,6 @@ func sqlcSyncLogToModel(s sqlcgen.SyncLog) models.SyncLog {
 	return l
 }
 
-func sqlcSyncLogItemToModel(s sqlcgen.GetSyncLogItemsByLogIDRow) models.SyncLogItem {
-	return models.SyncLogItem{
-		ID:              s.ID,
-		SyncLogID:       s.SyncLogID,
-		MappingID:       s.MappingID,
-		SonarrTitle:     s.SonarrTitle,
-		Status:          s.Status,
-		EpisodesChanged: int(s.EpisodesChanged),
-		Summary:         s.Summary,
-		Error:           s.Error,
-	}
-}
-
 func normalizeMapping(m models.ShowMapping) models.ShowMapping {
 	if m.StartMode == "" {
 		m.StartMode = models.StartModeCurrentProgress
@@ -273,22 +260,22 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 
 	err := db.q.UpsertMapping(ctx, sqlcgen.UpsertMappingParams{
 		SonarrSeriesID:   int64(m.SonarrSeriesID),
-			SonarrTitle:      m.SonarrTitle,
-			AflSlug:          m.AFLSlug,
-			AflTitle:         m.AFLTitle,
-			AutoMatched:      boolToInt(m.AutoMatched),
-			MatchConfidence:  m.MatchConfidence,
-			FillerAction:     string(m.FillerAction),
-			MixedAction:      string(m.MixedAction),
-			AnimeCanonAction: string(m.AnimeCanonAction),
-			Enabled:          boolToInt(m.Enabled),
-			StartMode:        string(m.StartMode),
-			WatermarkMode:    string(m.WatermarkMode),
-			SyncWatermark:    int64(m.SyncWatermark),
-			Overview:         m.Overview,
-			CreatedAt:        now,
-			UpdatedAt:        now,
-		})
+		SonarrTitle:      m.SonarrTitle,
+		AflSlug:          m.AFLSlug,
+		AflTitle:         m.AFLTitle,
+		AutoMatched:      boolToInt(m.AutoMatched),
+		MatchConfidence:  m.MatchConfidence,
+		FillerAction:     string(m.FillerAction),
+		MixedAction:      string(m.MixedAction),
+		AnimeCanonAction: string(m.AnimeCanonAction),
+		Enabled:          boolToInt(m.Enabled),
+		StartMode:        string(m.StartMode),
+		WatermarkMode:    string(m.WatermarkMode),
+		SyncWatermark:    int64(m.SyncWatermark),
+		Overview:         m.Overview,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	})
 	if err != nil {
 		return err
 	}

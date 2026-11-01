@@ -24,7 +24,17 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
-import { Plus, Search, Waves, CircleAlert, RefreshCw, Check, ArrowDownUp, LayoutGrid, Image } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Waves,
+  CircleAlert,
+  RefreshCw,
+  Check,
+  ArrowDownUp,
+  LayoutGrid,
+  Image,
+} from "lucide-react";
 import { useNotificationStore } from "../lib/store";
 import { useBootstrap, useShows, useSettings, useSonarrSeries } from "../lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -632,7 +642,8 @@ export function ShowsPage() {
               {filteredShows.map(
                 (show: Show & { poster?: string; banner?: string; logo?: string }) => {
                   const badge = syncStateBadge(show.enabled);
-                  const img = viewMode === "poster" ? (show.poster || show.banner) : (show.banner || show.poster);
+                  const img =
+                    viewMode === "poster" ? show.poster || show.banner : show.banner || show.poster;
                   const logo = show.logo;
                   return (
                     <ClickableCard

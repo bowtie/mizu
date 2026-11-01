@@ -29,7 +29,7 @@ type Manager struct {
 
 	// Per-mapping locks prevent concurrent FetchAndStore calls for the
 	// same mapping from corrupting each other's file writes.
-	mapMu   sync.Mutex
+	mapMu    sync.Mutex
 	mapLocks map[int64]*sync.Mutex
 
 	// intentMu guards intents. A per-mapping intent counter is bumped by

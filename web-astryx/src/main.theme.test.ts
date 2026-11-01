@@ -27,7 +27,12 @@ vi.mock("./lib/themes", () => ({
     { id: "flexoki", label: "Flexoki", description: "default", mode: "light" },
     { id: "tokyo-night", label: "Tokyo Night", description: "dark", mode: "dark" },
   ],
-  defaultTheme: { id: "flexoki", label: "Flexoki", description: "default", theme: { id: "flexoki" } },
+  defaultTheme: {
+    id: "flexoki",
+    label: "Flexoki",
+    description: "default",
+    theme: { id: "flexoki" },
+  },
   loadThemeDef: themeMocks.loadThemeDef,
   loadThemeCSS: themeMocks.loadThemeCSS,
 }));

@@ -51,7 +51,13 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
-import { useShows, useArtworkProviders, useDeleteShow, useSonarrSeries, useSettings } from "../lib/queries";
+import {
+  useShows,
+  useArtworkProviders,
+  useDeleteShow,
+  useSonarrSeries,
+  useSettings,
+} from "../lib/queries";
 import { VirtualizedEpisodeList } from "../components/VirtualizedEpisodeList";
 import {
   getArtworkBannerUrl,
@@ -306,41 +312,41 @@ const EpisodeListSection = memo(function EpisodeListSection({
             icon={<Icon icon={LoaderCircle} size="lg" color="secondary" className="spin" />}
           />
         ) : (
-        <VStack gap={4}>
-          {/* Skeleton filter bar */}
-          <div style={{ display: "flex", gap: "var(--spacing-2)" }}>
-            <div
-              className="skeleton"
-              style={{ width: 70, height: 36, borderRadius: "var(--radius-inner)" }}
-            />
-            <div
-              className="skeleton"
-              style={{ width: 80, height: 36, borderRadius: "var(--radius-inner)" }}
-            />
-            <div
-              className="skeleton"
-              style={{ width: 75, height: 36, borderRadius: "var(--radius-inner)" }}
-            />
-            <div
-              className="skeleton"
-              style={{ width: 70, height: 36, borderRadius: "var(--radius-inner)" }}
-            />
-            <div
-              className="skeleton"
-              style={{ width: 65, height: 36, borderRadius: "var(--radius-inner)" }}
-            />
-          </div>
-          {/* Skeleton season cards — show 2, not 4, to reduce visual noise */}
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="skeleton-season-card">
-              <div className="skeleton" style={{ width: 20, height: 20, borderRadius: 4 }} />
-              <div className="skeleton-text" style={{ width: 90 }} />
-              <div className="skeleton" style={{ width: 80, height: 20, borderRadius: 10 }} />
-              <div style={{ flex: 1 }} />
-              <div className="skeleton" style={{ width: 24, height: 24, borderRadius: 4 }} />
+          <VStack gap={4}>
+            {/* Skeleton filter bar */}
+            <div style={{ display: "flex", gap: "var(--spacing-2)" }}>
+              <div
+                className="skeleton"
+                style={{ width: 70, height: 36, borderRadius: "var(--radius-inner)" }}
+              />
+              <div
+                className="skeleton"
+                style={{ width: 80, height: 36, borderRadius: "var(--radius-inner)" }}
+              />
+              <div
+                className="skeleton"
+                style={{ width: 75, height: 36, borderRadius: "var(--radius-inner)" }}
+              />
+              <div
+                className="skeleton"
+                style={{ width: 70, height: 36, borderRadius: "var(--radius-inner)" }}
+              />
+              <div
+                className="skeleton"
+                style={{ width: 65, height: 36, borderRadius: "var(--radius-inner)" }}
+              />
             </div>
-          ))}
-        </VStack>
+            {/* Skeleton season cards — show 2, not 4, to reduce visual noise */}
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="skeleton-season-card">
+                <div className="skeleton" style={{ width: 20, height: 20, borderRadius: 4 }} />
+                <div className="skeleton-text" style={{ width: 90 }} />
+                <div className="skeleton" style={{ width: 80, height: 20, borderRadius: 10 }} />
+                <div style={{ flex: 1 }} />
+                <div className="skeleton" style={{ width: 24, height: 24, borderRadius: 4 }} />
+              </div>
+            ))}
+          </VStack>
         )
       ) : groupedBySeason.length === 0 ? (
         <EmptyState
@@ -380,7 +386,8 @@ const EpisodeListSection = memo(function EpisodeListSection({
                   }
                 }}
               >
-                {openedSeasons.has(String(group.season)) || group.index === groupedBySeason.length - 1 ? (
+                {openedSeasons.has(String(group.season)) ||
+                group.index === groupedBySeason.length - 1 ? (
                   group.episodes.length > 100 ? (
                     <VirtualizedEpisodeList
                       episodes={group.episodes}
@@ -594,9 +601,7 @@ export function ShowDetailPage() {
       const localUrl = getArtworkBannerUrl(showId) + cacheBust;
       // If local artwork errored, fall back to Sonarr's image
       if (heroImgError && show) {
-        const series = sonarrSeries.find(
-          (s: SonarrSeries) => s.id === show.sonarr_series_id,
-        );
+        const series = sonarrSeries.find((s: SonarrSeries) => s.id === show.sonarr_series_id);
         if (series?.images?.length) {
           const banner =
             series.images.find((img) => img.coverType === "fanart") ||
@@ -1105,7 +1110,12 @@ export function ShowDetailPage() {
               )}
               <div className="show-hero-content">
                 <VStack gap={1} className="show-hero-titles" style={{ padding: 0, margin: 0 }}>
-                  <HStack gap={3} align="center" wrap="wrap" style={{ padding: 0, margin: 0, alignItems: "center" }}>
+                  <HStack
+                    gap={3}
+                    align="center"
+                    wrap="wrap"
+                    style={{ padding: 0, margin: 0, alignItems: "center" }}
+                  >
                     {show ? (
                       <Heading level={1} className="show-hero-title">
                         {show.sonarr_title}
@@ -1187,7 +1197,9 @@ export function ShowDetailPage() {
                         icon={<Bot size={16} />}
                         isIconOnly={isMobile}
                         onClick={() => setWatermarkAuto(!watermarkAuto)}
-                        aria-label={watermarkAuto ? "Using Sonarr progress" : "Using manual episode"}
+                        aria-label={
+                          watermarkAuto ? "Using Sonarr progress" : "Using manual episode"
+                        }
                         data-cuelume-toggle
                       />
                     </HStack>

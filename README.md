@@ -193,6 +193,13 @@ cd web-astryx && vp dev
 # Backend
 go run ./cmd/server
 
+# Tests
+go test ./...
+
+# Tests with the race detector (requires cgo + a C compiler; on Windows add
+# MinGW gcc to PATH, e.g. /c/msys64/mingw64/bin)
+CGO_ENABLED=1 go test -race ./...
+
 # Type-check
 cd web-astryx && bunx tsc --noEmit
 

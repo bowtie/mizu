@@ -34,8 +34,7 @@ function fake304(): Response {
 // responses wired up, so getEpisodes falls through to requestEpisodesWithETag
 // → the stubbed global fetch.
 async function loadFreshApi() {
-  delete (globalThis as unknown as { window: { __mizuPrefetch?: unknown } }).window
-    .__mizuPrefetch;
+  delete (globalThis as unknown as { window: { __mizuPrefetch?: unknown } }).window.__mizuPrefetch;
   vi.resetModules();
   return await import("./api");
 }

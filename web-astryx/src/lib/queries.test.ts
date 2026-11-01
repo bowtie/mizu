@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  ARTWORK_REFETCH_DELAY_MS,
-  queryKeys,
-  useShowArtworkRefetch,
-} from "./queries";
+import { ARTWORK_REFETCH_DELAY_MS, queryKeys, useShowArtworkRefetch } from "./queries";
 import type { Show } from "./schemas";
 
 // ── Test doubles ──
@@ -73,9 +69,7 @@ afterEach(() => {
 
 async function renderHarness() {
   await act(async () => {
-    root.render(
-      createElement(QueryClientProvider, { client: qc }, createElement(Harness)),
-    );
+    root.render(createElement(QueryClientProvider, { client: qc }, createElement(Harness)));
   });
 }
 
@@ -107,9 +101,7 @@ describe("useShowArtworkRefetch", () => {
     });
     await advance(ARTWORK_REFETCH_DELAY_MS - 1);
     expect(invalidateSpy).not.toHaveBeenCalled();
-    expect(qc.getQueryData<Show[]>(queryKeys.shows)![0].artwork_poster_path).toBe(
-      "old/poster.jpg",
-    );
+    expect(qc.getQueryData<Show[]>(queryKeys.shows)![0].artwork_poster_path).toBe("old/poster.jpg");
 
     // The delay elapses: the show query is invalidated and its data is
     // patched into the cached shows list. (The patch premise is that the
@@ -118,9 +110,7 @@ describe("useShowArtworkRefetch", () => {
     await advance(1);
     expect(invalidateSpy).toHaveBeenCalledTimes(1);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.show(5) });
-    expect(qc.getQueryData<Show[]>(queryKeys.shows)![0].artwork_poster_path).toBe(
-      "new/poster.jpg",
-    );
+    expect(qc.getQueryData<Show[]>(queryKeys.shows)![0].artwork_poster_path).toBe("new/poster.jpg");
   });
 
   it("dedupes rapid re-schedules of the same show", async () => {

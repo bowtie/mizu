@@ -73,9 +73,7 @@ describe("ErrorBoundary", () => {
 
   it("renders children normally when no error occurs", async () => {
     await act(async () => {
-      root.render(
-        createElement(ErrorBoundary, null, createElement("div", null, "all good")),
-      );
+      root.render(createElement(ErrorBoundary, null, createElement("div", null, "all good")));
     });
 
     expect(container.textContent).toContain("all good");

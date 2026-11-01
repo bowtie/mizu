@@ -88,9 +88,9 @@ describe("prefetchShowDetail detail-cache write-back", () => {
     episodes.resolve(fakeResponse([]));
     await flush();
 
-    const cached = api.getCachedShowDetail(5) as unknown as
-      | { show: { sonarr_title: string } }
-      | null;
+    const cached = api.getCachedShowDetail(5) as unknown as {
+      show: { sonarr_title: string };
+    } | null;
     expect(cached?.show.sonarr_title).toBe("Fresh");
   });
 });

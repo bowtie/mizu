@@ -73,8 +73,7 @@ self.addEventListener("fetch", (event) => {
   // Skip caching for endpoints that return sensitive data (API keys).
   if (url.pathname.startsWith("/api/")) {
     // Never cache settings or bootstrap — they contain full API keys.
-    const isSensitive = url.pathname === "/api/settings" ||
-      url.pathname === "/api/bootstrap";
+    const isSensitive = url.pathname === "/api/settings" || url.pathname === "/api/bootstrap";
     if (isSensitive) {
       event.respondWith(fetch(req).catch(() => caches.match(req)));
       return;

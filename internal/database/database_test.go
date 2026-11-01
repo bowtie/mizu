@@ -25,9 +25,9 @@ func TestSetSettingsBatchUpsertAndGetAllSettingsRoundTrip(t *testing.T) {
 
 	// Batch upsert several settings at once.
 	require.NoError(t, db.SetSettings(ctx, map[string]string{
-		"ntfy_enabled":    "true",
-		"ntfy_topic":      "my-topic",
-		"sync_interval":   "6h",
+		"ntfy_enabled":          "true",
+		"ntfy_topic":            "my-topic",
+		"sync_interval":         "6h",
 		"default_filler_action": "unmonitor",
 	}))
 
