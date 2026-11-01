@@ -179,6 +179,9 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
   const isActivity = currentPath === "/activity";
   const isSettings = currentPath === "/settings";
 
+  // Setup and sign-in are focused, standalone screens: no app navigation.
+  if (currentPath === "/welcome" || currentPath === "/login") return null;
+
   return (
     <TopNav
       label="Mizu navigation"

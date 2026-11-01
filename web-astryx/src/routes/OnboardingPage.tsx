@@ -20,7 +20,7 @@ type StepKey = "sonarr" | "password" | "done";
 
 const STEPS: { key: StepKey; label: string }[] = [
   { key: "sonarr", label: "Connect Sonarr" },
-  { key: "password", label: "Protect dashboard" },
+  { key: "password", label: "Password" },
   { key: "done", label: "Finish" },
 ];
 

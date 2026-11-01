@@ -62,13 +62,16 @@ func humanizeMessage(msg string) string {
 }
 
 func humanizeErrString(msg string) string {
-	msg = strings.TrimPrefix(msg, `Post "`)
-	if idx := strings.Index(msg, `": `); idx >= 0 {
-		msg = msg[idx+3:]
-	}
-	msg = strings.TrimPrefix(msg, `Get "`)
-	if idx := strings.Index(msg, `": `); idx >= 0 {
-		msg = msg[idx+3:]
+	// Only cut at `": ` when the message starts with a quoted Go net/http
+	// URL prefix; otherwise a JSON error body such as {"error": "x"} would
+	// be mistaken for one and truncated to its value.
+	for _, prefix := range []string{`Post "`, `Get "`} {
+		if strings.HasPrefix(msg, prefix) {
+			msg = strings.TrimPrefix(msg, prefix)
+			if idx := strings.Index(msg, `": `); idx >= 0 {
+				msg = msg[idx+3:]
+			}
+		}
 	}
 	if strings.Contains(msg, "no such host") {
 		if parts := strings.SplitN(msg, "lookup ", 2); len(parts) == 2 {
