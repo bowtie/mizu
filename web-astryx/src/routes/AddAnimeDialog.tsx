@@ -9,11 +9,12 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Selector } from "@astryxdesign/core/Selector";
-import { Switch } from "@astryxdesign/core/Switch";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
 import { Search, Check, X, CircleAlert, Info } from "lucide-react";
+import { TrackingRuleCard } from "../components/TrackingRuleCard";
 import {
   addSonarrSeries,
   confirmMatch,
@@ -871,25 +872,33 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
               <Divider />
               <Card variant="muted" padding={4}>
                 <VStack gap={3}>
-                  <Heading level={3} className="settings-section-header">Tracking rules</Heading>
-                  <Switch
-                    label="Track filler"
-                    description="Monitor filler episodes in Sonarr"
-                    value={w.addTrackFiller}
-                    onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
-                  />
-                  <Switch
-                    label="Track mixed canon"
-                    description="Monitor mixed canon/filler episodes"
-                    value={w.addTrackMixed}
-                    onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
-                  />
-                  <Switch
-                    label="Track anime canon"
-                    description="Monitor anime-original episodes"
-                    value={w.addTrackAnimeCanon}
-                    onChange={(v) => dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })}
-                  />
+                  <Heading level={3}>Tracking rules</Heading>
+                  <Grid columns={{ minWidth: 240 }} gap={3}>
+                    <TrackingRuleCard
+                      variant="red"
+                      label="Filler"
+                      description="Skippable, no plot impact"
+                      switchLabel="Track filler"
+                      value={w.addTrackFiller}
+                      onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
+                    />
+                    <TrackingRuleCard
+                      variant="yellow"
+                      label="Mixed"
+                      description="Mix of canon and filler"
+                      switchLabel="Track mixed canon"
+                      value={w.addTrackMixed}
+                      onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
+                    />
+                    <TrackingRuleCard
+                      variant="green"
+                      label="Canon"
+                      description="Main plot episodes"
+                      switchLabel="Track anime canon"
+                      value={w.addTrackAnimeCanon}
+                      onChange={(v) => dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })}
+                    />
+                  </Grid>
                   <Selector
                     label="Start tracking from"
                     options={startModeOptions}

@@ -458,7 +458,7 @@ export function SettingsPage() {
             <Button
               label={savedFlash ? "Saved" : saving ? "Saving..." : "Save settings"}
               variant="primary"
-              icon={savedFlash ? <Check size={14} /> : <Save size={16} />}
+              icon={savedFlash ? <Check size={14} color="var(--color-success)" /> : <Save size={16} />}
               onClick={handleSave}
               isDisabled={saving || !settingsDirty}
               isLoading={saving}
@@ -468,8 +468,8 @@ export function SettingsPage() {
         </HStack>
 
         {/* Connection */}
-        <VStack gap={0}>
-          <Heading level={2} className="settings-section-header">Connection</Heading>
+        <VStack gap={3}>
+          <Heading level={2}>Connection</Heading>
           <Divider />
 
           <SettingsRow
@@ -540,17 +540,15 @@ export function SettingsPage() {
                       : "Test"
               }
               variant={
-                testPhase === "success"
-                  ? "primary"
-                  : testPhase === "error"
-                    ? "destructive"
-                    : "secondary"
+                testPhase === "error"
+                  ? "destructive"
+                  : "secondary"
               }
               icon={
                 testPhase === "connecting" ? (
                   <Spinner size="sm" />
                 ) : testPhase === "success" ? (
-                  <Check size={16} />
+                  <Check size={16} color="var(--color-success)" />
                 ) : testPhase === "error" ? (
                   <AlertTriangle size={16} />
                 ) : (
@@ -565,8 +563,8 @@ export function SettingsPage() {
         </VStack>
 
         {/* Sync */}
-        <VStack gap={0}>
-          <Heading level={2} className="settings-section-header">Sync</Heading>
+        <VStack gap={3}>
+          <Heading level={2}>Sync</Heading>
           <Divider />
 
           <SettingsRow
@@ -663,8 +661,8 @@ export function SettingsPage() {
         </VStack>
 
         {/* Notifications */}
-        <VStack gap={0}>
-          <Heading level={2} className="settings-section-header">Notifications</Heading>
+        <VStack gap={3}>
+          <Heading level={2}>Notifications</Heading>
           <Divider />
 
           <SettingsRow
@@ -750,17 +748,15 @@ export function SettingsPage() {
                       : "Test"
               }
               variant={
-                ntfyTestPhase === "success"
-                  ? "primary"
-                  : ntfyTestPhase === "error"
-                    ? "destructive"
-                    : "secondary"
+                ntfyTestPhase === "error"
+                  ? "destructive"
+                  : "secondary"
               }
               icon={
                 ntfyTestPhase === "connecting" ? (
                   <Spinner size="sm" />
                 ) : ntfyTestPhase === "success" ? (
-                  <Check size={16} />
+                  <Check size={16} color="var(--color-success)" />
                 ) : ntfyTestPhase === "error" ? (
                   <AlertTriangle size={16} />
                 ) : (
@@ -777,7 +773,7 @@ export function SettingsPage() {
         {/* Defaults */}
         <VStack gap={4}>
           <VStack gap={1}>
-            <Heading level={2} className="settings-section-header">Defaults</Heading>
+            <Heading level={2}>Defaults</Heading>
             <Text type="supporting" color="secondary" display="block">
               These tracking rules are applied automatically when you add a new anime mapping. You
               can override them per anime.

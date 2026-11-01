@@ -13,14 +13,15 @@ export function ToastViewport() {
       className="toast-viewport"
     >
       {notifications.map((n) => (
-        <Toast
-          key={n.id}
-          body={n.message}
-          type={n.type === "error" ? "error" : "info"}
-          isAutoHide={n.duration > 0}
-          autoHideDuration={n.duration > 0 ? n.duration : 5000}
-          onDismiss={() => removeNotification(n.id)}
-        />
+        <div key={n.id} data-notification-type={n.type}>
+          <Toast
+            body={n.message}
+            type={n.type === "error" ? "error" : "info"}
+            isAutoHide={n.duration > 0}
+            autoHideDuration={n.duration > 0 ? n.duration : 5000}
+            onDismiss={() => removeNotification(n.id)}
+          />
+        </div>
       ))}
     </VStack>
   );

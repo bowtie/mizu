@@ -124,6 +124,16 @@ body {
   max-width: 400px;
 }
 
+/* Toast type overrides — Astryx Toast only supports info/error, so we
+   override the background for success/warning via a wrapper data attribute. */
+[data-notification-type="success"] .astryx-toast {
+  background-color: var(--color-success) !important;
+}
+[data-notification-type="warning"] .astryx-toast {
+  background-color: var(--color-warning) !important;
+  color: var(--color-on-warning) !important;
+}
+
 /* Settings row error text */
 .settings-row-error {
   color: var(--color-error);
@@ -167,7 +177,7 @@ body {
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity var(--duration-medium) var(--ease-standard), transform var(--duration-medium) var(--ease-standard);
+  transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-medium) var(--ease-standard);
 }
 .mizu-card-img.is-loaded {
   opacity: 1;
@@ -188,6 +198,12 @@ body {
     var(--color-background-muted),
     color-mix(in srgb, var(--color-background-surface) 50%, var(--color-background-muted))
   );
+  animation: skeleton-pulse var(--duration-medium) var(--ease-standard) alternate infinite;
+}
+
+@keyframes skeleton-pulse {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
 }
 
 .mizu-card-logo {
@@ -245,8 +261,8 @@ body {
 }
 
 .mizu-card-overlay-title {
-  color: var(--color-text-on-accent, #fff);
-  font-size: 15px;
+  color: var(--color-on-dark);
+  font-size: 14px;
   font-weight: 600;
   text-shadow: 0 1px 4px color-mix(in srgb, var(--color-background-body) 70%, transparent);
   overflow: hidden;
@@ -318,25 +334,19 @@ body {
   box-shadow: none;
 }
 
-/* Test status buttons — show as non-interactive status indicators during
-   connecting/success/error phases. The onClick is guarded so clicks are
-   no-ops; this class suppresses the pointer cursor and applies the green
-   success color without fighting the component's disabled-state opacity. */
+/* Test status buttons — suppress pointer cursor during connecting/success/error
+   phases. The onClick is guarded so clicks are no-ops. Success is conveyed via
+   the green checkmark icon + "Connected" label, not via a variant change. */
 .test-status-btn {
   cursor: default;
 }
-.test-status-btn[data-variant="primary"] {
-  background: var(--color-success) !important;
-  border-color: var(--color-success) !important;
-  color: var(--color-on-success) !important;
-}
 
-/* Save button — flash green when save succeeds */
+/* Save button — subtle green ring when save succeeds (icon + label already
+   convey the state; this adds a non-intrusive color cue without fighting
+   the StyleX-compiled variant background). */
 .save-flash[data-variant="primary"] {
-  background: var(--color-success) !important;
-  border-color: var(--color-success) !important;
-  color: var(--color-on-success) !important;
-  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 40%, transparent);
+  transition: box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 /* Season rows — separate the primary season label from supporting episode count */
@@ -445,6 +455,7 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   padding: clamp(20px, 5vw, 32px) clamp(12px, 4vw, 32px);
+  color: var(--color-on-dark);
 }
 
 .show-hero-content h1,
@@ -589,6 +600,10 @@ body {
   .spin {
     animation: none;
   }
+  .mizu-card-img-placeholder,
+  .wizard-poster-placeholder {
+    animation: none;
+  }
   .astryx-top-nav-item[aria-current="page"]::after {
     animation: none;
     transform: scaleX(1);
@@ -684,31 +699,17 @@ body {
 }
 
 /* ── Settings rows ── */
-.settings-section-header {
-  padding-bottom: var(--spacing-3);
-  font-size: 1.05em;
-  letter-spacing: -0.01em;
-}
-
-.settings-row {
-  padding-block: var(--spacing-4);
-}
-
 .settings-row-label {
   min-width: 200px;
   max-width: 480px;
 }
 
-.tracking-rule-label {
-  min-width: 100px;
-}
-
 /* Season collapsible — episode count pill in trigger */
 .season-episode-count {
   color: var(--color-text-secondary);
-  font-size: var(--text-supporting-size, 13px);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-inner);
   background: var(--color-background-muted);
 }
@@ -721,15 +722,45 @@ body {
 
 /* Season card hover */
 .season-card,
-.artwork-card {
+.artwork-card,
+.tracking-rule-card {
   transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+/* Tracking rule card — tint the Switch track with the variant color
+   in both on and off states. StyleX generates hashed variable names
+   so we can't override via inline style; target the track element directly. */
+.tracking-rule-card[data-variant="green"] .astryx-switch:not([data-checked]) {
+  background-color: var(--color-background-green) !important;
+}
+.tracking-rule-card[data-variant="green"] .astryx-switch[data-checked] {
+  background-color: var(--color-border-green) !important;
+}
+.tracking-rule-card[data-variant="yellow"] .astryx-switch:not([data-checked]) {
+  background-color: var(--color-background-yellow) !important;
+}
+.tracking-rule-card[data-variant="yellow"] .astryx-switch[data-checked] {
+  background-color: var(--color-border-yellow) !important;
+}
+.tracking-rule-card[data-variant="red"] .astryx-switch:not([data-checked]) {
+  background-color: var(--color-background-red) !important;
+}
+.tracking-rule-card[data-variant="red"] .astryx-switch[data-checked] {
+  background-color: var(--color-border-red) !important;
 }
 
 @media (hover: hover) {
   .season-card:hover,
-  .artwork-card:hover {
+  .artwork-card:hover,
+  .tracking-rule-card:hover {
     border-color: var(--color-border-emphasized);
   }
+}
+
+/* Tracking rule card — press feedback for whole-card click */
+.tracking-rule-card:active {
+  transform: scale(0.99);
+  transition: transform var(--duration-fast) var(--ease-standard);
 }
 
 /* Show hero title overflow */
@@ -739,13 +770,11 @@ body {
 
 .show-hero-titles h1,
 .show-hero-titles [data-role="heading"] {
-  line-height: 1;
   margin: 0;
 }
 
-.show-hero-titles > div:first-child {
-  align-items: center !important;
-}
+/* HStack already sets align="center" via its prop; this was a redundant
+   !important override. Removed in D128. */
 
 /* Episode +/- step buttons in InputGroup */
 .episode-step-btn-wrap {
@@ -796,6 +825,7 @@ body {
     var(--color-background-muted),
     color-mix(in srgb, var(--color-background-surface) 50%, var(--color-background-muted))
   );
+  animation: skeleton-pulse var(--duration-medium) var(--ease-standard) alternate infinite;
 }
 
 /* AddAnimeDialog — step description */
@@ -812,7 +842,7 @@ body {
 .wizard-step-description-icon {
   color: var(--color-text-secondary);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--spacing-0-5);
 }
 
 /* AddAnimeDialog — success screen */
@@ -932,6 +962,10 @@ body {
   outline-offset: 2px;
 }
 
+.activity-log-summary[role="button"]:active {
+  background-color: var(--color-overlay-pressed);
+}
+
 .activity-error-row {
   color: var(--color-error);
   padding: var(--spacing-1) var(--spacing-2);
@@ -1020,17 +1054,17 @@ body {
 
 .wizard-step[data-state="past"] .wizard-step-dot {
   background-color: var(--color-accent);
-  color: var(--color-text-on-accent, #fff);
+  color: var(--color-on-accent);
 }
 
 .wizard-step[data-state="current"] .wizard-step-dot {
   background-color: var(--color-accent);
-  color: var(--color-text-on-accent, #fff);
+  color: var(--color-on-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
 .wizard-step-label {
-  font-size: var(--text-supporting-size, 13px);
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

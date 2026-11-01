@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { memo, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -125,6 +125,176 @@ function badgeVariantForType(
 function epSyncKey(groupSeason: number, ep: Episode): string {
   return `${groupSeason}-${displayEpisodeNumber(ep)}-${ep.sonarr_episode_id ?? "x"}`;
 }
+
+interface SeasonGroup {
+  season: number;
+  episodes: Episode[];
+  index: number;
+}
+
+interface EpisodeListSectionProps {
+  episodesLoading: boolean;
+  filteredEpisodes: Episode[];
+  groupedBySeason: SeasonGroup[];
+  epStats: { total: number; canon: number; anime: number; mixed: number; filler: number };
+  activeTypeFilter: string;
+  syncingEps: Record<string, boolean>;
+  onFilterChange: (value: string) => void;
+  onToggleMonitor: (groupSeason: number, ep: Episode) => void;
+}
+
+/** Episode list section — memoized so tracking-rule toggles don't re-render
+ *  the (potentially 1200+) episode list. Only re-renders when episode data,
+ *  filter, or syncing state actually changes. */
+const EpisodeListSection = memo(function EpisodeListSection({
+  episodesLoading,
+  filteredEpisodes,
+  groupedBySeason,
+  epStats,
+  activeTypeFilter,
+  syncingEps,
+  onFilterChange,
+  onToggleMonitor,
+}: EpisodeListSectionProps) {
+  const filterItems = (
+    <>
+      <SegmentedControlItem value="all" label={`All (${epStats.total})`} />
+      <SegmentedControlItem
+        value="canon"
+        label={`Manga (${epStats.canon})`}
+        icon={<BookOpen size={16} />}
+      />
+      <SegmentedControlItem
+        value="anime_canon"
+        label={`Anime (${epStats.anime})`}
+        icon={<Tv size={16} />}
+      />
+      <SegmentedControlItem
+        value="mixed_canon"
+        label={`Mixed (${epStats.mixed})`}
+        icon={<Shuffle size={16} />}
+      />
+      <SegmentedControlItem
+        value="filler"
+        label={`Filler (${epStats.filler})`}
+        icon={<SkipForward size={16} />}
+      </>
+  );
+
+  return (
+    <VStack gap={4}>
+      <HStack gap={3} align="center">
+        <Heading level={2}>Episode list</Heading>
+        <Divider xstyle={{ flex: 1 }} />
+      </HStack>
+
+      {/* Episode filters — desktop/mobile visibility via CSS media queries */}
+      <div className="episode-filters-desktop">
+        <SegmentedControl
+          value={activeTypeFilter}
+          onChange={onFilterChange}
+          label="Episode type filter"
+          layout="fill"
+          size="lg"
+        >
+          {filterItems}
+        </SegmentedControl>
+      </div>
+      <div className="episode-filters-mobile">
+        <SegmentedControl
+          value={activeTypeFilter}
+          onChange={onFilterChange}
+          label="Episode type filter"
+          layout="fill"
+          size="lg"
+        >
+          {filterItems}
+        </SegmentedControl>
+      </div>
+
+      {/* Episodes by season */}
+      {episodesLoading ? (
+        <VStack gap={3} hAlign="center" padding={6}>
+          <Spinner size="md" label="Loading episodes" />
+        </VStack>
+      ) : filteredEpisodes.length === 0 ? (
+        <EmptyState
+          title="No episodes"
+          description="No episodes match the selected type."
+          icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
+          actions={
+            <Button
+              label="Show all"
+              variant="secondary"
+              onClick={() => onFilterChange("all")}
+            />
+          }
+        />
+      ) : (
+        <VStack gap={4}>
+          {groupedBySeason.map((group) => (
+            <Card key={group.season} padding={4} variant="muted" className="season-card">
+              <Collapsible
+                trigger={
+                  <>
+                    <span>{seasonLabel(group.season)}</span>
+                    <span className="season-episode-count">
+                      {group.episodes.length} episodes
+                    </span>
+                  </>
+                }
+                value={String(group.season)}
+                defaultIsOpen={group.index === groupedBySeason.length - 1}
+              >
+                <div className="episode-list-wrap">
+                  <List density="balanced" hasDividers>
+                    {group.episodes.map((ep) => {
+                      const typeBadge = episodeTypeBadge(ep.type);
+                      const monitored = episodeMonitored(ep);
+                      const key = epSyncKey(group.season, ep);
+                      const isSyncing = syncingEps[key];
+                      return (
+                        <ListItem
+                          key={`${group.season}-${displayEpisodeNumber(ep)}`}
+                          label={ep.title || "—"}
+                          description={`Episode ${displayEpisodeNumber(ep)}`}
+                          endContent={
+                            <HStack gap={4} align="center">
+                              {ep.air_date && (
+                                <Timestamp value={ep.air_date} format="date" />
+                              )}
+                              <Badge
+                                variant={badgeVariantForType(ep.type)}
+                                label={typeBadge.label}
+                              />
+                              <Tooltip content={monitored ? "Unmonitor" : "Monitor"} placement="start">
+                                <ToggleButton
+                                  label={monitored ? "Unmonitor episode" : "Monitor episode"}
+                                  isIconOnly
+                                  size="sm"
+                                  icon={<Eye size={14} />}
+                                  pressedIcon={<EyeOff size={14} />}
+                                  isPressed={monitored}
+                                  isDisabled={isSyncing || !ep.sonarr_episode_id}
+                                  isLoading={isSyncing}
+                                  onPressedChange={() => onToggleMonitor(group.season, ep)}
+                                />
+                              </Tooltip>
+                            </HStack>
+                          }
+                        />
+                      );
+                    })}
+                  </List>
+                </div>
+              </Collapsible>
+            </Card>
+          ))}
+        </VStack>
+      )}
+    </VStack>
+  );
+});
 
 export function ShowDetailPage() {
   const { id: showId } = useParams<{ id: string }>();
@@ -495,7 +665,7 @@ export function ShowDetailPage() {
     setDeleting(false);
   };
 
-  const toggleEpisodeMonitor = async (groupSeason: number, ep: Episode) => {
+  const toggleEpisodeMonitor = useCallback(async (groupSeason: number, ep: Episode) => {
     const sonarrEp = resolveSonarrEpisode(ep);
     if (!sonarrEp?.id || !showId) {
       addNotification("No Sonarr episode found for " + episodeLabel(ep), "error");
@@ -521,7 +691,7 @@ export function ShowDetailPage() {
       delete next[key];
       return next;
     });
-  };
+  }, [showId, addNotification]);
 
   if (loadingShow) {
     return (
@@ -663,7 +833,7 @@ export function ShowDetailPage() {
                     label={savedFlash ? "Saved" : saving ? "Saving..." : "Save"}
                     variant="primary"
                     size="md"
-                    icon={savedFlash ? <Check size={14} /> : <Save size={14} />}
+                    icon={savedFlash ? <Check size={14} color="var(--color-success)" /> : <Save size={14} />}
                     isIconOnly={isMobile}
                     onClick={handleSave}
                     isDisabled={saving || !rulesDirty}
@@ -685,7 +855,7 @@ export function ShowDetailPage() {
             <VStack gap={3}>
               <HStack gap={3} align="center">
                 <ImageIcon size={16} color="var(--color-icon-secondary)" />
-                <Heading level={3} className="settings-section-header">Artwork</Heading>
+                <Heading level={3}>Artwork</Heading>
                 <Divider xstyle={{ flex: 1 }} />
                 <Button
                   label={artworkRefreshing ? "Refreshing..." : "Refresh"}
@@ -718,7 +888,7 @@ export function ShowDetailPage() {
           {/* Tracking rules */}
           <VStack gap={4}>
             <HStack gap={3} align="center">
-              <Heading level={2} className="settings-section-header">Tracking rules</Heading>
+              <Heading level={2}>Tracking rules</Heading>
               <Divider xstyle={{ flex: 1 }} />
               {rulesDirty && <Badge variant="warning" label="Unsaved changes" />}
             </HStack>
@@ -751,158 +921,17 @@ export function ShowDetailPage() {
             </Grid>
           </VStack>
 
-          {/* Episode list */}
-          <VStack gap={4}>
-            <HStack gap={3} align="center">
-              <Heading level={2} className="settings-section-header">Episode list</Heading>
-              <Divider xstyle={{ flex: 1 }} />
-            </HStack>
-
-            {/* Episode filters */}
-            <div className="episode-filters-desktop">
-              <SegmentedControl
-                value={activeTypeFilter}
-                onChange={setActiveTypeFilter}
-                label="Episode type filter"
-                layout="fill"
-                size="lg"
-              >
-                <SegmentedControlItem value="all" label={`All (${epStats.total})`} />
-                <SegmentedControlItem
-                  value="canon"
-                  label={`Manga (${epStats.canon})`}
-                  icon={<BookOpen size={16} />}
-                />
-                <SegmentedControlItem
-                  value="anime_canon"
-                  label={`Anime (${epStats.anime})`}
-                  icon={<Tv size={16} />}
-                />
-                <SegmentedControlItem
-                  value="mixed_canon"
-                  label={`Mixed (${epStats.mixed})`}
-                  icon={<Shuffle size={16} />}
-                />
-                <SegmentedControlItem
-                  value="filler"
-                  label={`Filler (${epStats.filler})`}
-                  icon={<SkipForward size={16} />}
-                />
-              </SegmentedControl>
-            </div>
-            <div className="episode-filters-mobile">
-              <SegmentedControl
-                value={activeTypeFilter}
-                onChange={setActiveTypeFilter}
-                label="Episode type filter"
-                layout="fill"
-                size="lg"
-              >
-                <SegmentedControlItem value="all" label={`All (${epStats.total})`} />
-                <SegmentedControlItem
-                  value="canon"
-                  label={`Manga (${epStats.canon})`}
-                  icon={<BookOpen size={16} />}
-                />
-                <SegmentedControlItem
-                  value="anime_canon"
-                  label={`Anime (${epStats.anime})`}
-                  icon={<Tv size={16} />}
-                />
-                <SegmentedControlItem
-                  value="mixed_canon"
-                  label={`Mixed (${epStats.mixed})`}
-                  icon={<Shuffle size={16} />}
-                />
-                <SegmentedControlItem
-                  value="filler"
-                  label={`Filler (${epStats.filler})`}
-                  icon={<SkipForward size={16} />}
-                />
-              </SegmentedControl>
-            </div>
-
-            {/* Episodes by season */}
-            {episodesLoading ? (
-              <VStack gap={3} hAlign="center" padding={6}>
-                <Spinner size="md" label="Loading episodes" />
-              </VStack>
-            ) : filteredEpisodes.length === 0 ? (
-              <EmptyState
-                title="No episodes"
-                description="No episodes match the selected type."
-                icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
-                actions={
-                  <Button
-                    label="Show all"
-                    variant="secondary"
-                    onClick={() => setActiveTypeFilter("all")}
-                  />
-                }
-              />
-            ) : (
-              <VStack gap={4}>
-                {groupedBySeason.map((group) => (
-                  <Card key={group.season} padding={4} variant="muted" className="season-card">
-                    <Collapsible
-                      trigger={
-                        <>
-                          <span>{seasonLabel(group.season)}</span>
-                          <span className="season-episode-count">
-                            {group.episodes.length} episodes
-                          </span>
-                        </>
-                      }
-                      value={String(group.season)}
-                      defaultIsOpen={group.index === groupedBySeason.length - 1}
-                    >
-                      <div className="episode-list-wrap">
-                        <List density="balanced" hasDividers>
-                          {group.episodes.map((ep) => {
-                            const typeBadge = episodeTypeBadge(ep.type);
-                            const monitored = episodeMonitored(ep);
-                            const key = epSyncKey(group.season, ep);
-                            const isSyncing = syncingEps[key];
-                            return (
-                              <ListItem
-                                key={`${group.season}-${displayEpisodeNumber(ep)}`}
-                                label={ep.title || "—"}
-                                description={`Episode ${displayEpisodeNumber(ep)}`}
-                                endContent={
-                                  <HStack gap={4} align="center">
-                                    {ep.air_date && (
-                                      <Timestamp value={ep.air_date} format="date" />
-                                    )}
-                                    <Badge
-                                      variant={badgeVariantForType(ep.type)}
-                                      label={typeBadge.label}
-                                    />
-                                    <Tooltip content={monitored ? "Unmonitor" : "Monitor"} placement="start">
-                                      <ToggleButton
-                                        label={monitored ? "Unmonitor episode" : "Monitor episode"}
-                                        isIconOnly
-                                        size="sm"
-                                        icon={<Eye size={14} />}
-                                        pressedIcon={<EyeOff size={14} />}
-                                        isPressed={monitored}
-                                        isDisabled={isSyncing || !ep.sonarr_episode_id}
-                                        isLoading={isSyncing}
-                                        onPressedChange={() => toggleEpisodeMonitor(group.season, ep)}
-                                      />
-                                    </Tooltip>
-                                  </HStack>
-                                }
-                              />
-                            );
-                          })}
-                        </List>
-                      </div>
-                    </Collapsible>
-                  </Card>
-                ))}
-              </VStack>
-            )}
-          </VStack>
+          {/* Episode list — memoized so tracking-rule toggles don't re-render it */}
+          <EpisodeListSection
+            episodesLoading={episodesLoading}
+            filteredEpisodes={filteredEpisodes}
+            groupedBySeason={groupedBySeason}
+            epStats={epStats}
+            activeTypeFilter={activeTypeFilter}
+            syncingEps={syncingEps}
+            onFilterChange={setActiveTypeFilter}
+            onToggleMonitor={toggleEpisodeMonitor}
+          />
         </VStack>
       </Section>
 

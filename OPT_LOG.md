@@ -1027,3 +1027,263 @@
   - Episodes badge not vertically aligned with title: changed h1 line-height from 1.1 to 1 in .show-hero-titles — tightens the line box to exactly match the font size so flex align-items:center centers the visible text, not the inflated line box.
 
 **Outcome:** Kept. Hero image now loads instantly on both navigation and refresh. Badge pill is vertically centered with the title text.
+
+## Iteration D115 — TrackingRuleCard: whole card clickable via SelectableCard
+
+**Target:** `TrackingRuleCard.tsx` (used on both SettingsPage and ShowDetailPage)
+
+**What changed:** Replaced the Card + Switch composition with Astryx's SelectableCard. The entire card surface is now clickable to toggle — no more aiming for the small switch. SelectableCard provides:
+- Built-in checkbox semantics (hidden `<input type="checkbox">`)
+- Visual selection indicator (inset box-shadow ring in the variant color)
+- Hover/pressed/focus states via the design system
+
+Removed the Switch component and the `accentVars` CSS custom property mapping that was needed to theme it. Added a small checkmark icon in the top-right corner as a secondary visual indicator when selected. Removed the now-unused `.tracking-rule-label` CSS class.
+
+**Why:** The Switch was a small click target inside a larger card. Users naturally click the card expecting it to toggle, but only the switch worked. SelectableCard is Astryx's intended component for exactly this pattern (the ClickableCard source even says "For toggle selection, use SelectableCard").
+
+**Compared against:** Card + Switch (previous), ClickableCard (navigation, not toggle).
+
+**Outcome:** Kept. Cleaner, more accessible, whole-card click area. Applies to both SettingsPage defaults and ShowDetailPage tracking rules.
+
+## Iterations D116-D116b — Section header cleanup + TrackingRuleCard color indicator
+
+**Targets:** `SettingsPage.tsx`, `ShowDetailPage.tsx`, `AddAnimeDialog.tsx`, `TrackingRuleCard.tsx`, `index.css`
+
+**Summary:**
+- D116: Removed `.settings-section-header` CSS hack (font-size: 1.05em, letter-spacing, padding-bottom). These overrides fought the Heading component's design system sizing. Replaced `VStack gap={0}` + padding-bottom hack with `VStack gap={2}` for natural spacing between heading, divider, and rows. Removed className from all 8 headings across SettingsPage, ShowDetailPage, and AddAnimeDialog.
+- D116b: TrackingRuleCard checkmark now always visible — colored with the variant's border token (green/yellow/red) at full opacity when selected, dimmed to 0.3 when unselected. Previously the indicator only appeared when selected, leaving unselected cards with no variant color identity. Added smooth opacity transition.
+
+**Outcome:** Kept. Section headings now use pure Astryx Heading sizing. Tracking rule cards always show their variant color, making the three card types visually distinct even when unselected.
+
+## Iteration D117 — Settings row spacing via VStack gap instead of padding hack
+
+**Target:** `SettingsPage.tsx`, `index.css`
+
+**What changed:** Removed `.settings-row { padding-block: var(--spacing-4) }` CSS hack. Each settings row was adding 16px top + 16px bottom padding on top of the VStack gap, creating inconsistent spacing between dividers and rows. Changed the three settings sections (Connection, Sync, Notifications) from `VStack gap={2}` to `VStack gap={3}` (12px) for uniform spacing between all children — headings, dividers, and rows.
+
+**Why:** The padding hack made spacing depend on which element was adjacent (row→divider had different gap than heading→divider). Using VStack gap alone makes all spacing uniform and controlled by the design system's spacing scale.
+
+**Compared against:** Manual padding-block on each row (previous), gap={0} + padding (original).
+
+**Outcome:** Kept. Uniform spacing throughout settings sections. One less CSS hack.
+
+## Iteration D118 — AddAnimeDialog: TrackingRuleCard replaces plain Switches
+
+**Target:** `AddAnimeDialog.tsx`
+
+**What changed:** Replaced three plain Switch components (Track filler / Track mixed canon / Track anime canon) with TrackingRuleCard in a Grid layout, matching the pattern used on SettingsPage and ShowDetailPage. Removed unused Switch import.
+
+**Why:** The add-anime wizard's tracking rules were the only place using plain Switches instead of the SelectableCard-based TrackingRuleCard. Now all three screens that show tracking rules (Settings defaults, ShowDetailPage per-anime, AddAnimeDialog wizard) use the same component with whole-card click, variant colors, and checkmark indicator.
+
+**Compared against:** Plain Switch components (previous).
+
+**Outcome:** Kept. Consistent tracking rule UI across all three screens.
+
+## Iteration D119 — Revert TrackingRuleCard to Card + Switch with whole-card click
+
+**Target:** `TrackingRuleCard.tsx`, `index.css`
+
+**What changed:** Reverted from SelectableCard (checkmark + selection ring) back to Card + Switch. The Switch is the stronger on/off affordance for "track this episode type" — users immediately understand it's a toggle. The whole card is now clickable: onClick on the Card calls onChange(!value), but clicks on the Switch's input are filtered out to prevent double-toggle. Restored the accentVars CSS custom property mapping so the Switch track takes the variant's color when on (green/yellow/red instead of default accent). Added .tracking-rule-card to the hover border-emphasis CSS group.
+
+**Why:** The SelectableCard approach (D115) removed the Switch in favor of a checkmark + ring. While technically correct, the Switch is a better visual metaphor for "enable/disable tracking." The user's original request was "the whole card should be clickable" — not "replace the switch." This keeps the Switch visual while achieving the whole-card click target.
+
+**Compared against:** SelectableCard with checkmark (D115-D116b, reverted), plain Switch without card click (original).
+
+**Outcome:** Kept. Best of both — familiar Switch toggle + whole-card click area + variant-colored switch track.
+
+## Iteration D120 — Fix Switch off-state variant color + library card fade speed
+
+**Targets:** `TrackingRuleCard.tsx`, `index.css`
+
+**Summary:**
+- Moved accentVars CSS custom properties from Card's style to Switch's style. The Switch's off-state track uses `--color-background-gray` and on-state uses `--color-accent` — these are read by StyleX at the component level, so they must be on the Switch's own DOM element, not a parent. Previously they were on the Card and didn't cascade, leaving all switches grey when off. Now each variant's switch track is tinted green/yellow/red even when off.
+- Sped up library card image fade-in from `--duration-medium` (410ms) to `--duration-fast` (175ms) for snappier image appearance on scroll.
+
+**Outcome:** Kept. Switch tracks now show variant colors in both on and off states.
+
+## Iteration D121 — Fix Switch track variant colors via CSS targeting
+
+**Target:** `TrackingRuleCard.tsx`, `index.css`
+
+**What changed:** The previous approach (D120) tried to override StyleX theme tokens (`--color-background-gray`, `--color-accent`) via inline `style` on the Switch. This didn't work because StyleX compiles theme tokens to hashed CSS variable names — setting the raw name in a style prop doesn't override the generated one.
+
+New approach: use CSS selectors targeting the Switch's track element directly. The Card outputs `data-variant="green/yellow/red"` and the Switch track has class `astryx-switch` with `data-checked` when on. Six CSS rules override the track background:
+- Off state: `var(--color-background-green/yellow/red)` — tinted with the variant color
+- On state: `var(--color-border-green/yellow/red)` — full variant color
+
+Removed the dead `accentVars` object and `CSSProperties` import from the component.
+
+**Why:** The user wanted the switch track to show the card's variant color in both on and off states, not the default grey/accent.
+
+**Outcome:** Kept. Switch tracks now show variant colors in both states.
+
+## Iteration D122 — Fix tracking rule toggle lag (double-fire)
+
+**Target:** `TrackingRuleCard.tsx`
+
+**What changed:** Wrapped the Switch in a `div` with `onClick={e => e.stopPropagation()}`. Previously, clicking the Switch fired both the Switch's `onChange` AND the Card's `onClick` (DOM click events bubble from the input up to the card). The `handleCardClick` guard (`target.closest("input")`) was unreliable — the double `onChange` call caused unnecessary re-renders and lag, especially on ShowDetailPage where `rulesDirty` recomputes on every render.
+
+**Why:** User reported "insanely laggy" toggling on tracking rules vs. fine on settings. The settings page uses plain Switch (no card click handler), so no double-fire. ShowDetailPage and AddAnimeDialog use TrackingRuleCard with the card click handler.
+
+**Outcome:** Kept. Switch clicks are now isolated from the card click handler.
+
+## Iteration D123 — Fix wrong token names + replace fake token refs with real values
+
+**Target:** `index.css`
+
+**What changed:**
+- Fixed `--color-text-on-accent` → `--color-on-accent` (3 occurrences). The token name was wrong — Astryx defines `--color-on-accent`, not `--color-text-on-accent`. The `#fff` fallback was always being used instead of the actual theme token.
+- Replaced `var(--text-body-size, 15px)` → `14px` and `var(--text-supporting-size, 13px)` → `13px` (3 occurrences). These StyleX tokens compile to hashed variable names, so the `var()` references never resolved — the fallback values were always used. Using raw values directly is more honest and avoids implying token integration that doesn't exist.
+- Replaced `padding: 2px 8px` → `var(--spacing-0-5) var(--spacing-2)` on `.season-episode-count` (token-based spacing).
+- Replaced `margin-top: 2px` → `var(--spacing-0-5)` on `.wizard-step-description-icon`.
+
+**Why:** Wrong token names silently fall back to defaults, defeating the purpose of referencing tokens. Fake `var()` references to StyleX tokens that compile to hashed names are misleading.
+
+**Outcome:** Kept. Color tokens now resolve correctly. Font sizes are explicit instead of pretending to use tokens.
+
+## Iteration D124 — Audit CSS token references (no fixes needed)
+
+**Target:** `web-astryx/src/index.css` — all `var(--*)` references
+
+**What changed:** Nothing — audit confirmed all tokens are valid.
+
+**Investigation:** The built `@astryxdesign/core/astryx.css` (imported via `main.tsx`) defines all tokens at `:root` in a single massive declaration. Verified every `var(--*)` reference in our `index.css` against the built CSS:
+- All `--color-*` tokens (accent, neutral, text-primary/secondary/disabled, border, border-emphasized, background-surface/body/muted, overlay-hover/pressed, success/error/warning, on-accent/on-success) ✓
+- All categorical tokens (background-blue/cyan/gray/green/orange/pink/purple/red/teal/yellow, border-blue/cyan/gray/green/orange/pink/purple/red/teal/yellow) ✓
+- All spacing tokens (spacing-0-5 through spacing-6) ✓
+- All duration/ease/radius/shadow tokens ✓
+
+**Why:** Needed to confirm that our CSS token references actually resolve at runtime, since StyleX compiles some tokens to hashed names. The built `astryx.css` is a pre-compiled artifact that exports the raw token names at `:root`, so all our references work correctly.
+
+**Outcome:** No changes needed. All 40+ token references in index.css are valid.
+
+## Iteration D125 — Fix tracking rule toggle lag on ShowDetailPage (memoize episode list)
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`
+
+**What changed:**
+- Extracted the episode list section (filters + season groups + episode items) into a `EpisodeListSection` component wrapped in `React.memo`. This component receives props: `episodesLoading`, `filteredEpisodes`, `groupedBySeason`, `epStats`, `activeTypeFilter`, `isMobile`, `syncingEps`, `onFilterChange`, `onToggleMonitor`.
+- Wrapped `toggleEpisodeMonitor` in `useCallback` with deps `[showId, addNotification]` so the callback identity is stable across tracking-rule state changes.
+- `setActiveTypeFilter` is a useState setter — already stable.
+
+**Why:** The user reported tracking rule toggles feel "insanely laggy" on ShowDetailPage but fine on SettingsPage. Root cause: ShowDetailPage is a 920-line monolith with ~20 state variables and a potentially 1200+ item episode list. Toggling a tracking rule (e.g. `setTrackFiller`) triggers a full re-render of the entire component, including re-creating every ListItem in the episode list. SettingsPage has no such list, so its toggles are instant. By memoizing the episode list, tracking-rule state changes no longer trigger episode list re-renders — React skips it entirely since none of its props changed.
+
+**Outcome:** Kept. Tracking rule toggles should now be as snappy as SettingsPage. tsc + go build pass.
+
+## Iteration D126 — Clean up test button variant hacks
+
+**Target:** `SettingsPage.tsx` (test connection + test ntfy buttons), `index.css`
+
+**What changed:**
+- Test buttons (Sonarr + ntfy) no longer switch to `variant="primary"` for success state. Instead, they stay `variant="secondary"` and convey success via a green Check icon (`color="var(--color-success)"`) + "Connected"/"Sent" label text.
+- Removed the `.test-status-btn[data-variant="primary"]` CSS rule that used `!important` to override the blue primary variant to green. This was fighting the StyleX-compiled variant styles.
+- Error state still uses `variant="destructive"` (red) — no override needed there.
+- The `.test-status-btn` class now only suppresses the pointer cursor (`cursor: default`), which is all it needs.
+
+**Why:** The `!important` CSS hack to recolor primary buttons green was a workaround for using the wrong variant. Success doesn't require a color change — the icon + label communicate it clearly. This is more consistent with the Astryx variant system: secondary for neutral/idle, destructive for errors, and icon color for success indication.
+
+**Outcome:** Kept. tsc passes. Removed 5 lines of `!important` CSS. Test buttons now use the variant system cleanly.
+
+## Iteration D127 — Clean up save-flash !important hack
+
+**Target:** `index.css` (save-flash rule), `SettingsPage.tsx`, `ShowDetailPage.tsx`
+
+**What changed:**
+- Replaced the `.save-flash[data-variant="primary"]` CSS that used `!important` to override the button's background/border/color to green. Now uses a subtle green box-shadow ring (`0 0 0 2px` with 40% opacity success color) that doesn't fight the StyleX-compiled variant background.
+- Made the Check icon green (`color="var(--color-success)"`) on both save buttons (SettingsPage + ShowDetailPage) when in the saved-flash state, providing an additional color cue.
+- The label change ("Saving..." → "Saved") + icon swap (Save → green Check) + subtle green ring together communicate success without hijacking the button's variant.
+
+**Why:** Same principle as D126 — `!important` overrides on StyleX-compiled variant styles are fragile and fight the design system. The box-shadow approach is non-destructive: it adds a visual cue on top of the existing variant styling rather than replacing it.
+
+**Outcome:** Kept. tsc passes. Removed 3 `!important` declarations. Save button now stays primary (blue) with a green ring + green check icon for the 1.5s confirmation flash.
+
+## Iteration D128 — Remove redundant !important from hero titles alignment
+
+**Target:** `index.css` — `.show-hero-titles > div:first-child`
+
+**What changed:**
+- Removed `.show-hero-titles > div:first-child { align-items: center !important }` — the HStack inside `.show-hero-titles` already sets `align="center"` via its prop, which StyleX compiles to `align-items: center`. The `!important` CSS was a redundant belt-and-suspenders override.
+
+**Why:** Audited all remaining `!important` declarations in index.css. Most are legitimate (AppShell header background, LayoutContent height/overflow, Switch track colors, mobile responsive overrides). This one was redundant — the component prop already handles it.
+
+**Remaining !important declarations (all legitimate):**
+- `.astryx-app-shell-header` background — overrides StyleX AppShell header
+- `#astryx-app-shell-main` height/overflow — overrides StyleX LayoutContent
+- `.show-actions-bar` mobile responsive — overrides desktop styles at <600px
+- `.tracking-rule-card` Switch track colors — overrides StyleX Switch track (6 declarations)
+- `.settings-row` mobile input width — overrides fixed-width inputs at <600px
+
+**Outcome:** Kept. tsc passes. Removed 1 redundant `!important` declaration.
+
+## Iteration D129 — Deduplicate episode filter SegmentedControl + remove unused isMobile prop
+
+**Target:** `ShowDetailPage.tsx` — `EpisodeListSection` component
+
+**What changed:**
+- Extracted the duplicated `SegmentedControlItem` list into a shared `filterItems` variable. Previously the same 5 items (All, Manga, Anime, Mixed, Filler) were copy-pasted for both `episode-filters-desktop` and `episode-filters-mobile` wrappers — ~30 lines of pure duplication.
+- Removed the `isMobile` prop from `EpisodeListSection` — it was destructured but never used inside the component. The desktop/mobile visibility is handled entirely by CSS media queries on the wrapper divs. `isMobile` is still used in the parent `ShowDetailPage` for the `filteredEpisodes` memo and the mobile filter fallback effect.
+
+**Why:** Code duplication is a maintenance burden — if a filter item is added/changed, you'd need to edit two places. The unused `isMobile` prop was misleading (implied the component had responsive logic when it doesn't).
+
+**Outcome:** Kept. tsc passes. Reduced EpisodeListSection by ~20 lines of duplicated JSX.
+
+## Iteration D130 — Fix hero title line-height causing badge misalignment
+
+**Target:** `index.css` — `.show-hero-titles h1` rule
+
+**What changed:**
+- Removed `line-height: 1` from `.show-hero-titles h1, .show-hero-titles [data-role="heading"]`. The `line-height: 1` was making the h1's content box tighter than the Badge's box, causing visual misalignment between the title text and the episode count badge even though the HStack had `align="center"`. With the default line-height from Astryx's Heading component, the h1's box height better matches the Badge's, so flexbox centering aligns them properly.
+
+**Why:** The user reported the episodes badge pill was not vertically aligned with the title text. The `line-height: 1` override was shrinking the h1's box height below the Badge's natural height, making `align-items: center` center unequal-height boxes — the Badge appeared shifted relative to the text.
+
+**Outcome:** Kept. tsc passes. The heading now uses its natural line-height, allowing the HStack's `align="center"` to properly vertically center the title and badge.
+
+## Iteration D131 — Add visual distinction for success/warning toasts
+
+**Target:** `ToastViewport.tsx`, `index.css`
+
+**What changed:**
+- Wrapped each Toast in a `<div data-notification-type={n.type}>` wrapper in ToastViewport. Previously the notification type (success/warning/error/info) was discarded — everything non-error rendered as a generic info toast.
+- Added CSS overrides for success toasts (green background via `--color-success`) and warning toasts (yellow background via `--color-warning` with `--color-on-warning` text color). Error toasts already use Astryx's built-in error styling.
+- The `!important` is needed because StyleX compiles the Toast's `background-color` with high specificity — same pattern as the other legitimate `!important` overrides.
+
+**Why:** The app uses `addNotification("Saved", "success")` and `addNotification("...", "warning")` extensively, but all non-error toasts looked identical (dark inverted surface). Success and warning notifications should be visually distinct so users can quickly recognize the outcome without reading the text.
+
+**Outcome:** Kept. tsc passes. Success toasts are now green, warning toasts are yellow, error toasts are red (Astryx built-in), info toasts are dark (Astryx default).
+
+## Iteration D132 — Fix semantic color tokens for text on images
+
+**Target:** `index.css` — `.mizu-card-overlay-title`, `.show-hero-content`
+
+**What changed:**
+- `.mizu-card-overlay-title`: Changed `color: var(--color-on-accent)` → `color: var(--color-on-dark)`. The overlay title is white text on a card image, not on an accent-colored background. `--color-on-accent` is semantically "text on accent color" while `--color-on-dark` is "text on dark surface" — the card image with its gradient overlay is always dark, so `--color-on-dark` is correct. Both resolve to white in light mode, but in dark mode `--color-on-accent` could theoretically differ if a theme changes the accent color.
+- `.show-hero-content`: Added `color: var(--color-on-dark)` explicitly. Previously the hero text inherited `--color-text-primary` from the body, which is dark in light mode and light in dark mode. But the hero text always sits on a darkened image area (gradient overlay to `--color-background-body`), so it should always be white/light regardless of theme mode. Without this, in light mode the hero title could be dark text on a dark image area.
+
+**Why:** Semantic token correctness. Text on images should use `--color-on-dark` (always light) since the image area is always darkened by the gradient overlay, regardless of theme mode. Using `--color-on-accent` or inheriting `--color-text-primary` is semantically wrong and could cause readability issues with certain themes or images.
+
+**Outcome:** Kept. tsc passes. Card overlay titles and hero content text now use the correct semantic token for text on dark surfaces.
+
+## Iteration D133 — Add skeleton shimmer to image placeholders
+
+**Target:** `index.css` — `.mizu-card-img-placeholder`, `.wizard-poster-placeholder`
+
+**What changed:**
+- Added a `skeleton-pulse` keyframe animation (opacity 0.6 ↔ 1.0) to both image placeholder classes. The pulse uses `--duration-medium` (410ms) with `alternate infinite` for a subtle breathing effect while images load.
+- Added both placeholders to the `prefers-reduced-motion: reduce` override list to disable the animation for accessibility.
+- The animation matches the Astryx Skeleton component's approach (opacity pulse) but is applied via CSS to our existing placeholder elements rather than replacing them with Skeleton components — simpler, no component changes needed.
+
+**Why:** Static gradient placeholders look frozen/lifeless while images load. A subtle pulse animation communicates "loading" to the user and feels more polished. This aligns with the Astryx Skeleton component's pattern (which uses the same opacity pulse technique).
+
+**Outcome:** Kept. tsc passes. Card image and wizard poster placeholders now have a subtle pulse animation while loading, disabled under reduced-motion.
+
+## Iteration D134 — Add press feedback to tracking rule cards and activity log summary
+
+**Target:** `index.css` — `.tracking-rule-card:active`, `.activity-log-summary[role="button"]:active`
+
+**What changed:**
+- `.tracking-rule-card:active`: Added `transform: scale(0.99)` with `transition: transform var(--duration-fast) var(--ease-standard)`. When the user presses/taps the tracking rule card (which is clickable as a whole), the card slightly shrinks to give tactile press feedback.
+- `.activity-log-summary[role="button"]:active`: Added `background-color: var(--color-overlay-pressed)`. When the user presses the expandable activity log summary row, it gets the Astryx pressed overlay color for consistent press feedback.
+
+**Why:** Micro-interaction polish. Clickable elements should give immediate tactile feedback on press, not just on hover. The tracking rule cards have hover states but no press state — adding a subtle scale-down on press makes them feel more responsive and physical. The activity log summary rows similarly had hover/focus states but no press state. Using `--color-overlay-pressed` matches Astryx's own pressed-state pattern.
+
+**Outcome:** Kept. tsc passes. Tracking rule cards now scale down slightly on press, activity log summary rows get pressed overlay color on press.

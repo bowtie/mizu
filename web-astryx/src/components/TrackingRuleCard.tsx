@@ -1,27 +1,11 @@
-import type { ReactNode } from "react";
 import { HStack } from "@astryxdesign/core/HStack";
 import { VStack } from "@astryxdesign/core/VStack";
 import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
 import { Switch } from "@astryxdesign/core/Switch";
-import type { CSSProperties } from "react";
+import type { MouseEvent } from "react";
 
 type RuleVariant = "green" | "yellow" | "red";
-
-const accentVars: Record<RuleVariant, CSSProperties> = {
-  green: {
-    "--color-accent": "var(--color-border-green)",
-    "--color-background-gray": "var(--color-background-green)",
-  } as CSSProperties,
-  yellow: {
-    "--color-accent": "var(--color-border-yellow)",
-    "--color-background-gray": "var(--color-background-yellow)",
-  } as CSSProperties,
-  red: {
-    "--color-accent": "var(--color-border-red)",
-    "--color-background-gray": "var(--color-background-red)",
-  } as CSSProperties,
-};
 
 interface TrackingRuleCardProps {
   variant: RuleVariant;
@@ -40,10 +24,30 @@ export function TrackingRuleCard({
   value,
   onChange,
 }: TrackingRuleCardProps) {
+  // Clicking anywhere on the card toggles the switch.
+  // Clicks on the switch itself are handled by the Switch component
+  // and won't bubble here (the input has zIndex:1 and stops propagation
+  // via the native checkbox change event).
+  const handleCardClick = (e: MouseEvent<HTMLDivElement>) => {
+    // If the click originated from the switch's input, the Switch's
+    // own onChange handles it — don't double-toggle.
+    const target = e.target as HTMLElement;
+    if (target.tagName === "INPUT" || target.closest("input")) {
+      return;
+    }
+    onChange(!value);
+  };
+
   return (
-    <Card padding={4} variant={variant}>
+    <Card
+      padding={4}
+      variant={variant}
+      onClick={handleCardClick}
+      className="tracking-rule-card"
+      style={{ cursor: "pointer" }}
+    >
       <HStack hAlign="between" vAlign="center" wrap="nowrap">
-        <VStack gap={0} className="tracking-rule-label">
+        <VStack gap={0}>
           <Text type="body" weight="semibold" display="block">
             {label}
           </Text>
@@ -51,13 +55,14 @@ export function TrackingRuleCard({
             {description}
           </Text>
         </VStack>
-        <Switch
-          label={switchLabel}
-          value={value}
-          onChange={onChange}
-          isLabelHidden
-          style={accentVars[variant]}
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <Switch
+            label={switchLabel}
+            value={value}
+            onChange={onChange}
+            isLabelHidden
+          />
+        </div>
       </HStack>
     </Card>
   );
