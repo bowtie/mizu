@@ -194,6 +194,12 @@ export function clearCachedShowDetail(id: string | number): void {
   // growth in long sessions where the user visits many show pages.
   episodeETags.delete(key);
   episodeDataCache.delete(key);
+  // Bump the fetch generation so a still-in-flight episode fetch (e.g. the
+  // prefetch fired before this clear) can't resurrect the caches it just wiped:
+  // its captured gen no longer matches, while a fresh fetch bumps to an even
+  // higher value. (Deleting would let the next fetch re-bump from 0 and collide
+  // with a stale fetch's captured gen.)
+  episodeFetchGen.set(key, (episodeFetchGen.get(key) ?? 0) + 1);
 }
 
 /** Prefetch show + episodes data. Used in main.tsx on direct
@@ -218,22 +224,48 @@ export function prefetchShowDetail(id: string | number): void {
         return res.clone().json() as Promise<Show>;
       })
     : request<Show>("GET", "/mappings/" + key);
-  const episodesPromise = episodesPreFired
-    ? episodesPreFired.then(async (res) => {
-        if (!res.ok) throw new Error("prefetch failed");
-        const newEtag = res.headers.get("ETag");
-        if (newEtag) episodeETags.set(key, newEtag);
-        const data = (await res.clone().json()) as Episode[];
-        if (newEtag) episodeDataCache.set(key, data);
-        return data;
-      })
-    : requestEpisodesWithETag(key);
+  let episodesPromise: Promise<Episode[]>;
+  if (episodesPreFired) {
+    // Capture the generation up front so the async write-back can verify it
+    // is still the newest fetch for the key when the response resolves.
+    const gen = (episodeFetchGen.get(key) ?? 0) + 1;
+    episodeFetchGen.set(key, gen);
+    episodesPromise = episodesPreFired.then(async (res) => {
+      if (!res.ok) throw new Error("prefetch failed");
+      const newEtag = res.headers.get("ETag");
+      const data = (await res.clone().json()) as Episode[];
+      // Write ETag and data atomically (same synchronous block), and only
+      // if this fetch is still the newest for the key — a slower older
+      // prefetch must not clobber a newer fetch's pair.
+      if (newEtag && episodeFetchGen.get(key) === gen) {
+        episodeETags.set(key, newEtag);
+        episodeDataCache.set(key, data);
+      }
+      return data;
+    });
+  } else {
+    episodesPromise = requestEpisodesWithETag(key);
+  }
 
-  detailPrefetch.set(key, { show: showPromise, episodes: episodesPromise });
+  // Retained per-key entry — also acts as a supersede marker below so a stale
+  // in-flight prefetch can't write back to the cache after the page has moved on.
+  const entry: DetailPrefetchEntry = { show: showPromise, episodes: episodesPromise };
+  detailPrefetch.set(key, entry);
 
   // When both resolve, populate the synchronous cache for getCachedShowDetail.
+  // Only write if this prefetch is still the current entry for the key: the
+  // detail page clears these caches (clearCachedShowDetail) once it has fired
+  // its own fetches, and a stale prefetch resolving after that clear must not
+  // resurrect a snapshot that loadShowData (after a save) would then serve via
+  // getShow/getEpisodes as if it were fresh.
+  //
+  // The episode ETag/data caches written inside episodesPromise above are
+  // guarded by the same per-key fetch generation as requestEpisodesWithETag,
+  // and the ETag+data pair is written atomically in one synchronous block, so
+  // a stale prefetch can't leave a mismatched {newer ETag, older data} pair.
   Promise.all([showPromise, episodesPromise])
     .then(([show, episodes]) => {
+      if (detailPrefetch.get(key) !== entry) return;
       detailDataCache.set(key, { show, episodes });
     })
     .catch(() => {
@@ -290,6 +322,14 @@ const episodePrefetch = new Map<string, Promise<Episode[]>>();
 const episodeETags = new Map<string, string>();
 const episodeDataCache = new Map<string, Episode[]>();
 
+// Per-key generation counter for episode fetches. Every episode fetch bumps
+// the counter for its key when it starts; the write-back only lands if the
+// captured generation is still current when the response resolves. Without
+// this, two concurrent fetches for one key (e.g. a hover prefetch racing a
+// post-save reload) can leave a mismatched {newer ETag, older data} pair: the
+// newer ETag keeps validating on 304 while the older data is served forever.
+const episodeFetchGen = new Map<string, number>();
+
 export function getEpisodes(showId: string | number): Promise<Episode[]> {
   const key = String(showId);
   const cached = episodePrefetch.get(key);
@@ -318,15 +358,22 @@ export function getEpisodes(showId: string | number): Promise<Episode[]> {
   // Response.json() can only be called once per Response.
   const preFired = prefetch?.episodes && prefetch.detailId === key ? prefetch.episodes : undefined;
   if (preFired) {
+    // Same generation guard as requestEpisodesWithETag: capture the gen for
+    // this write-back so a newer fetch for the key supersedes it, and write
+    // the ETag+data pair atomically in one synchronous block.
+    const gen = (episodeFetchGen.get(key) ?? 0) + 1;
+    episodeFetchGen.set(key, gen);
     return preFired.then(async (res) => {
       if (!res.ok) {
         // Fall through to ETag request
         return requestEpisodesWithETag(key);
       }
       const newEtag = res.headers.get("ETag");
-      if (newEtag) episodeETags.set(key, newEtag);
       const data = (await res.clone().json()) as Episode[];
-      if (newEtag) episodeDataCache.set(key, data);
+      if (newEtag && episodeFetchGen.get(key) === gen) {
+        episodeETags.set(key, newEtag);
+        episodeDataCache.set(key, data);
+      }
       return data;
     });
   }
@@ -334,6 +381,12 @@ export function getEpisodes(showId: string | number): Promise<Episode[]> {
 }
 
 async function requestEpisodesWithETag(key: string): Promise<Episode[]> {
+  // Capture this fetch's generation up front. The write-back below only lands
+  // if no newer fetch started for the same key by the time the response
+  // resolves — a slower older response must not clobber a newer pair.
+  const gen = (episodeFetchGen.get(key) ?? 0) + 1;
+  episodeFetchGen.set(key, gen);
+
   const headers: Record<string, string> = {};
   const etag = episodeETags.get(key);
   if (etag) headers["If-None-Match"] = etag;
@@ -353,11 +406,13 @@ async function requestEpisodesWithETag(key: string): Promise<Episode[]> {
     throw new Error(err.error || res.statusText);
   }
   const newEtag = res.headers.get("ETag");
-  if (newEtag) {
-    episodeETags.set(key, newEtag);
-  }
   const data = (await res.json()) as Episode[];
-  if (newEtag) {
+  // Write the ETag and data atomically (same synchronous block), and only if
+  // this fetch is still the newest for the key. Writing them split across the
+  // JSON await is exactly what let an older response pair its stale data with
+  // a newer ETag that the server then kept validating (304) forever.
+  if (newEtag && episodeFetchGen.get(key) === gen) {
+    episodeETags.set(key, newEtag);
     episodeDataCache.set(key, data);
   }
   return data;

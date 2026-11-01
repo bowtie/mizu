@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as v from "valibot";
 import {
@@ -67,6 +68,89 @@ export const queryKeys = {
   artworkProviders: ["artworkProviders"] as const,
   artworkRefreshStatus: ["artworkRefreshStatus"] as const,
 };
+
+// ── Delayed artwork refetch ──
+// Artwork is fetched in the background after a mapping is created or
+// auto-matched. A short delay then refetches just that show and patches
+// it into the cached shows list, so artwork appears without refetching
+// the entire library. Timers are owned per hook instance (tracked in a
+// ref Map keyed by showId) so a component unmounting only cancels its
+// own pending refetches — never another component's — and multiple
+// shows scheduled by one instance are all cleaned up.
+
+export const ARTWORK_REFETCH_DELAY_MS = 5000;
+
+// Per-show refetch state, kept for the life of the hook instance. Each
+// schedule bumps the generation; when a timer fires, `timer` is nulled but
+// the entry stays, so any in-flight invalidateQueries promise can tell
+// whether a newer schedule superseded it before applying its patch.
+interface PendingArtworkRefetch {
+  timer: ReturnType<typeof setTimeout> | null;
+  generation: number;
+}
+
+/**
+ * Hook that schedules the delayed artwork refetch for a show. Pending
+ * timers are tracked per instance in a Map keyed by showId, so
+ * re-scheduling the same show cancels the previous timer (dedupe) while
+ * different shows keep independent timers. All timers are cancelled on
+ * unmount. When a fired timer's invalidateQueries promise settles, the
+ * shows-list patch is skipped if the component has unmounted mid-flight
+ * or a newer schedule for the same show has superseded this one —
+ * applying the stale snapshot then could clobber fresher data.
+ */
+export function useShowArtworkRefetch() {
+  const qc = useQueryClient();
+  const pendingTimersRef = useRef<Map<string | number, PendingArtworkRefetch>>(new Map());
+  const disposedRef = useRef(false);
+
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+      pendingTimersRef.current.forEach(({ timer }) => {
+        if (timer) clearTimeout(timer);
+      });
+      pendingTimersRef.current.clear();
+    };
+  }, []);
+
+  return useCallback(
+    (showId: string | number) => {
+      const existing = pendingTimersRef.current.get(showId);
+      const generation = (existing?.generation ?? 0) + 1;
+      if (existing?.timer) clearTimeout(existing.timer);
+
+      const timer = setTimeout(() => {
+        // Only the newest schedule for this show may refetch.
+        const current = pendingTimersRef.current.get(showId);
+        if (!current || current.timer !== timer) return;
+        current.timer = null; // fired — entry stays as a supersede marker
+
+        qc.invalidateQueries({ queryKey: queryKeys.show(showId) })
+          .then(() => {
+            // Skip the patch if the component unmounted mid-flight, or if a
+            // newer schedule for the same show superseded this refetch — its
+            // own refetch will land fresh data, so patching now would only
+            // clobber whatever landed since.
+            if (disposedRef.current) return;
+            const latest = pendingTimersRef.current.get(showId);
+            if (latest && latest.generation > generation) return;
+
+            const updated = qc.getQueryData<Show>(queryKeys.show(showId));
+            if (updated) {
+              qc.setQueryData<Show[]>(queryKeys.shows, (prev) =>
+                prev ? prev.map((s) => (s.id === showId ? { ...s, ...updated } : s)) : prev,
+              );
+            }
+          })
+          .catch(() => {});
+      }, ARTWORK_REFETCH_DELAY_MS);
+      pendingTimersRef.current.set(showId, { timer, generation });
+    },
+    [qc],
+  );
+}
 
 // ── Queries ──
 
@@ -149,6 +233,7 @@ export function useArtworkRefreshStatus() {
 
 export function useCreateShow() {
   const qc = useQueryClient();
+  const scheduleArtworkRefetch = useShowArtworkRefetch();
   return useMutation({
     mutationFn: createShow,
     onSuccess: (show) => {
@@ -156,19 +241,7 @@ export function useCreateShow() {
       qc.invalidateQueries({ queryKey: queryKeys.episodes(show.id) });
       qc.invalidateQueries({ queryKey: queryKeys.shows });
       qc.invalidateQueries({ queryKey: queryKeys.bootstrap });
-      // Artwork is fetched in the background — refetch just this show after
-      // a delay and patch it into the cached shows list so artwork appears
-      // without refetching the entire library.
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: queryKeys.show(show.id) }).then(() => {
-          const updated = qc.getQueryData<Show>(queryKeys.show(show.id));
-          if (updated) {
-            qc.setQueryData<Show[]>(queryKeys.shows, (prev) =>
-              prev ? prev.map((s) => (s.id === show.id ? { ...s, ...updated } : s)) : prev,
-            );
-          }
-        }).catch(() => {});
-      }, 5000);
+      scheduleArtworkRefetch(show.id);
     },
   });
 }
@@ -201,6 +274,7 @@ export function useDeleteShow() {
 
 export function useAutoMatch() {
   const qc = useQueryClient();
+  const scheduleArtworkRefetch = useShowArtworkRefetch();
   return useMutation({
     mutationFn: autoMatch,
     onSuccess: (show) => {
@@ -208,22 +282,14 @@ export function useAutoMatch() {
       qc.invalidateQueries({ queryKey: queryKeys.episodes(show.id) });
       qc.invalidateQueries({ queryKey: queryKeys.shows });
       qc.invalidateQueries({ queryKey: queryKeys.bootstrap });
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: queryKeys.show(show.id) }).then(() => {
-          const updated = qc.getQueryData<Show>(queryKeys.show(show.id));
-          if (updated) {
-            qc.setQueryData<Show[]>(queryKeys.shows, (prev) =>
-              prev ? prev.map((s) => (s.id === show.id ? { ...s, ...updated } : s)) : prev,
-            );
-          }
-        }).catch(() => {});
-      }, 5000);
+      scheduleArtworkRefetch(show.id);
     },
   });
 }
 
 export function useConfirmMatch() {
   const qc = useQueryClient();
+  const scheduleArtworkRefetch = useShowArtworkRefetch();
   return useMutation({
     mutationFn: confirmMatch,
     onSuccess: (show) => {
@@ -231,16 +297,7 @@ export function useConfirmMatch() {
       qc.invalidateQueries({ queryKey: queryKeys.episodes(show.id) });
       qc.invalidateQueries({ queryKey: queryKeys.shows });
       qc.invalidateQueries({ queryKey: queryKeys.bootstrap });
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: queryKeys.show(show.id) }).then(() => {
-          const updated = qc.getQueryData<Show>(queryKeys.show(show.id));
-          if (updated) {
-            qc.setQueryData<Show[]>(queryKeys.shows, (prev) =>
-              prev ? prev.map((s) => (s.id === show.id ? { ...s, ...updated } : s)) : prev,
-            );
-          }
-        }).catch(() => {});
-      }, 5000);
+      scheduleArtworkRefetch(show.id);
     },
   });
 }

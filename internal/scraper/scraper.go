@@ -14,6 +14,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -28,6 +29,14 @@ type Scraper struct {
 	lastRequest    time.Time
 	mu             sync.Mutex
 	db             *database.DB
+	baseURL        string
+
+	// showListFlight coalesces concurrent show-list scrapes (the
+	// GetAllShows stale-cache fallback and the manual refresh handler) onto
+	// a single in-flight fetch instead of double-scraping
+	// animefillerlist.com. The cache holds no per-key user state, so reuse
+	// of the in-flight result is always safe.
+	showListFlight singleflight.Group
 }
 
 func New(requestTimeout, rateLimitDelay time.Duration, db *database.DB) *Scraper {
@@ -35,7 +44,15 @@ func New(requestTimeout, rateLimitDelay time.Duration, db *database.DB) *Scraper
 		client:         &http.Client{Timeout: requestTimeout},
 		rateLimitDelay: rateLimitDelay,
 		db:             db,
+		baseURL:        baseURL,
 	}
+}
+
+// SetBaseURL overrides the AFL base URL. Tests use this to point the
+// scraper at a local stub instead of animefillerlist.com; production always
+// uses the package-level default.
+func (s *Scraper) SetBaseURL(u string) {
+	s.baseURL = u
 }
 
 func (s *Scraper) rateLimit(ctx context.Context) error {
@@ -112,9 +129,37 @@ func (s *Scraper) GetAllShows(ctx context.Context) ([]models.AFLShow, error) {
 }
 
 func (s *Scraper) RefreshAllShows(ctx context.Context) ([]models.AFLShow, []string, error) {
+	// Coalesce concurrent refreshes onto one in-flight scrape: a
+	// create-with-auto-match hitting a stale cache while a manual refresh
+	// is in flight (or two stale-cache fallbacks at once) awaits the same
+	// result instead of scraping twice. If the leader's scrape fails, all
+	// waiters inherit its error rather than re-scraping — the deliberate
+	// singleflight tradeoff (retrying on a shared failure would reintroduce
+	// the double-scrape).
+	type refreshResult struct {
+		shows    []models.AFLShow
+		newSlugs []string
+	}
+	res, err, _ := s.showListFlight.Do("show-list", func() (interface{}, error) {
+		shows, newSlugs, err := s.doRefreshAllShows(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return refreshResult{shows: shows, newSlugs: newSlugs}, nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	r := res.(refreshResult)
+	return r.shows, r.newSlugs, nil
+}
+
+// doRefreshAllShows performs the actual scrape and cache write, running
+// under the singleflight gate in RefreshAllShows.
+func (s *Scraper) doRefreshAllShows(ctx context.Context) ([]models.AFLShow, []string, error) {
 	log.Info().Msg("fetching show list from AnimeFillerList")
 
-	doc, err := s.fetch(ctx, baseURL+"/shows")
+	doc, err := s.fetch(ctx, s.baseURL+"/shows")
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching show list: %w", err)
 	}
@@ -129,7 +174,7 @@ func (s *Scraper) RefreshAllShows(ctx context.Context) ([]models.AFLShow, []stri
 		title := strings.TrimSpace(sel.Text())
 		slug := extractSlug(href)
 		if title != "" && slug != "" {
-			shows = append(shows, models.AFLShow{Title: title, Slug: slug, URL: baseURL + href})
+			shows = append(shows, models.AFLShow{Title: title, Slug: slug, URL: s.baseURL + href})
 		}
 	})
 
@@ -156,7 +201,7 @@ func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []m
 			return "", nil, fmt.Errorf("invalid slug: %s", slug)
 		}
 	}
-	url := fmt.Sprintf("%s/shows/%s", baseURL, slug)
+	url := fmt.Sprintf("%s/shows/%s", s.baseURL, slug)
 	log.Info().Str("slug", slug).Str("url", url).Msg("fetching episode data")
 
 	doc, err := s.fetch(ctx, url)

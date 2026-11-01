@@ -35,8 +35,9 @@ DELETE FROM show_mappings WHERE id = ?;
 INSERT INTO show_mappings (
     sonarr_series_id, sonarr_title, afl_slug, afl_title,
     auto_matched, match_confidence, filler_action, mixed_action,
-    anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
+    overview, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(sonarr_series_id) DO UPDATE SET
     sonarr_title = excluded.sonarr_title,
     afl_slug = excluded.afl_slug,
@@ -50,6 +51,7 @@ ON CONFLICT(sonarr_series_id) DO UPDATE SET
     start_mode = excluded.start_mode,
     watermark_mode = excluded.watermark_mode,
     sync_watermark = excluded.sync_watermark,
+    overview = excluded.overview,
     updated_at = excluded.updated_at;
 
 -- name: GetMappingIDBySonarrID :one

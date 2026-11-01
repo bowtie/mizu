@@ -31,6 +31,14 @@ type Manager struct {
 	// same mapping from corrupting each other's file writes.
 	mapMu   sync.Mutex
 	mapLocks map[int64]*sync.Mutex
+
+	// intentMu guards intents. A per-mapping intent counter is bumped by
+	// newer user intent (a per-show refresh or an artwork source switch) so
+	// an older refresh-all write-back for the same mapping skips instead of
+	// clobbering the later choice — the per-mapping lock preserves
+	// acquisition order, not recency of intent.
+	intentMu sync.Mutex
+	intents  map[int64]int64
 }
 
 // NewManager creates a Manager that stores images under artDir.
@@ -43,6 +51,7 @@ func NewManager(artDir string, db *database.DB) *Manager {
 		},
 		db:       db,
 		mapLocks: make(map[int64]*sync.Mutex),
+		intents:  make(map[int64]int64),
 	}
 }
 
@@ -105,16 +114,94 @@ func (m *Manager) ResolveSource(override, defaultSource string) string {
 	return defaultSource
 }
 
+// BumpIntent records a newer user intent for a mapping: a per-show refresh
+// or an artwork source switch. In-flight fetches that captured the intent
+// before the bump skip their write-backs for that mapping (see
+// fetchAndStore), so a newer user choice always wins over an older
+// refresh-all write-back that lands later.
+func (m *Manager) BumpIntent(mappingID int64) {
+	m.intentMu.Lock()
+	m.intents[mappingID]++
+	m.intentMu.Unlock()
+}
+
+// captureIntent returns the mapping's current intent counter.
+func (m *Manager) captureIntent(mappingID int64) int64 {
+	m.intentMu.Lock()
+	defer m.intentMu.Unlock()
+	return m.intents[mappingID]
+}
+
 // FetchAndStore fetches artwork from the specified source, downloads the
 // images to disk, and updates the database with local paths. A "sonarr" or
 // empty source skips provider fetch — the frontend will fall back to Sonarr
 // image URLs.
+//
+// The captured intent is the current one: a per-show fetch records its own
+// newer intent (via BumpIntent) before this call, so its write is never
+// skipped — only a newer concurrent intent supersedes it.
 func (m *Manager) FetchAndStore(ctx context.Context, mappingID int64, series models.SonarrSeries, source string) (*FetchResult, error) {
+	return m.fetchAndStore(ctx, mappingID, series, source, m.captureIntent(mappingID))
+}
+
+// fetchAndStore is the shared implementation. capturedIntent is the mapping's
+// intent when this fetch's work was decided: the current intent for a
+// per-show fetch, or the intent at refresh-all start (RefreshAll snapshots it
+// for every mapping). If a newer intent lands before the write-back, the
+// stale fetch skips writing so it can't clobber the newer artwork.
+func (m *Manager) fetchAndStore(ctx context.Context, mappingID int64, series models.SonarrSeries, source string, capturedIntent int64) (*FetchResult, error) {
 	// Lock per-mapping to prevent concurrent file operations from
 	// corrupting each other (e.g. background artwork fetch overlapping
 	// with a manual refresh for the same show).
 	m.lockMapping(mappingID).Lock()
 	defer m.lockMapping(mappingID).Unlock()
+
+	// Supersede guard: a delete or a source switch to "sonarr" may have
+	// landed after this fetch was scheduled (the on-create goroutine does a
+	// GetSeries call before fetching, and refresh-all iterates a snapshot).
+	// Writing now would resurrect files for a mapping that no longer exists,
+	// or silently undo a switch back to Sonarr image URLs. The check runs
+	// under the per-mapping lock, so it is serialized with the
+	// delete/source-switch cleanup that removes the row.
+	current, err := m.db.GetMappingByID(ctx, mappingID)
+	if err != nil {
+		return nil, fmt.Errorf("load mapping for artwork fetch: %w", err)
+	}
+	if current == nil {
+		return &FetchResult{Source: source, Found: false}, nil
+	}
+	if current.ArtworkSource == "sonarr" {
+		// The mapping's override is "sonarr": local artwork must not render
+		// over the Sonarr image URLs. Clear stale files and DB paths left by
+		// an earlier provider fetch. This runs regardless of intent — the
+		// mapping's current state wants Sonarr images, so any local downloads
+		// are stale by definition (a mid-flight switch already cleared them
+		// via ClearArtworkForSonarr, making this a harmless re-clear).
+		if err := m.clearArtworkForSonarrUnlocked(ctx, mappingID); err != nil {
+			log.Warn().Err(err).Int64("mapping_id", mappingID).Msg("failed to clear artwork file paths")
+		}
+		return &FetchResult{Source: source, Found: false}, nil
+	}
+
+	// Supersede guard (early): a newer per-show refresh or source switch may
+	// have landed after this fetch's intent was captured (e.g. a refresh-all
+	// reaching a mapping the user refreshed mid-run) — skip the fetch
+	// entirely; the newer operation writes its own artwork.
+	if m.captureIntent(mappingID) != capturedIntent {
+		return &FetchResult{Source: source, Found: false}, nil
+	}
+
+	// A fetch that resolves to "sonarr" (or empty) never downloads — the
+	// frontend falls back to Sonarr image URLs. Clear any stale local files
+	// and DB paths so the sonarr default actually takes effect instead of
+	// older downloads rendering over it. The intent guard above ensures a
+	// superseded older fetch can't wipe a newer operation's artwork.
+	if source == "" || source == "sonarr" {
+		if err := m.clearArtworkForSonarrUnlocked(ctx, mappingID); err != nil {
+			log.Warn().Err(err).Int64("mapping_id", mappingID).Msg("failed to clear artwork file paths")
+		}
+		return &FetchResult{Source: source, Found: false}, nil
+	}
 
 	art, err := m.fetchFromSource(ctx, series, source)
 	if err != nil {
@@ -131,7 +218,7 @@ func (m *Manager) FetchAndStore(ctx context.Context, mappingID int64, series mod
 
 	// Clear old artwork files so stale images from a previous provider
 	// don't linger when the new provider doesn't return all three types.
-	m.DeleteArtwork(mappingID)
+	m.deleteArtworkUnlocked(mappingID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("recreate artwork dir: %w", err)
 	}
@@ -165,6 +252,16 @@ func (m *Manager) FetchAndStore(ctx context.Context, mappingID int64, series mod
 		} else {
 			log.Warn().Err(err).Str("url", art.LogoURL).Int64("mapping_id", mappingID).Msg("failed to download logo")
 		}
+	}
+
+	// Supersede guard (late): a newer per-show refresh or source switch may
+	// have landed while this fetch was downloading — skip the DB write-back
+	// and remove the just-downloaded files, so the stale fetch leaves no
+	// trace that could render over the newer choice (the newer fetch, queued
+	// on the per-mapping lock, rewrites both).
+	if m.captureIntent(mappingID) != capturedIntent {
+		m.deleteArtworkUnlocked(mappingID)
+		return &FetchResult{Source: source, Found: false}, nil
 	}
 
 	// Store relative paths in DB (relative to artDir).
@@ -303,6 +400,17 @@ type RefreshAllSummary struct {
 func (m *Manager) RefreshAll(ctx context.Context, mappings []models.ShowMapping, defaultSource string, seriesFetcher func(ctx context.Context, sonarrSeriesID int) (*models.SonarrSeries, error)) RefreshAllSummary {
 	summary := RefreshAllSummary{Total: len(mappings), Results: make([]RefreshResult, 0, len(mappings))}
 
+	// Capture each mapping's intent at the snapshot moment: a per-show
+	// refresh or source switch that lands during the run bumps it, and the
+	// per-show fetch for that mapping then skips its write-back instead of
+	// clobbering the newer choice (see fetchAndStore). Capturing here — not
+	// per mapping as the loop reaches it — is what makes the refresh-all the
+	// older intent for every mapping it touches.
+	snapshot := make(map[int64]int64, len(mappings))
+	for _, mapping := range mappings {
+		snapshot[mapping.ID] = m.captureIntent(mapping.ID)
+	}
+
 	for _, mapping := range mappings {
 		select {
 		case <-ctx.Done():
@@ -331,7 +439,7 @@ func (m *Manager) RefreshAll(ctx context.Context, mappings []models.ShowMapping,
 			series.AlternateTitles = append(series.AlternateTitles, models.SonarrAltTitle{Title: mapping.AFLSlug})
 		}
 
-		fr, err := m.FetchAndStore(ctx, mapping.ID, series, source)
+		fr, err := m.fetchAndStore(ctx, mapping.ID, series, source, snapshot[mapping.ID])
 		if err != nil {
 			result.Error = err.Error()
 			summary.Failed++
@@ -348,11 +456,44 @@ func (m *Manager) RefreshAll(ctx context.Context, mappings []models.ShowMapping,
 	return summary
 }
 
-// DeleteArtwork removes all downloaded artwork files for a mapping.
-// Called when a mapping is deleted to prevent orphaned files on disk.
-func (m *Manager) DeleteArtwork(mappingID int64) {
+// deleteArtworkUnlocked removes all downloaded artwork files for a
+// mapping. The caller must hold the per-mapping lock.
+func (m *Manager) deleteArtworkUnlocked(mappingID int64) {
 	dir := filepath.Join(m.artDir, fmt.Sprintf("%d", mappingID))
 	_ = os.RemoveAll(dir)
+}
+
+// DeleteArtwork removes all downloaded artwork files for a mapping.
+// It takes the per-mapping lock so an in-flight fetch for the same mapping
+// cannot resurrect files after the deletion: the fetch either completes
+// before the delete runs (and the delete then removes its output), or it
+// starts after and skips via the mapping-existence check in FetchAndStore.
+// Called when a mapping is deleted to prevent orphaned files on disk.
+func (m *Manager) DeleteArtwork(mappingID int64) {
+	m.lockMapping(mappingID).Lock()
+	defer m.lockMapping(mappingID).Unlock()
+	m.deleteArtworkUnlocked(mappingID)
+}
+
+// ClearArtworkForSonarr removes a mapping's local artwork files and clears
+// its DB file paths, serialized against in-flight fetches via the per-mapping
+// lock. Called when switching a mapping's source to "sonarr" so the frontend
+// falls back to Sonarr image URLs instead of stale downloads — without the
+// lock, an in-flight fetch completing after the switch would re-populate the
+// files and DB paths, silently undoing it.
+func (m *Manager) ClearArtworkForSonarr(ctx context.Context, mappingID int64) error {
+	m.lockMapping(mappingID).Lock()
+	defer m.lockMapping(mappingID).Unlock()
+	return m.clearArtworkForSonarrUnlocked(ctx, mappingID)
+}
+
+// clearArtworkForSonarrUnlocked removes a mapping's local artwork files and
+// clears its DB file paths. The caller must hold the per-mapping lock:
+// ClearArtworkForSonarr acquires it and delegates here, while fetchAndStore
+// calls it directly because it already holds the lock for the same mapping.
+func (m *Manager) clearArtworkForSonarrUnlocked(ctx context.Context, mappingID int64) error {
+	m.deleteArtworkUnlocked(mappingID)
+	return m.db.UpdateArtworkFiles(ctx, mappingID, "", "", "")
 }
 
 // BannerPath returns the on-disk path for a mapping's banner, or "" if none.

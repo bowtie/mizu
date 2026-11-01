@@ -273,21 +273,22 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 
 	err := db.q.UpsertMapping(ctx, sqlcgen.UpsertMappingParams{
 		SonarrSeriesID:   int64(m.SonarrSeriesID),
-		SonarrTitle:      m.SonarrTitle,
-		AflSlug:          m.AFLSlug,
-		AflTitle:         m.AFLTitle,
-		AutoMatched:      boolToInt(m.AutoMatched),
-		MatchConfidence:  m.MatchConfidence,
-		FillerAction:     string(m.FillerAction),
-		MixedAction:      string(m.MixedAction),
-		AnimeCanonAction: string(m.AnimeCanonAction),
-		Enabled:          boolToInt(m.Enabled),
-		StartMode:        string(m.StartMode),
-		WatermarkMode:    string(m.WatermarkMode),
-		SyncWatermark:    int64(m.SyncWatermark),
-		CreatedAt:        now,
-		UpdatedAt:        now,
-	})
+			SonarrTitle:      m.SonarrTitle,
+			AflSlug:          m.AFLSlug,
+			AflTitle:         m.AFLTitle,
+			AutoMatched:      boolToInt(m.AutoMatched),
+			MatchConfidence:  m.MatchConfidence,
+			FillerAction:     string(m.FillerAction),
+			MixedAction:      string(m.MixedAction),
+			AnimeCanonAction: string(m.AnimeCanonAction),
+			Enabled:          boolToInt(m.Enabled),
+			StartMode:        string(m.StartMode),
+			WatermarkMode:    string(m.WatermarkMode),
+			SyncWatermark:    int64(m.SyncWatermark),
+			Overview:         m.Overview,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+		})
 	if err != nil {
 		return err
 	}
@@ -609,6 +610,37 @@ func (db *DB) GetSetting(ctx context.Context, key string) (string, error) {
 		return "", nil
 	}
 	return row.Value, err
+}
+
+// GetAllSettings returns all stored settings in a single query.
+func (db *DB) GetAllSettings(ctx context.Context) (map[string]string, error) {
+	rows, err := db.q.GetAllSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	settings := make(map[string]string, len(rows))
+	for _, r := range rows {
+		settings[r.Key] = r.Value
+	}
+	return settings, nil
+}
+
+// SetSettings upserts all provided settings in a single transaction so a
+// partial failure can't leave the DB with a mix of old and new values.
+func (db *DB) SetSettings(ctx context.Context, values map[string]string) error {
+	tx, err := db.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := db.q.WithTx(tx)
+	for k, v := range values {
+		if err := qtx.SetSetting(ctx, sqlcgen.SetSettingParams{Key: k, Value: v}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (db *DB) SetSetting(ctx context.Context, key, value string) error {

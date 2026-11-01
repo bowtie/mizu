@@ -103,53 +103,65 @@ func main() {
 }
 
 func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Config) {
-	if value, err := db.GetSetting(ctx, "sonarr_url"); err == nil && value != "" {
+	// Load all settings in a single query instead of one round-trip per key.
+	settings, err := db.GetAllSettings(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to load runtime settings; using defaults")
+		return
+	}
+
+	// Keys gated on non-empty values skip when absent, matching the old
+	// per-key GetSetting behavior (absent rows returned "" and were skipped).
+	// Always-apply keys (API keys, topics) skip when the row is entirely
+	// missing, which is strictly safer than the old behavior of clobbering
+	// config.Load() defaults with "" on a fresh database.
+	if value, ok := settings["sonarr_url"]; ok && value != "" {
 		cfg.SonarrURL = strings.TrimRight(value, "/")
 	}
-	if value, err := db.GetSetting(ctx, "sonarr_api_key"); err == nil {
+	if value, ok := settings["sonarr_api_key"]; ok {
 		cfg.SonarrAPIKey = value
 	}
-	if value, err := db.GetSetting(ctx, "default_filler_action"); err == nil && value != "" {
+	if value, ok := settings["default_filler_action"]; ok && value != "" {
 		cfg.DefaultFillerAction = config.FillerAction(value)
 	}
-	if value, err := db.GetSetting(ctx, "default_mixed_canon_action"); err == nil && value != "" {
+	if value, ok := settings["default_mixed_canon_action"]; ok && value != "" {
 		cfg.DefaultMixedCanonAction = config.FillerAction(value)
 	}
-	if value, err := db.GetSetting(ctx, "default_anime_canon_action"); err == nil && value != "" {
+	if value, ok := settings["default_anime_canon_action"]; ok && value != "" {
 		cfg.DefaultAnimeCanonAction = config.FillerAction(value)
 	}
-	if value, err := db.GetSetting(ctx, "sync_interval"); err == nil && value != "" {
+	if value, ok := settings["sync_interval"]; ok && value != "" {
 		if _, d, parseErr := normalizeScanInterval(value); parseErr == nil {
 			cfg.ScanInterval = d
 		}
 	}
-	if value, err := db.GetSetting(ctx, "sonarr_add_root_folder"); err == nil {
+	if value, ok := settings["sonarr_add_root_folder"]; ok {
 		cfg.SonarrAddRootFolder = value
 	}
-	if value, err := db.GetSetting(ctx, "sonarr_add_quality_profile_id"); err == nil && value != "" {
+	if value, ok := settings["sonarr_add_quality_profile_id"]; ok && value != "" {
 		if id, parseErr := strconv.Atoi(value); parseErr == nil {
 			cfg.SonarrAddQualityProfileID = id
 		}
 	}
-	if value, err := db.GetSetting(ctx, "sonarr_add_monitor_mode"); err == nil && value != "" {
+	if value, ok := settings["sonarr_add_monitor_mode"]; ok && value != "" {
 		cfg.SonarrAddMonitorMode = value
 	}
-	if value, err := db.GetSetting(ctx, "sonarr_add_season_folder"); err == nil && value != "" {
+	if value, ok := settings["sonarr_add_season_folder"]; ok && value != "" {
 		cfg.SonarrAddSeasonFolder = value == "true"
 	}
-	if value, err := db.GetSetting(ctx, "ntfy_enabled"); err == nil && value != "" {
+	if value, ok := settings["ntfy_enabled"]; ok && value != "" {
 		cfg.NtfyEnabled = value == "true"
 	}
-	if value, err := db.GetSetting(ctx, "ntfy_server_url"); err == nil && value != "" {
+	if value, ok := settings["ntfy_server_url"]; ok && value != "" {
 		cfg.NtfyServerURL = strings.TrimRight(value, "/")
 	}
-	if value, err := db.GetSetting(ctx, "ntfy_topic"); err == nil {
+	if value, ok := settings["ntfy_topic"]; ok {
 		cfg.NtfyTopic = value
 	}
-	if value, err := db.GetSetting(ctx, "ntfy_token"); err == nil {
+	if value, ok := settings["ntfy_token"]; ok {
 		cfg.NtfyToken = value
 	}
-	if value, err := db.GetSetting(ctx, "artwork_default_source"); err == nil && value != "" {
+	if value, ok := settings["artwork_default_source"]; ok && value != "" {
 		// Migrate legacy "auto" to "sonarr".
 		if value == "auto" {
 			value = "sonarr"
@@ -159,13 +171,13 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		}
 		cfg.ArtworkDefaultSource = value
 	}
-	if value, err := db.GetSetting(ctx, "tmdb_api_key"); err == nil {
+	if value, ok := settings["tmdb_api_key"]; ok {
 		cfg.TMDBAPIKey = value
 	}
-	if value, err := db.GetSetting(ctx, "fanart_api_key"); err == nil {
+	if value, ok := settings["fanart_api_key"]; ok {
 		cfg.FanartAPIKey = value
 	}
-	if value, err := db.GetSetting(ctx, "ui_sounds_enabled"); err == nil && value != "" {
+	if value, ok := settings["ui_sounds_enabled"]; ok && value != "" {
 		cfg.UISoundsEnabled = value == "true"
 	}
 }

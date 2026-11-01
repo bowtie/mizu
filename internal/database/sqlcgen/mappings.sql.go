@@ -242,8 +242,9 @@ const upsertMapping = `-- name: UpsertMapping :exec
 INSERT INTO show_mappings (
     sonarr_series_id, sonarr_title, afl_slug, afl_title,
     auto_matched, match_confidence, filler_action, mixed_action,
-    anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
+    overview, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(sonarr_series_id) DO UPDATE SET
     sonarr_title = excluded.sonarr_title,
     afl_slug = excluded.afl_slug,
@@ -257,6 +258,7 @@ ON CONFLICT(sonarr_series_id) DO UPDATE SET
     start_mode = excluded.start_mode,
     watermark_mode = excluded.watermark_mode,
     sync_watermark = excluded.sync_watermark,
+    overview = excluded.overview,
     updated_at = excluded.updated_at
 `
 
@@ -274,6 +276,7 @@ type UpsertMappingParams struct {
 	StartMode        string
 	WatermarkMode    string
 	SyncWatermark    int64
+	Overview         string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
@@ -293,6 +296,7 @@ func (q *Queries) UpsertMapping(ctx context.Context, arg UpsertMappingParams) er
 		arg.StartMode,
 		arg.WatermarkMode,
 		arg.SyncWatermark,
+		arg.Overview,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)

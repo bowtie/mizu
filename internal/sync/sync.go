@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -28,7 +29,19 @@ type Engine struct {
 	notifier *notifier.Notifier
 	running  atomic.Bool
 	mu       sync.RWMutex
+
+	// epochMu guards mappingEpochs. A per-mapping epoch is bumped by
+	// user-facing writes (monitor toggles, mapping edits) so an in-flight
+	// sync can detect that its snapshot predates the edit and skip its
+	// stale write-backs for that mapping instead of reverting the edit.
+	epochMu       sync.Mutex
+	mappingEpochs map[int64]int64
 }
+
+// errModifiedDuringSync is returned by processSeries when a user write for
+// the mapping landed after the sync snapshotted it, so the sync's stale
+// write-backs are skipped rather than reverting the user's edit.
+var errModifiedDuringSync = errors.New("mapping modified during sync")
 
 type processSeriesResult struct {
 	EpisodesSeen     int
@@ -42,11 +55,12 @@ type processSeriesResult struct {
 
 func New(cfg *config.Config, db *database.DB) *Engine {
 	e := &Engine{
-		cfg:     cfg,
-		db:      db,
-		sonarr:  sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, cfg.RequestTimeout),
-		scraper: scraper.New(cfg.RequestTimeout, cfg.RateLimitDelay, db),
-		matcher: matcherpkg.New(0.82),
+		cfg:           cfg,
+		db:            db,
+		sonarr:        sonarr.New(cfg.SonarrURL, cfg.SonarrAPIKey, cfg.RequestTimeout),
+		scraper:       scraper.New(cfg.RequestTimeout, cfg.RateLimitDelay, db),
+		matcher:       matcherpkg.New(0.82),
+		mappingEpochs: make(map[int64]int64),
 	}
 	if cfg.NtfyEnabled {
 		e.notifier = notifier.New(cfg.NtfyServerURL, cfg.NtfyTopic, cfg.NtfyToken)
@@ -67,6 +81,32 @@ func (e *Engine) IsRunning() bool                    { return e.running.Load() }
 // SetRunning is a test helper to force the running flag. Production code
 // should use CompareAndSwap via RunSync/RunResync instead.
 func (e *Engine) SetRunning(v bool) { e.running.Store(v) }
+
+// BumpMappingEpoch records a user-initiated change to a mapping. Called by
+// handlers that persist a user write (episode monitor toggles, mapping edits)
+// so an in-flight sync — which snapshotted the mapping before the edit — skips
+// its stale write-backs for it instead of reverting the edit.
+func (e *Engine) BumpMappingEpoch(mappingID int64) {
+	e.epochMu.Lock()
+	e.mappingEpochs[mappingID]++
+	e.epochMu.Unlock()
+}
+
+// CaptureMappingEpoch returns the mapping's current epoch. The sync captures
+// it when it snapshots the mapping, then compares before any write-back.
+func (e *Engine) CaptureMappingEpoch(mappingID int64) int64 {
+	e.epochMu.Lock()
+	defer e.epochMu.Unlock()
+	return e.mappingEpochs[mappingID]
+}
+
+// mappingModifiedSinceSnapshot reports whether a user write landed for the
+// mapping after the sync captured its epoch. epochs is nil for callers that
+// don't participate in the guard.
+func (e *Engine) mappingModifiedSinceSnapshot(mappingID int64, epochs map[int64]int64) bool {
+	captured, ok := epochs[mappingID]
+	return ok && e.CaptureMappingEpoch(mappingID) != captured
+}
 
 // sonarrClient returns the current Sonarr client under a read lock.
 func (e *Engine) sonarrClient() *sonarr.Client {
@@ -147,10 +187,18 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 		return nil
 	}
 
+	// Capture the per-mapping epoch at snapshot time: any user write that
+	// lands later in the run bumps it, and processSeries then skips its
+	// stale write-backs for that mapping (see errModifiedDuringSync).
+	epochs := make(map[int64]int64, len(enabledMappings))
+	for _, m := range enabledMappings {
+		epochs[m.ID] = e.CaptureMappingEpoch(m.ID)
+	}
+
 	// Process mappings concurrently with a small worker pool. The scraper's
 	// rate limiter ensures AFL requests stay spaced out, while Sonarr API
 	// calls overlap — cutting wall-clock time roughly 3x for large libraries.
-	results := e.processMappingsConcurrent(ctx, enabledMappings)
+	results := e.processMappingsConcurrent(ctx, enabledMappings, epochs)
 
 	showsProcessed := 0
 	episodesUpdated := 0
@@ -158,6 +206,16 @@ func (e *Engine) RunSync(ctx context.Context, trigger string) error {
 	var totalFiller, totalMixedCanon, totalAnimeCanon int
 	runItems := make([]models.SyncLogItem, 0, len(enabledMappings))
 	for _, res := range results {
+		if res.skipped {
+			log.Info().Str("series", res.mapping.SonarrTitle).Msg("sync skipped: mapping modified during run")
+			runItems = append(runItems, models.SyncLogItem{
+				MappingID:   res.mapping.ID,
+				SonarrTitle: res.mapping.SonarrTitle,
+				Status:      "skipped",
+				Summary:     "Skipped — modified during sync",
+			})
+			continue
+		}
 		if res.fetchErr != nil {
 			errMsg := fmt.Sprintf("failed to fetch Sonarr series %d (%s): %v", res.mapping.SonarrSeriesID, res.mapping.SonarrTitle, res.fetchErr)
 			log.Error().Err(res.fetchErr).Msg(errMsg)
@@ -239,6 +297,7 @@ type mappingResult struct {
 	result   processSeriesResult
 	fetchErr error
 	procErr  error
+	skipped  bool // user wrote to the mapping mid-run; write-backs were skipped
 }
 
 // processMappingsConcurrent runs mappings through a worker pool. The worker
@@ -246,7 +305,7 @@ type mappingResult struct {
 // main latency source) while keeping AFL scraper concurrency at 1 (the rate
 // limiter serializes those anyway). Results are returned in input order so
 // sync log items are deterministic.
-func (e *Engine) processMappingsConcurrent(ctx context.Context, mappings []models.ShowMapping) []mappingResult {
+func (e *Engine) processMappingsConcurrent(ctx context.Context, mappings []models.ShowMapping, epochs map[int64]int64) []mappingResult {
 	const maxWorkers = 3
 	results := make([]mappingResult, len(mappings))
 
@@ -271,7 +330,12 @@ func (e *Engine) processMappingsConcurrent(ctx context.Context, mappings []model
 				continue
 			}
 			res.series = series
-			procResult, err := e.processSeries(ctx, *series, &mappings[idx], false)
+			procResult, err := e.processSeries(ctx, *series, &mappings[idx], false, epochs)
+			if errors.Is(err, errModifiedDuringSync) {
+				res.skipped = true
+				results[idx] = res
+				continue
+			}
 			res.result = procResult
 			res.procErr = err
 			results[idx] = res
@@ -308,6 +372,11 @@ func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
 		return fmt.Errorf("sonarr API key not configured")
 	}
 
+	// Capture the epoch before reading so a write landing after this point
+	// bumps it and is detected by processSeries's guards — a write between
+	// the read and the capture would otherwise be absorbed into the snapshot.
+	epochs := map[int64]int64{mappingID: e.CaptureMappingEpoch(mappingID)}
+
 	mapping, err := e.db.GetMappingByID(ctx, mappingID)
 	if err != nil || mapping == nil {
 		return fmt.Errorf("mapping not found")
@@ -318,7 +387,11 @@ func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
 		return fmt.Errorf("fetching Sonarr series: %w", err)
 	}
 
-	result, err := e.processSeries(ctx, *series, mapping, true)
+	result, err := e.processSeries(ctx, *series, mapping, true, epochs)
+	if errors.Is(err, errModifiedDuringSync) {
+		log.Info().Str("series", mapping.SonarrTitle).Msg("resync skipped: mapping modified during run")
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("processing series: %w", err)
 	}
@@ -369,6 +442,13 @@ func (e *Engine) AutoMatchSeries(ctx context.Context, seriesID int) (*models.Sho
 }
 
 func (e *Engine) HydrateMapping(ctx context.Context, mappingID int64) (*models.ShowMapping, error) {
+	// Capture the epoch before reading so a write landing after this point
+	// bumps it and is detected by processSeries's guards — a write between
+	// the read and the capture would otherwise be absorbed into the snapshot.
+	// The caller's own edit (if any) bumped before HydrateMapping was called,
+	// so this hydrate's own write-backs are still not skipped.
+	epochs := map[int64]int64{mappingID: e.CaptureMappingEpoch(mappingID)}
+
 	mapping, err := e.db.GetMappingByID(ctx, mappingID)
 	if err != nil {
 		return nil, fmt.Errorf("loading mapping: %w", err)
@@ -382,20 +462,37 @@ func (e *Engine) HydrateMapping(ctx context.Context, mappingID int64) (*models.S
 		return nil, fmt.Errorf("fetching Sonarr series: %w", err)
 	}
 
-	if _, err := e.processSeries(ctx, *series, mapping, false); err != nil {
+	if _, err := e.processSeries(ctx, *series, mapping, false, epochs); err != nil {
+		if errors.Is(err, errModifiedDuringSync) {
+			// A newer user write superseded this hydrate; return the mapping
+			// as-is — the user's own handler re-hydrates with fresh state.
+			return e.db.GetMappingByID(ctx, mappingID)
+		}
 		return nil, err
 	}
 
 	return e.db.GetMappingByID(ctx, mappingID)
 }
 
-func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, mapping *models.ShowMapping, resyncAll bool) (processSeriesResult, error) {
+func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, mapping *models.ShowMapping, resyncAll bool, epochs map[int64]int64) (processSeriesResult, error) {
 	mapping.StartMode = normalizeStartMode(mapping.StartMode)
 	mapping.WatermarkMode = normalizeWatermarkMode(mapping.WatermarkMode, mapping.StartMode)
+
+	// Supersede guard (early): a user write may have landed after the sync
+	// snapshotted this mapping — skip the expensive fetches entirely.
+	if e.mappingModifiedSinceSnapshot(mapping.ID, epochs) {
+		return processSeriesResult{}, errModifiedDuringSync
+	}
 
 	aflTitle, aflEpisodes, err := e.scraper.GetShowEpisodes(ctx, mapping.AFLSlug)
 	if err != nil {
 		return processSeriesResult{}, fmt.Errorf("fetching AFL episodes: %w", err)
+	}
+
+	// Supersede guard (late): a user write may have landed while the fetches
+	// were in flight. Check again right before the first write-back.
+	if e.mappingModifiedSinceSnapshot(mapping.ID, epochs) {
+		return processSeriesResult{}, errModifiedDuringSync
 	}
 
 	if mapping.AFLTitle == "" && aflTitle != "" {
@@ -419,6 +516,14 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 	sonarrEpisodes, err := e.sonarrClient().GetEpisodes(ctx, series.ID)
 	if err != nil {
 		return processSeriesResult{}, fmt.Errorf("fetching Sonarr episodes: %w", err)
+	}
+
+	// Supersede guard (post-fetch): a user write may have landed while the
+	// Sonarr episode fetch was in flight. Check again before the watermark
+	// and episode write-backs so a stale auto-watermark or monitor list
+	// computed from the snapshot can't clobber it.
+	if e.mappingModifiedSinceSnapshot(mapping.ID, epochs) {
+		return processSeriesResult{}, errModifiedDuringSync
 	}
 
 	watermarkChanged, effectiveWatermark := e.refreshWatermark(ctx, mapping, sonarrEpisodes)
@@ -537,6 +642,13 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		} else if monitorSet[dbEpisodes[i].SonarrEpisodeID] {
 			dbEpisodes[i].Monitored = true
 		}
+	}
+
+	// Supersede guard (pre-write): a user write may have landed during the
+	// watermark refresh or the episode loop — skip the episode-table rewrite
+	// and the Sonarr bulk apply so the newer state is never reverted.
+	if e.mappingModifiedSinceSnapshot(mapping.ID, epochs) {
+		return processSeriesResult{}, errModifiedDuringSync
 	}
 
 	if err := e.db.ReplaceEpisodesForMapping(ctx, mapping.ID, dbEpisodes); err != nil {
@@ -992,12 +1104,6 @@ func (e *Engine) autoMatch(ctx context.Context, series models.SonarrSeries, best
 
 	if err := e.db.UpsertMapping(ctx, mapping); err != nil {
 		return nil, fmt.Errorf("saving auto-match: %w", err)
-	}
-	// UpsertMapping doesn't persist overview — save it separately.
-	if series.Overview != "" && mapping.ID != 0 {
-		if err := e.db.UpdateOverview(ctx, mapping.ID, series.Overview); err != nil {
-			log.Warn().Err(err).Int64("mapping_id", mapping.ID).Msg("failed to save overview on auto-match")
-		}
 	}
 	return mapping, nil
 }

@@ -36,6 +36,16 @@ import {
 
 const PAGE_SIZE = 8;
 
+// Sync-polling cadence for the Activity page. While the latest sync log is
+// "running", poll every 2s for the first ACTIVITY_FAST_POLL_ATTEMPTS polls,
+// then fall back to a slow 30s watchdog so a long or hung sync keeps being
+// tracked — the page never freezes on a stale "Running" log — without
+// runaway polling.
+const ACTIVITY_POLL_FIRST_DELAY_MS = 1800;
+const ACTIVITY_POLL_INTERVAL_MS = 2000;
+const ACTIVITY_FAST_POLL_ATTEMPTS = 150; // ≈ 5 minutes at the 2s cadence
+const ACTIVITY_SLOW_POLL_INTERVAL_MS = 30_000;
+
 function statusIcon(status: string | undefined | null) {
   switch (status) {
     case "success":
@@ -80,6 +90,7 @@ export function ActivityPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollChainId = useRef(0);
   const isInitialLoad = useRef(true);
   const isMounted = useRef(true);
   const logsRef = useRef<SyncLog[]>([]);
@@ -142,27 +153,65 @@ export function ActivityPage() {
   }, []);
 
   useEffect(() => {
+    // StrictMode in dev mounts, cleans up, and mounts again; the cleanup
+    // below sets isMounted=false, so reset it here or polling would bail
+    // forever after the simulated unmount.
+    isMounted.current = true;
     return () => {
       isMounted.current = false;
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, []);
 
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     if (pollTimer.current) clearTimeout(pollTimer.current);
+    // Supersede any earlier chain: a poll that is mid-flight when a newer
+    // startPolling runs (e.g. the focus handler while a poll is in the
+    // network await) must not keep rescheduling itself alongside the new
+    // chain — clearing the pending timer can't stop an in-flight poll.
+    const chainId = ++pollChainId.current;
     let attempts = 0;
     const poll = async () => {
       if (!isMounted.current) return;
       attempts++;
       await loadActivity(true);
       if (!isMounted.current) return;
+      if (pollChainId.current !== chainId) return; // superseded by a newer chain
       const hasRunning = logsRef.current.some((l) => l.status === "running");
-      if (hasRunning && attempts < 20) {
-        pollTimer.current = setTimeout(poll, 2000);
+      // Stop once the sync reaches a terminal state (success/partial/failed).
+      if (!hasRunning) return;
+      // Fast 2s cadence for the first ACTIVITY_FAST_POLL_ATTEMPTS polls, then
+      // a slow 30s watchdog — bounded and cheap, but the page never freezes
+      // on a stale "Running" log even for a very long or hung sync.
+      const delay =
+        attempts <= ACTIVITY_FAST_POLL_ATTEMPTS
+          ? ACTIVITY_POLL_INTERVAL_MS
+          : ACTIVITY_SLOW_POLL_INTERVAL_MS;
+      pollTimer.current = setTimeout(poll, delay);
+    };
+    pollTimer.current = setTimeout(poll, ACTIVITY_POLL_FIRST_DELAY_MS);
+  }, [loadActivity]);
+
+  // Refresh when the tab regains focus/visibility: browsers throttle
+  // background timers, and a scheduled sync may have started (or a manual
+  // sync finished) while the page was hidden — reload immediately and
+  // resume polling if a sync is still running.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!isMounted.current) return;
+      if (document.visibilityState !== "visible") return;
+      void loadActivity(true);
+      if (logsRef.current.some((l) => l.status === "running")) {
+        startPolling();
       }
     };
-    pollTimer.current = setTimeout(poll, 1800);
-  };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadActivity, startPolling]);
 
   const handleSync = async () => {
     setSyncing(true);

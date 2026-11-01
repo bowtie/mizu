@@ -545,14 +545,6 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			return
 		}
 
-		// UpsertMapping doesn't persist the overview column (it's not in
-		// the sqlc query), so save it separately if we have one.
-		if sonarrOverview != "" {
-			if err := db.UpdateOverview(r.Context(), mapping.ID, sonarrOverview); err != nil {
-				log.Warn().Err(err).Int64("mapping_id", mapping.ID).Msg("failed to save overview on creation")
-			}
-		}
-
 		storedMapping, err := db.GetMappingBySonarrID(r.Context(), req.SonarrSeriesID)
 		if err != nil || storedMapping == nil {
 			writeError(w, http.StatusInternalServerError, "failed to load saved mapping")
@@ -715,6 +707,12 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 			mapping.WatermarkMode = models.WatermarkModeManual
 		}
 
+		// Mark the mapping user-modified so an in-flight sync skips its stale
+		// write-backs (watermark, episodes, monitor changes) instead of
+		// reverting this edit.
+		if syncEngine != nil {
+			syncEngine.BumpMappingEpoch(id)
+		}
 		if err := db.UpsertMapping(r.Context(), mapping); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to update mapping: "+err.Error())
 			return
@@ -934,12 +932,19 @@ func handleSetEpisodeMonitor(db *database.DB, syncEngine *sync.Engine, epCache *
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
+		id, idErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		// Mark the mapping user-modified before the Sonarr write so an
+		// in-flight sync skips its stale write-backs instead of reverting
+		// this toggle.
+		if syncEngine != nil && idErr == nil {
+			syncEngine.BumpMappingEpoch(id)
+		}
 		if err := syncEngine.SonarrClient().SetEpisodeMonitored(r.Context(), epID, req.Monitored); err != nil {
 			writeError(w, http.StatusBadGateway, "failed to update episode in Sonarr: "+err.Error())
 			return
 		}
 		// Update the local DB so the change persists beyond cache invalidation
-		if id, idErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64); idErr == nil {
+		if idErr == nil {
 			_ = db.UpdateEpisodeMonitor(r.Context(), id, int64(epID), req.Monitored)
 			epCache.invalidate(id)
 		}
@@ -1294,10 +1299,13 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		cfg.Unlock()
 
 		// Persist to DB outside the config lock so concurrent readers aren't blocked.
-		for k, v := range settingsSnapshot {
-			if err := db.SetSetting(r.Context(), k, v); err != nil {
-				log.Warn().Err(err).Str("key", k).Msg("failed to persist setting")
-			}
+		// All settings are written in a single transaction — a partial failure
+		// can't leave the DB with a mix of old and new values. Report the failure
+		// so the UI doesn't show a false "Saved" when the DB write didn't stick.
+		if err := db.SetSettings(r.Context(), settingsSnapshot); err != nil {
+			log.Error().Err(err).Msg("failed to persist settings")
+			writeError(w, http.StatusInternalServerError, "failed to persist settings: "+err.Error())
+			return
 		}
 
 		// Recreate Sonarr and ntfy clients with updated config
@@ -2172,6 +2180,10 @@ func handleRefreshArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Mana
 			return
 		}
 
+		// Record newer intent so an in-flight refresh-all skips its stale
+		// write-back for this mapping instead of clobbering this refresh.
+		mgr.BumpIntent(id)
+
 		// Determine source: query param > per-show override > global default
 		source := r.URL.Query().Get("source")
 		cfg.RLock()
@@ -2304,11 +2316,15 @@ func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerF
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		// Record newer intent so an in-flight refresh-all skips its stale
+		// write-back for this mapping instead of undoing the switch.
+		mgr.BumpIntent(id)
 		// When switching to "sonarr", clear local artwork files and DB paths
-		// so the frontend falls back to Sonarr image URLs instead of stale downloads.
+		// so the frontend falls back to Sonarr image URLs instead of stale
+		// downloads. ClearArtworkForSonarr holds the per-mapping lock, so an
+		// in-flight fetch for this mapping can't re-populate them afterwards.
 		if body.Source == "sonarr" {
-			mgr.DeleteArtwork(id)
-			if err := db.UpdateArtworkFiles(r.Context(), id, "", "", ""); err != nil {
+			if err := mgr.ClearArtworkForSonarr(r.Context(), id); err != nil {
 				log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to clear artwork file paths")
 			}
 		}

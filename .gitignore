@@ -33,3 +33,6 @@ web/build/
 /check-*.txt
 REDESIGN_PROMPT.md
 
+# Freebuff desktop app local state
+.freebuff/
+

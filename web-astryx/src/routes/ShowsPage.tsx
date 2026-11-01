@@ -66,6 +66,17 @@ const sortOptions: SelectOption[] = [
   { value: "watermark", label: "Latest progress" },
 ];
 
+// Artwork-refresh completion polling: a fast phase (3s cadence for ~5 min),
+// then a 30s watchdog while the refresh is still running. Status-check
+// errors retry with backoff instead of abandoning the wait, so a transient
+// failure can't end completion tracking early (the old code stopped after a
+// single 8s fallback reload).
+const FAST_POLLS = 100;
+const POLL_INTERVAL = 3000;
+const WATCHDOG_INTERVAL = 30_000;
+const ERROR_BACKOFF_BASE = 3000;
+const ERROR_BACKOFF_CAP = 30_000;
+
 export function ShowsPage() {
   const navigate = useNavigate();
   const addNotification = useNotificationStore((s) => s.addNotification);
@@ -93,6 +104,10 @@ export function ShowsPage() {
   });
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const artworkReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Supersede guard for the artwork-refresh poll chain: bumped on every
+  // (re)start and on unmount, so a poll that wakes after its await can tell
+  // whether it is still the newest chain (focus restarts, re-clicks).
+  const artworkPollChain = useRef(0);
   const [allSeries, setAllSeries] = useState<SonarrSeries[]>([]);
   const [addSeriesLibrary, setAddSeriesLibrary] = useState<SonarrSeries[]>([]);
   const [seriesById, setSeriesById] = useState<Record<string | number, SonarrSeries>>({});
@@ -292,41 +307,103 @@ export function ShowsPage() {
 
   useEffect(() => {
     return () => {
-      if (artworkReloadTimer.current) clearTimeout(artworkReloadTimer.current);
+      // Supersede any in-flight poll so it can't re-schedule after unmount.
+      artworkPollChain.current += 1;
+      if (artworkReloadTimer.current) {
+        clearTimeout(artworkReloadTimer.current);
+        artworkReloadTimer.current = null;
+      }
     };
   }, []);
+
+  // Poll the backend until the refresh reaches a terminal state. Transient
+  // status-check errors retry with backoff (they must not abandon the wait);
+  // a still-running refresh keeps being tracked at the fast cadence and then
+  // a slow watchdog. chainId is the supersede guard: only the newest chain
+  // may continue, so a focus restart or unmount can't leave stale polls alive.
+  const pollArtworkStatus = useCallback(
+    (chainId: number, attempt = 0, backoff = ERROR_BACKOFF_BASE) => {
+      getArtworkRefreshStatus()
+        .then((status) => {
+          if (artworkPollChain.current !== chainId) return;
+          if (!status.refreshing) {
+            artworkReloadTimer.current = null;
+            loadLanding(true)
+              .then(() => {
+                if (artworkPollChain.current !== chainId) return;
+                setArtworkRefreshing(false);
+                addNotification("Artwork refresh complete", "success");
+              })
+              .catch(() => {
+                // Reload failed (rare — invalidateQueries resolves even on
+                // refetch errors) — don't leave the button stuck on
+                // "Refreshing..." or an unhandled rejection.
+                if (artworkPollChain.current !== chainId) return;
+                setArtworkRefreshing(false);
+              });
+            return;
+          }
+          const delay = attempt < FAST_POLLS ? POLL_INTERVAL : WATCHDOG_INTERVAL;
+          artworkReloadTimer.current = setTimeout(
+            () => pollArtworkStatus(chainId, attempt + 1, ERROR_BACKOFF_BASE),
+            delay,
+          );
+        })
+        .catch(() => {
+          if (artworkPollChain.current !== chainId) return;
+          artworkReloadTimer.current = setTimeout(
+            () => pollArtworkStatus(chainId, attempt, Math.min(backoff * 2, ERROR_BACKOFF_CAP)),
+            backoff,
+          );
+        });
+    },
+    [addNotification, loadLanding],
+  );
+
+  // Recovery when the tab regains focus while a refresh is still running:
+  // immediately check status and restart the poll chain (browsers throttle
+  // background timers, so a hidden tab's wait could otherwise lag behind).
+  useEffect(() => {
+    if (!artworkRefreshing) return;
+    const resume = () => {
+      if (artworkReloadTimer.current) {
+        clearTimeout(artworkReloadTimer.current);
+        artworkReloadTimer.current = null;
+      }
+      // Supersede the old chain so a poll mid-flight can't keep rescheduling
+      // itself alongside the fresh one.
+      artworkPollChain.current += 1;
+      pollArtworkStatus(artworkPollChain.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") resume();
+    };
+    window.addEventListener("focus", resume);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", resume);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [artworkRefreshing, pollArtworkStatus]);
 
   const handleRefreshAllArtwork = async () => {
     if (artworkReloadTimer.current) {
       clearTimeout(artworkReloadTimer.current);
       artworkReloadTimer.current = null;
     }
+    // Supersede any in-flight poll chain (e.g. a focus restart).
+    artworkPollChain.current += 1;
+    const chainId = artworkPollChain.current;
     setArtworkRefreshing(true);
     try {
       await refreshAllArtwork();
+      // The chain may have been superseded while the trigger was in flight
+      // (e.g. a focus restart) — only the newest chain schedules polling.
+      if (artworkPollChain.current !== chainId) return;
       addNotification("Artwork refresh triggered — waiting for completion...", "info", 6000);
-      // Poll the backend until the refresh completes, then reload shows.
-      const poll = async () => {
-        try {
-          const status = await getArtworkRefreshStatus();
-          if (!status.refreshing) {
-            artworkReloadTimer.current = null;
-            await loadLanding(true);
-            setArtworkRefreshing(false);
-            addNotification("Artwork refresh complete", "success");
-          } else {
-            artworkReloadTimer.current = setTimeout(poll, 3000);
-          }
-        } catch {
-          // If the status check fails, fall back to a single reload after a delay.
-          artworkReloadTimer.current = setTimeout(() => {
-            artworkReloadTimer.current = null;
-            loadLanding(true).then(() => setArtworkRefreshing(false));
-          }, 8000);
-        }
-      };
-      artworkReloadTimer.current = setTimeout(poll, 3000);
+      artworkReloadTimer.current = setTimeout(() => pollArtworkStatus(chainId), POLL_INTERVAL);
     } catch (err: unknown) {
+      if (artworkPollChain.current !== chainId) return;
       addNotification("Artwork refresh failed: " + errorMessage(err), "error");
       setArtworkRefreshing(false);
     }

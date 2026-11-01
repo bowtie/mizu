@@ -20,6 +20,13 @@ export default defineConfig({
   lint: {},
   test: {
     include: ["src/**/*.test.ts"],
+    // Run the whole suite under happy-dom so component tests can render
+    // DOM without a per-file `@vitest-environment happy-dom` docblock.
+    // The plain lib tests don't touch DOM APIs and pass unchanged under it.
+    // Future node-only tests can opt back out with `@vitest-environment node`.
+    environment: "happy-dom",
+    // Shared per-file setup (sets React 19's IS_REACT_ACT_ENVIRONMENT flag).
+    setupFiles: ["./src/test/setup.ts"],
   },
   plugins: lazyPlugins(() => [
     // Declare CSS layer order so theme overrides beat component base styles.

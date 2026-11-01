@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { StrictMode, useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -32,7 +32,15 @@ import "./lib/flexokiTheme.css";
 import "./fonts.css";
 import "./index.css";
 import { App } from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { themeMetas, defaultTheme, loadThemeCSS, loadThemeDef } from "./lib/themes";
+
+// Key the ErrorBoundary by the current path so navigating to a different
+// route automatically resets a crashed boundary — no manual reload needed.
+function RouteBoundary({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
+}
 import type { DefinedTheme } from "@astryxdesign/core/theme";
 
 // Fire ShowsPage import immediately — it's the landing page and will
@@ -182,6 +190,11 @@ function Root() {
   const [theme, setTheme] = useState<DefinedTheme>(defaultTheme.theme);
   const [themeMode, setThemeMode] = useState<"dark" | "light" | "system">("system");
 
+  // Generation counter for theme loads. Every selection bumps it; a resolution
+  // only applies if it's still the latest selection — otherwise a slower
+  // earlier pick could resolve after a newer one and revert the theme.
+  const themeLoadGen = useRef(0);
+
   // On mount, load the saved theme's definition + CSS if it's a custom
   // theme. The eager theme (flexoki) is available immediately.
   useEffect(() => {
@@ -189,8 +202,10 @@ function Root() {
     if (meta?.mode) setThemeMode(meta.mode);
 
     let cancelled = false;
+    const gen = ++themeLoadGen.current;
     Promise.all([loadThemeDef(themeId), loadThemeCSS(themeId)]).then(([def]) => {
       if (cancelled) return;
+      if (themeLoadGen.current !== gen) return; // superseded by a newer selection
       setTheme(def);
     });
     return () => {
@@ -203,7 +218,9 @@ function Root() {
     setThemeId(id);
     localStorage.setItem(STORAGE_KEY, id);
     if (meta?.mode) setThemeMode(meta.mode);
+    const gen = ++themeLoadGen.current;
     Promise.all([loadThemeDef(id), loadThemeCSS(id)]).then(([def]) => {
+      if (themeLoadGen.current !== gen) return; // superseded by a newer selection
       setTheme(def);
     });
   }, []);
@@ -226,7 +243,9 @@ function Root() {
         <Theme theme={theme} mode={themeMode}>
           <BrowserRouter>
             <AppShell variant="surface" height="auto" topNav={<Nav themeMenu={menu} />}>
-              <App />
+              <RouteBoundary>
+                <App />
+              </RouteBoundary>
             </AppShell>
           </BrowserRouter>
         </Theme>
