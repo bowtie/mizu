@@ -799,3 +799,53 @@
 **What changed:** Updated the mobile SegmentedControl to match the desktop version exactly — same 5 items, same labels with counts, same icons. The SegmentedControl's `layout="fill"` handles the narrower width by distributing space equally.
 
 **Outcome:** Kept. tsc clean. Mobile users now have the same filtering granularity and information as desktop users.
+
+## Iteration D65 — CSS consolidation + reduced-motion completeness
+
+**Target:** `web-astryx/src/index.css` — `.mizu-card-img` duplicate declarations + `prefers-reduced-motion` block
+
+**Problem 1:** `.mizu-card-img` had two separate CSS blocks — one at line 181 (`transition: transform 0.3s ease` + position styles) and another at line 266 (`opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease`). The first block's transition was dead code, overridden by the second. The hover zoom rule (`.mizu-card:hover .mizu-card-img { transform: scale(1.04) }`) was sandwiched between them, separated from the transition it depended on.
+
+**What changed:** Consolidated into a single `.mizu-card-img` block with all properties (position, opacity, transition) followed immediately by the `.is-loaded` state and the `:hover` zoom rule. Removed the duplicate block.
+
+**Problem 2:** Several elements with `transition: border-color 0.2s ease` or `transition: background-color` were missing from the `prefers-reduced-motion` block: `.activity-log-card`, `.season-card`, `.artwork-card`, `.activity-log-summary[role="button"]`, `.save-flash[data-variant="primary"]`. While these are subtle color transitions (not movement), the WCAG reduced-motion preference asks for all motion to be minimized.
+
+**What changed:** Added all five selectors to the existing `transition: none` rule in the reduced-motion block.
+
+**Outcome:** Kept. tsc clean. CSS is more maintainable with no duplicate declarations, and all transitions respect reduced-motion preference.
+
+## Iteration D66 — Fix non-existent --spacing-80 token in wizard list
+
+**Target:** `web-astryx/src/index.css` — `.wizard-list` max-height
+
+**Problem:** `.wizard-list` used `max-height: var(--spacing-80)` but the Astryx spacing scale only goes up to `--spacing-12` (48px). The token `--spacing-80` doesn't exist in any theme or in the Astryx core token definitions. This means `max-height` resolved to nothing — the wizard series list never scrolled, it just grew until the dialog's own `maxHeight="85vh"` kicked in, pushing the footer buttons off-screen.
+
+**What changed:** Replaced `var(--spacing-80)` with `400px` — a reasonable fixed height that allows ~8-10 list items visible before scrolling, fitting comfortably within the 640px dialog with its header and footer.
+
+**Outcome:** Kept. tsc clean. The wizard list now scrolls properly within the dialog instead of overflowing.
+
+## Iteration D67 — Fix non-existent --radius-1 and --radius-2 tokens
+
+**Target:** `web-astryx/src/index.css` — 6 occurrences of `--radius-1` and 1 of `--radius-2`
+
+**Problem:** The CSS used `--radius-1` (4px) and `--radius-2` (8px) tokens that don't exist in the Astryx token system. The actual named tokens are `--radius-inner` (4px), `--radius-element` (8px), `--radius-container` (12px), etc. The `--radius-2` usage had a fallback (`var(--radius-2, 8px)`) so it worked accidentally, but the four `--radius-1` usages had no fallback — they resolved to nothing, meaning those elements had no border-radius.
+
+**Affected elements:** `.season-episode-count` pill, `.wizard-poster-thumb` border, `.wizard-poster-placeholder` border, `.activity-log-summary[role="button"]` focus ring, `.activity-error-row` left border radius.
+
+**What changed:** Replaced all `--radius-1` with `--radius-inner` and `--radius-2` with `--radius-element` — the correct Astryx token names for the same values.
+
+**Outcome:** Kept. tsc clean. All border-radius values now use valid design system tokens. The season episode count pill, wizard poster thumbnails, and activity log summary now have proper rounded corners that were previously missing.
+
+## Iteration D68 — Fix ShowDetailPage centering + hero/content width alignment
+
+**Target:** `web-astryx/src/index.css` — `.section-centered` and `.show-shell`
+
+**Problem 1 (centering):** The `.section-centered` class sets `marginInline: auto` to center Section components, but Astryx's Section component renders StyleX-generated `marginInlineStart` and `marginInlineEnd` properties (for nested padding escape) that override our plain CSS `marginInline: auto`. On pages with no parent container padding to escape, these resolve to `calc(-1 * 0px)` = `0px`, which prevents centering.
+
+**Fix 1:** Added `!important` to `.section-centered { marginInline: auto !important; }` to override the StyleX escape margins. This ensures all page Sections (ShowsPage, ActivityPage, SettingsPage, ShowDetailPage) are properly centered.
+
+**Problem 2 (hero wider than content):** The hero `.show-shell` had `width: 100%; max-width: 900px` — going edge-to-edge within the 900px container. The content Section below has `paddingInline: clamp(12px, 4vw, 32px)` (via `.show-content-padded`), making the actual content ~836px on desktop. The hero image appeared wider than the content below it.
+
+**Fix 2:** Added `padding-inline: clamp(12px, 4vw, 32px)` and `box-sizing: border-box` to `.show-shell`, matching the content's horizontal padding exactly. The hero image is now inset by the same amount as the content text, so both align vertically.
+
+**Outcome:** Kept. tsc clean. All pages should now be properly centered, and the ShowDetailPage hero aligns with the content below it.
