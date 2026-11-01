@@ -56,6 +56,7 @@ type ShowMapping struct {
 	ArtworkPosterPath string        `json:"artwork_poster_path,omitempty"` // relative path to local poster file
 	ArtworkBannerPath string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file
 	ArtworkLogoPath   string        `json:"artwork_logo_path,omitempty"`   // relative path to local logo file
+	Overview          string        `json:"overview,omitempty"`            // series synopsis (cached from Sonarr)
 	CreatedAt         time.Time     `json:"created_at"`
 	UpdatedAt         time.Time     `json:"updated_at"`
 }
@@ -73,6 +74,7 @@ type EpisodeInfo struct {
 	SeasonNumber          int         `json:"season_number,omitempty"`
 	SonarrEpisodeNumber   int         `json:"sonarr_episode_number,omitempty"`
 	AbsoluteEpisodeNumber *int        `json:"absolute_episode_number,omitempty"`
+	AirDate               *time.Time  `json:"air_date,omitempty"`
 	Monitored             bool        `json:"monitored,omitempty"`
 }
 

@@ -763,6 +763,16 @@ body {
   min-width: 0;
 }
 
+.show-hero-titles h1,
+.show-hero-titles [data-role="heading"] {
+  line-height: 1.1;
+  margin: 0;
+}
+
+.show-hero-titles > div:first-child {
+  align-items: center !important;
+}
+
 /* Episode +/- step buttons in InputGroup */
 .episode-step-btn-wrap {
   padding: 0;

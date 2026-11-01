@@ -46,9 +46,7 @@ import {
   getArtworkProviders,
   getArtworkPosterUrl,
   getEpisodes,
-  getSettings,
   getShow,
-  getSonarrSeriesById,
   refreshArtwork,
   setArtworkSource,
   setEpisodeMonitor,
@@ -59,7 +57,6 @@ import type {
   ArtworkProvider,
   Episode,
   SelectOption,
-  Settings,
   Show,
   ShowUpdate,
   SonarrSeries,
@@ -260,19 +257,63 @@ export function ShowDetailPage() {
     return resolveSonarrImageUrl(preferred, settings?.sonarr_url || "");
   }, [show, showId, series, settings?.sonarr_url, artworkVersion]);
 
+  // Fetch show data + episodes in parallel — they're independent and
+  // both keyed off showId from the URL. Settings is no longer needed
+  // here since we removed the Sonarr series fallback fetch.
+  useEffect(() => {
+    if (!showId) return;
+    setLoadingShow(true);
+    setEpisodesLoading(true);
+    setPageSettled(false);
+
+    Promise.all([getShow(showId), getEpisodes(showId)] as const)
+      .then(([showRes, episodesRes]) => {
+        if (!showRes) {
+          addNotification("Anime not found", "error");
+          navigate("/shows");
+          return;
+        }
+
+        setShow(showRes);
+        setSeries(null);
+        setTrackFiller(actionToTracked(showRes.filler_action, false));
+        setTrackMixed(actionToTracked(showRes.mixed_action, true));
+        setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
+        setWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+        setMarkerValue(Math.max(0, showRes.sync_watermark || 0));
+        setPristineFiller(actionToTracked(showRes.filler_action, false));
+        setPristineMixed(actionToTracked(showRes.mixed_action, true));
+        setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
+        setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+        setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
+
+        setEpisodes((episodesRes as Episode[]) || []);
+        setMarkerValue(clampMarkerValue(showRes.sync_watermark || 0));
+        setPristineMarkerValue(clampMarkerValue(showRes.sync_watermark || 0));
+      })
+      .catch((err: unknown) => {
+        addNotification("Failed to load anime: " + errorMessage(err), "error");
+      })
+      .finally(() => {
+        setLoadingShow(false);
+        setEpisodesLoading(false);
+        // Defer enabling the hover-reveal collapse until React has committed
+        // the episode list to the DOM and the browser has painted it.
+        requestAnimationFrame(() => {
+          setTimeout(() => setPageSettled(true), 80);
+        });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showId]);
+
+  // Lightweight reload functions for post-action refreshes (artwork, save, etc.)
   const loadShowData = useCallback(async (): Promise<Show | null> => {
     if (!showId) return null;
-    setLoadingShow(true);
     try {
-      // Fetch show + series (for backdrop image) in parallel so the
-      // page renders with the image already resolved — no pop-in.
       const showRes = await getShow(showId);
-      if (!showRes) {
-        addNotification("Anime not found", "error");
-        navigate("/shows");
-        return null;
-      }
+      if (!showRes) return null;
       setShow(showRes);
+      setSeries(null);
       setTrackFiller(actionToTracked(showRes.filler_action, false));
       setTrackMixed(actionToTracked(showRes.mixed_action, true));
       setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
@@ -283,71 +324,29 @@ export function ShowDetailPage() {
       setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
       setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
       setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-
-      // Await series fetch so backdropUrl is ready on first render
-      if (showRes.sonarr_series_id) {
-        try {
-          const seriesRes = await getSonarrSeriesById(showRes.sonarr_series_id);
-          setSeries(seriesRes);
-        } catch {
-          setSeries(null);
-        }
-      }
       return showRes;
     } catch (err: unknown) {
       addNotification("Failed to load anime: " + errorMessage(err), "error");
       return null;
-    } finally {
-      setLoadingShow(false);
     }
-  }, [showId, addNotification, navigate]);
+  }, [showId, addNotification]);
 
-  // Keep a ref to settings so loadEpisodeData doesn't depend on settings
-  // in its dep array — otherwise setting settings triggers the effect to
-  // re-run and double-fetch episodes.
-  const settingsRef = useRef<Settings | null>(null);
-  settingsRef.current = settings;
-
-  /** Requires an explicit `currentShow` — never falls back to stale closure state. */
   const loadEpisodeData = useCallback(
     async (currentShow: Show) => {
       if (!showId) return;
       setEpisodesLoading(true);
       try {
-        const currentSettings = settingsRef.current;
-        const [settingsRes, episodesRes] = (await Promise.all([
-          currentSettings ? Promise.resolve(currentSettings) : getSettings(),
-          getEpisodes(showId),
-        ])) as [Settings, Episode[]];
-
-        if (!currentSettings) setSettings(settingsRes);
-
-        const episodesList = episodesRes || [];
-        setEpisodes(episodesList);
+        const episodesRes = await getEpisodes(showId);
+        setEpisodes((episodesRes as Episode[]) || []);
         setMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
         setPristineMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
       } catch (err: unknown) {
         addNotification("Failed to load episodes: " + errorMessage(err), "error");
       }
       setEpisodesLoading(false);
-      // Defer enabling the hover-reveal collapse until React has committed
-      // the episode list to the DOM and the browser has painted it.
-      // RAF alone isn't enough for large episode lists (1000+ rows) because
-      // React's async batching may not have flushed by the next frame.
-      // The combination of RAF + a short timeout covers both the paint
-      // cycle and React's commit phase.
-      requestAnimationFrame(() => {
-        setTimeout(() => setPageSettled(true), 80);
-      });
     },
-    [showId, setSettings, addNotification, clampMarkerValue],
+    [showId, addNotification, clampMarkerValue],
   );
-
-  const effectSkipRef = useRef(false);
-
-  useEffect(() => {
-    loadShowData();
-  }, [loadShowData]);
 
   // Load artwork providers list once
   useEffect(() => {
@@ -365,13 +364,6 @@ export function ShowDetailPage() {
     }
     return opts;
   }, [artworkProviders]);
-
-  useEffect(() => {
-    if (!loadingShow && show && !effectSkipRef.current) {
-      loadEpisodeData(show);
-    }
-    effectSkipRef.current = false;
-  }, [loadingShow, show, loadEpisodeData]);
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 600);
@@ -403,14 +395,12 @@ export function ShowDetailPage() {
         // Reload show to get updated artwork paths, then bust browser cache
         const refreshed = await loadShowData();
         if (refreshed) {
-          effectSkipRef.current = true;
           setArtworkVersion((v) => v + 1);
         }
       } else {
         // Source is "sonarr" or provider returned nothing — reload to
         // pick up any cleared paths, and inform the user.
         await loadShowData();
-        effectSkipRef.current = true;
         setArtworkVersion((v) => v + 1);
         addNotification(
           source === "sonarr"
@@ -433,13 +423,11 @@ export function ShowDetailPage() {
 
       if (source === "" ) {
         await loadShowData();
-        effectSkipRef.current = true;
         setArtworkVersion((v) => v + 1);
         addNotification("Using global default artwork source", "info");
       } else if (source === "sonarr") {
         // Reload show to reflect cleared local paths, then bust cache.
         await loadShowData();
-        effectSkipRef.current = true;
         setArtworkVersion((v) => v + 1);
         addNotification("Switched to Sonarr images", "info");
       } else {
@@ -448,7 +436,6 @@ export function ShowDetailPage() {
         const result = await refreshArtwork(showId, source);
         const refreshed = await loadShowData();
         if (refreshed) {
-          effectSkipRef.current = true;
           setArtworkVersion((v) => v + 1);
         }
         if (result.found) {
@@ -483,7 +470,6 @@ export function ShowDetailPage() {
       savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
       const refreshedShow = await loadShowData();
       if (refreshedShow) {
-        effectSkipRef.current = true;
         await loadEpisodeData(refreshedShow);
       }
     } catch (err: unknown) {
@@ -577,22 +563,22 @@ export function ShowDetailPage() {
             <div className="show-hero-content">
               <VStack gap={4}>
                 <VStack gap={1} className="show-hero-titles">
-                  <Heading level={1}>
-                    {show.sonarr_title}
-                  </Heading>
-                  {!episodesLoading && (
-                    <Text type="supporting" color="secondary" hasTabularNumbers display="block">
-                      {`${episodes.length} episodes · from ep ${show.sync_watermark > 0 ? show.sync_watermark : 0}`}
-                    </Text>
-                  )}
-                  {series?.overview && (
+                  <HStack gap={3} align="center" wrap="wrap">
+                    <Heading level={1}>
+                      {show.sonarr_title}
+                    </Heading>
+                    {!episodesLoading && (
+                      <Badge variant="gray" label={`${episodes.length} episodes`} />
+                    )}
+                  </HStack>
+                  {show.overview && (
                     <Text
                       type="supporting"
                       color="secondary"
                       display="block"
                       className="show-hero-overview"
                     >
-                      {series.overview}
+                      {show.overview}
                     </Text>
                   )}
                 </VStack>
@@ -875,11 +861,12 @@ export function ShowDetailPage() {
                             const monitored = episodeMonitored(ep);
                             const key = epSyncKey(group.season, ep);
                             const isSyncing = syncingEps[key];
+                            const airDate = ep.air_date ? new Date(ep.air_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : null;
                             return (
                               <ListItem
                                 key={`${group.season}-${displayEpisodeNumber(ep)}`}
                                 label={ep.title || "—"}
-                                description={`Episode ${displayEpisodeNumber(ep)}`}
+                                description={`Episode ${displayEpisodeNumber(ep)}${airDate ? ` · ${airDate}` : ""}`}
                                 endContent={
                                   <HStack gap={4} align="center">
                                     <Badge

@@ -70,6 +70,7 @@ export interface Show {
   artwork_poster_path?: string;
   artwork_banner_path?: string;
   artwork_logo_path?: string;
+  overview?: string;
   poster?: string;
   sync_watermark: number;
   enabled: boolean;
@@ -105,6 +106,7 @@ export interface Episode {
   title?: string;
   type?: string;
   monitored?: boolean;
+  air_date?: string;
   [key: string]: unknown;
 }
 

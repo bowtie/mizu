@@ -405,6 +405,14 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 
+	// Backfill overview if missing (older mappings created before the column existed)
+	if mapping.Overview == "" && series.Overview != "" {
+		mapping.Overview = series.Overview
+		if uerr := e.db.UpdateOverview(ctx, mapping.ID, series.Overview); uerr != nil {
+			log.Warn().Err(uerr).Msg("failed to backfill overview")
+		}
+	}
+
 	aflByNumber, aflPreferred := BuildAFLEpisodeLookup(aflEpisodes)
 	coverageMax := AFLCoverageMaxEpisodeNumber(aflEpisodes)
 
@@ -450,6 +458,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 
 		if !isSpecialSeason(ep.SeasonNumber) {
+			airDate := ep.AirDateUTC
 			dbEpisodes = append(dbEpisodes, models.EpisodeInfo{
 				MappingID:             mapping.ID,
 				EpisodeNum:            aflNum,
@@ -459,6 +468,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 				SeasonNumber:          ep.SeasonNumber,
 				SonarrEpisodeNumber:   ep.EpisodeNumber,
 				AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
+				AirDate:               &airDate,
 				Monitored:             ep.Monitored,
 			})
 		}
@@ -878,6 +888,7 @@ func (e *Engine) autoMatch(ctx context.Context, series models.SonarrSeries, best
 	mapping := &models.ShowMapping{
 		SonarrSeriesID:   series.ID,
 		SonarrTitle:      series.Title,
+		Overview:         series.Overview,
 		AFLSlug:          bestMatch.AFLShow.Slug,
 		AFLTitle:         bestMatch.AFLShow.Title,
 		AutoMatched:      true,

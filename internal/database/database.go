@@ -82,6 +82,7 @@ func (db *DB) migrate() error {
 			sonarr_episode_number INTEGER NOT NULL DEFAULT 0,
 			absolute_episode_number INTEGER,
 			monitored INTEGER NOT NULL DEFAULT 0,
+			air_date DATETIME,
 			FOREIGN KEY (mapping_id) REFERENCES show_mappings(id) ON DELETE CASCADE,
 			UNIQUE(mapping_id, episode_num)
 		)`,
@@ -148,10 +149,12 @@ func (db *DB) migrate() error {
 		"ALTER TABLE episode_info ADD COLUMN sonarr_episode_number INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE episode_info ADD COLUMN absolute_episode_number INTEGER",
 		"ALTER TABLE episode_info ADD COLUMN monitored INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE episode_info ADD COLUMN air_date DATETIME",
 		"ALTER TABLE show_mappings ADD COLUMN artwork_source TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE show_mappings ADD COLUMN artwork_poster_path TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE show_mappings ADD COLUMN artwork_banner_path TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE show_mappings ADD COLUMN artwork_logo_path TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE show_mappings ADD COLUMN overview TEXT NOT NULL DEFAULT ''",
 	} {
 		db.conn.Exec(alterSQL)
 	}
@@ -171,6 +174,19 @@ func (db *DB) migrate() error {
 	// mappings fall back to the global default.
 	db.conn.Exec("UPDATE show_mappings SET artwork_source = '' WHERE artwork_source = 'auto'")
 
+	// One-time backfill: copy overview from sonarr_series_cache into
+	// show_mappings for existing shows that predate the overview column.
+	// The cache stores the full SonarrSeries as JSON; we extract overview
+	// with json_extract (available in SQLite >= 3.38).
+	db.conn.Exec(`
+		UPDATE show_mappings
+		SET overview = json_extract(c.data_json, '$.overview')
+		FROM sonarr_series_cache c
+		WHERE show_mappings.sonarr_series_id = c.series_id
+		  AND show_mappings.overview = ''
+		  AND json_extract(c.data_json, '$.overview') IS NOT NULL
+		  AND json_extract(c.data_json, '$.overview') != ''`)
+
 	return nil
 }
 
@@ -180,7 +196,7 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
 		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-		       created_at, updated_at
+		       overview, created_at, updated_at
 		FROM show_mappings ORDER BY sonarr_title ASC`)
 	if err != nil {
 		return nil, err
@@ -195,7 +211,7 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 			&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 			&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
 			&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
-			&m.CreatedAt, &m.UpdatedAt,
+			&m.Overview, &m.CreatedAt, &m.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -212,13 +228,13 @@ func (db *DB) GetMappingByID(ctx context.Context, id int64) (*models.ShowMapping
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
 		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-		       created_at, updated_at
+		       overview, created_at, updated_at
 		FROM show_mappings WHERE id = ?`, id).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
 		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
-		&m.CreatedAt, &m.UpdatedAt,
+		&m.Overview, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -237,13 +253,13 @@ func (db *DB) GetMappingBySonarrID(ctx context.Context, seriesID int) (*models.S
 		       auto_matched, match_confidence, filler_action, mixed_action,
 		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
 		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-		       created_at, updated_at
+		       overview, created_at, updated_at
 		FROM show_mappings WHERE sonarr_series_id = ?`, seriesID).Scan(
 		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
 		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
 		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
 		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
-		&m.CreatedAt, &m.UpdatedAt,
+		&m.Overview, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -334,6 +350,15 @@ func (db *DB) UpdateArtworkSource(ctx context.Context, mappingID int64, source s
 	return err
 }
 
+// UpdateOverview caches the series synopsis on the mapping so the frontend
+// doesn't need a separate Sonarr API call to display it.
+func (db *DB) UpdateOverview(ctx context.Context, mappingID int64, overview string) error {
+	_, err := db.conn.ExecContext(ctx,
+		`UPDATE show_mappings SET overview = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		overview, mappingID)
+	return err
+}
+
 func (db *DB) UpdateWatermarkState(ctx context.Context, mappingID int64, watermark int, mode models.WatermarkMode) error {
 	if watermark < 0 {
 		watermark = 0
@@ -354,7 +379,7 @@ func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.Episod
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT id, mapping_id, episode_num, title, type, last_scraped,
 		       sonarr_episode_id, season_number, sonarr_episode_number,
-		       absolute_episode_number, monitored
+		       absolute_episode_number, monitored, air_date
 		FROM episode_info WHERE mapping_id = ? ORDER BY episode_num ASC`, mappingID)
 	if err != nil {
 		return nil, err
@@ -365,15 +390,20 @@ func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.Episod
 	for rows.Next() {
 		var e models.EpisodeInfo
 		var absNum sql.NullInt64
+		var airDate sql.NullTime
 		err := rows.Scan(&e.ID, &e.MappingID, &e.EpisodeNum, &e.Title, &e.Type, &e.LastScraped,
 			&e.SonarrEpisodeID, &e.SeasonNumber, &e.SonarrEpisodeNumber,
-			&absNum, &e.Monitored)
+			&absNum, &e.Monitored, &airDate)
 		if err != nil {
 			return nil, err
 		}
 		if absNum.Valid {
 			val := int(absNum.Int64)
 			e.AbsoluteEpisodeNumber = &val
+		}
+		if airDate.Valid {
+			t := airDate.Time
+			e.AirDate = &t
 		}
 		episodes = append(episodes, e)
 	}
@@ -397,8 +427,8 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped,
-			sonarr_episode_id, season_number, sonarr_episode_number, absolute_episode_number, monitored)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			sonarr_episode_id, season_number, sonarr_episode_number, absolute_episode_number, monitored, air_date)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -410,8 +440,12 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 		if e.AbsoluteEpisodeNumber != nil {
 			absNum = *e.AbsoluteEpisodeNumber
 		}
+		var airDate any
+		if e.AirDate != nil {
+			airDate = *e.AirDate
+		}
 		_, err := stmt.ExecContext(ctx, mappingID, e.EpisodeNum, e.Title, e.Type, now,
-			e.SonarrEpisodeID, e.SeasonNumber, e.SonarrEpisodeNumber, absNum, e.Monitored)
+			e.SonarrEpisodeID, e.SeasonNumber, e.SonarrEpisodeNumber, absNum, e.Monitored, airDate)
 		if err != nil {
 			return err
 		}

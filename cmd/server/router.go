@@ -372,10 +372,12 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 		}
 
 		sonarrTitle := req.SonarrTitle
+		var sonarrOverview string
 		if sonarrTitle == "" {
 			sonarrSeries, err := syncEngine.SonarrClient().GetSeries(r.Context(), req.SonarrSeriesID)
 			if err == nil && sonarrSeries != nil {
 				sonarrTitle = sonarrSeries.Title
+				sonarrOverview = sonarrSeries.Overview
 			}
 		}
 
@@ -409,6 +411,7 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 		mapping := models.ShowMapping{
 			SonarrSeriesID:   req.SonarrSeriesID,
 			SonarrTitle:      sonarrTitle,
+			Overview:         sonarrOverview,
 			AFLSlug:          req.AFLSlug,
 			AFLTitle:         req.AFLTitle,
 			AutoMatched:      false,
@@ -685,6 +688,7 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 			}
 		}
 
+		airDate := ep.AirDateUTC
 		enriched = append(enriched, models.EpisodeInfo{
 			MappingID:             mappingID,
 			EpisodeNum:            episodeNum,
@@ -695,6 +699,7 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 			SeasonNumber:          ep.SeasonNumber,
 			SonarrEpisodeNumber:   ep.EpisodeNumber,
 			AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
+			AirDate:               &airDate,
 			Monitored:             ep.Monitored,
 		})
 	}
@@ -1580,6 +1585,18 @@ func handleGetSonarrSeriesByID(db *database.DB, syncEngine *sync.Engine) http.Ha
 		// Cache the result
 		if err := db.SetCachedSonarrSeries(r.Context(), id, series); err != nil {
 			log.Warn().Err(err).Int("series_id", id).Msg("failed to cache Sonarr series")
+		}
+
+		// Also cache the overview on the mapping so the frontend can
+		// display it without a separate Sonarr API call.
+		if series.Overview != "" {
+			if mapping, err := db.GetMappingBySonarrID(r.Context(), id); err == nil && mapping != nil {
+				if mapping.Overview != series.Overview {
+					if err := db.UpdateOverview(r.Context(), mapping.ID, series.Overview); err != nil {
+						log.Warn().Err(err).Int64("mapping_id", mapping.ID).Msg("failed to cache overview")
+					}
+				}
+			}
 		}
 
 		writeJSON(w, http.StatusOK, series)
