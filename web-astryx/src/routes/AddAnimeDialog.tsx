@@ -13,7 +13,7 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
-import { Search, Check, X, CircleAlert } from "lucide-react";
+import { Search, Check, X, CircleAlert, Info } from "lucide-react";
 import {
   addSonarrSeries,
   confirmMatch,
@@ -610,11 +610,15 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         })}
       </ol>
 
-      <Text type="supporting" className="wizard-step-description">{stepDescription()}</Text>
+      <div className="wizard-step-description">
+        <Info size={14} className="wizard-step-description-icon" />
+        <Text type="supporting">{stepDescription()}</Text>
+      </div>
 
       <Divider />
 
-      {/* Step content */}
+      {/* Step content — keyed div re-mounts on step change for fade-in animation */}
+      <div key={w.addStep} className="wizard-step-content">
       {w.addStep === ADD_STEP_SERIES &&
         (w.sonarrLoading ? (
           <VStack gap={3} hAlign="center" padding={6}>
@@ -669,15 +673,20 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                       }}
                       startContent={
                         posterUrl(series) ? (
-                          <img
-                            src={posterUrl(series)}
-                            alt=""
-                            loading="lazy"
-                            className="wizard-poster-thumb"
-                            onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
-                          />
+                          <div className="wizard-poster-wrap">
+                            <div className="wizard-poster-placeholder" />
+                            <img
+                              src={posterUrl(series)}
+                              alt=""
+                              loading="lazy"
+                              className="wizard-poster-thumb"
+                              onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                            />
+                          </div>
                         ) : (
-                          <div className="wizard-poster-placeholder" />
+                          <div className="wizard-poster-wrap">
+                            <div className="wizard-poster-placeholder" />
+                          </div>
                         )
                       }
                       endContent={
@@ -943,6 +952,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           </HStack>
         </VStack>
       )}
+      </div>
     </VStack>
   );
 }

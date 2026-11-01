@@ -234,10 +234,26 @@ export function ActivityPage() {
                   const isExpanded = expandedId === log.id;
                   const runBadge = runStatusBadge(log.status);
                   return (
-                    <Card key={String(log.id)} padding={3} variant="muted" className="activity-log-card">
+                    <Card key={String(log.id)} padding={3} variant="muted" className={`activity-log-card${isExpanded ? " activity-log-card-expanded" : ""}`}>
                       <VStack gap={2}>
                         <HStack justify="between" align="center" wrap="wrap" gap={2}>
-                          <VStack gap={1} className="activity-log-summary">
+                          <VStack
+                            gap={1}
+                            className="activity-log-summary"
+                            onClick={hasDetails(log) ? () => toggleExpand(log.id) : undefined}
+                            role={hasDetails(log) ? "button" : undefined}
+                            tabIndex={hasDetails(log) ? 0 : undefined}
+                            onKeyDown={
+                              hasDetails(log)
+                                ? (e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      toggleExpand(log.id);
+                                    }
+                                  }
+                                : undefined
+                            }
+                          >
                             <HStack gap={2} align="center" wrap="wrap">
                               <Badge
                                 variant={runStatusBadgeVariant(log.status)}

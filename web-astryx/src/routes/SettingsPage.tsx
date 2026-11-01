@@ -63,6 +63,8 @@ export function SettingsPage() {
   const { setSettings, addNotification } = useAppStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
   const [revealingKey, setRevealingKey] = useState(false);
   const [testPhase, setTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
@@ -160,6 +162,7 @@ export function SettingsPage() {
     return () => {
       if (resetTimer.current) clearTimeout(resetTimer.current);
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
+      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
     };
   }, []);
 
@@ -328,6 +331,9 @@ export function SettingsPage() {
       addNotification("Failed to save settings: " + errorMessage(err), "error");
     }
     setSaving(false);
+    setSavedFlash(true);
+    if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+    savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
   };
 
   const handleTestConnection = async () => {
@@ -450,12 +456,13 @@ export function SettingsPage() {
           <HStack gap={3} align="center">
             {settingsDirty && <Badge variant="warning" label="Unsaved changes" />}
             <Button
-              label={saving ? "Saving..." : "Save settings"}
+              label={savedFlash ? "Saved" : saving ? "Saving..." : "Save settings"}
               variant="primary"
-              icon={<Save size={16} />}
+              icon={savedFlash ? <Check size={14} /> : <Save size={16} />}
               onClick={handleSave}
               isDisabled={saving || !settingsDirty}
               isLoading={saving}
+              className={savedFlash ? "save-flash" : undefined}
             />
           </HStack>
         </HStack>

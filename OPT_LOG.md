@@ -633,3 +633,169 @@
 **D48: Color contrast audit** — Reviewed all 4 custom themes (Flexoki, Tokyo Night, Mizu Wintry, Y2K Rounded). All use well-known palettes designed with contrast in mind. Only hardcoded colors in CSS are `#fff` on dark gradient overlays (card overlay title with text-shadow) and `var(--color-text-on-accent, #fff)` fallback on wizard step dots. Both are appropriate uses.
 
 **Outcome:** No changes needed. The app is consistent across these dimensions.
+
+## Iteration D49 — Wizard step content fade-in transition
+
+**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — step content area between wizard steps
+
+**Problem:** When advancing between wizard steps (Series → Match → Post-Add, etc.), the content swapped instantly with no transition. The step indicator (dots/labels) had transitions, but the main content area didn't, creating a jarring cut.
+
+**What changed:** Wrapped all step content blocks in a `<div key={w.addStep} className="wizard-step-content">`. The `key` prop changes with the step, causing React to unmount/remount the div — re-triggering the `fade-in-up` CSS animation (0.25s ease-out). Added `.wizard-step-content` to the `prefers-reduced-motion` guard to disable the animation for users who prefer reduced motion.
+
+**Outcome:** Kept. tsc clean. Wizard step transitions now have a subtle fade-in-up entrance, matching the app's existing animation language (page-enter, episode-list-wrap, activity-details-expanded).
+
+## Iteration D50 — Scroll-to-top on route change + settings error fade-in
+
+**Target:** `web-astryx/src/App.tsx` — route changes; `web-astryx/src/index.css` — settings error text
+
+**Problem 1:** When navigating between pages (e.g., clicking a show card from the library), the new page opened at the same scroll position as the previous page. This is a common SPA UX issue — the user expects to start at the top of each new page.
+
+**What changed 1:** Added a `ScrollToTop` component that calls `window.scrollTo(0, 0)` on every `pathname` change. Placed it inside `<AppProvider>` but before `<Routes>` so it runs on every navigation.
+
+**Problem 2:** Settings row error text (e.g., "URL must start with http://") appeared instantly with no animation, drawing abrupt attention.
+
+**What changed 2:** Added `animation: fade-in-up 0.2s ease-out` to `.settings-row-error` for a subtle entrance. Added to `prefers-reduced-motion` guard.
+
+**Outcome:** Kept. tsc clean. Page navigation now starts at the top. Settings errors fade in subtly instead of appearing abruptly.
+
+## Iteration D51 — Activity log card: clickable summary to expand details
+
+**Target:** `web-astryx/src/routes/ActivityPage.tsx` — activity log card summary area
+
+**Problem:** The only way to expand an activity log's details was the small "Details" ghost button on the right. The summary area (badge + title + timestamp) wasn't clickable, even though it's the natural click target for expanding a log entry.
+
+**What changed:** Made the `.activity-log-summary` VStack clickable when the log has details — added `onClick`, `role="button"`, `tabIndex={0}`, and `onKeyDown` (Enter/Space) handlers. Added CSS: `cursor: pointer`, subtle hover background (`--color-overlay-hover`), and `:focus-visible` accent outline for keyboard users. The Details button still works independently.
+
+**Outcome:** Kept. tsc clean. The entire summary area is now clickable and keyboard-accessible, providing a larger click target and more natural interaction pattern.
+
+## Iteration D52 — HTML head polish: meta description, theme-color, noscript
+
+**Target:** `web-astryx/index.html`
+
+**Problem:** The HTML head was missing several standard meta tags: no `<meta name="description">` (bad for SEO/sharing), no `<meta name="theme-color">` (mobile browsers show default white/black chrome instead of matching the app theme), and no `<noscript>` fallback.
+
+**What changed:**
+- Added `<meta name="description">` with a concise app description
+- Added two `<meta name="theme-color">` tags — one for dark mode (`#1a1b26`, matching Tokyo Night dark body) and one for light mode (`#f2f0e5`, matching Flexoki light body), both with `media` attributes so the browser picks the right one
+- Added `<noscript>` message inside `#root` for users with JS disabled
+
+**Outcome:** Kept. tsc clean. Mobile browser chrome now matches the app theme. Search engines and link previews have a description. No-JS users get a message instead of a blank page.
+
+## Iteration D53 — SettingsPage save button success flash
+
+**Target:** `web-astryx/src/routes/SettingsPage.tsx` — save settings button
+
+**Problem:** The ShowDetailPage save button flashes green with a Check icon on successful save (D36), but the SettingsPage save button had no visual success feedback — it just reverted from "Saving..." back to "Save settings" with no confirmation that the save succeeded. This was an inconsistency between the two pages with save actions.
+
+**What changed:** Added `savedFlash` state + `savedFlashRef` timeout (1.5s) to SettingsPage, matching the ShowDetailPage pattern. The save button now shows "Saved" with a Check icon and the `.save-flash` green color override for 1.5 seconds after a successful save, then reverts to normal. Added cleanup in the existing unmount effect.
+
+**Outcome:** Kept. tsc clean. Both save actions now have consistent success feedback — green flash + Check icon + "Saved" label.
+
+## Iteration D54 — CSS cleanup: standard line-clamp, token-ize hardcoded values
+
+**Target:** `web-astryx/src/index.css` — `.show-hero-overview`, `.mizu-card-overlay`
+
+**Problem:** Several CSS values were hardcoded pixels instead of design tokens, and the overview line clamp only had the `-webkit-` prefix.
+
+**What changed:**
+- Added standard `line-clamp: 3` alongside `-webkit-line-clamp: 3` in `.show-hero-overview` for future-proofing (Firefox supports the unprefixed property)
+- Replaced `margin-top: 8px` → `var(--spacing-2)` in `.show-hero-overview`
+- Replaced `padding: 12px` → `var(--spacing-3)` and `gap: 8px` → `var(--spacing-2)` in `.mizu-card-overlay`
+
+**Outcome:** Kept. tsc clean. CSS now uses spacing tokens consistently and has both prefixed and standard line-clamp.
+
+## Iteration D55 — Scope wizard step dot transition
+
+**Target:** `web-astryx/src/index.css` — `.wizard-step-dot`
+
+**Problem:** The wizard step dot used `transition: all 200ms ease` — `transition: all` is generally discouraged because it can cause unexpected transitions on properties that change for non-animation reasons (e.g., layout shifts).
+
+**What changed:** Replaced `transition: all 200ms ease` with `transition: background-color 200ms ease, color 200ms ease, box-shadow 200ms ease` — the only three properties that actually change between step states (future/past/current).
+
+**Outcome:** Kept. tsc clean. Transition is now scoped to only the properties that animate, preventing unexpected side effects.
+
+## Iteration D56 — Fix ShowDetailPage hero width misalignment
+
+**Target:** `web-astryx/src/index.css` — `.show-shell`
+
+**Problem:** The hero `show-shell` had `width: calc(100% - clamp(24px, 8vw, 64px))` and `max-width: calc(900px - 64px)`, making it up to 64px narrower per side than the content section below (which uses the full 900px with `paddingInline: clamp(12px, 4vw, 32px)`). This created a visible misalignment where the hero header was smaller than the rest of the page content — it looked like a bug rather than an intentional design choice.
+
+**What changed:** Set `.show-shell` to `width: 100%` and `max-width: 900px` — matching the content section's `Section maxWidth={900}`. The hero content's internal padding (`padding: clamp(20px, 5vw, 32px) clamp(12px, 4vw, 32px)`) already aligns horizontally with the content section's `paddingInline: clamp(12px, 4vw, 32px)`, so text in the hero now aligns with text in the content below.
+
+**Outcome:** Kept. tsc clean. Hero and content are now the same width, with text aligned consistently.
+
+## Iteration D57 — Wizard poster loading skeleton
+
+**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` — series list poster thumbnails
+
+**Problem:** When a poster URL existed, only the `<img>` was rendered with `opacity: 0` until load. While the image was loading, the list item showed an empty 32×44 blank space — no visual placeholder. The `wizard-poster-placeholder` gradient was only shown when no URL existed at all.
+
+**What changed:** Wrapped the poster image in a `.wizard-poster-wrap` div (position: relative, 32×44) containing both the placeholder gradient div and the image (position: absolute, inset: 0). Now the placeholder gradient is visible behind the image while it loads, creating a skeleton effect. When the image loads (opacity → 1), it covers the placeholder seamlessly.
+
+**Outcome:** Kept. tsc clean. Poster thumbnails now show a gradient placeholder during loading instead of blank space, matching the pattern used for show card images.
+
+## Iteration D58 — Actions bar padding alignment with hero content
+
+**Target:** `web-astryx/src/index.css` — `.show-actions-bar` horizontal padding
+
+**Problem:** The actions bar used `padding: ... var(--spacing-3) ...` (12px) for horizontal padding, while the hero content above it used `padding: ... clamp(12px, 4vw, 32px) ...`. On desktop (900px wide), the hero text had 32px padding while the actions bar controls had only 12px — a 20px misalignment that made the controls look pushed toward the edges relative to the hero text.
+
+**What changed:** Changed the actions bar horizontal padding from `var(--spacing-3)` (12px) to `clamp(12px, 4vw, 32px)` — matching the hero content's horizontal padding exactly. Now the controls in the actions bar align vertically with the hero text above them.
+
+**Outcome:** Kept. tsc clean. Actions bar controls now align with hero text across all viewport sizes.
+
+## Iteration D59 — List item active state for press feedback
+
+**Target:** `web-astryx/src/index.css` — `.astryx-list .astryx-list-item`
+
+**Problem:** List items had a hover background (`--color-overlay-hover`) but no `:active` state. On touch devices and mouse clicks, there was no visual feedback when pressing a list item — it went from hover directly to no state with no intermediate "pressed" cue.
+
+**What changed:** Added `.astryx-list .astryx-list-item:active { background-color: var(--color-overlay-pressed); }` — uses the existing Astryx `--color-overlay-pressed` token (slightly stronger than hover) for press feedback. Not scoped to `@media (hover: hover)` so it works on touch too.
+
+**Outcome:** Kept. tsc clean. List items now have a subtle press feedback using the design system's pressed overlay token.
+
+## Iteration D60 — Activity log card expanded indicator
+
+**Target:** `web-astryx/src/routes/ActivityPage.tsx` + `web-astryx/src/index.css` — `.activity-log-card`
+
+**Problem:** When a log card was expanded, the chevron rotated but the card border didn't change — the only visual indicator of expanded state was the chevron direction and the appearance of details below. On hover the card already got `border-color: var(--color-border-emphasized)`, but expanded cards lost that emphasis when the mouse moved away.
+
+**What changed:** Added `activity-log-card-expanded` class to the Card when expanded, with `border-color: var(--color-border-emphasized)` — persisting the emphasized border while expanded. The card already had `transition: border-color 0.2s ease` so the change animates smoothly.
+
+**Outcome:** Kept. tsc clean. Expanded log cards now have a persistent emphasized border, making the expanded state visually clear without relying solely on the chevron.
+
+## Iteration D61 — Wizard step description info icon
+
+**Target:** `web-astryx/src/routes/AddAnimeDialog.tsx` + `web-astryx/src/index.css` — `.wizard-step-description`
+
+**Problem:** The step description was a plain text block in a muted pill. It lacked visual structure — just a blob of secondary text with no icon to signal "this is guidance/info."
+
+**What changed:** Added an `Info` icon (14px, secondary color) to the left of the description text. Updated the CSS to use `display: flex` with `align-items: flex-start` and a `gap: var(--spacing-2)`. The icon has `flex-shrink: 0` and `margin-top: 2px` to align with the first line of text.
+
+**Outcome:** Kept. tsc clean. The step description now has a clear info icon prefix, giving it more visual structure and making it read as guidance rather than just muted text.
+
+## Iteration D62 — Hero max-height check (no-op)
+
+**Target:** `.show-hero` min-height/max-height
+
+**Problem:** Considered adding a max-height to prevent very long titles from making the hero excessively tall.
+
+**Decision:** No-op. The hero has `overflow: hidden` and content is bottom-aligned with `justify-content: flex-end`. Adding a max-height would clip long titles, which is worse than letting it grow naturally. The `min-height: clamp(160px, 30vw, 220px)` already ensures a consistent minimum.
+
+## Iteration D63 — Content section vertical spacing check (no-op)
+
+**Target:** Gap between hero Section and content Section on ShowDetailPage
+
+**Problem:** Considered whether the gap between the hero and content section was inconsistent with other page spacing.
+
+**Decision:** No-op. The actions bar bridges the hero and content with `margin-top: calc(-1 * var(--radius-container))`, creating a seamless visual connection. The spacing is intentional and consistent.
+
+## Iteration D64 — Mobile episode filter parity with desktop
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `.episode-filters-mobile` SegmentedControl
+
+**Problem:** The desktop episode filter showed 5 tabs with episode counts (`All (67)`, `Manga (4)`, `Anime (N)`, `Mixed (N)`, `Filler (N)`) and icons. The mobile filter only showed 4 tabs with no counts, different labels ("Canon" instead of "Manga"), and was missing the "Anime" tab entirely. Mobile users got less information and fewer filtering options.
+
+**What changed:** Updated the mobile SegmentedControl to match the desktop version exactly — same 5 items, same labels with counts, same icons. The SegmentedControl's `layout="fill"` handles the narrower width by distributing space equally.
+
+**Outcome:** Kept. tsc clean. Mobile users now have the same filtering granularity and information as desktop users.

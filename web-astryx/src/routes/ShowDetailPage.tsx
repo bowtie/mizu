@@ -804,16 +804,25 @@ export function ShowDetailPage() {
                 layout="fill"
                 size="lg"
               >
-                <SegmentedControlItem value="all" label="All" />
-                <SegmentedControlItem value="canon" label="Canon" icon={<BookOpen size={16} />} />
+                <SegmentedControlItem value="all" label={`All (${epStats.total})`} />
+                <SegmentedControlItem
+                  value="canon"
+                  label={`Manga (${epStats.canon})`}
+                  icon={<BookOpen size={16} />}
+                />
+                <SegmentedControlItem
+                  value="anime_canon"
+                  label={`Anime (${epStats.anime})`}
+                  icon={<Tv size={16} />}
+                />
                 <SegmentedControlItem
                   value="mixed_canon"
-                  label="Mixed"
+                  label={`Mixed (${epStats.mixed})`}
                   icon={<Shuffle size={16} />}
                 />
                 <SegmentedControlItem
                   value="filler"
-                  label="Filler"
+                  label={`Filler (${epStats.filler})`}
                   icon={<SkipForward size={16} />}
                 />
               </SegmentedControl>
