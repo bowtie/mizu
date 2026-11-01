@@ -64,8 +64,8 @@ function MizuLogo() {
       aria-hidden="true"
       style={{ display: "block" }}
     >
-      <path d="M3.75 9c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0" />
-      <path d="M3.75 16c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0" opacity="0.55" />
+      <path d="M3 8c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0" />
+      <path d="M3 16c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0" opacity="0.55" />
     </svg>
   );
 }

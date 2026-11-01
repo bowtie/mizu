@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { Notification, Settings, Show } from "./types";
+import { getShows, getSettings } from "./api";
 
 interface AppStore {
   shows: Show[];
@@ -76,6 +77,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const removeNotification = useCallback((id: number) => {
     setNotifications((n) => n.filter((x) => x.id !== id));
+  }, []);
+
+  // Fetch shows + settings on mount so they're available app-wide.
+  // This lets ShowDetailPage show the hero image instantly on direct
+  // navigation/refresh (before getShow resolves) via the store fallback.
+  useEffect(() => {
+    const aborted = { current: false };
+    Promise.allSettled([getShows(), getSettings()]).then(([showsRes, settingsRes]) => {
+      if (aborted.current) return;
+      if (showsRes.status === "fulfilled") setShows(showsRes.value || []);
+      if (settingsRes.status === "fulfilled") setSettings(settingsRes.value ?? null);
+    });
+    return () => { aborted.current = true; };
   }, []);
 
   return (

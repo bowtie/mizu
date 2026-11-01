@@ -1003,3 +1003,27 @@
 - D106 (user changes): Fixed hero header, replaced tilde text logo with Mizu wave SVG, removed nav underline indicator CSS, tweaked actions bar margin for seamless corner transition
 
 **Outcome:** Kept. All pages now use consistent VStack gap={6}. Mizu has a proper wave logo. Nav uses Astryx's built-in selected state instead of custom underline.
+
+## Iterations D108-D110 — Transition token harmonization + micro-interactions
+
+**Targets:** `index.css`
+
+**Summary:**
+- D108: Replaced raw `ease`/`0.18s`/`0.3s` timings on library cards with `var(--duration-fast)` / `var(--duration-medium)` / `var(--ease-standard)` tokens
+- D109: Replaced all remaining raw `ease-out` values across the CSS with `var(--ease-standard)` — fade-in-up animations, page-enter, success-pulse, controls-reveal transitions, episode-list-wrap, activity-details-expanded, wizard-step-content
+- D110: Replaced hero image opacity transition `0.4s ease` with `var(--duration-medium) var(--ease-standard)`
+
+**Outcome:** Kept. All transitions and animations in the app now use Astryx design tokens consistently. No raw timing values remain except intentional `transition-delay: 300ms` for the hover-reveal interaction (which is a specific delay, not a duration).
+
+## Iterations D112-D114 — Logo centering, instant hero image, badge alignment
+
+**Targets:** `main.tsx`, `store.tsx`, `ShowDetailPage.tsx`, `index.css`
+
+**Summary:**
+- D112: Centered Mizu wave logo SVG — shifted paths from x=3.75 to x=3, y=9 to y=8 to center the wave within the 24×24 viewBox
+- D113: Instant hero image on ShowDetailPage — backdropUrl memo now falls back to store `shows` array for artwork URL before getShow resolves. When navigating from Library, the image appears immediately.
+- D114: Fixed two issues:
+  - Hero image slow on direct navigation/refresh: moved shows + settings fetch to AppProvider (store.tsx) so the store is populated app-wide on mount, not just when ShowsPage loads. ShowDetailPage's backdropUrl fallback now works even on refresh.
+  - Episodes badge not vertically aligned with title: changed h1 line-height from 1.1 to 1 in .show-hero-titles — tightens the line box to exactly match the font size so flex align-items:center centers the visible text, not the inflated line box.
+
+**Outcome:** Kept. Hero image now loads instantly on both navigation and refresh. Badge pill is vertically centered with the title text.

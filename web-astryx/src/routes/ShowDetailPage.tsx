@@ -142,6 +142,7 @@ export function ShowDetailPage() {
   const [artworkProviders, setArtworkProviders] = useState<ArtworkProvider[]>([]);
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const [artworkVersion, setArtworkVersion] = useState(0);
+  const [heroImgError, setHeroImgError] = useState(false);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [episodesLoading, setEpisodesLoading] = useState(true);
   const [pageSettled, setPageSettled] = useState(false);
@@ -240,14 +241,13 @@ export function ShowDetailPage() {
     [maxEpisode],
   );
 
-  /** Memoized backdrop URL — locally downloaded artwork first, then Sonarr images.
-   *  Local artwork is always preferred when files exist (they were downloaded
-   *  from the configured provider). Sonarr images are only a fallback. */
+  /** Memoized backdrop URL — hits the artwork endpoint immediately
+   *  using just the showId from the URL. No need to wait for getShow
+   *  or store data — the backend serves the file if it exists. */
   const backdropUrl = useMemo((): string => {
     const cacheBust = artworkVersion > 0 ? `?v=${artworkVersion}` : "";
-    // 1. Locally downloaded artwork — always prefer when files exist
-    if (show?.artwork_banner_path) return getArtworkBannerUrl(showId!) + cacheBust;
-    if (show?.artwork_poster_path) return getArtworkPosterUrl(showId!) + cacheBust;
+    // 1. Try locally downloaded artwork immediately — we know the ID
+    if (showId) return getArtworkBannerUrl(showId) + cacheBust;
     // 2. Sonarr images (fallback when no local artwork)
     if (!series?.images?.length) return "";
     const preferred =
@@ -256,7 +256,7 @@ export function ShowDetailPage() {
       series.images[0];
     if (!preferred) return "";
     return resolveSonarrImageUrl(preferred, settings?.sonarr_url || "");
-  }, [show, showId, series, settings?.sonarr_url, artworkVersion]);
+  }, [showId, series, settings?.sonarr_url, artworkVersion]);
 
   // Fetch show data + episodes in parallel — they're independent and
   // both keyed off showId from the URL. Settings is no longer needed
@@ -266,6 +266,7 @@ export function ShowDetailPage() {
     setLoadingShow(true);
     setEpisodesLoading(true);
     setPageSettled(false);
+    setHeroImgError(false);
 
     Promise.all([getShow(showId), getEpisodes(showId)] as const)
       .then(([showRes, episodesRes]) => {
@@ -545,7 +546,7 @@ export function ShowDetailPage() {
         <div className={`show-shell${pageSettled ? " is-settled" : ""}`}>
           {/* Hero header with backdrop */}
           <div className="show-hero">
-            {backdropUrl ? (
+            {backdropUrl && !heroImgError ? (
               <>
                 <img
                   src={backdropUrl}
@@ -554,7 +555,7 @@ export function ShowDetailPage() {
                   decoding="async"
                   fetchPriority="high"
                   className="show-hero-img"
-                  onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                  onError={() => setHeroImgError(true)}
                 />
                 <div className="show-hero-gradient" />
               </>
