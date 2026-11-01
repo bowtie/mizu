@@ -61,10 +61,9 @@ export function ShowsPage() {
   // recomputing all show posters/banners when unrelated settings change.
   const artworkSettings = useMemo(
     () => ({
-      artwork_default_source: settings?.artwork_default_source,
       sonarr_url: settings?.sonarr_url,
     }),
-    [settings?.artwork_default_source, settings?.sonarr_url],
+    [settings?.sonarr_url],
   );
 
   const mappedSeriesIds = useMemo(
@@ -131,13 +130,11 @@ export function ShowsPage() {
   const currentStepIndex = activeWizardSteps.findIndex((s) => s.key === w.addStep);
 
   function posterUrl(show: Show, series: SonarrSeries | null | undefined): string {
-    const effectiveSource = show.artwork_source || artworkSettings.artwork_default_source || "sonarr";
-    // 1. Locally downloaded artwork (from the selected provider)
-    //    Skip when source is "sonarr" — those files are from another provider.
-    if (effectiveSource !== "sonarr" && show.artwork_poster_path) {
+    // 1. Locally downloaded artwork — always prefer when files exist
+    if (show.artwork_poster_path) {
       return getArtworkPosterUrl(show.id);
     }
-    // 2. Sonarr images
+    // 2. Sonarr images (fallback)
     return posterUrlForSeries(series);
   }
 
@@ -152,13 +149,11 @@ export function ShowsPage() {
   }
 
   function bannerUrl(show: Show, series: SonarrSeries | null | undefined): string {
-    const effectiveSource = show.artwork_source || artworkSettings.artwork_default_source || "sonarr";
-    // 1. Locally downloaded artwork (from the selected provider)
-    //    Skip when source is "sonarr" — those files are from another provider.
-    if (effectiveSource !== "sonarr" && show.artwork_banner_path) {
+    // 1. Locally downloaded artwork — always prefer when files exist
+    if (show.artwork_banner_path) {
       return getArtworkBannerUrl(show.id);
     }
-    // 2. Sonarr images
+    // 2. Sonarr images (fallback)
     if (!series?.images?.length) return "";
     const preferred =
       series.images.find((img) => img.coverType === "fanart") ||

@@ -5,7 +5,6 @@ import { Section } from "@astryxdesign/core/Section";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
-import { Badge } from "@astryxdesign/core/Badge";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
@@ -13,17 +12,11 @@ import { Card } from "@astryxdesign/core/Card";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Search } from "lucide-react";
-import { RefreshCw, History, ChevronDown, TriangleAlert } from "lucide-react";
+import { RefreshCw, History, ChevronDown, TriangleAlert, Check, CircleAlert, Loader2, CircleDot } from "lucide-react";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { useAppStore } from "../lib/store";
 import { getSyncLogs, triggerSync, errorMessage } from "../lib/api";
 import type { SyncLog } from "../lib/types";
-import {
-  runStatusBadge,
-  itemStatusBadge,
-  runStatusBadgeVariant,
-  itemStatusBadgeVariant,
-} from "../lib/fox";
 import {
   formatDuration,
   formatTrigger,
@@ -33,6 +26,34 @@ import {
 } from "../lib/activity-utils";
 
 const PAGE_SIZE = 8;
+
+function statusIcon(status: string | undefined | null) {
+  switch (status) {
+    case "success":
+      return { icon: <Check size={14} />, className: "activity-status-icon-success" };
+    case "partial":
+      return { icon: <TriangleAlert size={14} />, className: "activity-status-icon-partial" };
+    case "failed":
+      return { icon: <CircleAlert size={14} />, className: "activity-status-icon-failed" };
+    case "running":
+      return { icon: <Loader2 size={14} className="spin" />, className: "activity-status-icon-running" };
+    default:
+      return { icon: <CircleDot size={14} />, className: "activity-status-icon-neutral" };
+  }
+}
+
+function itemStatusIcon(status: string | undefined | null) {
+  switch (status) {
+    case "success":
+      return { icon: <Check size={12} />, className: "activity-status-icon-success" };
+    case "failed":
+      return { icon: <CircleAlert size={12} />, className: "activity-status-icon-failed" };
+    case "new_in_cache":
+      return { icon: <CircleDot size={12} />, className: "activity-status-icon-partial" };
+    default:
+      return { icon: <CircleDot size={12} />, className: "activity-status-icon-neutral" };
+  }
+}
 
 export function ActivityPage() {
   const { addNotification } = useAppStore();
@@ -232,66 +253,64 @@ export function ActivityPage() {
               <VStack gap={3}>
                 {filteredLogs.map((log) => {
                   const isExpanded = expandedId === log.id;
-                  const runBadge = runStatusBadge(log.status);
                   return (
                     <Card key={String(log.id)} padding={3} variant="muted" className={`activity-log-card${isExpanded ? " activity-log-card-expanded" : ""}`}>
                       <VStack gap={2}>
-                        <HStack justify="between" align="center" wrap="wrap" gap={2}>
-                          <VStack
-                            gap={1}
-                            className="activity-log-summary"
-                            onClick={hasDetails(log) ? () => toggleExpand(log.id) : undefined}
-                            role={hasDetails(log) ? "button" : undefined}
-                            tabIndex={hasDetails(log) ? 0 : undefined}
-                            onKeyDown={
-                              hasDetails(log)
-                                ? (e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.preventDefault();
-                                      toggleExpand(log.id);
+                        <HStack gap={3} align="center" wrap="nowrap" width="100%">
+                          <div className={`activity-status-icon ${statusIcon(log.status).className}`}>
+                            {statusIcon(log.status).icon}
+                          </div>
+                          <HStack justify="between" align="center" wrap="wrap" gap={2} className="activity-log-body">
+                            <VStack
+                              gap={1}
+                              className="activity-log-summary"
+                              onClick={hasDetails(log) ? () => toggleExpand(log.id) : undefined}
+                              role={hasDetails(log) ? "button" : undefined}
+                              tabIndex={hasDetails(log) ? 0 : undefined}
+                              onKeyDown={
+                                hasDetails(log)
+                                  ? (e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        toggleExpand(log.id);
+                                      }
                                     }
-                                  }
-                                : undefined
-                            }
-                          >
-                            <HStack gap={2} align="center" wrap="wrap">
-                              <Badge
-                                variant={runStatusBadgeVariant(log.status)}
-                                label={runBadge.label}
-                              />
+                                  : undefined
+                              }
+                            >
                               <Text type="body" weight="medium">
                                 {humanSummary(log)}
                               </Text>
-                            </HStack>
-                            <Text
-                              type="supporting"
-                              hasTabularNumbers
-                              size="sm"
-                            >
-                              {formatTrigger(log.trigger)}{" "}
-                              {formatDuration(log.started_at, log.completed_at)}{" "}
-                              <Timestamp
-                                value={log.started_at || ""}
-                                format="auto"
+                              <Text
                                 type="supporting"
-                                color="secondary"
-                              />
-                            </Text>
-                          </VStack>
-                          {hasDetails(log) && (
-                            <Button
-                              label="Details"
-                              variant="ghost"
-                              size="sm"
-                              icon={
-                                <ChevronDown
-                                  size={12}
-                                  className={`button-icon-chevron${isExpanded ? " chevron-expanded" : ""}`}
+                                hasTabularNumbers
+                                size="sm"
+                              >
+                                {formatTrigger(log.trigger)}{" "}
+                                {formatDuration(log.started_at, log.completed_at)}{" "}
+                                <Timestamp
+                                  value={log.started_at || ""}
+                                  format="auto"
+                                  type="supporting"
+                                  color="secondary"
                                 />
-                              }
-                              onClick={() => toggleExpand(log.id)}
-                            />
-                          )}
+                              </Text>
+                            </VStack>
+                            {hasDetails(log) && (
+                              <Button
+                                label="Details"
+                                variant="ghost"
+                                size="sm"
+                                icon={
+                                  <ChevronDown
+                                    size={12}
+                                    className={`button-icon-chevron${isExpanded ? " chevron-expanded" : ""}`}
+                                  />
+                                }
+                                onClick={() => toggleExpand(log.id)}
+                              />
+                            )}
+                          </HStack>
                         </HStack>
 
                         {/* Run-level errors shown only when not expanded (expanded view shows them below) */}
@@ -309,7 +328,7 @@ export function ActivityPage() {
                             {log.items?.length && (
                               <VStack gap={2}>
                                 {log.items.map((item, idx) => {
-                                  const itemBadge = itemStatusBadge(item.status);
+                                  const si = itemStatusIcon(item.status);
                                   return (
                                     <Card key={idx} padding={2} variant="default">
                                       <HStack justify="between" align="center" wrap="wrap" gap={2}>
@@ -318,22 +337,21 @@ export function ActivityPage() {
                                             {item.sonarr_title}
                                           </Text>
                                           <Text type="supporting">{detailLine(item)}</Text>
+                                          {item.error && (
+                                            <HStack
+                                              gap={2}
+                                              align="start"
+                                              className="activity-error-row"
+                                            >
+                                              <TriangleAlert size={14} />
+                                              <Text type="supporting">{item.error}</Text>
+                                            </HStack>
+                                          )}
                                         </VStack>
-                                        <Badge
-                                          variant={itemStatusBadgeVariant(item.status)}
-                                          label={itemBadge.label}
-                                        />
+                                        <div className={`activity-status-icon activity-status-icon-sm ${si.className}`}>
+                                          {si.icon}
+                                        </div>
                                       </HStack>
-                                      {item.error && (
-                                        <HStack
-                                          gap={2}
-                                          align="start"
-                                          className="activity-error-row"
-                                        >
-                                          <TriangleAlert size={14} />
-                                          <Text type="supporting">{item.error}</Text>
-                                        </HStack>
-                                      )}
                                     </Card>
                                   );
                                 })}

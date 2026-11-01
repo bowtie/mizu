@@ -146,6 +146,7 @@ export function ShowDetailPage() {
   const [artworkVersion, setArtworkVersion] = useState(0);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [episodesLoading, setEpisodesLoading] = useState(true);
+  const [pageSettled, setPageSettled] = useState(false);
   const [trackFiller, setTrackFiller] = useState(false);
   const [trackMixed, setTrackMixed] = useState(true);
   const [trackAnimeCanon, setTrackAnimeCanon] = useState(true);
@@ -241,19 +242,15 @@ export function ShowDetailPage() {
     [maxEpisode],
   );
 
-  /** Memoized backdrop URL — locally downloaded artwork, then Sonarr images.
-   *  When the effective source is "sonarr", skip local downloads (they're
-   *  from a different provider) and use Sonarr images directly. */
+  /** Memoized backdrop URL — locally downloaded artwork first, then Sonarr images.
+   *  Local artwork is always preferred when files exist (they were downloaded
+   *  from the configured provider). Sonarr images are only a fallback. */
   const backdropUrl = useMemo((): string => {
     const cacheBust = artworkVersion > 0 ? `?v=${artworkVersion}` : "";
-    const effectiveSource = show?.artwork_source || settings?.artwork_default_source || "sonarr";
-    // 1. Locally downloaded artwork (from the selected provider, works offline)
-    //    Skip when source is "sonarr" — those files are from another provider.
-    if (effectiveSource !== "sonarr") {
-      if (show?.artwork_banner_path) return getArtworkBannerUrl(showId!) + cacheBust;
-      if (show?.artwork_poster_path) return getArtworkPosterUrl(showId!) + cacheBust;
-    }
-    // 2. Sonarr images
+    // 1. Locally downloaded artwork — always prefer when files exist
+    if (show?.artwork_banner_path) return getArtworkBannerUrl(showId!) + cacheBust;
+    if (show?.artwork_poster_path) return getArtworkPosterUrl(showId!) + cacheBust;
+    // 2. Sonarr images (fallback when no local artwork)
     if (!series?.images?.length) return "";
     const preferred =
       series.images.find((img) => img.coverType === "fanart") ||
@@ -261,7 +258,7 @@ export function ShowDetailPage() {
       series.images[0];
     if (!preferred) return "";
     return resolveSonarrImageUrl(preferred, settings?.sonarr_url || "");
-  }, [show, showId, series, settings?.artwork_default_source, settings?.sonarr_url, artworkVersion]);
+  }, [show, showId, series, settings?.sonarr_url, artworkVersion]);
 
   const loadShowData = useCallback(async (): Promise<Show | null> => {
     if (!showId) return null;
@@ -333,6 +330,15 @@ export function ShowDetailPage() {
         addNotification("Failed to load episodes: " + errorMessage(err), "error");
       }
       setEpisodesLoading(false);
+      // Defer enabling the hover-reveal collapse until React has committed
+      // the episode list to the DOM and the browser has painted it.
+      // RAF alone isn't enough for large episode lists (1000+ rows) because
+      // React's async batching may not have flushed by the next frame.
+      // The combination of RAF + a short timeout covers both the paint
+      // cycle and React's commit phase.
+      requestAnimationFrame(() => {
+        setTimeout(() => setPageSettled(true), 80);
+      });
     },
     [showId, setSettings, addNotification, clampMarkerValue],
   );
@@ -549,7 +555,7 @@ export function ShowDetailPage() {
         maxWidth={900}
         className="section-centered show-hero-section"
       >
-        <div className="show-shell">
+        <div className={`show-shell${pageSettled ? " is-settled" : ""}`}>
           {/* Hero header with backdrop */}
           <div className="show-hero">
             {backdropUrl ? (
@@ -574,11 +580,11 @@ export function ShowDetailPage() {
                   <Heading level={1}>
                     {show.sonarr_title}
                   </Heading>
-                  <Text type="supporting" color="secondary" hasTabularNumbers display="block">
-                    {episodesLoading
-                      ? "Loading episodes..."
-                      : `${episodes.length} episodes · from ep ${show.sync_watermark > 0 ? show.sync_watermark : 0}`}
-                  </Text>
+                  {!episodesLoading && (
+                    <Text type="supporting" color="secondary" hasTabularNumbers display="block">
+                      {`${episodes.length} episodes · from ep ${show.sync_watermark > 0 ? show.sync_watermark : 0}`}
+                    </Text>
+                  )}
                   {series?.overview && (
                     <Text
                       type="supporting"
