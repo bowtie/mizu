@@ -117,11 +117,14 @@ export function App() {
     <>
       <ScrollToTop />
       <Routes>
-        <Route path="/login" element={
-          <Suspense fallback={<PageFallback />}>
-            <LoginPage />
-          </Suspense>
-        } />
+        <Route
+          path="/login"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <LoginPage />
+            </Suspense>
+          }
+        />
         <Route
           path="/"
           element={

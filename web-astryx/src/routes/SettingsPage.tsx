@@ -1,27 +1,25 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { valibotResolver } from "@hookform/resolvers/valibot";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Section } from "@astryxdesign/core/Section";
-import { Grid } from "@astryxdesign/core/Grid";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Badge } from "@astryxdesign/core/Badge";
-import { Spinner } from "@astryxdesign/core/Spinner";
-import { TextInput } from "@astryxdesign/core/TextInput";
-import { Switch } from "@astryxdesign/core/Switch";
-import { Selector } from "@astryxdesign/core/Selector";
-import { Divider } from "@astryxdesign/core/Divider";
-import { Card } from "@astryxdesign/core/Card";
-import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff, FileDown, FileUp } from "lucide-react";
+import { Save, Check } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
 import { useSettings, useArtworkProviders, useUpdateSettings } from "../lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { applySoundsEnabled } from "../lib/sounds";
-import { SettingsRow } from "../components/SettingsRow";
-import { TrackingRuleCard } from "../components/TrackingRuleCard";
+import { ConnectionCard } from "../components/settings/ConnectionCard";
+import { SyncCard } from "../components/settings/SyncCard";
+import { NotificationsCard } from "../components/settings/NotificationsCard";
+import { BackupCard } from "../components/settings/BackupCard";
+import { InterfaceCard } from "../components/settings/InterfaceCard";
+import { DefaultsSection } from "../components/settings/DefaultsSection";
+import { SettingsSkeleton } from "../components/settings/SettingsSkeleton";
 import { SecuritySettingsCard } from "../components/SecuritySettingsCard";
 import {
   getSettings,
@@ -43,21 +41,7 @@ const actionToTracked = (action: string | undefined, fallback = true): boolean =
   (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
 const trackedToAction = (tracked: boolean): string => (tracked ? "monitor" : "unmonitor");
 
-const syncIntervalOptions: SelectOption[] = [
-  { value: "1h", label: "1 hour" },
-  { value: "3h", label: "3 hours" },
-  { value: "6h", label: "6 hours" },
-  { value: "12h", label: "12 hours" },
-  { value: "24h", label: "24 hours" },
-];
-
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-const notifyOnOptions: SelectOption[] = [
-  { value: "always", label: "Every sync" },
-  { value: "changes", label: "Changes or failures" },
-  { value: "failures", label: "Failures only" },
-];
 
 const isNotifyOn = (value: unknown): value is "always" | "changes" | "failures" =>
   value === "always" || value === "changes" || value === "failures";
@@ -585,92 +569,8 @@ export function SettingsPage() {
     }
   };
 
-  const formatCacheTime = (value: string | null | undefined): string => {
-    if (!value) return "Never refreshed";
-    return new Date(value).toLocaleString();
-  };
-
   if (loading) {
-    return (
-      <Section padding={4} maxWidth={900} className="section-centered">
-        <VStack gap={6}>
-          {/* Skeleton header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-1)" }}>
-              <div className="skeleton-text-lg" style={{ width: 120 }} />
-              <div className="skeleton-text" style={{ width: 280 }} />
-            </div>
-            <div
-              className="skeleton"
-              style={{ width: 110, height: 36, borderRadius: "var(--radius-inner)" }}
-            />
-          </div>
-          {/* Skeleton connection card */}
-          <div
-            className="skeleton-card"
-            style={{
-              padding: "var(--spacing-4)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--spacing-3)",
-            }}
-          >
-            <div className="skeleton-text-lg" style={{ width: 120 }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
-              <div className="skeleton-text" style={{ width: 80 }} />
-              <div
-                className="skeleton"
-                style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }}
-              />
-              <div className="skeleton-text" style={{ width: 60 }} />
-              <div
-                className="skeleton"
-                style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }}
-              />
-            </div>
-          </div>
-          {/* Skeleton sync card */}
-          <div
-            className="skeleton-card"
-            style={{
-              padding: "var(--spacing-4)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--spacing-3)",
-            }}
-          >
-            <div className="skeleton-text-lg" style={{ width: 80 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
-              <div className="skeleton-text" style={{ width: 100 }} />
-              <div
-                className="skeleton"
-                style={{ width: 160, height: 36, borderRadius: "var(--radius-inner)" }}
-              />
-            </div>
-          </div>
-          {/* Skeleton notifications card */}
-          <div
-            className="skeleton-card"
-            style={{
-              padding: "var(--spacing-4)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--spacing-3)",
-            }}
-          >
-            <div className="skeleton-text-lg" style={{ width: 110 }} />
-            <div className="skeleton" style={{ width: 44, height: 24, borderRadius: 12 }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
-              <div className="skeleton-text" style={{ width: 70 }} />
-              <div
-                className="skeleton"
-                style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }}
-              />
-            </div>
-          </div>
-        </VStack>
-      </Section>
-    );
+    return <SettingsSkeleton />;
   }
 
   return (
@@ -702,524 +602,74 @@ export function SettingsPage() {
         </HStack>
 
         {/* Connection */}
-        <Card variant="muted" padding={4}>
-          <VStack gap={3}>
-            <Heading level={2}>Connection</Heading>
-            <Divider />
-
-            <SettingsRow
-              label="Sonarr URL"
-              description="Base URL of your Sonarr instance."
-              error={errors.sonarrUrl?.message}
-            >
-              <Controller
-                control={control}
-                name="sonarrUrl"
-                render={({ field }) => (
-                  <TextInput
-                    label="Sonarr URL"
-                    value={field.value}
-                    onChange={(v) => {
-                      field.onChange(v);
-                      clearTestResult();
-                    }}
-                    placeholder="http://localhost:8989"
-                    isLabelHidden
-                    width={320}
-                  />
-                )}
-              />
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow label="API key" description="Found in Sonarr under Settings, General.">
-              <HStack gap={2} align="center">
-                <Controller
-                  control={control}
-                  name="sonarrApiKey"
-                  render={({ field }) => (
-                    <TextInput
-                      label="API key"
-                      type={apiKeyVisible ? "text" : "password"}
-                      value={field.value}
-                      onChange={(v) => {
-                        field.onChange(v);
-                        setApiKeyDirty(true);
-                        clearTestResult();
-                      }}
-                      placeholder={hasSavedApiKey ? savedApiKeyMasked || "Saved API key" : "Your Sonarr API key"}
-                      isLabelHidden
-                      width={280}
-                    />
-                  )}
-                />
-                {(hasSavedApiKey || apiKeyDirty) && (
-                  <Button
-                    label={apiKeyVisible ? "Hide" : "Show"}
-                    variant="ghost"
-                    isIconOnly
-                    icon={apiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                    onClick={toggleApiKeyVisibility}
-                    data-cuelume-toggle="whisper"
-                  />
-                )}
-              </HStack>
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="Test connection"
-              description="Check that Mizu can reach Sonarr with the URL and API key above."
-            >
-              <Button
-                label={
-                  testPhase === "connecting"
-                    ? "Testing"
-                    : testPhase === "success"
-                      ? "Connected"
-                      : testPhase === "error"
-                        ? "Retry"
-                        : "Test"
-                }
-                variant={testPhase === "error" ? "destructive" : "secondary"}
-                icon={
-                  testPhase === "connecting" ? (
-                    <Spinner size="sm" />
-                  ) : testPhase === "success" ? (
-                    <Check size={16} color="var(--color-on-success, #fff)" />
-                  ) : testPhase === "error" ? (
-                    <AlertTriangle size={16} />
-                  ) : (
-                    <Plug size={16} />
-                  )
-                }
-                onClick={handleTestConnection}
-                isDisabled={!getValues("sonarrUrl") || !!errors.sonarrUrl}
-                className={testPhase !== "idle" ? "test-status-btn" : undefined}
-                data-test-success={testPhase === "success" ? "true" : undefined}
-                data-cuelume-press
-              />
-            </SettingsRow>
-          </VStack>
-        </Card>
+        <ConnectionCard
+          control={control}
+          sonarrUrlError={errors.sonarrUrl?.message}
+          testPhase={testPhase}
+          testDisabled={!getValues("sonarrUrl") || !!errors.sonarrUrl}
+          apiKeyVisible={apiKeyVisible}
+          hasSavedApiKey={hasSavedApiKey}
+          apiKeyDirty={apiKeyDirty}
+          savedApiKeyMasked={savedApiKeyMasked}
+          clearTestResult={clearTestResult}
+          setApiKeyDirty={setApiKeyDirty}
+          toggleApiKeyVisibility={toggleApiKeyVisibility}
+          handleTestConnection={handleTestConnection}
+        />
 
         {/* Sync */}
-        <Card variant="muted" padding={4}>
-          <VStack gap={3}>
-            <Heading level={2}>Sync</Heading>
-            <Divider />
-
-            <SettingsRow
-              label="Sync interval"
-              description="How often Mizu checks for episode changes and updates Sonarr."
-            >
-              <Controller
-                control={control}
-                name="syncInterval"
-                render={({ field }) => (
-                  <Selector
-                    label="Sync interval"
-                    value={field.value}
-                    options={syncIntervalOptions}
-                    onChange={(v) => field.onChange(v as string)}
-                    isLabelHidden
-                    width={180}
-                  />
-                )}
-              />
-            </SettingsRow>
-            <Divider />
-
-            {/* Multi-source artwork system */}
-            <SettingsRow
-              label="Artwork source"
-              description="Default provider for fetching show artwork. Images are downloaded and stored locally so browsing works offline."
-            >
-              <Controller
-                control={control}
-                name="artworkDefaultSource"
-                render={({ field }) => (
-                  <Selector
-                    label="Artwork source"
-                    value={field.value}
-                    options={artworkSourceOptions}
-                    onChange={(v) => field.onChange(v as string)}
-                    isLabelHidden
-                    width={220}
-                  />
-                )}
-              />
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="TMDB API key"
-              description="Required for TMDB artwork. Get a free key at themoviedb.org."
-            >
-              <HStack gap={2} align="center">
-                <Controller
-                  control={control}
-                  name="tmdbApiKey"
-                  render={({ field }) => (
-                    <TextInput
-                      label="TMDB API key"
-                      type={tmdbApiKeyVisible ? "text" : "password"}
-                      value={field.value}
-                      onChange={(v) => {
-                        field.onChange(v);
-                        setTmdbApiKeyDirty(true);
-                      }}
-                      placeholder={tmdbApiKeySet ? savedTmdbApiKeyMasked || "Saved API key" : "Enter TMDB API key"}
-                      isLabelHidden
-                      width={260}
-                    />
-                  )}
-                />
-                {(tmdbApiKeySet || tmdbApiKeyDirty) && (
-                  <Button
-                    label={tmdbApiKeyVisible ? "Hide" : "Show"}
-                    variant="ghost"
-                    isIconOnly
-                    icon={tmdbApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                    onClick={toggleTmdbApiKeyVisibility}
-                    data-cuelume-toggle="whisper"
-                  />
-                )}
-              </HStack>
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="Fanart.tv API key"
-              description="Required for Fanart.tv artwork. Get a free key at fanart.tv."
-            >
-              <HStack gap={2} align="center">
-                <Controller
-                  control={control}
-                  name="fanartApiKey"
-                  render={({ field }) => (
-                    <TextInput
-                      label="Fanart.tv API key"
-                      type={fanartApiKeyVisible ? "text" : "password"}
-                      value={field.value}
-                      onChange={(v) => {
-                        field.onChange(v);
-                        setFanartApiKeyDirty(true);
-                      }}
-                      placeholder={fanartApiKeySet ? savedFanartApiKeyMasked || "Saved API key" : "Enter Fanart.tv API key"}
-                      isLabelHidden
-                      width={260}
-                    />
-                  )}
-                />
-                {(fanartApiKeySet || fanartApiKeyDirty) && (
-                  <Button
-                    label={fanartApiKeyVisible ? "Hide" : "Show"}
-                    variant="ghost"
-                    isIconOnly
-                    icon={fanartApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                    onClick={toggleFanartApiKeyVisibility}
-                    data-cuelume-toggle="whisper"
-                  />
-                )}
-              </HStack>
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="AFL cache"
-              description={`${cacheCount} shows cached, refreshed ${formatCacheTime(cacheRefreshedAt)}.`}
-            >
-              <Button
-                label={refreshingCache ? "Refreshing..." : "Refresh"}
-                variant="secondary"
-                icon={<RefreshCw size={16} />}
-                onClick={handleRefreshCache}
-                isLoading={refreshingCache}
-                data-cuelume-press
-              />
-            </SettingsRow>
-          </VStack>
-        </Card>
+        <SyncCard
+          control={control}
+          artworkSourceOptions={artworkSourceOptions}
+          tmdb={{
+            visible: tmdbApiKeyVisible,
+            isSet: tmdbApiKeySet,
+            dirty: tmdbApiKeyDirty,
+            savedMasked: savedTmdbApiKeyMasked,
+          }}
+          fanart={{
+            visible: fanartApiKeyVisible,
+            isSet: fanartApiKeySet,
+            dirty: fanartApiKeyDirty,
+            savedMasked: savedFanartApiKeyMasked,
+          }}
+          setTmdbApiKeyDirty={setTmdbApiKeyDirty}
+          setFanartApiKeyDirty={setFanartApiKeyDirty}
+          toggleTmdbApiKeyVisibility={toggleTmdbApiKeyVisibility}
+          toggleFanartApiKeyVisibility={toggleFanartApiKeyVisibility}
+          cacheCount={cacheCount}
+          cacheRefreshedAt={cacheRefreshedAt}
+          refreshingCache={refreshingCache}
+          handleRefreshCache={handleRefreshCache}
+        />
 
         {/* Notifications */}
-        <Card variant="muted" padding={4}>
-          <VStack gap={3}>
-            <Heading level={2}>Notifications</Heading>
-            <Divider />
-
-            <SettingsRow
-              label="Enable notifications"
-              description="Get a push notification after each sync via ntfy.sh."
-            >
-              <Controller
-                control={control}
-                name="ntfyEnabled"
-                render={({ field }) => (
-                  <Switch
-                    label="Enable notifications"
-                    value={field.value}
-                    onChange={field.onChange}
-                    isLabelHidden
-                    data-cuelume-toggle
-                  />
-                )}
-              />
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="Notify on"
-              description="Which sync results should send a notification."
-            >
-              <Controller
-                control={control}
-                name="notifyOn"
-                render={({ field }) => (
-                  <Selector
-                    label="Notify on"
-                    value={field.value}
-                    options={notifyOnOptions}
-                    onChange={(v) => field.onChange(v as "always" | "changes" | "failures")}
-                    isLabelHidden
-                    width={220}
-                  />
-                )}
-              />
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="Server URL"
-              description="ntfy server URL (self-hosted or public ntfy.sh)."
-            >
-              <Controller
-                control={control}
-                name="ntfyServerUrl"
-                render={({ field }) => (
-                  <TextInput
-                    label="Server URL"
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder="https://ntfy.sh"
-                    isLabelHidden
-                    width={320}
-                  />
-                )}
-              />
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow label="Topic" description="ntfy topic name to publish to.">
-              <Controller
-                control={control}
-                name="ntfyTopic"
-                render={({ field }) => (
-                  <TextInput
-                    label="Topic"
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder="my-anime-sync"
-                    isLabelHidden
-                    width={320}
-                  />
-                )}
-              />
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="Access token"
-              description="Optional — only needed if your ntfy server requires authentication."
-            >
-              <HStack gap={2} align="center">
-                <Controller
-                  control={control}
-                  name="ntfyToken"
-                  render={({ field }) => (
-                    <TextInput
-                      label="Access token"
-                      type="password"
-                      value={field.value}
-                      onChange={(v) => {
-                        field.onChange(v);
-                        setNtfyTokenDirty(true);
-                      }}
-                      placeholder={ntfyTokenSet ? "Saved token" : "Enter access token"}
-                      isLabelHidden
-                      width={260}
-                    />
-                  )}
-                />
-                {ntfyTokenSet && !ntfyTokenDirty && <Badge variant="success" label="Token set" />}
-              </HStack>
-            </SettingsRow>
-            <Divider />
-
-            <SettingsRow
-              label="Test notification"
-              description="Send a test notification to verify your configuration."
-            >
-              <Button
-                label={
-                  ntfyTestPhase === "connecting"
-                    ? "Sending"
-                    : ntfyTestPhase === "success"
-                      ? "Sent"
-                      : ntfyTestPhase === "error"
-                        ? "Retry"
-                        : "Test"
-                }
-                variant={ntfyTestPhase === "error" ? "destructive" : "secondary"}
-                icon={
-                  ntfyTestPhase === "connecting" ? (
-                    <Spinner size="sm" />
-                  ) : ntfyTestPhase === "success" ? (
-                    <Check size={16} color="var(--color-on-success, #fff)" />
-                  ) : ntfyTestPhase === "error" ? (
-                    <AlertTriangle size={16} />
-                  ) : (
-                    <Plug size={16} />
-                  )
-                }
-                onClick={handleTestNtfy}
-                isDisabled={!getValues("ntfyServerUrl") || !getValues("ntfyTopic")}
-                className={ntfyTestPhase !== "idle" ? "test-status-btn" : undefined}
-                data-test-success={ntfyTestPhase === "success" ? "true" : undefined}
-                data-cuelume-press
-              />
-            </SettingsRow>
-          </VStack>
-        </Card>
+        <NotificationsCard
+          control={control}
+          ntfyTokenSet={ntfyTokenSet}
+          ntfyTokenDirty={ntfyTokenDirty}
+          ntfyTestPhase={ntfyTestPhase}
+          ntfyTestDisabled={!getValues("ntfyServerUrl") || !getValues("ntfyTopic")}
+          setNtfyTokenDirty={setNtfyTokenDirty}
+          handleTestNtfy={handleTestNtfy}
+        />
 
         {/* Backup */}
-        <Card variant="muted" padding={4}>
-          <VStack gap={3}>
-            <Heading level={2}>Backup</Heading>
-            <Divider />
-            <SettingsRow
-              label="Export config"
-              description="Download all shows and settings as a JSON file for backup or migration."
-            >
-              <Button
-                label="Export"
-                variant="secondary"
-                icon={<FileDown size={16} />}
-                onClick={() => void handleExportConfig()}
-                data-cuelume-press
-              />
-            </SettingsRow>
-            <Divider />
-            <SettingsRow
-              label="Import config"
-              description="Restore shows and settings from an exported file. Existing shows with the same series are replaced."
-            >
-              <Button
-                label={importingConfig ? "Importing..." : "Import"}
-                variant="secondary"
-                icon={<FileUp size={16} />}
-                isLoading={importingConfig}
-                onClick={() => importFileRef.current?.click()}
-                data-cuelume-press
-              />
-            </SettingsRow>
-            <input
-              ref={importFileRef}
-              type="file"
-              accept="application/json,.json"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleImportConfigFile(file);
-              }}
-            />
-          </VStack>
-        </Card>
+        <BackupCard
+          importingConfig={importingConfig}
+          importFileRef={importFileRef}
+          handleExportConfig={handleExportConfig}
+          handleImportConfigFile={handleImportConfigFile}
+        />
 
         {/* Interface */}
-        <Card variant="muted" padding={4}>
-          <VStack gap={3}>
-            <Heading level={2}>Interface</Heading>
-            <Divider />
-            <SettingsRow
-              label="Interaction sounds"
-              description="Play subtle audio cues on hover, press, toggle, and notifications."
-            >
-              <Controller
-                control={control}
-                name="soundsEnabled"
-                render={({ field }) => (
-                  <Switch
-                    label="Enable interaction sounds"
-                    value={field.value}
-                    onChange={field.onChange}
-                    isLabelHidden
-                    data-cuelume-toggle
-                  />
-                )}
-              />
-            </SettingsRow>
-          </VStack>
-        </Card>
+        <InterfaceCard control={control} />
 
         {/* Security */}
         <SecuritySettingsCard />
 
         {/* Defaults */}
-        <VStack gap={4}>
-          <VStack gap={1}>
-            <Heading level={2}>Defaults</Heading>
-            <Text type="supporting" color="secondary" display="block">
-              These tracking rules are applied automatically when you add a new anime mapping. You
-              can override them per anime.
-            </Text>
-          </VStack>
-
-          <Grid columns={{ minWidth: 240, max: 3 }} gap={4} align="start">
-            <Controller
-              control={control}
-              name="trackAnimeCanonDefault"
-              render={({ field }) => (
-                <TrackingRuleCard
-                  variant="green"
-                  label="Canon"
-                  description="Main plot episodes"
-                  switchLabel="Track canon"
-                  value={field.value}
-                  onChange={field.onChange}
-                />
-              )}
-            />
-            <Controller
-              control={control}
-              name="trackMixedDefault"
-              render={({ field }) => (
-                <TrackingRuleCard
-                  variant="yellow"
-                  label="Mixed"
-                  description="Mix of canon and filler"
-                  switchLabel="Track mixed"
-                  value={field.value}
-                  onChange={field.onChange}
-                />
-              )}
-            />
-            <Controller
-              control={control}
-              name="trackFillerDefault"
-              render={({ field }) => (
-                <TrackingRuleCard
-                  variant="red"
-                  label="Filler"
-                  description="Skippable, no plot impact"
-                  switchLabel="Track filler"
-                  value={field.value}
-                  onChange={field.onChange}
-                />
-              )}
-            />
-          </Grid>
-        </VStack>
+        <DefaultsSection control={control} />
       </VStack>
     </Section>
   );

@@ -273,167 +273,167 @@
       --shadow-inset-error: inset 0px 0px 0px 2px #e33f4a4d;
     }
 
-    .astryx-heading:is(.level-1,[data-level="1"]) {
+    .astryx-heading:is(.level-1, [data-level="1"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-heading-1-size);
       font-weight: var(--text-heading-1-weight);
       line-height: var(--text-heading-1-leading);
     }
 
-    .astryx-heading:is(.level-2,[data-level="2"]) {
+    .astryx-heading:is(.level-2, [data-level="2"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-heading-2-size);
       font-weight: var(--text-heading-2-weight);
       line-height: var(--text-heading-2-leading);
     }
 
-    .astryx-heading:is(.level-3,[data-level="3"]) {
+    .astryx-heading:is(.level-3, [data-level="3"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-heading-3-size);
       font-weight: var(--text-heading-3-weight);
       line-height: var(--text-heading-3-leading);
     }
 
-    .astryx-heading:is(.level-4,[data-level="4"]) {
+    .astryx-heading:is(.level-4, [data-level="4"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-heading-4-size);
       font-weight: var(--text-heading-4-weight);
       line-height: var(--text-heading-4-leading);
     }
 
-    .astryx-heading:is(.level-5,[data-level="5"]) {
+    .astryx-heading:is(.level-5, [data-level="5"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-heading-5-size);
       font-weight: var(--text-heading-5-weight);
       line-height: var(--text-heading-5-leading);
     }
 
-    .astryx-heading:is(.level-6,[data-level="6"]) {
+    .astryx-heading:is(.level-6, [data-level="6"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-heading-6-size);
       font-weight: var(--text-heading-6-weight);
       line-height: var(--text-heading-6-leading);
     }
 
-    .astryx-text:is(.body,[data-type="body"]) {
+    .astryx-text:is(.body, [data-type="body"]) {
       font-family: var(--font-family-body);
       font-size: var(--text-body-size);
       line-height: var(--text-body-leading);
     }
 
-    .astryx-text:is(.large,[data-type="large"]) {
+    .astryx-text:is(.large, [data-type="large"]) {
       font-family: var(--font-family-body);
       font-size: var(--text-large-size);
       line-height: var(--text-large-leading);
     }
 
-    .astryx-text:is(.label,[data-type="label"]) {
+    .astryx-text:is(.label, [data-type="label"]) {
       font-family: var(--font-family-body);
       font-size: var(--text-label-size);
       line-height: var(--text-label-leading);
     }
 
-    .astryx-text:is(.code,[data-type="code"]) {
+    .astryx-text:is(.code, [data-type="code"]) {
       font-family: var(--font-family-code);
       font-size: var(--text-code-size);
       line-height: var(--text-code-leading);
     }
 
-    .astryx-text:is(.supporting,[data-type="supporting"]) {
+    .astryx-text:is(.supporting, [data-type="supporting"]) {
       font-family: var(--font-family-body);
       font-size: var(--text-supporting-size);
       line-height: var(--text-supporting-leading);
     }
 
-    .astryx-text:is(.display-1,[data-type="display-1"]) {
+    .astryx-text:is(.display-1, [data-type="display-1"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-display-1-size);
       line-height: var(--text-display-1-leading);
     }
 
-    .astryx-text:is(.display-2,[data-type="display-2"]) {
+    .astryx-text:is(.display-2, [data-type="display-2"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-display-2-size);
       line-height: var(--text-display-2-leading);
     }
 
-    .astryx-text:is(.display-3,[data-type="display-3"]) {
+    .astryx-text:is(.display-3, [data-type="display-3"]) {
       font-family: var(--font-family-heading);
       font-size: var(--text-display-3-size);
       line-height: var(--text-display-3-leading);
     }
 
-    .astryx-button:is(.destructive,[data-variant="destructive"]) {
+    .astryx-button:is(.destructive, [data-variant="destructive"]) {
       background-color: var(--color-error-muted);
       color: var(--color-error);
     }
 
-    .astryx-badge:is(.info,[data-variant="info"]) {
+    .astryx-badge:is(.info, [data-variant="info"]) {
       background-color: light-dark(#0074e2, #6d9cfe);
       color: light-dark(#ffffff, #171717);
     }
 
-    .astryx-badge:is(.neutral,[data-variant="neutral"]) {
+    .astryx-badge:is(.neutral, [data-variant="neutral"]) {
       background-color: var(--color-background-gray);
       color: var(--color-text-gray);
     }
 
-    .astryx-badge:is(.success,[data-variant="success"]) {
+    .astryx-badge:is(.success, [data-variant="success"]) {
       background-color: light-dark(#198100, #64af4c);
       color: light-dark(#ffffff, #171717);
     }
 
-    .astryx-badge:is(.warning,[data-variant="warning"]) {
+    .astryx-badge:is(.warning, [data-variant="warning"]) {
       background-color: #ffce2f;
       color: #171717;
     }
 
-    .astryx-badge:is(.error,[data-variant="error"]) {
+    .astryx-badge:is(.error, [data-variant="error"]) {
       background-color: light-dark(#e33f4a, #ff705d);
       color: light-dark(#ffffff, #171717);
     }
 
-    .astryx-badge:is(.red,[data-variant="red"]) {
+    .astryx-badge:is(.red, [data-variant="red"]) {
       background-color: var(--color-background-red);
       color: var(--color-text-red);
     }
 
-    .astryx-badge:is(.orange,[data-variant="orange"]) {
+    .astryx-badge:is(.orange, [data-variant="orange"]) {
       background-color: var(--color-background-orange);
       color: var(--color-text-orange);
     }
 
-    .astryx-badge:is(.yellow,[data-variant="yellow"]) {
+    .astryx-badge:is(.yellow, [data-variant="yellow"]) {
       background-color: var(--color-background-yellow);
       color: var(--color-text-yellow);
     }
 
-    .astryx-badge:is(.green,[data-variant="green"]) {
+    .astryx-badge:is(.green, [data-variant="green"]) {
       background-color: var(--color-background-green);
       color: var(--color-text-green);
     }
 
-    .astryx-badge:is(.teal,[data-variant="teal"]) {
+    .astryx-badge:is(.teal, [data-variant="teal"]) {
       background-color: var(--color-background-teal);
       color: var(--color-text-teal);
     }
 
-    .astryx-badge:is(.cyan,[data-variant="cyan"]) {
+    .astryx-badge:is(.cyan, [data-variant="cyan"]) {
       background-color: var(--color-background-cyan);
       color: var(--color-text-cyan);
     }
 
-    .astryx-badge:is(.blue,[data-variant="blue"]) {
+    .astryx-badge:is(.blue, [data-variant="blue"]) {
       background-color: var(--color-background-blue);
       color: var(--color-text-blue);
     }
 
-    .astryx-badge:is(.purple,[data-variant="purple"]) {
+    .astryx-badge:is(.purple, [data-variant="purple"]) {
       background-color: var(--color-background-purple);
       color: var(--color-text-purple);
     }
 
-    .astryx-badge:is(.pink,[data-variant="pink"]) {
+    .astryx-badge:is(.pink, [data-variant="pink"]) {
       background-color: var(--color-background-pink);
       color: var(--color-text-pink);
     }
@@ -443,23 +443,23 @@
       color: var(--color-text-gray);
     }
 
-    .astryx-statusdot:is(.success,[data-variant="success"]) {
+    .astryx-statusdot:is(.success, [data-variant="success"]) {
       background-color: light-dark(#198100, #64af4c);
     }
 
-    .astryx-statusdot:is(.warning,[data-variant="warning"]) {
+    .astryx-statusdot:is(.warning, [data-variant="warning"]) {
       background-color: #ffce2f;
     }
 
-    .astryx-statusdot:is(.error,[data-variant="error"]) {
+    .astryx-statusdot:is(.error, [data-variant="error"]) {
       background-color: light-dark(#e33f4a, #ff705d);
     }
 
-    .astryx-statusdot:is(.accent,[data-variant="accent"]) {
+    .astryx-statusdot:is(.accent, [data-variant="accent"]) {
       background-color: light-dark(#0074e2, #6d9cfe);
     }
 
-    .astryx-banner:is(.info,[data-status="info"]) {
+    .astryx-banner:is(.info, [data-status="info"]) {
       background-color: var(--color-background-blue);
       --color-accent-muted: transparent;
       --color-text-primary: var(--color-text-blue);
@@ -467,19 +467,19 @@
       --color-accent: var(--color-text-blue);
     }
 
-    .astryx-banner:is(.success,[data-status="success"]) {
+    .astryx-banner:is(.success, [data-status="success"]) {
       --color-text-primary: var(--color-text-green);
       --color-text-secondary: var(--color-text-green);
       --color-success: var(--color-text-green);
     }
 
-    .astryx-banner:is(.warning,[data-status="warning"]) {
+    .astryx-banner:is(.warning, [data-status="warning"]) {
       --color-text-primary: var(--color-text-yellow);
       --color-text-secondary: var(--color-text-yellow);
       --color-warning: var(--color-text-yellow);
     }
 
-    .astryx-banner:is(.error,[data-status="error"]) {
+    .astryx-banner:is(.error, [data-status="error"]) {
       --color-text-primary: var(--color-text-red);
       --color-text-secondary: var(--color-text-red);
       --color-error: var(--color-text-red);
@@ -493,19 +493,19 @@
       --color-background-muted: var(--color-border-emphasized);
     }
 
-    .astryx-progressbar:is(.accent,[data-variant="accent"]) {
+    .astryx-progressbar:is(.accent, [data-variant="accent"]) {
       --color-accent: #0074e2;
     }
 
-    .astryx-progressbar:is(.success,[data-variant="success"]) {
+    .astryx-progressbar:is(.success, [data-variant="success"]) {
       --color-success: #198100;
     }
 
-    .astryx-progressbar:is(.warning,[data-variant="warning"]) {
+    .astryx-progressbar:is(.warning, [data-variant="warning"]) {
       --color-warning: #ffce2f;
     }
 
-    .astryx-progressbar:is(.error,[data-variant="error"]) {
+    .astryx-progressbar:is(.error, [data-variant="error"]) {
       --color-error: #e33f4a;
     }
 
@@ -517,43 +517,43 @@
       --astryx-section-padding: var(--spacing-3);
     }
 
-    .astryx-text:is(.primary,[data-color="primary"]) {
+    .astryx-text:is(.primary, [data-color="primary"]) {
       color: var(--color-text-primary);
     }
 
-    .astryx-heading:is(.primary,[data-color="primary"]) {
+    .astryx-heading:is(.primary, [data-color="primary"]) {
       color: var(--color-text-primary);
     }
 
-    .astryx-text:is(.secondary,[data-color="secondary"]) {
+    .astryx-text:is(.secondary, [data-color="secondary"]) {
       color: var(--color-text-secondary);
     }
 
-    .astryx-heading:is(.secondary,[data-color="secondary"]) {
+    .astryx-heading:is(.secondary, [data-color="secondary"]) {
       color: var(--color-text-secondary);
     }
 
-    .astryx-text:is(.disabled,[data-color="disabled"]) {
+    .astryx-text:is(.disabled, [data-color="disabled"]) {
       color: var(--color-text-disabled);
     }
 
-    .astryx-heading:is(.disabled,[data-color="disabled"]) {
+    .astryx-heading:is(.disabled, [data-color="disabled"]) {
       color: var(--color-text-disabled);
     }
 
-    .astryx-text:is(.placeholder,[data-color="placeholder"]) {
+    .astryx-text:is(.placeholder, [data-color="placeholder"]) {
       color: var(--color-text-secondary);
     }
 
-    .astryx-heading:is(.placeholder,[data-color="placeholder"]) {
+    .astryx-heading:is(.placeholder, [data-color="placeholder"]) {
       color: var(--color-text-secondary);
     }
 
-    .astryx-text:is(.accent,[data-color="accent"]) {
+    .astryx-text:is(.accent, [data-color="accent"]) {
       color: var(--color-text-accent);
     }
 
-    .astryx-heading:is(.accent,[data-color="accent"]) {
+    .astryx-heading:is(.accent, [data-color="accent"]) {
       color: var(--color-text-accent);
     }
   }
