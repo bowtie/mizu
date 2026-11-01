@@ -139,7 +139,7 @@ export function LoginPage() {
             >
               <Waves size={24} />
             </div>
-            <Heading level={2}>{isSetup ? "Set up Mizu" : "Sign in to Mizu"}</Heading>
+            <Heading level={1}>{isSetup ? "Set up Mizu" : "Sign in to Mizu"}</Heading>
             <Text size="sm" color="secondary" style={{ textAlign: "center" }}>
               {isSetup
                 ? "Create a password to protect your dashboard. You'll sign in with it from now on."

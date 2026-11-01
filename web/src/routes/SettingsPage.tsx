@@ -7,7 +7,6 @@ import { Section } from "@astryxdesign/core/Section";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
-import { Badge } from "@astryxdesign/core/Badge";
 import { Save, Check } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
 import { useSettings, useArtworkProviders, useUpdateSettings } from "../lib/queries";
@@ -67,19 +66,14 @@ export function SettingsPage() {
   const [savedApiKeyMasked, setSavedApiKeyMasked] = useState("");
   const [savedApiKeyFull, setSavedApiKeyFull] = useState("");
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
 
   const [savedTmdbApiKeyMasked, setSavedTmdbApiKeyMasked] = useState("");
-  const [savedTmdbApiKeyFull, setSavedTmdbApiKeyFull] = useState("");
   const [tmdbApiKeySet, setTmdbApiKeySet] = useState(false);
-  const [tmdbApiKeyVisible, setTmdbApiKeyVisible] = useState(false);
   const [tmdbApiKeyDirty, setTmdbApiKeyDirty] = useState(false);
 
   const [savedFanartApiKeyMasked, setSavedFanartApiKeyMasked] = useState("");
-  const [savedFanartApiKeyFull, setSavedFanartApiKeyFull] = useState("");
   const [fanartApiKeySet, setFanartApiKeySet] = useState(false);
-  const [fanartApiKeyVisible, setFanartApiKeyVisible] = useState(false);
   const [fanartApiKeyDirty, setFanartApiKeyDirty] = useState(false);
 
   const [ntfyTokenSet, setNtfyTokenSet] = useState(false);
@@ -191,19 +185,14 @@ export function SettingsPage() {
       setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
       setSavedApiKeyFull(data.sonarr_api_key || "");
       setHasSavedApiKey(!!data.sonarr_api_key_set);
-      setApiKeyVisible(false);
       setApiKeyDirty(false);
 
       setSavedTmdbApiKeyMasked(data.tmdb_api_key_masked || "");
-      setSavedTmdbApiKeyFull(data.tmdb_api_key || "");
       setTmdbApiKeySet(!!data.tmdb_api_key_set);
-      setTmdbApiKeyVisible(false);
       setTmdbApiKeyDirty(false);
 
       setSavedFanartApiKeyMasked(data.fanart_api_key_masked || "");
-      setSavedFanartApiKeyFull(data.fanart_api_key || "");
       setFanartApiKeySet(!!data.fanart_api_key_set);
-      setFanartApiKeyVisible(false);
       setFanartApiKeyDirty(false);
 
       setNtfyTokenSet(!!data.ntfy_token_set);
@@ -268,54 +257,12 @@ export function SettingsPage() {
 
   // ── API key helpers ──
 
-  const toggleApiKeyVisibility = () => {
-    if (apiKeyVisible) {
-      setApiKeyVisible(false);
-      if (!apiKeyDirty && hasSavedApiKey) {
-        reset({ ...getValues(), sonarrApiKey: "" });
-      }
-      return;
-    }
-    if (!apiKeyDirty && hasSavedApiKey) {
-      reset({ ...getValues(), sonarrApiKey: savedApiKeyFull });
-    }
-    setApiKeyVisible(true);
-  };
-
   const resolveApiKeyForTest = (): string => {
     const current = getValues("sonarrApiKey");
-    if (apiKeyDirty || apiKeyVisible || !hasSavedApiKey) {
+    if (apiKeyDirty || !hasSavedApiKey) {
       return current;
     }
     return savedApiKeyFull;
-  };
-
-  const toggleTmdbApiKeyVisibility = () => {
-    if (tmdbApiKeyVisible) {
-      setTmdbApiKeyVisible(false);
-      if (!tmdbApiKeyDirty && tmdbApiKeySet) {
-        reset({ ...getValues(), tmdbApiKey: "" });
-      }
-    } else {
-      if (!tmdbApiKeyDirty && tmdbApiKeySet) {
-        reset({ ...getValues(), tmdbApiKey: savedTmdbApiKeyFull });
-      }
-      setTmdbApiKeyVisible(true);
-    }
-  };
-
-  const toggleFanartApiKeyVisibility = () => {
-    if (fanartApiKeyVisible) {
-      setFanartApiKeyVisible(false);
-      if (!fanartApiKeyDirty && fanartApiKeySet) {
-        reset({ ...getValues(), fanartApiKey: "" });
-      }
-    } else {
-      if (!fanartApiKeyDirty && fanartApiKeySet) {
-        reset({ ...getValues(), fanartApiKey: savedFanartApiKeyFull });
-      }
-      setFanartApiKeyVisible(true);
-    }
   };
 
   // ── Save ──
@@ -379,6 +326,8 @@ export function SettingsPage() {
   };
 
   const handleSave = handleSubmit(onSubmit);
+
+  const handleDiscard = () => applySettings(storeSettings);
 
   // ── Test connection ──
 
@@ -584,21 +533,6 @@ export function SettingsPage() {
               Configure Sonarr connection, sync behavior, and defaults.
             </Text>
           </VStack>
-          <HStack gap={3} align="center">
-            {settingsDirty && <Badge variant="warning" label="Unsaved changes" />}
-            <Button
-              label={savedFlash ? "Saved" : saving ? "Saving..." : "Save settings"}
-              variant="primary"
-              icon={
-                savedFlash ? <Check size={14} color="var(--color-success)" /> : <Save size={16} />
-              }
-              onClick={handleSave}
-              isDisabled={saving || !settingsDirty}
-              isLoading={saving}
-              className={savedFlash ? "save-flash" : undefined}
-              data-cuelume-press
-            />
-          </HStack>
         </HStack>
 
         {/* Connection */}
@@ -607,13 +541,11 @@ export function SettingsPage() {
           sonarrUrlError={errors.sonarrUrl?.message}
           testPhase={testPhase}
           testDisabled={!getValues("sonarrUrl") || !!errors.sonarrUrl}
-          apiKeyVisible={apiKeyVisible}
           hasSavedApiKey={hasSavedApiKey}
           apiKeyDirty={apiKeyDirty}
           savedApiKeyMasked={savedApiKeyMasked}
           clearTestResult={clearTestResult}
           setApiKeyDirty={setApiKeyDirty}
-          toggleApiKeyVisibility={toggleApiKeyVisibility}
           handleTestConnection={handleTestConnection}
         />
 
@@ -622,21 +554,17 @@ export function SettingsPage() {
           control={control}
           artworkSourceOptions={artworkSourceOptions}
           tmdb={{
-            visible: tmdbApiKeyVisible,
             isSet: tmdbApiKeySet,
             dirty: tmdbApiKeyDirty,
             savedMasked: savedTmdbApiKeyMasked,
           }}
           fanart={{
-            visible: fanartApiKeyVisible,
             isSet: fanartApiKeySet,
             dirty: fanartApiKeyDirty,
             savedMasked: savedFanartApiKeyMasked,
           }}
           setTmdbApiKeyDirty={setTmdbApiKeyDirty}
           setFanartApiKeyDirty={setFanartApiKeyDirty}
-          toggleTmdbApiKeyVisibility={toggleTmdbApiKeyVisibility}
-          toggleFanartApiKeyVisibility={toggleFanartApiKeyVisibility}
           cacheCount={cacheCount}
           cacheRefreshedAt={cacheRefreshedAt}
           refreshingCache={refreshingCache}
@@ -671,6 +599,42 @@ export function SettingsPage() {
         {/* Defaults */}
         <DefaultsSection control={control} />
       </VStack>
+
+      {(settingsDirty || savedFlash) && (
+        <HStack
+          className="settings-save-bar"
+          justify="between"
+          align="center"
+          gap={3}
+          role="region"
+          aria-label="Unsaved settings"
+        >
+          <Text type="supporting" color="secondary">
+            {savedFlash ? "All changes saved" : "You have unsaved changes"}
+          </Text>
+          <HStack gap={2} align="center">
+            <Button
+              label="Discard"
+              variant="ghost"
+              onClick={handleDiscard}
+              isDisabled={saving || savedFlash}
+              data-cuelume-press
+            />
+            <Button
+              label={savedFlash ? "Saved" : saving ? "Saving..." : "Save settings"}
+              variant="primary"
+              icon={
+                savedFlash ? <Check size={14} color="var(--color-success)" /> : <Save size={16} />
+              }
+              onClick={handleSave}
+              isDisabled={saving || savedFlash}
+              isLoading={saving}
+              className={savedFlash ? "save-flash" : undefined}
+              data-cuelume-press
+            />
+          </HStack>
+        </HStack>
+      )}
     </Section>
   );
 }

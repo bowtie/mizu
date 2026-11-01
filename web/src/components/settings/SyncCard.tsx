@@ -1,28 +1,27 @@
 import { Controller, type Control } from "react-hook-form";
 import { VStack } from "@astryxdesign/core/VStack";
-import { HStack } from "@astryxdesign/core/HStack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Button } from "@astryxdesign/core/Button";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
-import { RefreshCw, Eye, EyeOff } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { SettingsRow } from "../SettingsRow";
+import { SecretField } from "./SecretField";
+import { formatRelativeTime } from "../../lib/time";
 import type { SettingsForm } from "../../lib/schemas";
 import type { SelectOption } from "../../lib/types";
 
 export interface SecretKeyState {
-  visible: boolean;
   isSet: boolean;
   dirty: boolean;
   savedMasked: string;
 }
 
-const formatCacheTime = (value: string | null | undefined): string => {
-  if (!value) return "Never refreshed";
-  return new Date(value).toLocaleString();
-};
+const cacheStatus = (count: number, refreshedAt: string | null | undefined): string =>
+  refreshedAt
+    ? `${count} shows cached, refreshed ${formatRelativeTime(refreshedAt)}.`
+    : `${count} shows cached. Never refreshed.`;
 
 const syncIntervalOptions: SelectOption[] = [
   { value: "1h", label: "1 hour" },
@@ -39,8 +38,6 @@ interface SyncCardProps {
   fanart: SecretKeyState;
   setTmdbApiKeyDirty: (dirty: boolean) => void;
   setFanartApiKeyDirty: (dirty: boolean) => void;
-  toggleTmdbApiKeyVisibility: () => void;
-  toggleFanartApiKeyVisibility: () => void;
   cacheCount: number;
   cacheRefreshedAt: string | null;
   refreshingCache: boolean;
@@ -54,8 +51,6 @@ export function SyncCard({
   fanart,
   setTmdbApiKeyDirty,
   setFanartApiKeyDirty,
-  toggleTmdbApiKeyVisibility,
-  toggleFanartApiKeyVisibility,
   cacheCount,
   cacheRefreshedAt,
   refreshingCache,
@@ -114,38 +109,17 @@ export function SyncCard({
           label="TMDB API key"
           description="Required for TMDB artwork. Get a free key at themoviedb.org."
         >
-          <HStack gap={2} align="center">
-            <Controller
-              control={control}
-              name="tmdbApiKey"
-              render={({ field }) => (
-                <TextInput
-                  label="TMDB API key"
-                  type={tmdb.visible ? "text" : "password"}
-                  value={field.value}
-                  onChange={(v) => {
-                    field.onChange(v);
-                    setTmdbApiKeyDirty(true);
-                  }}
-                  placeholder={
-                    tmdb.isSet ? tmdb.savedMasked || "Saved API key" : "Enter TMDB API key"
-                  }
-                  isLabelHidden
-                  width={260}
-                />
-              )}
-            />
-            {(tmdb.isSet || tmdb.dirty) && (
-              <Button
-                label={tmdb.visible ? "Hide" : "Show"}
-                variant="ghost"
-                isIconOnly
-                icon={tmdb.visible ? <EyeOff size={16} /> : <Eye size={16} />}
-                onClick={toggleTmdbApiKeyVisibility}
-                data-cuelume-toggle="whisper"
-              />
-            )}
-          </HStack>
+          <SecretField
+            control={control}
+            name="tmdbApiKey"
+            label="TMDB API key"
+            isSet={tmdb.isSet}
+            dirty={tmdb.dirty}
+            savedMasked={tmdb.savedMasked}
+            emptyPlaceholder="Enter TMDB API key"
+            width={260}
+            onDirtyChange={setTmdbApiKeyDirty}
+          />
         </SettingsRow>
         <Divider />
 
@@ -153,45 +127,21 @@ export function SyncCard({
           label="Fanart.tv API key"
           description="Required for Fanart.tv artwork. Get a free key at fanart.tv."
         >
-          <HStack gap={2} align="center">
-            <Controller
-              control={control}
-              name="fanartApiKey"
-              render={({ field }) => (
-                <TextInput
-                  label="Fanart.tv API key"
-                  type={fanart.visible ? "text" : "password"}
-                  value={field.value}
-                  onChange={(v) => {
-                    field.onChange(v);
-                    setFanartApiKeyDirty(true);
-                  }}
-                  placeholder={
-                    fanart.isSet ? fanart.savedMasked || "Saved API key" : "Enter Fanart.tv API key"
-                  }
-                  isLabelHidden
-                  width={260}
-                />
-              )}
-            />
-            {(fanart.isSet || fanart.dirty) && (
-              <Button
-                label={fanart.visible ? "Hide" : "Show"}
-                variant="ghost"
-                isIconOnly
-                icon={fanart.visible ? <EyeOff size={16} /> : <Eye size={16} />}
-                onClick={toggleFanartApiKeyVisibility}
-                data-cuelume-toggle="whisper"
-              />
-            )}
-          </HStack>
+          <SecretField
+            control={control}
+            name="fanartApiKey"
+            label="Fanart.tv API key"
+            isSet={fanart.isSet}
+            dirty={fanart.dirty}
+            savedMasked={fanart.savedMasked}
+            emptyPlaceholder="Enter Fanart.tv API key"
+            width={260}
+            onDirtyChange={setFanartApiKeyDirty}
+          />
         </SettingsRow>
         <Divider />
 
-        <SettingsRow
-          label="AFL cache"
-          description={`${cacheCount} shows cached, refreshed ${formatCacheTime(cacheRefreshedAt)}.`}
-        >
+        <SettingsRow label="AFL cache" description={cacheStatus(cacheCount, cacheRefreshedAt)}>
           <Button
             label={refreshingCache ? "Refreshing..." : "Refresh"}
             variant="secondary"

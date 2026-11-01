@@ -330,8 +330,7 @@ body {
 /* Keyboard focus visibility for list items and clickable elements */
 .astryx-list-item:focus-visible,
 .astryx-clickable-card:focus-visible,
-.astryx-collapsible > button:focus-visible,
-.tracking-rule-card:focus-visible {
+.astryx-collapsible > button:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
@@ -433,6 +432,19 @@ body {
 .save-flash[data-variant="primary"] {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 40%, transparent);
   transition: box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+/* Settings — floating save bar, visible while edits are pending */
+.settings-save-bar {
+  position: sticky;
+  bottom: var(--spacing-4);
+  z-index: 10;
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-container);
+  border: 1px solid var(--color-border-emphasized);
+  background-color: var(--color-background-surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, black 30%, transparent);
 }
 
 /* Season rows — separate the primary season label from supporting episode count */
@@ -633,6 +645,12 @@ body {
   overflow: hidden;
   margin-top: calc(-1 * var(--spacing-4));
   margin-bottom: var(--spacing-4);
+}
+
+/* Let the actions bar shrink to the shell width (and scroll) instead of the
+   grid item growing to its min-content and being clipped on narrow screens. */
+.controls-reveal > .controls-reveal-inner {
+  min-width: 0;
 }
 
 /* Before page settles: collapsed, no transition (no flash) */
@@ -1344,7 +1362,7 @@ body {
 .wizard-step[data-state="future"] .wizard-step-dot {
   background-color: var(--color-background-muted);
   border: 1px solid var(--color-border);
-  color: var(--color-text-disabled);
+  color: var(--color-text-secondary);
 }
 
 .wizard-step[data-state="past"] .wizard-step-dot {
@@ -1555,5 +1573,53 @@ body {
   .skeleton-text,
   .skeleton-text-lg {
     animation: none;
+  }
+}
+
+/* Touch screens — keep controls at a comfortable tap size (44px per WCAG 2.5.5) */
+@media (pointer: coarse) {
+  .astryx-button,
+  .astryx-top-nav-item {
+    min-height: 44px;
+  }
+
+  /* Icon-only buttons render a single child (the icon wrapper). */
+  .astryx-button:has(> span:only-child) {
+    min-width: 44px;
+  }
+}
+
+/* ── Small screens: keep controls consistent and nothing hidden ── */
+@media (max-width: 600px) {
+  /* Segmented filters keep their labels and scroll sideways instead of
+     squeezing every item to an equal, truncated slice. */
+  .astryx-segmented-control {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .astryx-segmented-control::-webkit-scrollbar {
+    display: none;
+  }
+
+  .astryx-segmented-control-item {
+    flex: 1 0 auto;
+  }
+
+  /* Fixed-width fields (the width lives on the field wrapper) fill the row. */
+  .settings-row .astryx-field {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Wrap the show actions bar rather than scrolling Save/Remove out of sight. */
+  .show-actions-bar {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  /* Library: search gets its own full-width row above sort and view toggle. */
+  .library-toolbar .library-search {
+    flex: 1 1 100%;
   }
 }

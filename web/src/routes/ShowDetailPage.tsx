@@ -104,6 +104,7 @@ export function ShowDetailPage() {
   const [heroFallbackFailed, setHeroFallbackFailed] = useState(false);
   const [episodes, setEpisodes] = useState<Episode[]>(initialEpisodes ?? []);
   const [episodesLoading, setEpisodesLoading] = useState(!initialEpisodes);
+  const [episodesError, setEpisodesError] = useState<string | null>(null);
   const [pageSettled, setPageSettled] = useState(!!initialShow);
   const [epStats, setEpStats] = useState(() => {
     if (initialEpisodes) {
@@ -276,12 +277,6 @@ export function ShowDetailPage() {
     const hasStoreData = !!storeShow;
     const hasPrefetched = !!prefetchedDetail;
 
-    // Clear stale state from a previous show so the old show's data
-    // doesn't linger while the new show's data loads.
-    setEpisodes([]);
-    setEpStats({ total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 });
-    setMaxEpisode(0);
-
     // Cancellation flag — prevents stale promises from a previous showId
     // from overwriting state after navigation.
     let cancelled = false;
@@ -294,6 +289,7 @@ export function ShowDetailPage() {
     };
 
     // If we already have all data from prefetch, just settle — no fetch needed.
+    // (Initial state already holds the prefetched episodes; don't clear it.)
     if (hasPrefetched) {
       scheduleSettled();
       // Clear the cache so subsequent getShow/getEpisodes calls (e.g.
@@ -306,6 +302,12 @@ export function ShowDetailPage() {
       };
     }
 
+    // Clear stale state from a previous show so the old show's data
+    // doesn't linger while the new show's data loads.
+    setEpisodes([]);
+    setEpStats({ total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 });
+    setMaxEpisode(0);
+
     // Note: clearCachedShowDetail is called AFTER getShow/getEpisodes
     // below, so they can still reuse the in-flight prefetch promise.
     // The cache is only needed for the initial mount — clearing it
@@ -314,6 +316,7 @@ export function ShowDetailPage() {
 
     setLoadingShow(!hasStoreData);
     setEpisodesLoading(true);
+    setEpisodesError(null);
     setHeroImgError(false);
     setHeroFallbackFailed(false);
 
@@ -407,7 +410,7 @@ export function ShowDetailPage() {
         })
         .catch((err: unknown) => {
           if (!cancelled) {
-            addNotification("Failed to load episodes: " + errorMessage(err), "error");
+            setEpisodesError(errorMessage(err));
             setEpisodesLoading(false);
           }
         });
@@ -420,7 +423,7 @@ export function ShowDetailPage() {
         })
         .catch((err: unknown) => {
           if (!cancelled) {
-            addNotification("Failed to load episodes: " + errorMessage(err), "error");
+            setEpisodesError(errorMessage(err));
             setEpisodesLoading(false);
           }
         });
@@ -484,9 +487,10 @@ export function ShowDetailPage() {
   }, [showId, addNotification]);
 
   const loadEpisodeData = useCallback(
-    async (currentShow: Show) => {
+    async (currentShow: Show | null) => {
       if (!showId) return;
       setEpisodesLoading(true);
+      setEpisodesError(null);
       try {
         const episodesRes = await getEpisodes(showId);
         const eps = (episodesRes as Episode[]) || [];
@@ -518,14 +522,21 @@ export function ShowDetailPage() {
         }
         setEpStats({ total, canon, anime, mixed, filler });
         setMaxEpisode(freshMax);
-        setMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
-        setPristineMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
+        if (currentShow) {
+          setMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
+          setPristineMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
+        }
       } catch (err: unknown) {
-        addNotification("Failed to load episodes: " + errorMessage(err), "error");
+        setEpisodesError(errorMessage(err));
       }
       setEpisodesLoading(false);
     },
-    [showId, addNotification, clampMarkerValue],
+    [showId, clampMarkerValue],
+  );
+
+  const retryEpisodes = useCallback(
+    () => loadEpisodeData(show ?? storeShow ?? null),
+    [loadEpisodeData, show, storeShow],
   );
 
   /** Build Selector options for the artwork source dropdown. */
@@ -834,6 +845,8 @@ export function ShowDetailPage() {
           {showId && (
             <EpisodeListSection
               episodesLoading={episodesLoading}
+              episodesError={episodesError}
+              onRetryEpisodes={retryEpisodes}
               hasShowData={!!show}
               groupedBySeason={groupedBySeason}
               epStats={epStats}

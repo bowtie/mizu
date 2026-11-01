@@ -89,6 +89,7 @@ function ThemeMenu({
         <button
           className="theme-menu-placeholder"
           aria-label="Theme"
+          title="Theme"
           style={{
             display: "flex",
             alignItems: "center",
@@ -108,11 +109,12 @@ function ThemeMenu({
     >
       <DropdownMenu
         button={{
-          label: selectedMeta.label,
+          label: `Theme: ${selectedMeta.label}`,
           variant: "secondary",
           size: "sm",
           isIconOnly: true,
           icon: <Palette size={16} />,
+          tooltip: `Theme: ${selectedMeta.label}`,
         }}
         items={items}
         menuWidth={220}

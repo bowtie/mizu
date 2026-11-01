@@ -34,6 +34,8 @@ import { VirtualizedEpisodeList } from "./VirtualizedEpisodeList";
 
 interface EpisodeListSectionProps {
   episodesLoading: boolean;
+  episodesError: string | null;
+  onRetryEpisodes: () => void;
   hasShowData: boolean;
   groupedBySeason: SeasonGroup[];
   epStats: { total: number; canon: number; anime: number; mixed: number; filler: number };
@@ -101,6 +103,8 @@ const EpisodeListItem = memo(function EpisodeListItem({
  *  filter, or syncing state actually changes. */
 export const EpisodeListSection = memo(function EpisodeListSection({
   episodesLoading,
+  episodesError,
+  onRetryEpisodes,
   hasShowData,
   groupedBySeason,
   epStats,
@@ -191,7 +195,21 @@ export const EpisodeListSection = memo(function EpisodeListSection({
 
       {/* Episodes by season — keep skeleton visible while useDeferredValue
           catches up to avoid a flash of "No episodes" empty state. */}
-      {episodesLoading || (epStats.total > 0 && groupedBySeason.length === 0) ? (
+      {episodesError && !episodesLoading ? (
+        <EmptyState
+          title="Couldn't load episodes"
+          description={episodesError}
+          icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
+          actions={
+            <Button
+              label="Try again"
+              variant="secondary"
+              onClick={onRetryEpisodes}
+              data-cuelume-press
+            />
+          }
+        />
+      ) : episodesLoading || (epStats.total > 0 && groupedBySeason.length === 0) ? (
         hasShowData ? (
           /* Minimal loader — show data is already rendered, just waiting
              for episodes to arrive from prefetch/network. */

@@ -389,11 +389,16 @@ export function ActivityPage() {
                                 {humanSummary(log)}
                               </Text>
                               <Text type="supporting" hasTabularNumbers size="sm">
-                                {formatTrigger(log.trigger)}{" "}
-                                {formatDuration(log.started_at, log.completed_at)}{" "}
+                                {[
+                                  formatTrigger(log.trigger),
+                                  formatDuration(log.started_at, log.completed_at),
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                                {" · "}
                                 <Timestamp
                                   value={log.started_at || ""}
-                                  format="auto"
+                                  format="relative"
                                   type="supporting"
                                   color="secondary"
                                 />

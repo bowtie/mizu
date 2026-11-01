@@ -1,14 +1,14 @@
 import { Controller, type Control } from "react-hook-form";
 import { VStack } from "@astryxdesign/core/VStack";
-import { HStack } from "@astryxdesign/core/HStack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Button } from "@astryxdesign/core/Button";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
-import { Check, Plug, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { Check, Plug, AlertTriangle } from "lucide-react";
 import { SettingsRow } from "../SettingsRow";
+import { SecretField } from "./SecretField";
 import type { SettingsForm } from "../../lib/schemas";
 import type { TestPhase } from "./testPhase";
 
@@ -17,13 +17,11 @@ interface ConnectionCardProps {
   sonarrUrlError?: string;
   testPhase: TestPhase;
   testDisabled: boolean;
-  apiKeyVisible: boolean;
   hasSavedApiKey: boolean;
   apiKeyDirty: boolean;
   savedApiKeyMasked: string;
   clearTestResult: () => void;
   setApiKeyDirty: (dirty: boolean) => void;
-  toggleApiKeyVisibility: () => void;
   handleTestConnection: () => void;
 }
 
@@ -32,13 +30,11 @@ export function ConnectionCard({
   sonarrUrlError,
   testPhase,
   testDisabled,
-  apiKeyVisible,
   hasSavedApiKey,
   apiKeyDirty,
   savedApiKeyMasked,
   clearTestResult,
   setApiKeyDirty,
-  toggleApiKeyVisibility,
   handleTestConnection,
 }: ConnectionCardProps) {
   return (
@@ -73,39 +69,18 @@ export function ConnectionCard({
         <Divider />
 
         <SettingsRow label="API key" description="Found in Sonarr under Settings, General.">
-          <HStack gap={2} align="center">
-            <Controller
-              control={control}
-              name="sonarrApiKey"
-              render={({ field }) => (
-                <TextInput
-                  label="API key"
-                  type={apiKeyVisible ? "text" : "password"}
-                  value={field.value}
-                  onChange={(v) => {
-                    field.onChange(v);
-                    setApiKeyDirty(true);
-                    clearTestResult();
-                  }}
-                  placeholder={
-                    hasSavedApiKey ? savedApiKeyMasked || "Saved API key" : "Your Sonarr API key"
-                  }
-                  isLabelHidden
-                  width={280}
-                />
-              )}
-            />
-            {(hasSavedApiKey || apiKeyDirty) && (
-              <Button
-                label={apiKeyVisible ? "Hide" : "Show"}
-                variant="ghost"
-                isIconOnly
-                icon={apiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                onClick={toggleApiKeyVisibility}
-                data-cuelume-toggle="whisper"
-              />
-            )}
-          </HStack>
+          <SecretField
+            control={control}
+            name="sonarrApiKey"
+            label="API key"
+            isSet={hasSavedApiKey}
+            dirty={apiKeyDirty}
+            savedMasked={savedApiKeyMasked}
+            emptyPlaceholder="Your Sonarr API key"
+            width={280}
+            onDirtyChange={setApiKeyDirty}
+            onEdit={clearTestResult}
+          />
         </SettingsRow>
         <Divider />
 

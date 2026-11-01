@@ -34,16 +34,16 @@ export const flexokiTheme = defineTheme({
 
     // ── Text ────────────────────────────────────────────────────────
     // Light: tx=black, tx-2=base-600, tx-3=base-300
-    // Dark:  tx=base-200, tx-2=base-500, tx-3=base-700
+    // Dark:  tx=base-200, tx-2=base-400 (base-500 was <4.5:1 on muted surfaces), tx-3=base-700
     "--color-text-primary": ["#100F0F", "#CECDC3"],
-    "--color-text-secondary": ["#6F6E69", "#878580"],
+    "--color-text-secondary": ["#6F6E69", "#9F9D96"],
     "--color-text-disabled": ["#B7B5AC", "#575653"],
     "--color-on-dark": "#FFFCF0",
     "--color-on-light": "#100F0F",
 
     // ── Icons ───────────────────────────────────────────────────────
     "--color-icon-primary": ["#100F0F", "#CECDC3"],
-    "--color-icon-secondary": ["#6F6E69", "#878580"],
+    "--color-icon-secondary": ["#6F6E69", "#9F9D96"],
     "--color-icon-disabled": ["#B7B5AC", "#575653"],
 
     // ── Borders ─────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export const flexokiTheme = defineTheme({
     "--color-background-blue": ["#205EA626", "#4385BE3F"],
     "--color-border-blue": ["#205EA6", "#4385BE"],
     "--color-icon-blue": ["#205EA6", "#4385BE"],
-    "--color-text-blue": ["#205EA6", "#4385BE"],
+    "--color-text-blue": ["#205EA6", "#92BFDB"],
 
     // Purple #5E409D / #8B7EC8
     "--color-background-purple": ["#5E409D26", "#8B7EC83F"],

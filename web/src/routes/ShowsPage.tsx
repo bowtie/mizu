@@ -551,8 +551,8 @@ export function ShowsPage() {
         </HStack>
 
         {/* Row 2: search (fill) + sort, independent */}
-        <HStack gap={3} align="center" wrap="nowrap" width="100%">
-          <StackItem size="fill">
+        <HStack gap={3} align="center" wrap="wrap" width="100%" className="library-toolbar">
+          <StackItem size="fill" className="library-search">
             <TextInput
               label="Search anime"
               value={filter}

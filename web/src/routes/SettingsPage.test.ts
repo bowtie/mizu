@@ -147,18 +147,15 @@ describe("SettingsPage", () => {
 
     expect(container.textContent).toContain("Settings");
     expect(container.textContent).toContain("Sonarr URL");
-    // The skeleton heading is a bare div, not the real <h1> "Settings" — the
-    // presence of a real Save button confirms the loaded form rendered.
-    expect(findButton("Save settings")).toBeDefined();
+    // The skeleton has no Replace button; a stored Sonarr key shows masked
+    // with one, which confirms the loaded form rendered.
+    expect(findButton("Replace")).toBeDefined();
+    // Nothing edited yet, so the save bar stays hidden.
+    expect(findButton("Save settings")).toBeUndefined();
   });
 
-  it("keeps Save disabled until a default rule changes, then persists via updateSettings", async () => {
+  it("shows the save bar only once a default rule changes, then persists via updateSettings", async () => {
     await renderPage();
-
-    // Nothing dirty yet — clicking Save must not persist anything.
-    await act(async () => {
-      findButton("Save settings")?.click();
-    });
     expect(updateSettingsMock).not.toHaveBeenCalled();
 
     // Toggle the Filler default (unmonitor -> monitor).
@@ -167,7 +164,7 @@ describe("SettingsPage", () => {
     await act(async () => {
       filler!.click();
     });
-    expect(container.textContent).toContain("Unsaved changes");
+    expect(container.textContent).toContain("You have unsaved changes");
 
     await act(async () => {
       findButton("Save settings")?.click();
@@ -179,6 +176,38 @@ describe("SettingsPage", () => {
       expect.objectContaining({ default_filler_action: "monitor" }),
     );
     expect(addNotificationMock).toHaveBeenCalledWith("Settings saved", "success");
+  });
+
+  it("Discard reverts the edit and hides the save bar without saving", async () => {
+    await renderPage();
+
+    const filler = container.querySelector<HTMLButtonElement>('button[data-rule="Filler"]');
+    await act(async () => {
+      filler!.click();
+    });
+    expect(findButton("Discard")).toBeDefined();
+
+    await act(async () => {
+      findButton("Discard")?.click();
+    });
+    expect(findButton("Save settings")).toBeUndefined();
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+  });
+
+  it("Replace opens an empty key input and Cancel restores the masked display", async () => {
+    await renderPage();
+
+    await act(async () => {
+      findButton("Replace")?.click();
+    });
+    expect(findButton("Cancel")).toBeDefined();
+    expect(findButton("Replace")).toBeUndefined();
+
+    await act(async () => {
+      findButton("Cancel")?.click();
+    });
+    expect(findButton("Replace")).toBeDefined();
+    expect(findButton("Save settings")).toBeUndefined();
   });
 
   it("registers a beforeunload warning when the form becomes dirty", async () => {

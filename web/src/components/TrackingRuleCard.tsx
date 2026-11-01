@@ -4,7 +4,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
 import { Switch } from "@astryxdesign/core/Switch";
 import { memo } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 // Lazy-load cuelume — it's optional. If it fails to load, sound calls are no-ops.
 let cuelumePlay: ((sound: string, opts?: { volume?: number }) => void) | null = null;
@@ -35,7 +35,9 @@ export const TrackingRuleCard = memo(function TrackingRuleCard({
   value,
   onChange,
 }: TrackingRuleCardProps) {
-  // Clicking anywhere on the card toggles the switch.
+  // Clicking anywhere on the card toggles the switch (a mouse convenience;
+  // keyboard and assistive tech use the labelled Switch, so the card itself
+  // is not a nested interactive control).
   // Clicks on the switch itself are handled by the Switch component
   // and won't bubble here (the input has zIndex:1 and stops propagation
   // via the native checkbox change event).
@@ -50,28 +52,11 @@ export const TrackingRuleCard = memo(function TrackingRuleCard({
     onChange(!value);
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    // Don't intercept keyboard events from the switch — it handles its own.
-    const target = e.target as HTMLElement;
-    if (target.tagName === "INPUT" || target.closest("input")) {
-      return;
-    }
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onChange(!value);
-    }
-  };
-
   return (
     <Card
       padding={4}
       variant={variant}
       onClick={handleCardClick}
-      onKeyDown={handleKeyDown}
-      role="button"
-      tabIndex={0}
-      aria-pressed={value}
-      aria-label={`${label}: ${value ? "enabled" : "disabled"}`}
       className="tracking-rule-card"
       style={{ cursor: "pointer" }}
     >
@@ -80,7 +65,7 @@ export const TrackingRuleCard = memo(function TrackingRuleCard({
           <Text type="body" weight="semibold" display="block">
             {label}
           </Text>
-          <Text type="supporting" color="secondary" display="block">
+          <Text type="supporting" color="primary" display="block">
             {description}
           </Text>
         </VStack>

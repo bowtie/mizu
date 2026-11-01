@@ -31,30 +31,31 @@ export function ArtworkCard({
   return (
     <Card padding={4} variant="muted" className="artwork-card">
       <VStack gap={3}>
-        <HStack gap={3} align="center">
+        <HStack gap={3} align="center" wrap="wrap">
           <ImageIcon size={16} color="var(--color-icon-secondary)" />
-          <Heading level={3}>Artwork</Heading>
-          <div style={{ flex: 1 }} />
-          {canPick && (
+          <Heading level={2}>Artwork</Heading>
+          <HStack gap={2} align="center" wrap="nowrap" style={{ marginInlineStart: "auto" }}>
+            {canPick && (
+              <Button
+                label="Choose"
+                variant="secondary"
+                size="sm"
+                icon={<ImageIcon size={14} />}
+                onClick={() => onChoose()}
+                isDisabled={refreshing}
+                data-cuelume-press
+              />
+            )}
             <Button
-              label="Choose"
-              variant="secondary"
+              label={refreshing ? "Refreshing..." : "Refresh"}
+              variant="ghost"
               size="sm"
-              icon={<ImageIcon size={14} />}
-              onClick={() => onChoose()}
+              icon={<RefreshCw size={14} className={refreshing ? "spin" : ""} />}
+              onClick={() => onRefresh()}
               isDisabled={refreshing}
               data-cuelume-press
             />
-          )}
-          <Button
-            label={refreshing ? "Refreshing..." : "Refresh"}
-            variant="ghost"
-            size="sm"
-            icon={<RefreshCw size={14} className={refreshing ? "spin" : ""} />}
-            onClick={() => onRefresh()}
-            isDisabled={refreshing}
-            data-cuelume-press
-          />
+          </HStack>
         </HStack>
         <HStack gap={3} align="center" wrap="wrap">
           <Text type="supporting" color="secondary">

@@ -1,9 +1,7 @@
 import { Controller, type Control } from "react-hook-form";
 import { VStack } from "@astryxdesign/core/VStack";
-import { HStack } from "@astryxdesign/core/HStack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Button } from "@astryxdesign/core/Button";
-import { Badge } from "@astryxdesign/core/Badge";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Switch } from "@astryxdesign/core/Switch";
@@ -12,6 +10,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
 import { Check, Plug, AlertTriangle } from "lucide-react";
 import { SettingsRow } from "../SettingsRow";
+import { SecretField } from "./SecretField";
 import type { SettingsForm } from "../../lib/schemas";
 import type { SelectOption } from "../../lib/types";
 import type { TestPhase } from "./testPhase";
@@ -128,27 +127,17 @@ export function NotificationsCard({
           label="Access token"
           description="Optional — only needed if your ntfy server requires authentication."
         >
-          <HStack gap={2} align="center">
-            <Controller
-              control={control}
-              name="ntfyToken"
-              render={({ field }) => (
-                <TextInput
-                  label="Access token"
-                  type="password"
-                  value={field.value}
-                  onChange={(v) => {
-                    field.onChange(v);
-                    setNtfyTokenDirty(true);
-                  }}
-                  placeholder={ntfyTokenSet ? "Saved token" : "Enter access token"}
-                  isLabelHidden
-                  width={260}
-                />
-              )}
-            />
-            {ntfyTokenSet && !ntfyTokenDirty && <Badge variant="success" label="Token set" />}
-          </HStack>
+          <SecretField
+            control={control}
+            name="ntfyToken"
+            label="Access token"
+            isSet={ntfyTokenSet}
+            dirty={ntfyTokenDirty}
+            savedMasked="Token set"
+            emptyPlaceholder="Enter access token"
+            width={260}
+            onDirtyChange={setNtfyTokenDirty}
+          />
         </SettingsRow>
         <Divider />
 
