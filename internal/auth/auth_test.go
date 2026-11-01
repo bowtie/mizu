@@ -159,3 +159,25 @@ func TestTokenHashIsDeterministic(t *testing.T) {
 	assert.Equal(t, TokenHash("abc"), TokenHash("abc"))
 	assert.NotEqual(t, TokenHash("abc"), TokenHash("abd"))
 }
+
+func TestRemovePassword(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+
+	assert.ErrorIs(t, mgr.RemovePassword(ctx), ErrNotConfigured)
+
+	require.NoError(t, mgr.SetPassword(ctx, "correct horse battery"))
+	token, _, err := mgr.Login(ctx, "correct horse battery")
+	require.NoError(t, err)
+
+	require.NoError(t, mgr.RemovePassword(ctx))
+	configured, err := mgr.IsConfigured(ctx)
+	require.NoError(t, err)
+	assert.False(t, configured)
+
+	_, err = mgr.Validate(ctx, token)
+	assert.Error(t, err, "old sessions are revoked")
+
+	// A password can be set up again from the open state.
+	require.NoError(t, mgr.SetPassword(ctx, "another good pass"))
+}

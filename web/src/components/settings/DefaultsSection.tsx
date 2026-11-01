@@ -14,7 +14,7 @@ export function DefaultsSection({ control }: DefaultsSectionProps) {
   return (
     <VStack gap={4}>
       <VStack gap={1}>
-        <Heading level={2}>Defaults</Heading>
+        <Heading level={3}>Tracking defaults</Heading>
         <Text type="supporting" color="secondary" display="block">
           These tracking rules are applied automatically when you add a new anime mapping. You can
           override them per anime.

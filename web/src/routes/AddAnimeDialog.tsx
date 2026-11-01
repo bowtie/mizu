@@ -4,9 +4,7 @@ import { HStack } from "@astryxdesign/core/HStack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
-import { Divider } from "@astryxdesign/core/Divider";
-import { Card } from "@astryxdesign/core/Card";
-import { Check, X, Info } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { HTTPError } from "ky";
 import {
   addSonarrSeries,
@@ -399,9 +397,9 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
 
   const stepDescription = (): string => {
     if (w.addStep === ADD_STEP_SERIES)
-      return "Search your actionable Sonarr anime library first. If the anime is missing, switch to cached AFL search and add it into Sonarr from here.";
+      return "Pick an anime from your Sonarr library, or add a new one from the AFL list.";
     if (w.addStep === ADD_STEP_FALLBACK_AFL)
-      return "Search cached AnimeFillerList titles, then use the chosen title to look up the right Sonarr series before adding it.";
+      return "Pick the AnimeFillerList title, then Mizu looks it up in Sonarr.";
     if (w.addStep === ADD_STEP_FALLBACK_SONARR)
       return `Confirm the Sonarr series Mizu should add for ${w.selectedFallbackAfl?.title || ""}.`;
     if (w.addStep === ADD_STEP_POST_ADD) {
@@ -449,14 +447,11 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         })}
       </ol>
 
-      <Card variant="muted" padding={3}>
-        <HStack gap={2} align="start">
-          <Info size={14} className="wizard-step-description-icon" />
-          <Text type="supporting">{stepDescription()}</Text>
-        </HStack>
-      </Card>
-
-      <Divider />
+      {w.addStep !== ADD_STEP_POST_ADD && (
+        <Text type="supporting" color="secondary" style={{ textAlign: "center" }}>
+          {stepDescription()}
+        </Text>
+      )}
 
       {/* Step content — keyed div re-mounts on step change for fade-in animation */}
       <div key={w.addStep} className="wizard-step-content">

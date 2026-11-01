@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"mizu/internal/artwork"
@@ -19,8 +21,10 @@ import (
 // Config export/import: a JSON snapshot of all mappings plus the
 // non-auth settings for backup and migrating instances. API keys are
 // included on purpose — a restore that loses the Sonarr key isn't a
-// restore — and the endpoints live in the session-protected group,
-// consistent with /api/settings returning full keys.
+// restore — so, unlike /api/settings (which only returns masked keys),
+// the export is a secret: it lives in the session-protected group and is
+// sent with Cache-Control: no-store so neither the browser nor the service
+// worker keeps a copy.
 
 const backupFormatVersion = 1
 
@@ -154,6 +158,7 @@ func handleExportConfig(db *database.DB) http.HandlerFunc {
 
 		filename := "mizu-config-" + time.Now().Format("20060102") + ".json"
 		w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, backupFile{
 			Version:    backupFormatVersion,
 			ExportedAt: time.Now().UTC(),
@@ -196,6 +201,18 @@ func handleImportConfig(cfg *config.Config, db *database.DB, scheduler *schedule
 					return
 				}
 			}
+			switch m.StartMode {
+			case "", models.StartModeCurrentProgress, models.StartModeFromBeginning:
+			default:
+				writeError(w, http.StatusBadRequest, "invalid start_mode: "+string(m.StartMode))
+				return
+			}
+			switch m.WatermarkMode {
+			case "", models.WatermarkModeAuto, models.WatermarkModeManual:
+			default:
+				writeError(w, http.StatusBadRequest, "invalid watermark_mode: "+string(m.WatermarkMode))
+				return
+			}
 		}
 
 		imported := make(map[string]string, len(file.Settings))
@@ -204,19 +221,21 @@ func handleImportConfig(cfg *config.Config, db *database.DB, scheduler *schedule
 				imported[k] = v
 			}
 		}
-		if len(imported) > 0 {
-			if err := db.SetSettings(r.Context(), imported); err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to persist settings: "+err.Error())
-				return
-			}
+		// Validate values with the same rules as PUT /api/settings: the
+		// runtime config is rebuilt from these, so an invalid action or
+		// interval would otherwise go live unchecked.
+		if err := validateImportedSettings(imported, artworkMgr); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
 		}
 
+		mappings := make([]models.ShowMapping, 0, len(file.Mappings))
 		for _, mb := range file.Mappings {
-			m := mb.toMapping()
-			if err := db.UpsertMapping(r.Context(), &m); err != nil {
-				writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to import mapping for series %d: %s", m.SonarrSeriesID, err))
-				return
-			}
+			mappings = append(mappings, mb.toMapping())
+		}
+		if err := db.ImportConfig(r.Context(), imported, mappings); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to import config: "+err.Error())
+			return
 		}
 
 		// Reload the in-memory config from the imported settings and
@@ -242,4 +261,61 @@ func handleImportConfig(cfg *config.Config, db *database.DB, scheduler *schedule
 			"mappings_imported": len(file.Mappings),
 		})
 	}
+}
+
+// knownArtworkSources are the artwork_default_source values every build
+// accepts; registered providers are checked too when a manager is present.
+var knownArtworkSources = map[string]struct{}{
+	"": {}, "sonarr": {}, "anilist": {}, "tmdb": {}, "fanart": {}, "kitsu": {},
+}
+
+// validateImportedSettings applies the PUT /api/settings validation rules
+// to imported values. sync_interval is normalized in place.
+func validateImportedSettings(settings map[string]string, artworkMgr *artwork.Manager) error {
+	for key, value := range settings {
+		bad := false
+		switch key {
+		case "default_filler_action", "default_mixed_canon_action", "default_anime_canon_action":
+			bad = value != "" && !config.IsValidFillerAction(value)
+		case "sync_interval":
+			if value != "" {
+				normalized, _, err := normalizeScanInterval(value)
+				if err != nil {
+					bad = true
+				} else {
+					settings[key] = normalized
+				}
+			}
+		case "sonarr_add_monitor_mode":
+			bad = !config.IsValidSonarrMonitorMode(value)
+		case "ntfy_notify_on":
+			bad = value != "" && !config.IsValidNtfyNotifyOn(value)
+		case "ntfy_enabled", "sonarr_add_season_folder", "ui_sounds_enabled":
+			bad = value != "" && value != "true" && value != "false"
+		case "sonarr_add_quality_profile_id":
+			if value != "" {
+				id, err := strconv.Atoi(value)
+				bad = err != nil || id < 0
+			}
+		case "sonarr_url", "ntfy_server_url":
+			lower := strings.ToLower(value)
+			bad = value != "" && !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://")
+		case "artwork_default_source":
+			if _, ok := knownArtworkSources[value]; !ok {
+				bad = true
+				if artworkMgr != nil {
+					for _, p := range artworkMgr.Providers() {
+						if p.ID == value {
+							bad = false
+							break
+						}
+					}
+				}
+			}
+		}
+		if bad {
+			return fmt.Errorf("invalid value for %s: %q", key, value)
+		}
+	}
+	return nil
 }

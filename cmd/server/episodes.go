@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"mizu/internal/database"
 	"mizu/internal/models"
@@ -14,7 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine, epCache *episodeCache) http.HandlerFunc {
+func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
@@ -22,66 +24,69 @@ func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine, epCache *episod
 			return
 		}
 
-		// Compute a cheap version tag for ETag-based caching.
-		version, verr := db.EpisodeVersion(r.Context(), id)
-		if verr == nil && version != "" {
-			etag := `"` + version + `"`
-			w.Header().Set("ETag", etag)
-			// stale-while-revalidate lets the browser serve the cached
-			// response instantly on repeat visits while revalidating
-			// in the background. Combined with ETag, this makes repeat
-			// visits to the same anime page effectively zero-latency.
-			w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=86400")
-			if match := r.Header.Get("If-None-Match"); match == etag {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-		}
-
-		// Serve from in-memory cache if available
-		if cached, ok := epCache.get(id); ok {
-			writeJSON(w, http.StatusOK, cached)
-			return
-		}
-
-		// Serve from database (populated by syncs) — instant, no external calls
-		dbEpisodes, err := db.GetEpisodes(r.Context(), id)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load episodes: "+err.Error())
-			return
-		}
-
-		if len(dbEpisodes) > 0 && hasSonarrEpisodeIDs(dbEpisodes) {
-			epCache.set(id, dbEpisodes)
-			writeJSON(w, http.StatusOK, dbEpisodes)
-			return
-		}
-
-		// DB is empty — fetch live from Sonarr + AFL as a fallback
-		mapping, err := db.GetMappingByID(r.Context(), id)
-		if err != nil || mapping == nil {
-			writeError(w, http.StatusNotFound, "mapping not found")
-			return
-		}
-		if syncEngine == nil {
-			writeError(w, http.StatusInternalServerError, "sync engine unavailable")
-			return
-		}
-
-		enriched, herr := fetchEpisodesLive(r.Context(), syncEngine, id, mapping.SonarrSeriesID, mapping.AFLSlug)
+		episodes, herr := loadEpisodes(r.Context(), db, syncEngine, id, nil)
 		if herr != nil {
 			writeError(w, herr.code, herr.message)
 			return
 		}
-
-		// Persist to DB so future loads are instant
-		if err := db.ReplaceEpisodesForMapping(r.Context(), id, enriched); err != nil {
-			log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to persist live-fetched episodes")
-		}
-
-		epCache.set(id, enriched)
-		writeJSON(w, http.StatusOK, enriched)
+		writeJSONWithETag(w, r, episodes)
 	}
+}
+
+// loadEpisodes returns a mapping's episodes from the database (populated by
+// syncs), falling back to a live Sonarr + AFL fetch when the database has
+// none yet. The mapping is loaded on demand when the caller doesn't have it.
+func loadEpisodes(ctx context.Context, db *database.DB, syncEngine *sync.Engine, id int64, mapping *models.ShowMapping) ([]models.EpisodeInfo, *httpError) {
+	dbEpisodes, err := db.GetEpisodes(ctx, id)
+	if err != nil {
+		return nil, &httpError{http.StatusInternalServerError, "failed to load episodes: " + err.Error()}
+	}
+	if len(dbEpisodes) > 0 && hasSonarrEpisodeIDs(dbEpisodes) {
+		return dbEpisodes, nil
+	}
+
+	if mapping == nil {
+		mapping, err = db.GetMappingByID(ctx, id)
+		if err != nil || mapping == nil {
+			return nil, &httpError{http.StatusNotFound, "mapping not found"}
+		}
+	}
+	if syncEngine == nil {
+		return nil, &httpError{http.StatusInternalServerError, "sync engine unavailable"}
+	}
+
+	enriched, herr := fetchEpisodesLive(ctx, syncEngine, id, mapping.SonarrSeriesID, mapping.AFLSlug)
+	if herr != nil {
+		return nil, herr
+	}
+	// Persist so future loads are served from the database.
+	if err := db.ReplaceEpisodesForMapping(ctx, id, enriched); err != nil {
+		log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to persist live-fetched episodes")
+	}
+	return enriched, nil
+}
+
+// writeJSONWithETag writes data as JSON with an ETag derived from the exact
+// response bytes, answering 304 when the client already has them. Hashing
+// the body (rather than a summary of the rows) means the tag can never
+// describe different data than the body it was sent with.
+func writeJSONWithETag(w http.ResponseWriter, r *http.Request, data interface{}) {
+	body, err := json.Marshal(data)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to encode response")
+		return
+	}
+	sum := sha256.Sum256(body)
+	etag := `"` + hex.EncodeToString(sum[:12]) + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(append(body, '\n'))
 }
 
 func hasSonarrEpisodeIDs(episodes []models.EpisodeInfo) bool {
@@ -187,7 +192,7 @@ func handleGetSonarrEpisodes(db *database.DB, syncEngine *sync.Engine) http.Hand
 	}
 }
 
-func handleSetEpisodeMonitor(db *database.DB, syncEngine *sync.Engine, epCache *episodeCache) http.HandlerFunc {
+func handleSetEpisodeMonitor(db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		epID, err := strconv.Atoi(chi.URLParam(r, "epId"))
 		if err != nil {
@@ -216,16 +221,15 @@ func handleSetEpisodeMonitor(db *database.DB, syncEngine *sync.Engine, epCache *
 			writeError(w, http.StatusBadGateway, "failed to update episode in Sonarr: "+err.Error())
 			return
 		}
-		// Update the local DB so the change persists beyond cache invalidation
+		// Mirror the change into the local DB so the episode list reflects it.
 		if idErr == nil {
 			_ = db.UpdateEpisodeMonitor(r.Context(), id, int64(epID), req.Monitored)
-			epCache.invalidate(id)
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"monitored": req.Monitored})
 	}
 }
 
-func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup, epCache *episodeCache) http.HandlerFunc {
+func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
@@ -246,13 +250,12 @@ func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stds
 			if err := engine.RunResyncClaimed(appCtx, id); err != nil {
 				log.Error().Err(err).Int64("mapping_id", id).Msg("resync failed")
 			}
-			epCache.invalidate(id)
 		}()
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "resync triggered"})
 	}
 }
 
-func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup, epCache *episodeCache) http.HandlerFunc {
+func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		done, ok := engine.TryAcquireRun()
 		if !ok {
@@ -266,7 +269,6 @@ func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsyn
 			if err := engine.RunSyncClaimed(appCtx, "manual"); err != nil {
 				log.Error().Err(err).Msg("manual sync failed")
 			}
-			epCache.invalidateAll()
 		}()
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "sync triggered"})
 	}

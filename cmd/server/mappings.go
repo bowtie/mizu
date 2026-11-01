@@ -23,7 +23,6 @@ func handleGetMappings(db *database.DB) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
 		writeJSON(w, http.StatusOK, mappings)
 	}
 }
@@ -44,69 +43,7 @@ func handleGetMapping(db *database.DB) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
-		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
 		writeJSON(w, http.StatusOK, mapping)
-	}
-}
-
-// handleGetMappingDetail returns the show mapping + episodes in a single
-// response, saving 1 HTTP round-trip on hard refresh of the detail page.
-// The episodes portion includes the same ETag + in-memory cache logic
-// as the standalone episodes endpoint.
-func handleGetMappingDetail(db *database.DB, syncEngine *sync.Engine, epCache *episodeCache) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid mapping ID")
-			return
-		}
-
-		// Mapping
-		mapping, err := db.GetMappingByID(r.Context(), id)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		if mapping == nil {
-			writeError(w, http.StatusNotFound, "mapping not found")
-			return
-		}
-
-		// Episodes — same logic as handleGetEpisodes but inlined to
-		// avoid a second request. ETag is not set on the combined
-		// response since the mapping portion doesn't have a version tag.
-		var episodes []models.EpisodeInfo
-		if cached, ok := epCache.get(id); ok {
-			episodes = cached
-		} else {
-			dbEpisodes, err := db.GetEpisodes(r.Context(), id)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to load episodes: "+err.Error())
-				return
-			}
-			if len(dbEpisodes) > 0 && hasSonarrEpisodeIDs(dbEpisodes) {
-				epCache.set(id, dbEpisodes)
-				episodes = dbEpisodes
-			} else if syncEngine != nil {
-				// DB is empty — fetch live from Sonarr + AFL
-				enriched, herr := fetchEpisodesLive(r.Context(), syncEngine, id, mapping.SonarrSeriesID, mapping.AFLSlug)
-				if herr != nil {
-					writeError(w, herr.code, herr.message)
-					return
-				}
-				if err := db.ReplaceEpisodesForMapping(r.Context(), id, enriched); err != nil {
-					log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to persist live-fetched episodes")
-				}
-				epCache.set(id, enriched)
-				episodes = enriched
-			}
-		}
-
-		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"show":     mapping,
-			"episodes": episodes,
-		})
 	}
 }
 
@@ -498,7 +435,7 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 	}
 }
 
-func handleDeleteMapping(db *database.DB, mgr *artwork.Manager, epCache *episodeCache) http.HandlerFunc {
+func handleDeleteMapping(db *database.DB, mgr *artwork.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
@@ -509,8 +446,7 @@ func handleDeleteMapping(db *database.DB, mgr *artwork.Manager, epCache *episode
 			writeError(w, http.StatusInternalServerError, "failed to delete mapping: "+err.Error())
 			return
 		}
-		// Clean up cached episodes and downloaded artwork files
-		epCache.invalidate(id)
+		// Clean up downloaded artwork files
 		mgr.DeleteArtwork(id)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	}

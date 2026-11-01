@@ -8,6 +8,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { RefreshCw } from "lucide-react";
 import { SettingsRow } from "../SettingsRow";
 import { SecretField } from "./SecretField";
+import { DefaultsSection } from "./DefaultsSection";
 import { formatRelativeTime } from "../../lib/time";
 import type { SettingsForm } from "../../lib/schemas";
 import type { SelectOption } from "../../lib/types";
@@ -23,7 +24,7 @@ const cacheStatus = (count: number, refreshedAt: string | null | undefined): str
     ? `${count} shows cached, refreshed ${formatRelativeTime(refreshedAt)}.`
     : `${count} shows cached. Never refreshed.`;
 
-const syncIntervalOptions: SelectOption[] = [
+export const syncIntervalOptions: SelectOption[] = [
   { value: "1h", label: "1 hour" },
   { value: "3h", label: "3 hours" },
   { value: "6h", label: "6 hours" },
@@ -81,6 +82,9 @@ export function SyncCard({
             )}
           />
         </SettingsRow>
+        <Divider />
+
+        <DefaultsSection control={control} />
         <Divider />
 
         {/* Multi-source artwork system */}

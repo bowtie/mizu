@@ -126,6 +126,25 @@ func (m *Manager) ChangePassword(ctx context.Context, current, next string) erro
 	return m.store.DeleteAllSessions(ctx)
 }
 
+// RemovePassword turns password protection off, returning the dashboard to
+// the open first-run state. Callers must already be authenticated. Existing
+// sessions are revoked so they don't resurface if a password is set again.
+func (m *Manager) RemovePassword(ctx context.Context) error {
+	configured, err := m.IsConfigured(ctx)
+	if err != nil {
+		return err
+	}
+	if !configured {
+		return ErrNotConfigured
+	}
+	if err := m.store.SetSetting(ctx, SettingPasswordHash, ""); err != nil {
+		return err
+	}
+	m.configured.Store(false)
+	m.checked.Store(true)
+	return m.store.DeleteAllSessions(ctx)
+}
+
 // Verify checks a plaintext password against the stored hash.
 func (m *Manager) Verify(ctx context.Context, password string) error {
 	return m.verify(ctx, password)

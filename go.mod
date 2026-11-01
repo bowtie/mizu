@@ -2,6 +2,9 @@ module mizu
 
 go 1.27.0
 
+// web/node_modules can contain Go packages (e.g. flatted); keep ./... out of it.
+ignore ./web/node_modules
+
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/go-chi/chi/v5 v5.5.0

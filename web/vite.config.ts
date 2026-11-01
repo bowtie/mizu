@@ -15,6 +15,17 @@ const lightningcssTargets = {
   safari: (17 << 16) | (5 << 8),
 };
 
+// StyleX's dev plugin polls for CSS changes on a setInterval that it only
+// clears when Vite's HTTP server closes. Vitest's servers have no HTTP
+// server, so the timer outlives the run and Vitest reports "something
+// prevents 2 Vite servers from exiting" after a 10s close timeout. The hook
+// only pushes CSS hot-reload messages, which tests don't need.
+function withoutDevServerHookUnderVitest<T extends { configureServer?: unknown }>(plugin: T): T {
+  if (!process.env.VITEST) return plugin;
+  const { configureServer: _configureServer, ...rest } = plugin;
+  return rest as T;
+}
+
 export default defineConfig({
   fmt: {},
   lint: {},
@@ -65,25 +76,9 @@ export default defineConfig({
           if (!ctx.bundle) return html;
           let showsPageUrl = "";
           let detailPageUrl = "";
-          let cssUrl = "";
           for (const chunk of Object.values(ctx.bundle)) {
             if (chunk.name === "ShowsPage") showsPageUrl = "/" + chunk.fileName;
             if (chunk.name === "ShowDetailPage") detailPageUrl = "/" + chunk.fileName;
-            // The main CSS chunk doesn't have a name — detect by .css extension.
-            if (!cssUrl && chunk.fileName.endsWith(".css")) cssUrl = "/" + chunk.fileName;
-          }
-
-          // Move the CSS stylesheet link to before the inline API prefetch
-          // script so the browser starts downloading the 168KB stylesheet
-          // immediately, in parallel with the JS bundle. Vite places the
-          // stylesheet after the script tag by default, which delays CSS
-          // download by the time it takes to parse the script tag.
-          if (cssUrl) {
-            const stylesheetLink = `<link rel="stylesheet" crossorigin href="${cssUrl}">`;
-            // Remove the stylesheet from its current position (after script tag)
-            html = html.replace(stylesheetLink, "");
-            // Insert it before the first <script> tag in the head
-            html = html.replace("<script>", `${stylesheetLink}\n    <script>`);
           }
 
           let extra = "";
@@ -104,19 +99,21 @@ export default defineConfig({
         },
       },
     },
-    stylex.vite({
-      dev: process.env.NODE_ENV === "development",
-      runtimeInjection: false,
-      treeshakeCompensation: true,
-      useCSSLayers: true,
-      unstable_moduleResolution: {
-        type: "commonJS",
-        rootDir: __dirname,
-      },
-      lightningcssOptions: {
-        targets: lightningcssTargets,
-      },
-    }),
+    withoutDevServerHookUnderVitest(
+      stylex.vite({
+        dev: process.env.NODE_ENV === "development",
+        runtimeInjection: false,
+        treeshakeCompensation: true,
+        useCSSLayers: true,
+        unstable_moduleResolution: {
+          type: "commonJS",
+          rootDir: __dirname,
+        },
+        lightningcssOptions: {
+          targets: lightningcssTargets,
+        },
+      }),
+    ),
     react(),
   ]),
   resolve: {
@@ -136,30 +133,6 @@ export default defineConfig({
       "@astryxdesign/theme-neutral/theme.css": path.resolve(
         __dirname,
         "node_modules/@astryxdesign/theme-neutral/dist/theme.css",
-      ),
-      "@astryxdesign/theme-y2k/theme.css": path.resolve(
-        __dirname,
-        "node_modules/@astryxdesign/theme-y2k/dist/theme.css",
-      ),
-      "@astryxdesign/theme-butter/theme.css": path.resolve(
-        __dirname,
-        "node_modules/@astryxdesign/theme-butter/dist/theme.css",
-      ),
-      "@astryxdesign/theme-chocolate/theme.css": path.resolve(
-        __dirname,
-        "node_modules/@astryxdesign/theme-chocolate/dist/theme.css",
-      ),
-      "@astryxdesign/theme-gothic/theme.css": path.resolve(
-        __dirname,
-        "node_modules/@astryxdesign/theme-gothic/dist/theme.css",
-      ),
-      "@astryxdesign/theme-matcha/theme.css": path.resolve(
-        __dirname,
-        "node_modules/@astryxdesign/theme-matcha/dist/theme.css",
-      ),
-      "@astryxdesign/theme-stone/theme.css": path.resolve(
-        __dirname,
-        "node_modules/@astryxdesign/theme-stone/dist/theme.css",
       ),
       "@astryxdesign/core": path.resolve(__dirname, "node_modules/@astryxdesign/core/src"),
       "@": path.resolve(__dirname, "src"),

@@ -52,6 +52,12 @@ vi.mock("./lib/sounds", () => ({
   initSounds: () => undefined,
 }));
 
+// The nav's sign-out button reads the auth status; without this stub it
+// fires a real request to /api/auth/status from the test environment.
+vi.mock("./lib/queries", () => ({
+  useAuthStatus: () => ({ data: undefined }),
+}));
+
 // Theme renders a data attribute so the applied theme is observable in the DOM.
 vi.mock("@astryxdesign/core/theme", () => ({
   Theme: ({

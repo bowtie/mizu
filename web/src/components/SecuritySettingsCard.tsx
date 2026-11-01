@@ -5,140 +5,214 @@ import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Card } from "@astryxdesign/core/Card";
 import { Heading } from "@astryxdesign/core/Heading";
-import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
+import { Switch } from "@astryxdesign/core/Switch";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Divider } from "@astryxdesign/core/Divider";
-import { KeyRound, LogOut } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
 import { useAuthStatus } from "../lib/queries";
-import { changePassword, logout, errorMessage } from "../lib/api";
-import { isAuthManaged } from "../lib/authMode";
+import { changePassword, errorMessage } from "../lib/api";
+import { SettingsRow } from "./SettingsRow";
 
-const MIN_PASSWORD_LENGTH = 8;
+export const MIN_PASSWORD_LENGTH = 8;
 
-export function SecuritySettingsCard() {
+/** A password change staged on the toggle; applied by the page's save bar. */
+export type SecurityIntent = "enable" | "disable" | null;
+
+interface SecuritySettingsCardProps {
+  intent: SecurityIntent;
+  onIntentChange: (intent: SecurityIntent) => void;
+  password: string;
+  confirm: string;
+  onPasswordChange: (value: string) => void;
+  onConfirmChange: (value: string) => void;
+  isDisabled?: boolean;
+}
+
+type Panel = "change" | null;
+
+export function SecuritySettingsCard({
+  intent,
+  onIntentChange,
+  password,
+  confirm,
+  onPasswordChange,
+  onConfirmChange,
+  isDisabled = false,
+}: SecuritySettingsCardProps) {
   const { data: status } = useAuthStatus();
   const addNotification = useNotificationStore((s) => s.addNotification);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  const [panel, setPanel] = useState<Panel>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Clear the form when auth is toggled on/off.
+  // Start every panel with empty fields.
   useEffect(() => {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
-  }, [status?.configured]);
+  }, [panel, status?.configured]);
 
-  if (isAuthManaged(status)) {
-    return (
-      <Card variant="muted" padding={4}>
-        <VStack gap={3}>
-          <Heading level={2}>Security</Heading>
-          <Divider />
-          <Text type="supporting" color="secondary" display="block">
-            {status?.mode === "proxy"
-              ? `Sign-in is handled by your reverse proxy${status.user ? ` (signed in as ${status.user})` : ""}. Set by MIZU_AUTH=proxy.`
-              : "Authentication is turned off (MIZU_AUTH=none). Make sure Mizu is only reachable through something that protects it."}
-          </Text>
-        </VStack>
-      </Card>
-    );
-  }
+  if (!status) return null;
 
-  if (!status?.configured) return null;
+  const card = (children: React.ReactNode) => (
+    <Card variant="muted" padding={4}>
+      <VStack gap={3}>
+        <Heading level={2}>Security</Heading>
+        <Divider />
+        {children}
+      </VStack>
+    </Card>
+  );
 
-  const handleChangePassword = async () => {
+  const configured = status.configured;
+
+  const run = async (action: () => Promise<void>, failure: string) => {
     if (submitting) return;
-    if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      addNotification(`New password must be at least ${MIN_PASSWORD_LENGTH} characters`, "error");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      addNotification("New passwords do not match", "error");
-      return;
-    }
     setSubmitting(true);
     try {
-      await changePassword(currentPassword, newPassword);
-      addNotification("Password changed — please sign in again", "success");
-      queryClient.clear();
-      navigate("/login", { replace: true });
+      await action();
     } catch (err) {
-      addNotification("Failed to change password: " + errorMessage(err), "error");
+      addNotification(`${failure}: ${errorMessage(err)}`, "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // Session may already be gone — clearing local state is enough.
-    } finally {
-      queryClient.clear();
-      navigate("/login", { replace: true });
+  const validNew = () => {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      addNotification(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, "error");
+      return false;
     }
+    if (newPassword !== confirmPassword) {
+      addNotification("Passwords do not match", "error");
+      return false;
+    }
+    return true;
   };
 
-  return (
-    <Card variant="muted" padding={4}>
-      <VStack gap={3}>
-        <Heading level={2}>Security</Heading>
-        <Divider />
-        <Text type="supporting" color="secondary" display="block">
-          Changing the password signs out every device.
-        </Text>
+  const handleChange = () =>
+    run(async () => {
+      if (!validNew()) return;
+      await changePassword(currentPassword, newPassword);
+      addNotification("Password changed — please sign in again", "success");
+      queryClient.clear();
+      navigate("/login", { replace: true });
+    }, "Failed to change password");
+
+  const cancel = (
+    <Button variant="ghost" label="Cancel" isDisabled={submitting} onClick={() => setPanel(null)} />
+  );
+
+  const newPasswordFields = (
+    <>
+      <TextInput
+        type="password"
+        label="New password"
+        value={newPassword}
+        onChange={setNewPassword}
+        placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+        isDisabled={submitting}
+      />
+      <TextInput
+        type="password"
+        label="Confirm password"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        isDisabled={submitting}
+      />
+    </>
+  );
+
+  const currentPasswordField = (
+    <TextInput
+      type="password"
+      label="Current password"
+      value={currentPassword}
+      onChange={setCurrentPassword}
+      isDisabled={submitting}
+    />
+  );
+
+  const switchOn = intent === "enable" ? true : intent === "disable" ? false : configured;
+
+  return card(
+    <>
+      <SettingsRow
+        label="Require a password"
+        description={
+          configured
+            ? "Mizu asks for a password before showing anything."
+            : "Off: anyone who can reach Mizu can use it. Fine for a local lab."
+        }
+      >
+        <HStack gap={3} align="center">
+          {configured && (
+            <Button
+              variant="secondary"
+              label="Change password"
+              icon={<KeyRound size={16} />}
+              isDisabled={panel === "change" || submitting}
+              onClick={() => setPanel("change")}
+              data-cuelume-press
+            />
+          )}
+          <Switch
+            label="Require a password"
+            value={switchOn}
+            isLabelHidden
+            isDisabled={submitting || isDisabled}
+            onChange={(on: boolean) => {
+              if (on === configured) onIntentChange(null);
+              else onIntentChange(on ? "enable" : "disable");
+            }}
+            data-cuelume-toggle
+          />
+        </HStack>
+      </SettingsRow>
+
+      {intent === "enable" && (
         <VStack gap={3} maxWidth={420}>
           <TextInput
             type="password"
-            label="Current password"
-            value={currentPassword}
-            onChange={setCurrentPassword}
-            isDisabled={submitting}
-          />
-          <TextInput
-            type="password"
             label="New password"
-            value={newPassword}
-            onChange={setNewPassword}
-            isDisabled={submitting}
+            value={password}
+            onChange={onPasswordChange}
+            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+            isDisabled={isDisabled}
           />
           <TextInput
             type="password"
-            label="Confirm new password"
-            value={confirmPassword}
-            onChange={setConfirmPassword}
-            isDisabled={submitting}
+            label="Confirm password"
+            value={confirm}
+            onChange={onConfirmChange}
+            isDisabled={isDisabled}
           />
         </VStack>
-        <HStack gap={2} align="center">
-          <Button
-            variant="primary"
-            label="Change password"
-            icon={<KeyRound size={16} />}
-            isDisabled={submitting || !currentPassword || !newPassword}
-            isLoading={submitting}
-            onClick={() => void handleChangePassword()}
-          >
-            Change password
-          </Button>
-          <Button
-            variant="secondary"
-            label="Sign out"
-            icon={<LogOut size={16} />}
-            onClick={() => void handleLogout()}
-          >
-            Sign out
-          </Button>
-        </HStack>
-      </VStack>
-    </Card>
+      )}
+
+      {panel === "change" && (
+        <VStack gap={3} maxWidth={420}>
+          {currentPasswordField}
+          {newPasswordFields}
+          <HStack gap={2}>
+            <Button
+              variant="primary"
+              label="Change password"
+              isLoading={submitting}
+              isDisabled={submitting || !currentPassword || !newPassword || !confirmPassword}
+              onClick={() => void handleChange()}
+            />
+            {cancel}
+          </HStack>
+        </VStack>
+      )}
+    </>,
   );
 }

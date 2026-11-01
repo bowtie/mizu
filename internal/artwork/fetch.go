@@ -172,7 +172,7 @@ func (m *Manager) storeArtworkLocked(ctx context.Context, mappingID int64, art *
 // series. Sources that don't implement CandidatesProvider (sonarr, anilist,
 // kitsu) return an empty set — the caller can then hide the picker.
 func (m *Manager) ListCandidates(ctx context.Context, series models.SonarrSeries, source string) (*ArtworkOptions, error) {
-	if source == "" || source == "sonarr" || source == "auto" {
+	if source == "" || source == "sonarr" {
 		return &ArtworkOptions{}, nil
 	}
 
@@ -194,15 +194,11 @@ func (m *Manager) ListCandidates(ctx context.Context, series models.SonarrSeries
 	return cp.Candidates(ctx, series)
 }
 
-// fetchFromSource tries the specified source. "auto" tries each provider in
-// priority order. "sonarr" (or empty) means no provider fetch — the caller
-// should fall back to Sonarr image URLs.
+// fetchFromSource fetches from the specified provider. "sonarr" (or empty)
+// means no provider fetch — the caller should fall back to Sonarr image URLs.
 func (m *Manager) fetchFromSource(ctx context.Context, series models.SonarrSeries, source string) (*Artwork, error) {
 	if source == "" || source == "sonarr" {
 		return nil, nil
-	}
-	if source == "auto" {
-		return m.autoFetch(ctx, series)
 	}
 
 	m.mu.RLock()
@@ -215,37 +211,6 @@ func (m *Manager) fetchFromSource(ctx context.Context, series models.SonarrSerie
 		return nil, fmt.Errorf("provider %s is not configured (missing API key?)", source)
 	}
 	return p.Fetch(ctx, series)
-}
-
-// autoFetch tries each provider in priority order.
-func (m *Manager) autoFetch(ctx context.Context, series models.SonarrSeries) (*Artwork, error) {
-	m.mu.RLock()
-	order := make([]string, len(m.order))
-	copy(order, m.order)
-	providers := make(map[string]Provider, len(order))
-	for _, name := range order {
-		providers[name] = m.providers[name]
-	}
-	m.mu.RUnlock()
-
-	for _, name := range order {
-		p := providers[name]
-		if !p.Available() {
-			continue
-		}
-		art, err := p.Fetch(ctx, series)
-		if err != nil {
-			log.Warn().Err(err).Str("provider", name).Str("series", series.Title).Msg("artwork provider error")
-			continue
-		}
-		if art == nil {
-			continue
-		}
-		if art.PosterURL != "" || art.BannerURL != "" || art.LogoURL != "" {
-			return art, nil
-		}
-	}
-	return nil, nil
 }
 
 // downloadImage fetches a remote image and saves it to destPath.
@@ -269,8 +234,9 @@ func (m *Manager) downloadImage(ctx context.Context, url, destPath string) (stri
 	// Only store actual images: the URL can be user-supplied (artwork
 	// picker), and this origin serves whatever lands in the artwork dir.
 	// image/svg+xml is allowed here but served sandboxed (see ServeImage)
-	// because SVGs can carry scripts.
-	if ct := resp.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(strings.ToLower(ct), "image/") {
+	// because SVGs can carry scripts. A missing Content-Type is rejected
+	// too: real image hosts always send one.
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(strings.ToLower(ct), "image/") {
 		return "", fmt.Errorf("download %s: unexpected content type %q", url, ct)
 	}
 

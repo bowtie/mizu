@@ -84,8 +84,8 @@ func handleRefreshArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Mana
 			source = mgr.ResolveSource(mapping.ArtworkSource, artworkDefaultSource)
 		}
 
-		// Validate source: "auto", "sonarr", empty, or a registered provider.
-		if source != "" && source != "auto" && source != "sonarr" {
+		// Validate source: "sonarr", empty, or a registered provider.
+		if source != "" && source != "sonarr" {
 			valid := false
 			for _, p := range mgr.Providers() {
 				if p.ID == source {
@@ -187,8 +187,8 @@ func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerF
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		// Validate source: empty (use global default), "sonarr", "auto", or a registered provider.
-		if body.Source != "" && body.Source != "sonarr" && body.Source != "auto" {
+		// Validate source: empty (use global default), "sonarr", or a registered provider.
+		if body.Source != "" && body.Source != "sonarr" {
 			valid := false
 			for _, p := range mgr.Providers() {
 				if p.ID == body.Source {
@@ -287,7 +287,7 @@ func handleListArtworkCandidates(cfg *config.Config, db *database.DB, mgr *artwo
 // handleSelectArtwork persists a user-picked image set for a mapping: it
 // downloads the chosen URLs to disk, writes the local paths, and sets the
 // per-show source override so future refreshes use the same source.
-func handleSelectArtwork(db *database.DB, mgr *artwork.Manager) http.HandlerFunc {
+func handleSelectArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Manager, syncEngine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
@@ -304,7 +304,7 @@ func handleSelectArtwork(db *database.DB, mgr *artwork.Manager) http.HandlerFunc
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if body.Source == "" || body.Source == "sonarr" || body.Source == "auto" {
+		if body.Source == "" || body.Source == "sonarr" {
 			writeError(w, http.StatusBadRequest, "a concrete artwork source is required")
 			return
 		}
@@ -317,6 +317,29 @@ func handleSelectArtwork(db *database.DB, mgr *artwork.Manager) http.HandlerFunc
 		}
 		if !valid {
 			writeError(w, http.StatusBadRequest, "unknown artwork source: "+body.Source)
+			return
+		}
+
+		// Only download URLs the provider actually offered for this show.
+		// The server fetches and re-serves whatever it is given, so an
+		// arbitrary URL would turn the picker into a proxy into the local
+		// network.
+		mapping, err := db.GetMappingByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
+			writeError(w, http.StatusNotFound, "mapping not found")
+			return
+		}
+		opts, err := mgr.ListCandidates(r.Context(), resolveArtworkSeries(r.Context(), cfg, syncEngine, mapping), body.Source)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to list artwork candidates: "+err.Error())
+			return
+		}
+		if !offeredURL(body.PosterURL, opts.Posters) || !offeredURL(body.BannerURL, opts.Banners) || !offeredURL(body.LogoURL, opts.Logos) {
+			writeError(w, http.StatusBadRequest, "artwork URL is not one of the source's candidates")
 			return
 		}
 
@@ -336,4 +359,18 @@ func handleSelectArtwork(db *database.DB, mgr *artwork.Manager) http.HandlerFunc
 		}
 		writeJSON(w, http.StatusOK, result)
 	}
+}
+
+// offeredURL reports whether url is empty (slot left unchanged) or one of
+// the candidate URLs a provider returned for that slot.
+func offeredURL(url string, candidates []artwork.ArtworkOption) bool {
+	if url == "" {
+		return true
+	}
+	for _, c := range candidates {
+		if c.URL == url {
+			return true
+		}
+	}
+	return false
 }

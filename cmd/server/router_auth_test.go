@@ -184,3 +184,35 @@ func TestSessionExpiryRespectedByMiddleware(t *testing.T) {
 	rec = doJSON(t, handler, http.MethodGet, "/api/mappings", "", cookie)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
+
+func TestRemovePasswordOpensDashboard(t *testing.T) {
+	handler, _ := newAuthTestRouter(t)
+
+	rec := doJSON(t, handler, http.MethodPost, "/api/auth/setup", `{"password":"first-pass-1"}`, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	cookie := sessionCookie(t, rec)
+
+	// Needs a signed-in session, not the password.
+	rec = doJSON(t, handler, http.MethodPost, "/api/auth/remove-password", `{}`, nil)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	rec = doJSON(t, handler, http.MethodPost, "/api/auth/remove-password", `{}`, cookie)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = doJSON(t, handler, http.MethodGet, "/api/mappings", "", nil)
+	assert.Equal(t, http.StatusOK, rec.Code, "open without a session")
+}
+
+// /metrics is the conventional scrape path; it must serve the metrics text,
+// not the SPA. Unknown API paths must answer a JSON 404, not index.html.
+func TestMetricsPathAndAPINotFound(t *testing.T) {
+	router, _ := newAuthTestRouter(t)
+
+	rec := doJSON(t, router, http.MethodGet, "/metrics", "", nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "mizu_build_info")
+
+	rec = doJSON(t, router, http.MethodGet, "/api/does-not-exist", "", nil)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+}

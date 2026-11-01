@@ -9,6 +9,8 @@ import {
   Suspense,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { VStack } from "@astryxdesign/core/VStack";
 import { Section } from "@astryxdesign/core/Section";
 const AlertDialog = lazy(() =>
@@ -17,23 +19,21 @@ const AlertDialog = lazy(() =>
 import { Divider } from "@astryxdesign/core/Divider";
 import { useNotificationStore } from "../lib/store";
 import {
-  useShows,
+  invalidateShow,
   useArtworkProviders,
   useDeleteShow,
+  useEpisodes,
+  useSetEpisodeMonitor,
+  useShow,
   useSonarrSeries,
   useSettings,
+  useUpdateShow,
 } from "../lib/queries";
 import {
   getArtworkBannerUrl,
-  getCachedShowDetail,
-  clearCachedShowDetail,
-  getEpisodes,
-  getShow,
   refreshArtwork,
   setArtworkSource,
   selectArtwork,
-  setEpisodeMonitor,
-  updateShow,
   errorMessage,
 } from "../lib/api";
 import type { Episode, SelectOption, Show, ShowUpdate, SonarrSeries } from "../lib/types";
@@ -63,494 +63,140 @@ import { ShowDetailSkeleton } from "../components/ShowDetailSkeleton";
 import { ArtworkCard } from "../components/ArtworkCard";
 import { TrackingRulesSection } from "../components/TrackingRulesSection";
 
+const NO_EPISODES: Episode[] = [];
+
+/** The show's tracking rules as edited on this page. */
+interface RulesForm {
+  trackFiller: boolean;
+  trackMixed: boolean;
+  trackAnimeCanon: boolean;
+  watermarkAuto: boolean;
+  markerValue: number;
+}
+
+function rulesFromShow(show: Show, maxEpisode: number): RulesForm {
+  const marker = Math.max(0, show.sync_watermark || 0);
+  return {
+    trackFiller: actionToTracked(show.filler_action, false),
+    trackMixed: actionToTracked(show.mixed_action, true),
+    trackAnimeCanon: actionToTracked(show.anime_canon_action, true),
+    watermarkAuto: (show.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO,
+    // Until episodes load the ceiling is unknown, so don't clamp yet.
+    markerValue: maxEpisode > 0 ? Math.min(marker, maxEpisode) : marker,
+  };
+}
+
+/** Per-type counts for the filter tabs, plus the highest episode number
+ *  (the ceiling for the manual sync marker). */
+function episodeStats(episodes: Episode[]) {
+  const stats = { total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 };
+  let maxEpisode = 0;
+  for (const ep of episodes) {
+    maxEpisode = Math.max(maxEpisode, displayEpisodeNumber(ep));
+    stats.total++;
+    switch (ep.type) {
+      case "canon":
+        stats.canon++;
+        break;
+      case "anime_canon":
+        stats.anime++;
+        break;
+      case "mixed_canon":
+        stats.mixed++;
+        break;
+      case "filler":
+        stats.filler++;
+        break;
+    }
+  }
+  return { stats, maxEpisode };
+}
+
 export function ShowDetailPage() {
   const { id: showId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const addNotification = useNotificationStore((s) => s.addNotification);
-  const showsQuery = useShows();
-  const shows = showsQuery.data ?? [];
+
+  const showQuery = useShow(showId);
+  const episodesQuery = useEpisodes(showId);
   const { data: artworkProviders = [] } = useArtworkProviders();
-  const deleteShowMutation = useDeleteShow();
   const { data: sonarrSeries = [] } = useSonarrSeries();
   const { data: settings } = useSettings();
+  const updateShowMutation = useUpdateShow();
+  const deleteShowMutation = useDeleteShow();
+  const setEpisodeMonitorMutation = useSetEpisodeMonitor();
 
-  // If the store already has this show (fetched on app mount), use it as
-  // the initial state so the page renders instantly without waiting for
-  // getShow to resolve. The effect below still fetches fresh data to pick
-  // up any changes, but the user sees content immediately.
-  const storeShow = useMemo(
-    () => shows.find((s) => s.id === Number(showId)) ?? null,
-    [shows, showId],
+  const show = (showQuery.data as Show | undefined) ?? null;
+  const episodes = (episodesQuery.data as Episode[] | undefined) ?? NO_EPISODES;
+  const { stats: epStats, maxEpisode } = useMemo(() => episodeStats(episodes), [episodes]);
+
+  const showError = showQuery.error;
+  useEffect(() => {
+    if (showError) addNotification("Failed to load anime: " + errorMessage(showError), "error");
+  }, [showError, addNotification]);
+
+  // ── Tracking rules form ──
+  // `values` re-seeds the form whenever the saved rules change on the
+  // server; keepDirtyValues preserves edits the user hasn't saved yet.
+  const savedRules = useMemo(
+    () => (show ? rulesFromShow(show, maxEpisode) : undefined),
+    [show, maxEpisode],
+  );
+  const form = useForm<RulesForm>({
+    values: savedRules,
+    resetOptions: { keepDirtyValues: true },
+  });
+  const { trackFiller, trackMixed, trackAnimeCanon, watermarkAuto, markerValue } = form.watch();
+  const { dirtyFields } = form.formState;
+  // The marker only matters in manual mode, so an edited marker doesn't
+  // count as a change once the show is back on auto.
+  const rulesDirty =
+    !!show &&
+    !!(
+      dirtyFields.trackFiller ||
+      dirtyFields.trackMixed ||
+      dirtyFields.trackAnimeCanon ||
+      dirtyFields.watermarkAuto ||
+      (!watermarkAuto && dirtyFields.markerValue)
+    );
+  const setRule = <K extends keyof RulesForm>(name: K, value: RulesForm[K]) =>
+    form.setValue(name, value as never, { shouldDirty: true });
+
+  const clampMarkerValue = useCallback(
+    (next: number): number => Math.min(Math.max(0, Number(next) || 0), maxEpisode),
+    [maxEpisode],
   );
 
-  // Check if the prefetched detail data (fired in main.tsx on hard
-  // refresh) has already resolved. If so, use it as initial state to
-  // skip the skeleton entirely — the user sees content on first paint.
-  const prefetchedDetail = showId ? getCachedShowDetail(showId) : null;
-  const initialShow = storeShow ?? prefetchedDetail?.show ?? null;
-  const initialEpisodes = prefetchedDetail?.episodes as Episode[] | undefined;
-
-  const [loadingShow, setLoadingShow] = useState(!initialShow);
-  const [saving, setSaving] = useState(false);
+  // ── View state ──
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [show, setShow] = useState<Show | null>(initialShow);
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const [artworkVersion, setArtworkVersion] = useState(0);
   const [heroImgError, setHeroImgError] = useState(false);
   const [heroFallbackFailed, setHeroFallbackFailed] = useState(false);
-  const [episodes, setEpisodes] = useState<Episode[]>(initialEpisodes ?? []);
-  const [episodesLoading, setEpisodesLoading] = useState(!initialEpisodes);
-  const [episodesError, setEpisodesError] = useState<string | null>(null);
-  const [pageSettled, setPageSettled] = useState(!!initialShow);
-  const [epStats, setEpStats] = useState(() => {
-    if (initialEpisodes) {
-      let total = 0,
-        canon = 0,
-        anime = 0,
-        mixed = 0,
-        filler = 0,
-        max = 0;
-      for (const ep of initialEpisodes) {
-        max = Math.max(max, displayEpisodeNumber(ep));
-        total++;
-        switch (ep.type) {
-          case "canon":
-            canon++;
-            break;
-          case "anime_canon":
-            anime++;
-            break;
-          case "mixed_canon":
-            mixed++;
-            break;
-          case "filler":
-            filler++;
-            break;
-        }
-      }
-      return { total, canon, anime, mixed, filler };
-    }
-    return { total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 };
-  });
-  const [maxEpisode, setMaxEpisode] = useState(() => {
-    if (!initialEpisodes) return 0;
-    let max = 0;
-    for (const ep of initialEpisodes) max = Math.max(max, displayEpisodeNumber(ep));
-    return max;
-  });
-  const [trackFiller, setTrackFiller] = useState(() =>
-    actionToTracked(initialShow?.filler_action, false),
-  );
-  const [trackMixed, setTrackMixed] = useState(() =>
-    actionToTracked(initialShow?.mixed_action, true),
-  );
-  const [trackAnimeCanon, setTrackAnimeCanon] = useState(() =>
-    actionToTracked(initialShow?.anime_canon_action, true),
-  );
-  const [watermarkAuto, setWatermarkAuto] = useState(
-    () => (initialShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO,
-  );
-  const [markerValue, setMarkerValue] = useState(() =>
-    Math.max(0, initialShow?.sync_watermark || 0),
-  );
   const [activeTypeFilter, setActiveTypeFilter] = useState<string>("all");
   const [isMobile, setIsMobile] = useState(false);
   const [syncingEps, setSyncingEps] = useState<Record<string, boolean>>({});
+  // The actions bar animates in only after the first frame with show data,
+  // so it doesn't slide in on every navigation.
+  const [settledShowId, setSettledShowId] = useState<string | null>(null);
+  const pageSettled = !!showId && settledShowId === showId;
 
-  const [pristineFiller, setPristineFiller] = useState(() =>
-    actionToTracked(initialShow?.filler_action, false),
-  );
-  const [pristineMixed, setPristineMixed] = useState(() =>
-    actionToTracked(initialShow?.mixed_action, true),
-  );
-  const [pristineAnimeCanon, setPristineAnimeCanon] = useState(() =>
-    actionToTracked(initialShow?.anime_canon_action, true),
-  );
-  const [pristineWatermarkAuto, setPristineWatermarkAuto] = useState(
-    () => (initialShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO,
-  );
-  const [pristineMarkerValue, setPristineMarkerValue] = useState(() =>
-    Math.max(0, initialShow?.sync_watermark || 0),
-  );
-
-  const rulesDirty =
-    !!show &&
-    (trackFiller !== pristineFiller ||
-      trackMixed !== pristineMixed ||
-      trackAnimeCanon !== pristineAnimeCanon ||
-      watermarkAuto !== pristineWatermarkAuto ||
-      (!watermarkAuto && markerValue !== pristineMarkerValue));
-
-  const filteredEpisodes = useMemo(() => {
-    // Fast path: "all" filter returns the original array reference,
-    // avoiding a 1209-element .filter() allocation on every render.
-    if (activeTypeFilter === "all") return episodes;
-    return episodes.filter((ep) => {
-      if (activeTypeFilter === "canon" && isMobile) {
-        return ep.type === "canon" || ep.type === "anime_canon";
-      }
-      return ep.type === activeTypeFilter;
-    });
-  }, [episodes, activeTypeFilter, isMobile]);
-
-  // Defer filtered episode rendering on large lists so filter changes
-  // don't block the SegmentedControl interaction. React renders the
-  // urgent update (filter highlight) first, then commits the episode
-  // list in a separate, lower-priority pass.
-  const deferredFilteredEpisodes = useDeferredValue(filteredEpisodes);
-
-  const groupedBySeason = useMemo(() => {
-    const groups: Record<string, Episode[]> = {};
-    for (const ep of deferredFilteredEpisodes) {
-      const season = String(episodeSeason(ep));
-      if (!groups[season]) groups[season] = [];
-      groups[season].push(ep);
-    }
-    // Episodes come from the DB sorted by episode_num ASC. Within each
-    // season, reverse to show newest first — avoids a full sort since
-    // the input is already ordered.
-    return Object.entries(groups)
-      .map(([seasonKey, eps], index) => ({
-        season: Number.parseInt(seasonKey, 10),
-        episodes: eps.reverse(),
-        index,
-      }))
-      .sort((a, b) => {
-        if (a.season === -1) return 1;
-        if (b.season === -1) return -1;
-        return b.season - a.season;
-      });
-  }, [deferredFilteredEpisodes]);
-
-  const clampMarkerValue = useCallback(
-    (next: number): number => {
-      const normalized = Math.max(0, Number(next) || 0);
-      return Math.min(normalized, maxEpisode);
-    },
-    [maxEpisode],
-  );
-
-  /** Memoized backdrop URL — hits the artwork endpoint immediately
-   *  using just the showId from the URL. No need to wait for getShow
-   *  or store data — the backend serves the file if it exists.
-   *  Falls back to Sonarr's banner/fanart URL when local artwork is
-   *  missing (e.g. artwork not yet downloaded). */
-  const backdropUrl = useMemo((): string => {
-    const cacheBust = artworkVersion > 0 ? `?v=${artworkVersion}` : "";
-    if (showId) {
-      const localUrl = getArtworkBannerUrl(showId) + cacheBust;
-      // If local artwork errored, fall back to Sonarr's image
-      if (heroImgError && show) {
-        const series = sonarrSeries.find((s: SonarrSeries) => s.id === show.sonarr_series_id);
-        if (series?.images?.length) {
-          const banner =
-            series.images.find((img) => img.coverType === "fanart") ||
-            series.images.find((img) => img.coverType === "banner") ||
-            series.images[0];
-          if (banner) {
-            return resolveSonarrImageUrl(banner, settings?.sonarr_url || "");
-          }
-        }
-      }
-      return localUrl;
-    }
-    return "";
-  }, [showId, artworkVersion, heroImgError, show, sonarrSeries, settings?.sonarr_url]);
-
-  // Fetch show data + episodes. If the store already has show data,
-  // we skip the getShow call entirely — the store data is fresh enough
-  // (fetched on app mount). Episodes always need fetching since they're
-  // not in the store. On hard refresh (no store data), we fire two
-  // parallel requests: getShow (simple DB query, resolves fast) and
-  // getEpisodes (may need Sonarr + AFL enrichment, resolves slower).
-  // Show data is applied as soon as getShow resolves — the hero title,
-  // tracking rules, and artwork card appear immediately. Episodes fill
-  // in when getEpisodes resolves.
-  // If the prefetched detail data was already resolved (fired in
-  // main.tsx before React mounted), we skip all fetching.
+  const hasShow = !!show;
   useEffect(() => {
-    if (!showId) return;
-    const hasStoreData = !!storeShow;
-    const hasPrefetched = !!prefetchedDetail;
+    if (!hasShow || !showId) return;
+    const frame = requestAnimationFrame(() => setSettledShowId(showId));
+    return () => cancelAnimationFrame(frame);
+  }, [hasShow, showId]);
 
-    // Cancellation flag — prevents stale promises from a previous showId
-    // from overwriting state after navigation.
-    let cancelled = false;
-    const rafIds: number[] = [];
-    const scheduleSettled = () => {
-      const id = requestAnimationFrame(() => {
-        if (!cancelled) setPageSettled(true);
-      });
-      rafIds.push(id);
-    };
-
-    // If we already have all data from prefetch, just settle — no fetch needed.
-    // (Initial state already holds the prefetched episodes; don't clear it.)
-    if (hasPrefetched) {
-      scheduleSettled();
-      // Clear the cache so subsequent getShow/getEpisodes calls (e.g.
-      // loadShowData after a save) fetch fresh data instead of returning
-      // the stale prefetch.
-      clearCachedShowDetail(showId);
-      return () => {
-        cancelled = true;
-        rafIds.forEach(cancelAnimationFrame);
-      };
-    }
-
-    // Clear stale state from a previous show so the old show's data
-    // doesn't linger while the new show's data loads.
-    setEpisodes([]);
-    setEpStats({ total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 });
-    setMaxEpisode(0);
-
-    // Note: clearCachedShowDetail is called AFTER getShow/getEpisodes
-    // below, so they can still reuse the in-flight prefetch promise.
-    // The cache is only needed for the initial mount — clearing it
-    // after the fetches are fired ensures subsequent calls (e.g.
-    // loadShowData after a save) fetch fresh data.
-
-    setLoadingShow(!hasStoreData);
-    setEpisodesLoading(true);
-    setEpisodesError(null);
+  // A different show starts with a clean hero.
+  useEffect(() => {
     setHeroImgError(false);
     setHeroFallbackFailed(false);
-
-    // If the store already has show data, settle immediately — the
-    // CSS controls-reveal keeps the bar hidden until hover anyway,
-    // so we just need to enable the transition on next frame.
-    if (hasStoreData) {
-      scheduleSettled();
-    } else {
-      setPageSettled(false);
-    }
-
-    const applyShowData = (showRes: Show) => {
-      if (cancelled) return;
-      setShow(showRes);
-      setTrackFiller(actionToTracked(showRes.filler_action, false));
-      setTrackMixed(actionToTracked(showRes.mixed_action, true));
-      setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
-      setWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-      setPristineFiller(actionToTracked(showRes.filler_action, false));
-      setPristineMixed(actionToTracked(showRes.mixed_action, true));
-      setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
-      setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-      scheduleSettled();
-    };
-
-    const applyEpisodes = (eps: Episode[]) => {
-      if (cancelled) return;
-      setEpisodes(eps);
-      let freshMax = 0;
-      let total = 0,
-        canon = 0,
-        anime = 0,
-        mixed = 0,
-        filler = 0;
-      for (const ep of eps) {
-        freshMax = Math.max(freshMax, displayEpisodeNumber(ep));
-        total++;
-        switch (ep.type) {
-          case "canon":
-            canon++;
-            break;
-          case "anime_canon":
-            anime++;
-            break;
-          case "mixed_canon":
-            mixed++;
-            break;
-          case "filler":
-            filler++;
-            break;
-        }
-      }
-      setEpStats({ total, canon, anime, mixed, filler });
-      setMaxEpisode(freshMax);
-      setMarkerValue((prev) => Math.min(prev, freshMax));
-      setPristineMarkerValue((prev) => Math.min(prev, freshMax));
-      setEpisodesLoading(false);
-    };
-
-    if (!hasStoreData) {
-      // Hard refresh — fire show-only and episodes requests in parallel.
-      // getShow is a simple DB query and resolves much faster than
-      // getEpisodes (which may need to enrich from Sonarr + AFL). Show
-      // data is applied as soon as it arrives so the hero title,
-      // tracking rules, and artwork card appear immediately.
-      // Episodes fill in when getEpisodes resolves — the episodes
-      // endpoint has ETag support so repeat visits get 304 Not Modified.
-      let showApplied = false;
-      getShow(showId)
-        .then((showRes) => {
-          if (cancelled) return;
-          showApplied = true;
-          applyShowData(showRes);
-        })
-        .catch((err: unknown) => {
-          if (!cancelled && !showApplied) {
-            addNotification("Failed to load anime: " + errorMessage(err), "error");
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoadingShow(false);
-        });
-
-      getEpisodes(showId)
-        .then((episodesRes) => {
-          if (cancelled) return;
-          applyEpisodes((episodesRes as Episode[]) || []);
-        })
-        .catch((err: unknown) => {
-          if (!cancelled) {
-            setEpisodesError(errorMessage(err));
-            setEpisodesLoading(false);
-          }
-        });
-    } else {
-      // Store has show data — only fetch episodes.
-      getEpisodes(showId)
-        .then((episodesRes) => {
-          if (cancelled) return;
-          applyEpisodes((episodesRes as Episode[]) || []);
-        })
-        .catch((err: unknown) => {
-          if (!cancelled) {
-            setEpisodesError(errorMessage(err));
-            setEpisodesLoading(false);
-          }
-        });
-    }
-
-    // Clear the prefetch caches after getShow/getEpisodes have been fired.
-    // This ensures subsequent calls (e.g. loadShowData after a save) fetch
-    // fresh data instead of returning stale prefetch data.
-    clearCachedShowDetail(showId);
-
-    return () => {
-      cancelled = true;
-      rafIds.forEach(cancelAnimationFrame);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showId]);
-
-  // If the store didn't have show data on first render (e.g. hard refresh
-  // where getShows() hasn't resolved yet), adopt it as soon as it arrives
-  // so the page content appears without waiting for getShow to finish.
-  useEffect(() => {
-    if (storeShow && show?.id !== storeShow.id) {
-      setShow(storeShow);
-      setLoadingShow(false);
-      setTrackFiller(actionToTracked(storeShow.filler_action, false));
-      setTrackMixed(actionToTracked(storeShow.mixed_action, true));
-      setTrackAnimeCanon(actionToTracked(storeShow.anime_canon_action, true));
-      setWatermarkAuto((storeShow.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setMarkerValue(Math.max(0, storeShow.sync_watermark || 0));
-      setPristineFiller(actionToTracked(storeShow.filler_action, false));
-      setPristineMixed(actionToTracked(storeShow.mixed_action, true));
-      setPristineAnimeCanon(actionToTracked(storeShow.anime_canon_action, true));
-      setPristineWatermarkAuto((storeShow.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setPristineMarkerValue(Math.max(0, storeShow.sync_watermark || 0));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeShow]);
-
-  // Lightweight reload functions for post-action refreshes (artwork, save, etc.)
-  const loadShowData = useCallback(async (): Promise<Show | null> => {
-    if (!showId) return null;
-    try {
-      const showRes = await getShow(showId);
-      if (!showRes) return null;
-      setShow(showRes);
-      setTrackFiller(actionToTracked(showRes.filler_action, false));
-      setTrackMixed(actionToTracked(showRes.mixed_action, true));
-      setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
-      setWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-      setPristineFiller(actionToTracked(showRes.filler_action, false));
-      setPristineMixed(actionToTracked(showRes.mixed_action, true));
-      setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
-      setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-      setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-      return showRes;
-    } catch (err: unknown) {
-      addNotification("Failed to load anime: " + errorMessage(err), "error");
-      return null;
-    }
-  }, [showId, addNotification]);
-
-  const loadEpisodeData = useCallback(
-    async (currentShow: Show | null) => {
-      if (!showId) return;
-      setEpisodesLoading(true);
-      setEpisodesError(null);
-      try {
-        const episodesRes = await getEpisodes(showId);
-        const eps = (episodesRes as Episode[]) || [];
-        setEpisodes(eps);
-        // Recompute epStats in the same pass.
-        let total = 0,
-          canon = 0,
-          anime = 0,
-          mixed = 0,
-          filler = 0;
-        let freshMax = 0;
-        for (const ep of eps) {
-          freshMax = Math.max(freshMax, displayEpisodeNumber(ep));
-          total++;
-          switch (ep.type) {
-            case "canon":
-              canon++;
-              break;
-            case "anime_canon":
-              anime++;
-              break;
-            case "mixed_canon":
-              mixed++;
-              break;
-            case "filler":
-              filler++;
-              break;
-          }
-        }
-        setEpStats({ total, canon, anime, mixed, filler });
-        setMaxEpisode(freshMax);
-        if (currentShow) {
-          setMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
-          setPristineMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
-        }
-      } catch (err: unknown) {
-        setEpisodesError(errorMessage(err));
-      }
-      setEpisodesLoading(false);
-    },
-    [showId, clampMarkerValue],
-  );
-
-  const retryEpisodes = useCallback(
-    () => loadEpisodeData(show ?? storeShow ?? null),
-    [loadEpisodeData, show, storeShow],
-  );
-
-  /** Build Selector options for the artwork source dropdown. */
-  const artworkSourceOptions = useMemo<SelectOption[]>(() => {
-    const opts: SelectOption[] = [
-      { value: "", label: "Use global default" },
-      { value: "sonarr", label: "Sonarr (local)" },
-    ];
-    for (const p of artworkProviders) {
-      const suffix = p.needs_key && !p.available ? " (needs API key)" : "";
-      opts.push({ value: p.id, label: `${p.label}${suffix}` });
-    }
-    return opts;
-  }, [artworkProviders]);
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 600);
@@ -565,20 +211,88 @@ export function ShowDetailPage() {
     }
   }, [isMobile, activeTypeFilter]);
 
-  // Clean up savedFlash timeout on unmount
   useEffect(() => {
     return () => {
       if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
     };
   }, []);
 
-  // Effective artwork source for the picker: the per-show override if set,
-  // otherwise the global default. The picker only appears for sources that
-  // expose candidate images.
+  // ── Episode list ──
+  const filteredEpisodes = useMemo(() => {
+    // Fast path: "all" returns the original array, avoiding a large .filter().
+    if (activeTypeFilter === "all") return episodes;
+    return episodes.filter((ep) => {
+      if (activeTypeFilter === "canon" && isMobile) {
+        return ep.type === "canon" || ep.type === "anime_canon";
+      }
+      return ep.type === activeTypeFilter;
+    });
+  }, [episodes, activeTypeFilter, isMobile]);
+
+  // Defer the list on large shows so filter changes don't block the
+  // SegmentedControl interaction.
+  const deferredFilteredEpisodes = useDeferredValue(filteredEpisodes);
+
+  const groupedBySeason = useMemo(() => {
+    const groups: Record<string, Episode[]> = {};
+    for (const ep of deferredFilteredEpisodes) {
+      const season = String(episodeSeason(ep));
+      if (!groups[season]) groups[season] = [];
+      groups[season].push(ep);
+    }
+    // Episodes arrive sorted by episode_num ASC; reverse within each season
+    // to show newest first. (Groups hold copies, so the cached list is
+    // never mutated.)
+    return Object.entries(groups)
+      .map(([seasonKey, eps], index) => ({
+        season: Number.parseInt(seasonKey, 10),
+        episodes: eps.reverse(),
+        index,
+      }))
+      .sort((a, b) => {
+        if (a.season === -1) return 1;
+        if (b.season === -1) return -1;
+        return b.season - a.season;
+      });
+  }, [deferredFilteredEpisodes]);
+
+  // ── Artwork ──
+
+  /** Hero backdrop: the locally stored banner, falling back to Sonarr's
+   *  fanart/banner when the local file is missing. */
+  const backdropUrl = useMemo((): string => {
+    if (!showId) return "";
+    const cacheBust = artworkVersion > 0 ? `?v=${artworkVersion}` : "";
+    if (heroImgError && show) {
+      const series = sonarrSeries.find((s: SonarrSeries) => s.id === show.sonarr_series_id);
+      if (series?.images?.length) {
+        const banner =
+          series.images.find((img) => img.coverType === "fanart") ||
+          series.images.find((img) => img.coverType === "banner") ||
+          series.images[0];
+        if (banner) return resolveSonarrImageUrl(banner, settings?.sonarr_url || "");
+      }
+    }
+    return getArtworkBannerUrl(showId) + cacheBust;
+  }, [showId, artworkVersion, heroImgError, show, sonarrSeries, settings?.sonarr_url]);
+
+  const artworkSourceOptions = useMemo<SelectOption[]>(() => {
+    const opts: SelectOption[] = [
+      { value: "", label: "Use global default" },
+      { value: "sonarr", label: "Sonarr (local)" },
+    ];
+    for (const p of artworkProviders) {
+      const suffix = p.needs_key && !p.available ? " (needs API key)" : "";
+      opts.push({ value: p.id, label: `${p.label}${suffix}` });
+    }
+    return opts;
+  }, [artworkProviders]);
+
+  // Effective source for the picker: the per-show override, else the global
+  // default. The picker only appears for sources with candidate images.
   const resolvedArtworkSource =
     show?.artwork_source || settings?.artwork_default_source || "sonarr";
   const canPickArtwork = PICKER_SOURCES.has(resolvedArtworkSource);
-  // Candidate-capable sources to tab between in the picker dialog.
   const pickerSources = useMemo<ArtworkPickerSource[]>(
     () =>
       artworkProviders
@@ -587,53 +301,49 @@ export function ShowDetailPage() {
     [artworkProviders],
   );
 
-  const handleArtworkPick = async (source: string, slot: ArtworkSlot, url: string) => {
+  /** Re-read the show after an artwork change and bust the image cache. */
+  const reloadArtwork = async () => {
     if (!showId) return;
+    await invalidateShow(queryClient, showId);
+    setHeroImgError(false);
+    setHeroFallbackFailed(false);
+    setArtworkVersion((v) => v + 1);
+  };
+
+  const withArtworkBusy = async (action: () => Promise<void>, failure: string) => {
     setArtworkRefreshing(true);
     try {
-      // Partial pick: only the chosen slot is sent; the backend preserves
-      // the other slots' existing files and paths.
+      await action();
+    } catch (err: unknown) {
+      addNotification(`${failure}: ${errorMessage(err)}`, "error");
+    }
+    setArtworkRefreshing(false);
+  };
+
+  const handleArtworkPick = (source: string, slot: ArtworkSlot, url: string) =>
+    withArtworkBusy(async () => {
+      if (!showId) return;
+      // Partial pick: only the chosen slot is sent; the backend keeps the
+      // other slots' existing files.
       await selectArtwork(showId, {
         source,
         poster_url: slot === "poster" ? url : "",
         banner_url: slot === "banner" ? url : "",
         logo_url: slot === "logo" ? url : "",
       });
-      const refreshed = await loadShowData();
-      if (refreshed) {
-        setHeroImgError(false);
-        setHeroFallbackFailed(false);
-        setArtworkVersion((v) => v + 1);
-      }
+      await reloadArtwork();
       setPickerOpen(false);
       addNotification(`Artwork ${slot} updated`, "success");
-    } catch (err: unknown) {
-      addNotification("Failed to save artwork: " + errorMessage(err), "error");
-    }
-    setArtworkRefreshing(false);
-  };
+    }, "Failed to save artwork");
 
-  const handleRefreshArtwork = async (source?: string) => {
-    if (!showId) return;
-    setArtworkRefreshing(true);
-    try {
+  const handleRefreshArtwork = (source?: string) =>
+    withArtworkBusy(async () => {
+      if (!showId) return;
       const result = await refreshArtwork(showId, source);
+      await reloadArtwork();
       if (result.found) {
         addNotification(`Artwork fetched from ${result.source}`, "success");
-        // Reload show to get updated artwork paths, then bust browser cache
-        const refreshed = await loadShowData();
-        if (refreshed) {
-          setHeroImgError(false);
-          setHeroFallbackFailed(false);
-          setArtworkVersion((v) => v + 1);
-        }
       } else {
-        // Source is "sonarr" or provider returned nothing — reload to
-        // pick up any cleared paths, and inform the user.
-        await loadShowData();
-        setHeroImgError(false);
-        setHeroFallbackFailed(false);
-        setArtworkVersion((v) => v + 1);
         addNotification(
           source === "sonarr"
             ? "Using Sonarr images (no download needed)"
@@ -641,84 +351,58 @@ export function ShowDetailPage() {
           "warning",
         );
       }
-    } catch (err: unknown) {
-      addNotification("Failed to fetch artwork: " + errorMessage(err), "error");
-    }
-    setArtworkRefreshing(false);
-  };
+    }, "Failed to fetch artwork");
 
-  const handleArtworkSourceChange = async (source: string) => {
-    if (!showId) return;
-    setArtworkRefreshing(true);
-    try {
+  const handleArtworkSourceChange = (source: string) =>
+    withArtworkBusy(async () => {
+      if (!showId) return;
       await setArtworkSource(showId, source);
-
-      if (source === "") {
-        await loadShowData();
-        setHeroImgError(false);
-        setHeroFallbackFailed(false);
-        setArtworkVersion((v) => v + 1);
-        addNotification("Using global default artwork source", "info");
-      } else if (source === "sonarr") {
-        // Reload show to reflect cleared local paths, then bust cache.
-        await loadShowData();
-        setHeroImgError(false);
-        setHeroFallbackFailed(false);
-        setArtworkVersion((v) => v + 1);
-        addNotification("Switched to Sonarr images", "info");
+      if (source === "" || source === "sonarr") {
+        await reloadArtwork();
+        addNotification(
+          source === "" ? "Using global default artwork source" : "Switched to Sonarr images",
+          "info",
+        );
+        return;
+      }
+      const result = await refreshArtwork(showId, source);
+      await reloadArtwork();
+      if (result.found) {
+        addNotification(`Switched to ${result.source} artwork`, "success");
       } else {
-        // Fetch artwork from the selected provider, then reload once
-        // to pick up the new paths — no need to reload before the fetch.
-        const result = await refreshArtwork(showId, source);
-        const refreshed = await loadShowData();
-        if (refreshed) {
-          setHeroImgError(false);
-          setHeroFallbackFailed(false);
-          setArtworkVersion((v) => v + 1);
-        }
-        if (result.found) {
-          addNotification(`Switched to ${result.source} artwork`, "success");
-        } else {
-          addNotification(`No artwork found from ${source}`, "warning");
-        }
+        addNotification(`No artwork found from ${source}`, "warning");
       }
-    } catch (err: unknown) {
-      addNotification("Failed to set artwork source: " + errorMessage(err), "error");
-    }
-    setArtworkRefreshing(false);
-  };
+    }, "Failed to set artwork source");
 
-  const handleSave = async () => {
+  // ── Save / delete ──
+
+  const handleSave = form.handleSubmit(async (rules) => {
     if (!showId) return;
-    setSaving(true);
+    const payload: ShowUpdate = {
+      filler_action: trackedToAction(rules.trackFiller),
+      mixed_action: trackedToAction(rules.trackMixed),
+      anime_canon_action: trackedToAction(rules.trackAnimeCanon),
+      watermark_mode: rules.watermarkAuto ? WATERMARK_AUTO : WATERMARK_MANUAL,
+    };
+    if (!rules.watermarkAuto) {
+      payload.sync_watermark = clampMarkerValue(rules.markerValue);
+    }
     try {
-      const payload: ShowUpdate = {
-        filler_action: trackedToAction(trackFiller),
-        mixed_action: trackedToAction(trackMixed),
-        anime_canon_action: trackedToAction(trackAnimeCanon),
-        watermark_mode: watermarkAuto ? WATERMARK_AUTO : WATERMARK_MANUAL,
-      };
-      if (!watermarkAuto) {
-        payload.sync_watermark = clampMarkerValue(markerValue);
-      }
-      await updateShow(showId, payload);
+      const saved = await updateShowMutation.mutateAsync({ id: showId, data: payload });
+      // Mark the saved rules as the new baseline. reset() inherits the
+      // form's keepDirtyValues option, which would keep the dirty flags.
+      form.reset(rulesFromShow(saved, maxEpisode), { keepDirtyValues: false });
       addNotification(`Saved tracking rules for ${show?.sonarr_title || "anime"}`, "success");
       setSavedFlash(true);
       if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
       savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
-      const refreshedShow = await loadShowData();
-      if (refreshedShow) {
-        await loadEpisodeData(refreshedShow);
-      }
     } catch (err: unknown) {
       addNotification("Failed to save anime: " + errorMessage(err), "error");
     }
-    setSaving(false);
-  };
+  });
 
   const handleDelete = async () => {
     if (!showId) return;
-    setDeleting(true);
     try {
       await deleteShowMutation.mutateAsync(showId);
       addNotification(`Removed ${show?.sonarr_title || "anime"} from Mizu`, "success");
@@ -727,9 +411,9 @@ export function ShowDetailPage() {
     } catch (err: unknown) {
       addNotification("Failed to remove anime: " + errorMessage(err), "error");
     }
-    setDeleting(false);
   };
 
+  const { mutateAsync: setEpisodeMonitor } = setEpisodeMonitorMutation;
   const toggleEpisodeMonitor = useCallback(
     async (groupSeason: number, ep: Episode) => {
       const sonarrEp = resolveSonarrEpisode(ep);
@@ -741,17 +425,7 @@ export function ShowDetailPage() {
       setSyncingEps((prev) => ({ ...prev, [key]: true }));
       try {
         const nextState = !sonarrEp.monitored;
-        await setEpisodeMonitor(showId, sonarrEp.id, nextState);
-        setEpisodes((prev) => {
-          // Find the episode by sonarr_episode_id and update in-place
-          // via splice — avoids mapping all 1200+ elements when only
-          // one changed.
-          const idx = prev.findIndex((e) => e.sonarr_episode_id === sonarrEp.id);
-          if (idx === -1) return prev;
-          const next = prev.slice();
-          next[idx] = { ...prev[idx], monitored: nextState };
-          return next;
-        });
+        await setEpisodeMonitor({ showId, epId: sonarrEp.id, monitored: nextState });
         addNotification(
           `${episodeLabel(ep)} ${nextState ? "now monitored" : "now unmonitored"}`,
           "success",
@@ -765,8 +439,10 @@ export function ShowDetailPage() {
         return next;
       });
     },
-    [showId, addNotification],
+    [showId, addNotification, setEpisodeMonitor],
   );
+
+  const retryEpisodes = useCallback(() => void episodesQuery.refetch(), [episodesQuery]);
 
   return (
     <>
@@ -797,24 +473,24 @@ export function ShowDetailPage() {
                 markerValue={markerValue}
                 maxEpisode={maxEpisode}
                 isMobile={isMobile}
-                deleting={deleting}
-                saving={saving}
+                deleting={deleteShowMutation.isPending}
+                saving={updateShowMutation.isPending}
                 savedFlash={savedFlash}
                 rulesDirty={rulesDirty}
-                onMarkerChange={(value) => setMarkerValue(clampMarkerValue(value))}
-                onToggleAuto={() => setWatermarkAuto(!watermarkAuto)}
+                onMarkerChange={(value) => setRule("markerValue", clampMarkerValue(value))}
+                onToggleAuto={() => setRule("watermarkAuto", !watermarkAuto)}
                 onRemove={() => setShowDeleteDialog(true)}
-                onSave={handleSave}
+                onSave={() => {
+                  if (rulesDirty) void handleSave();
+                }}
               />
             )}
           </div>
 
           <Divider />
 
-          {loadingShow || !show ? (
-            <>
-              <ShowDetailSkeleton />
-            </>
+          {!show ? (
+            <ShowDetailSkeleton />
           ) : (
             <>
               <ArtworkCard
@@ -823,8 +499,8 @@ export function ShowDetailPage() {
                 canPick={canPickArtwork}
                 refreshing={artworkRefreshing}
                 onChoose={() => setPickerOpen(true)}
-                onRefresh={() => handleRefreshArtwork()}
-                onSourceChange={handleArtworkSourceChange}
+                onRefresh={() => void handleRefreshArtwork()}
+                onSourceChange={(source) => void handleArtworkSourceChange(source)}
               />
 
               <TrackingRulesSection
@@ -832,20 +508,19 @@ export function ShowDetailPage() {
                 trackAnimeCanon={trackAnimeCanon}
                 trackMixed={trackMixed}
                 trackFiller={trackFiller}
-                onAnimeCanonChange={setTrackAnimeCanon}
-                onMixedChange={setTrackMixed}
-                onFillerChange={setTrackFiller}
+                onAnimeCanonChange={(value) => setRule("trackAnimeCanon", value)}
+                onMixedChange={(value) => setRule("trackMixed", value)}
+                onFillerChange={(value) => setRule("trackFiller", value)}
               />
             </>
           )}
 
-          {/* Episode list — memoized so tracking-rule toggles don't re-render it.
-            Rendered outside the show-gate so the skeleton appears immediately
-            even before show data resolves (e.g. hard refresh). */}
+          {/* Rendered outside the show gate so the episode skeleton appears
+            immediately, even before the show itself has loaded. */}
           {showId && (
             <EpisodeListSection
-              episodesLoading={episodesLoading}
-              episodesError={episodesError}
+              episodesLoading={episodesQuery.isPending}
+              episodesError={episodesQuery.error ? errorMessage(episodesQuery.error) : null}
               onRetryEpisodes={retryEpisodes}
               hasShowData={!!show}
               groupedBySeason={groupedBySeason}
@@ -868,8 +543,8 @@ export function ShowDetailPage() {
             title="Remove anime?"
             description={`This will remove "${show.sonarr_title}" from Mizu. The series stays in Sonarr. You can re-add it anytime.`}
             actionLabel="Remove"
-            isActionLoading={deleting}
-            onAction={handleDelete}
+            isActionLoading={deleteShowMutation.isPending}
+            onAction={() => void handleDelete()}
           />
         </Suspense>
       )}
@@ -886,7 +561,7 @@ export function ShowDetailPage() {
             banner: show?.artwork_banner_url || undefined,
             logo: show?.artwork_logo_url || undefined,
           }}
-          onSelect={handleArtworkPick}
+          onSelect={(source, slot, url) => void handleArtworkPick(source, slot, url)}
         />
       )}
     </>

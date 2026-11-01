@@ -66,9 +66,11 @@ describe("ErrorBoundary", () => {
     });
 
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
-    expect(container.textContent).toContain("Something went wrong");
-    expect(container.textContent).toContain("Try again");
-    expect(container.textContent).toContain("Reload app");
+    expect(container.textContent).toContain("This page ran into a problem");
+    expect(container.textContent).toContain("Reload page");
+    // The error message is available under "Technical details".
+    expect(container.textContent).toContain("Technical details");
+    expect(container.innerHTML).toContain("kaboom");
   });
 
   it("renders children normally when no error occurs", async () => {
@@ -80,26 +82,35 @@ describe("ErrorBoundary", () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it("recovers when the child is fixed and Try again is clicked", async () => {
+  it("offers Go to library off the library, and it recovers the page", async () => {
     crash = true;
     await act(async () => {
-      root.render(createElement(ErrorBoundary, null, createElement(Crashable)));
+      root.render(
+        createElement(MemoryRouter, { initialEntries: ["/settings"] }, createElement(RouteApp)),
+      );
     });
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
 
-    // Fix the child, then click Try again — the boundary resets and
-    // re-renders children, which now succeed.
     crash = false;
-    const tryAgain = Array.from(container.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes("Try again"),
+    const goHome = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Go to library"),
     );
-    expect(tryAgain).toBeDefined();
+    expect(goHome).toBeDefined();
     await act(async () => {
-      tryAgain!.click();
+      goHome!.click();
     });
 
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.textContent).toContain("healthy content");
+  });
+
+  it("hides Go to library when the library itself crashed", async () => {
+    crash = true;
+    await act(async () => {
+      root.render(createElement(MemoryRouter, { initialEntries: ["/"] }, createElement(RouteApp)));
+    });
+    expect(container.textContent).toContain("Reload page");
+    expect(container.textContent).not.toContain("Go to library");
   });
 
   it("recovers on route change (key remount clears error state)", async () => {
@@ -107,7 +118,7 @@ describe("ErrorBoundary", () => {
     await act(async () => {
       root.render(createElement(MemoryRouter, null, createElement(RouteApp)));
     });
-    expect(container.textContent).toContain("Something went wrong");
+    expect(container.textContent).toContain("This page ran into a problem");
 
     // Fix the child and navigate to a different route — the boundary
     // remounts under a new pathname key with fresh state.

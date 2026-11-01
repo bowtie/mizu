@@ -16,12 +16,15 @@ Automatically manage filler episodes in Sonarr using data from [AnimeFillerList]
 
 ## Quick Start
 
+There's no published image yet; both options below build it from this
+repository.
+
 ### Docker Compose (Recommended)
 
 ```yaml
 services:
   mizu:
-    image: mizu:latest
+    build: .
     container_name: mizu
     ports:
       - "8978:8978"
@@ -34,11 +37,12 @@ services:
 docker compose up -d
 ```
 
-Open `http://localhost:8978` to access the dashboard, then configure your Sonarr URL and API key in Settings.
+Open `http://localhost:8978`; the welcome screen asks for your Sonarr URL and API key.
 
 ### Docker Run
 
 ```bash
+docker build -t mizu .
 docker run -d \
   --name mizu \
   -p 8978:8978 \
@@ -56,9 +60,16 @@ The container listens on `0.0.0.0:8978` by default. Bare binaries default to
 # Build frontend
 cd web && bun install && bun run build && cd ..
 
+# Copy the frontend into the Go embed directory
+cp -r web/dist/. internal/web/dist/
+
 # Build Go binary
 go build -o mizu ./cmd/server
 ```
+
+On Windows, `bun run build` from the repo root runs all three steps
+(`scripts/build.ps1`). Without the copy step the binary still builds, but it
+serves no dashboard.
 
 ## Configuration
 
@@ -90,41 +101,13 @@ All settings are stored in the embedded SQLite database and managed through the 
 
 ### Dashboard Password
 
-Until a password is set, the dashboard (and API) is open to anyone who can reach it. On first launch the UI prompts you to create one; it is stored bcrypt-hashed in SQLite and can be changed later in Settings. The initial password can also be seeded non-interactively:
+Until a password is set, the dashboard (and API) is open to anyone who can reach it. On first launch the UI prompts you to create one; it is stored bcrypt-hashed in SQLite and can be changed or removed later in Settings (Security). The initial password can also be seeded non-interactively:
 
 ```bash
 MIZU_PASSWORD=your-password ./mizu
 ```
 
 The env var only applies while no password is configured; rotate via Settings afterwards. Sessions last 30 days, and changing the password revokes all existing sessions. Health and version endpoints stay public for monitoring.
-
-### Authentication Modes
-
-`MIZU_AUTH` chooses who signs users in. It is read from the environment only, never from the UI, so a compromised session cannot turn authentication off.
-
-| `MIZU_AUTH` | Behavior |
-| --- | --- |
-| `builtin` (default) | The dashboard password described above. |
-| `none` | No authentication. Use this when Mizu is only reachable through a VPN/tailnet or an authenticating proxy. The password endpoints return 404 and the UI hides password setup and sign-out. |
-| `proxy` | Trust an identity header from a reverse proxy (tinyauth, Authelia, Authentik, oauth2-proxy, ...). Requests must come from `MIZU_TRUSTED_PROXIES` **and** carry the header, otherwise they get 401. |
-
-Proxy-mode settings:
-
-- `MIZU_TRUSTED_PROXIES` (required): comma- or space-separated IPs/CIDRs of your proxy, e.g. `172.18.0.0/16`. Matched against the TCP peer address only; `X-Forwarded-For` is never trusted.
-- `MIZU_AUTH_PROXY_HEADER` (default `Remote-User`): the header carrying the signed-in user, e.g. `X-Forwarded-User` or `Remote-Email`.
-
-```yaml
-environment:
-  MIZU_AUTH: proxy
-  MIZU_TRUSTED_PROXIES: 172.18.0.0/16
-  MIZU_AUTH_PROXY_HEADER: Remote-User
-```
-
-Notes:
-
-- Have the proxy strip the identity header from incoming client requests and pass `Host` through unchanged; Mizu rejects cross-origin writes by comparing `Origin` to `Host`.
-- `MIZU_AUTH=none` on a non-loopback `MIZU_ADDR` logs a warning at startup: anyone who can reach the port can use the dashboard.
-- Health, version and metrics endpoints stay public in every mode. The API never returns stored API keys in full; only a masked form is sent to the browser.
 
 ### Metrics
 
@@ -133,26 +116,31 @@ Mizu exposes Prometheus-style metrics at `/metrics` (public, like `/api/health`)
 ## Architecture
 
 ```
-cmd/server/
-  main.go              # Entry point, wires up all components
-  router.go            # HTTP API routes and handlers
+cmd/server/            # HTTP server: one file per API area
+  main.go              # Entry point, settings load, scheduler
+  router.go            # Route table and middleware
+  auth.go, settings.go, mappings.go, episodes.go, artwork.go,
+  sonarr_series.go, afl.go, backup.go, health.go, system.go
 
 internal/
-  config/config.go     # SQLite-based configuration with defaults
-  database/database.go # SQLite with migrations, full CRUD
-  matcher/matcher.go   # Jaro-Winkler fuzzy title matching
-  models/models.go     # Shared types (Sonarr, AFL, mappings)
-  notifier/ntfy.go     # ntfy.sh push notifications
-  scraper/scraper.go   # AnimeFillerList HTML parser
-  sonarr/sonarr.go     # Sonarr API v3 client
-  sync/sync.go         # Orchestrates scraper + matcher + Sonarr
-  web/embed.go         # Embeds React SPA into Go binary
+  artwork/             # Artwork providers (AniList, TMDB, fanart.tv, Kitsu) and local storage
+  auth/                # Password hashing and DB-backed sessions
+  config/              # Runtime config with defaults (values live in SQLite)
+  database/            # SQLite: goose migrations, sqlc queries (sqlcgen/)
+  matcher/             # Jaro-Winkler fuzzy title matching
+  metrics/             # Dependency-free Prometheus text exposition
+  models/              # Shared types (Sonarr, AFL, mappings)
+  notifier/            # ntfy push notifications
+  scraper/             # AnimeFillerList HTML parser
+  sonarr/              # Sonarr API v3 client with retries
+  sync/                # Sync engine: scraper + matcher + Sonarr
+  web/                 # Embeds the built SPA into the Go binary
 
-web/                  # React SPA frontend (Vite+ + StyleX)
+web/                   # React SPA (Vite+, Astryx design system, TanStack Query)
   src/
-    routes/            # ShowsPage, ShowDetailPage, SettingsPage, ActivityPage, AddAnimeDialog
-    components/        # ToastViewport
-    lib/               # API client, stores, types, themes
+    routes/            # Shows, ShowDetail, Activity, Settings, Onboarding, Login, AddAnime dialog
+    components/        # Page sections, settings cards, add-anime wizard steps
+    lib/               # API client, query hooks, schemas, themes
 ```
 
 ## Notifications (ntfy)
@@ -180,47 +168,57 @@ If you run your own ntfy server, set the ntfy server URL in Settings and provide
 
 ## API Reference
 
-All endpoints are under `/api`.
+Endpoints are under `/api`, except `/metrics`. Once a password is set, everything except health, version, metrics and auth status/setup/login/logout needs a session.
 
-| Method   | Path                                        | Description                                             |
-| -------- | ------------------------------------------- | ------------------------------------------------------- |
-| `GET`    | `/api/health`                               | Health check (503 when Sonarr is unreachable)           |
-| `GET`    | `/api/version`                              | Version info                                            |
-| `GET`    | `/api/stats`                                | Dashboard statistics                                    |
-| `GET`    | `/metrics`                                  | Prometheus-style metrics                                |
-| `GET`    | `/api/artwork/providers`                    | List available artwork providers                        |
-| `GET`    | `/api/artwork/{id}/poster`                  | Serve poster artwork for a mapping                      |
-| `GET`    | `/api/artwork/{id}/banner`                  | Serve banner artwork for a mapping                      |
-| `GET`    | `/api/artwork/{id}/logo`                    | Serve logo artwork for a mapping                        |
-| `POST`   | `/api/artwork/refresh-all`                  | Refresh artwork for all mappings                        |
-| `GET`    | `/api/mappings`                             | List all show mappings                                  |
-| `POST`   | `/api/mappings`                             | Create mapping (auto-match or manual)                   |
-| `GET`    | `/api/mappings/:id`                         | Get a single mapping                                    |
-| `PUT`    | `/api/mappings/:id`                         | Update a mapping                                        |
-| `DELETE` | `/api/mappings/:id`                         | Delete a mapping                                        |
-| `POST`   | `/api/mappings/:id/artwork/refresh`         | Refresh artwork for a single mapping                    |
-| `PUT`    | `/api/mappings/:id/artwork/source`          | Change artwork source for a mapping                     |
-| `GET`    | `/api/mappings/:id/episodes`                | Get episodes for a mapping                              |
-| `GET`    | `/api/mappings/:id/episodes/sonarr`         | Get Sonarr episode data for a mapping                   |
-| `PUT`    | `/api/mappings/:id/episodes/{epId}/monitor` | Toggle episode monitor status                           |
-| `POST`   | `/api/mappings/:id/resync`                  | Resync a single mapping                                 |
-| `POST`   | `/api/sync`                                 | Trigger manual sync                                     |
-| `GET`    | `/api/logs`                                 | Get sync history                                        |
-| `GET`    | `/api/settings`                             | Get current settings                                    |
-| `GET`    | `/api/settings/sonarr-api-key`              | Get stored Sonarr API key                               |
-| `PUT`    | `/api/settings`                             | Update settings                                         |
-| `POST`   | `/api/settings/afl-cache/refresh`           | Trigger background AFL cache refresh                    |
-| `GET`    | `/api/settings/afl-cache/status`            | Get AFL cache refresh status                            |
-| `GET`    | `/api/sonarr/series`                        | List Sonarr series                                      |
-| `GET`    | `/api/sonarr/series/:id`                    | Get a single Sonarr series                              |
-| `POST`   | `/api/sonarr/series`                        | Add a series to Sonarr                                  |
-| `GET`    | `/api/sonarr/lookup`                        | Lookup series in Sonarr                                 |
-| `GET`    | `/api/sonarr/add-options`                   | Get Sonarr add options (root folders, quality profiles) |
-| `POST`   | `/api/sonarr/manual-match-pending`          | Mark a series as pending manual match                   |
-| `POST`   | `/api/sonarr/test`                          | Test Sonarr connection                                  |
-| `POST`   | `/api/ntfy/test`                            | Send test ntfy notification                             |
-| `GET`    | `/api/afl/search?q=`                        | Search AnimeFillerList                                  |
-| `GET`    | `/api/afl/suggest`                          | Get AFL suggestions                                     |
+| Method   | Path                                         | Description                                             |
+| -------- | -------------------------------------------- | ------------------------------------------------------- |
+| `GET`    | `/api/health`                                | Health check (503 when Sonarr is unreachable)           |
+| `GET`    | `/api/version`                               | Version info                                            |
+| `GET`    | `/metrics`                                   | Prometheus-style metrics                                |
+| `GET`    | `/api/auth/status`                           | Whether a password is set and the caller is signed in   |
+| `POST`   | `/api/auth/setup`                            | Set the initial password and sign in                    |
+| `POST`   | `/api/auth/login`                            | Sign in                                                 |
+| `POST`   | `/api/auth/logout`                           | Sign out                                                |
+| `POST`   | `/api/auth/change-password`                  | Change the password (revokes all sessions)              |
+| `POST`   | `/api/auth/remove-password`                  | Turn password protection off                            |
+| `GET`    | `/api/stats`                                 | Dashboard statistics                                    |
+| `GET`    | `/api/artwork/providers`                     | List available artwork providers                        |
+| `GET`    | `/api/artwork/{id}/poster`                   | Serve poster artwork for a mapping                      |
+| `GET`    | `/api/artwork/{id}/banner`                   | Serve banner artwork for a mapping                      |
+| `GET`    | `/api/artwork/{id}/logo`                     | Serve logo artwork for a mapping                        |
+| `POST`   | `/api/artwork/refresh-all`                   | Refresh artwork for all mappings (background)           |
+| `GET`    | `/api/artwork/refresh-status`                | Whether an artwork refresh is running                   |
+| `GET`    | `/api/mappings`                              | List all show mappings                                  |
+| `POST`   | `/api/mappings`                              | Create mapping (auto-match or manual)                   |
+| `GET`    | `/api/mappings/{id}`                         | Get a single mapping                                    |
+| `PUT`    | `/api/mappings/{id}`                         | Update a mapping                                        |
+| `DELETE` | `/api/mappings/{id}`                         | Delete a mapping                                        |
+| `POST`   | `/api/mappings/{id}/artwork/refresh`         | Refresh artwork for a single mapping                    |
+| `PUT`    | `/api/mappings/{id}/artwork/source`          | Change artwork source for a mapping                     |
+| `GET`    | `/api/mappings/{id}/artwork/candidates`      | List candidate images from a source                     |
+| `PUT`    | `/api/mappings/{id}/artwork/select`          | Store a picked candidate image                          |
+| `GET`    | `/api/mappings/{id}/episodes`                | Get episodes for a mapping                              |
+| `GET`    | `/api/mappings/{id}/episodes/sonarr`         | Get Sonarr episode data for a mapping                   |
+| `PUT`    | `/api/mappings/{id}/episodes/{epId}/monitor` | Toggle episode monitor status                           |
+| `POST`   | `/api/mappings/{id}/resync`                  | Resync a single mapping                                 |
+| `POST`   | `/api/sync`                                  | Trigger manual sync                                     |
+| `GET`    | `/api/logs`                                  | Get sync history                                        |
+| `GET`    | `/api/settings`                              | Get current settings (API keys masked)                  |
+| `PUT`    | `/api/settings`                              | Update settings                                         |
+| `POST`   | `/api/settings/afl-cache/refresh`            | Trigger background AFL cache refresh                    |
+| `GET`    | `/api/settings/afl-cache/status`             | Get AFL cache refresh status                            |
+| `GET`    | `/api/sonarr/series`                         | List Sonarr series                                      |
+| `GET`    | `/api/sonarr/series/{id}`                    | Get a single Sonarr series                              |
+| `POST`   | `/api/sonarr/series`                         | Add a series to Sonarr                                  |
+| `GET`    | `/api/sonarr/lookup`                         | Lookup series in Sonarr                                 |
+| `GET`    | `/api/sonarr/add-options`                    | Get Sonarr add options (root folders, quality profiles) |
+| `POST`   | `/api/sonarr/manual-match-pending`           | Mark a series as pending manual match                   |
+| `POST`   | `/api/sonarr/test`                           | Test Sonarr connection                                  |
+| `POST`   | `/api/ntfy/test`                             | Send test ntfy notification                             |
+| `GET`    | `/api/afl/search?q=`                         | Search AnimeFillerList                                  |
+| `GET`    | `/api/afl/suggest`                           | Get AFL suggestions                                     |
+| `GET`    | `/api/backup/export`                         | Download config backup (includes API keys)              |
+| `POST`   | `/api/backup/import`                         | Restore a config backup                                 |
 
 ## Development
 

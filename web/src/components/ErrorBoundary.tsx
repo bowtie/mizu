@@ -1,67 +1,96 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { CircleAlert } from "lucide-react";
+import { useInRouterContext, useLocation, useNavigate } from "react-router-dom";
+import { Section } from "@astryxdesign/core/Section";
+import { VStack } from "@astryxdesign/core/VStack";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Button } from "@astryxdesign/core/Button";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Collapsible } from "@astryxdesign/core/Collapsible";
+import { Text } from "@astryxdesign/core/Text";
+import { CircleAlert, House, RotateCw } from "lucide-react";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
 }
 
 interface ErrorBoundaryState {
-  hasError: boolean;
+  error: Error | null;
 }
 
 /**
- * Top-level error boundary. Catches render errors from any lazy-loaded
- * route chunk (or a component below it) so a crash shows a recoverable
- * fallback instead of a blank screen. "Try again" resets the boundary
- * and re-renders children; "Reload" does a full page reload to also
- * reset app state (theme, query cache, navigation).
+ * Route-level error boundary. Catches render errors from a lazy route chunk
+ * (or anything below it) and shows the error as the page content, with the
+ * app's navigation still in place. main.tsx keys it by pathname, so moving
+ * to another page clears the error.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false };
+  state: ErrorBoundaryState = { error: null };
 
-  static getDerivedStateFromError(): ErrorBoundaryState {
-    return { hasError: true };
+  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
+    return { error: error instanceof Error ? error : new Error(String(error)) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Log the full error + component stack for debugging. The user sees
-    // the fallback UI; this keeps the details out of the UI.
     console.error("[ErrorBoundary] render error:", error, info.componentStack);
   }
 
-  private reset = () => {
-    this.setState({ hasError: false });
-  };
-
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="error-boundary" role="alert">
-          <div className="error-boundary-card">
-            <div className="error-boundary-icon">
-              <CircleAlert size={24} />
-            </div>
-            <h2 className="error-boundary-title">Something went wrong</h2>
-            <p className="error-boundary-desc">
-              An unexpected error occurred while rendering this page. Your data is safe — try again,
-              or reload the app to start fresh.
-            </p>
-            <div className="error-boundary-actions">
-              <button type="button" className="error-boundary-btn" onClick={this.reset}>
-                Try again
-              </button>
-              <button
-                type="button"
-                className="error-boundary-btn error-boundary-btn-primary"
-                onClick={() => window.location.reload()}
-              >
-                Reload app
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
+    if (this.state.error) return <ErrorPage error={this.state.error} />;
     return this.props.children;
   }
+}
+
+function ErrorPage({ error }: { error: Error }) {
+  // The boundary also wraps content outside the router in tests; only offer
+  // in-app navigation when a router is present.
+  const inRouter = useInRouterContext();
+  return (
+    <Section variant="transparent" padding={4} maxWidth={900} className="section-centered">
+      <VStack gap={4} align="center" role="alert">
+        <EmptyState
+          headingLevel={1}
+          title="This page ran into a problem"
+          description="Mizu couldn't show this page. Your shows and settings aren't affected — reloading usually fixes it."
+          icon={<Icon icon={CircleAlert} size="lg" color="error" />}
+          actions={
+            <>
+              <Button
+                label="Reload page"
+                variant="primary"
+                icon={<RotateCw size={16} />}
+                onClick={() => window.location.reload()}
+              />
+              {inRouter && <GoToLibraryButton />}
+            </>
+          }
+        />
+        {error.message && (
+          <Collapsible
+            trigger={<Text type="supporting">Technical details</Text>}
+            defaultIsOpen={false}
+            style={{ width: "100%", maxWidth: "32rem" }}
+          >
+            <Text type="code" color="secondary">
+              {error.message}
+            </Text>
+          </Collapsible>
+        )}
+      </VStack>
+    </Section>
+  );
+}
+
+/** Hidden on the library itself, where it would do nothing. */
+function GoToLibraryButton() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  if (pathname === "/" || pathname === "/shows") return null;
+  return (
+    <Button
+      label="Go to library"
+      variant="secondary"
+      icon={<House size={16} />}
+      onClick={() => navigate("/")}
+    />
+  );
 }

@@ -9,11 +9,10 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Divider } from "@astryxdesign/core/Divider";
-import { Card } from "@astryxdesign/core/Card";
-import { Grid } from "@astryxdesign/core/Grid";
+import { Switch } from "@astryxdesign/core/Switch";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Search, Check } from "lucide-react";
-import { TrackingRuleCard } from "../TrackingRuleCard";
+import { SettingsRow } from "../SettingsRow";
 import type { AddWizardState, AddWizardAction } from "../../routes/addWizardHelpers";
 import type { SelectOption } from "../../lib/types";
 import {
@@ -108,57 +107,67 @@ export function MatchStep({
 
           {/* Tracking rules */}
           <Divider />
-          <Card variant="muted" padding={4}>
-            <VStack gap={3}>
-              <Heading level={3}>Tracking rules</Heading>
-              <Grid columns={{ minWidth: 240 }} gap={3}>
-                <TrackingRuleCard
-                  variant="red"
-                  label="Filler"
-                  description="Skippable, no plot impact"
-                  switchLabel="Track filler"
-                  value={w.addTrackFiller}
-                  onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
-                />
-                <TrackingRuleCard
-                  variant="yellow"
-                  label="Mixed"
-                  description="Mix of canon and filler"
-                  switchLabel="Track mixed canon"
-                  value={w.addTrackMixed}
-                  onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
-                />
-                <TrackingRuleCard
-                  variant="green"
-                  label="Canon"
-                  description="Main plot episodes"
-                  switchLabel="Track anime canon"
-                  value={w.addTrackAnimeCanon}
-                  onChange={(v) => dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })}
-                />
-              </Grid>
+          <VStack gap={3}>
+            <Heading level={3}>Tracking rules</Heading>
+            <SettingsRow label="Canon" description="Main plot episodes">
+              <Switch
+                label="Track anime canon"
+                value={w.addTrackAnimeCanon}
+                onChange={(v: boolean) =>
+                  dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })
+                }
+                isLabelHidden
+                data-cuelume-toggle
+              />
+            </SettingsRow>
+            <SettingsRow label="Mixed" description="Mix of canon and filler">
+              <Switch
+                label="Track mixed canon"
+                value={w.addTrackMixed}
+                onChange={(v: boolean) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
+                isLabelHidden
+                data-cuelume-toggle
+              />
+            </SettingsRow>
+            <SettingsRow label="Filler" description="Skippable, no plot impact">
+              <Switch
+                label="Track filler"
+                value={w.addTrackFiller}
+                onChange={(v: boolean) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
+                isLabelHidden
+                data-cuelume-toggle
+              />
+            </SettingsRow>
+            <SettingsRow
+              label="Start tracking from"
+              description="Where Mizu begins applying rules."
+            >
               <Selector
                 label="Start tracking from"
                 options={startModeOptions}
                 value={w.addStartMode}
                 onChange={(v) => dispatch({ type: "SET", payload: { addStartMode: v } })}
+                isLabelHidden
+                width={180}
               />
-            </VStack>
-          </Card>
+            </SettingsRow>
+          </VStack>
 
           {w.addStep === ADD_STEP_UNSAFE_MATCH ? (
-            <Button
-              label="Confirm match"
-              variant="primary"
-              onClick={() => handleConfirmMatch()}
-              isLoading={w.confirming}
-              data-cuelume-press
-            />
+            <HStack justify="end">
+              <Button
+                label="Confirm match"
+                variant="primary"
+                onClick={() => handleConfirmMatch()}
+                isLoading={w.confirming}
+                data-cuelume-press
+              />
+            </HStack>
           ) : (
-            <HStack gap={2}>
+            <HStack gap={2} justify="between" wrap="wrap">
               <Button
                 label="Keep Sonarr only"
-                variant="secondary"
+                variant="ghost"
                 onClick={handleKeepSonarrOnly}
                 data-cuelume-press
               />

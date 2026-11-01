@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -120,4 +121,56 @@ func TestImportRejectsInvalidMapping(t *testing.T) {
 		handleImportConfig(config.DefaultConfig(), target, newSchedulerController(0), nil, nil)(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, tt.name)
 	}
+}
+
+// Imported settings get the same validation as PUT /api/settings, and a
+// rejected import writes nothing — not even the valid mappings in it.
+func TestImportRejectsInvalidSettingsAndWritesNothing(t *testing.T) {
+	target, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer target.Close()
+
+	mapping := `"mappings":[{"sonarr_series_id":1,"sonarr_title":"Naruto","afl_slug":"naruto","afl_title":"Naruto"}]`
+	for name, settings := range map[string]string{
+		"bad action":       `{"default_filler_action":"delete"}`,
+		"bad interval":     `{"sync_interval":"5m"}`,
+		"bad monitor mode": `{"sonarr_add_monitor_mode":"everything"}`,
+		"bad bool":         `{"ntfy_enabled":"yes"}`,
+		"bad url":          `{"sonarr_url":"ftp://sonarr"}`,
+		"bad source":       `{"artwork_default_source":"nope"}`,
+		"bad start mode":   `{}`,
+	} {
+		payload := `{"version":1,"settings":` + settings + `,` + mapping + `}`
+		if name == "bad start mode" {
+			payload = `{"version":1,"mappings":[{"sonarr_series_id":1,"afl_slug":"naruto","start_mode":"sideways"}]}`
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/backup/import", strings.NewReader(payload))
+		rec := httptest.NewRecorder()
+		handleImportConfig(config.DefaultConfig(), target, newSchedulerController(0), nil, nil)(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
+	}
+
+	mappings, err := target.GetAllMappings(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, mappings, "a rejected import must not write any mapping")
+	all, err := target.GetAllSettings(context.Background())
+	require.NoError(t, err)
+	assert.NotContains(t, all, "default_filler_action")
+}
+
+// A valid import normalizes sync_interval ("360m" → "6h") before storing it.
+func TestImportNormalizesSyncInterval(t *testing.T) {
+	target, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer target.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/backup/import", strings.NewReader(`{"version":1,"settings":{"sync_interval":"360m"},"mappings":[]}`))
+	rec := httptest.NewRecorder()
+	cfg := config.DefaultConfig()
+	handleImportConfig(cfg, target, newSchedulerController(cfg.ScanInterval), nil, nil)(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	v, err := target.GetSetting(context.Background(), "sync_interval")
+	require.NoError(t, err)
+	assert.Equal(t, "6h", v)
 }

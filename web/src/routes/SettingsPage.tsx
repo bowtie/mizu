@@ -17,9 +17,12 @@ import { SyncCard } from "../components/settings/SyncCard";
 import { NotificationsCard } from "../components/settings/NotificationsCard";
 import { BackupCard } from "../components/settings/BackupCard";
 import { InterfaceCard } from "../components/settings/InterfaceCard";
-import { DefaultsSection } from "../components/settings/DefaultsSection";
 import { SettingsSkeleton } from "../components/settings/SettingsSkeleton";
-import { SecuritySettingsCard } from "../components/SecuritySettingsCard";
+import {
+  SecuritySettingsCard,
+  MIN_PASSWORD_LENGTH,
+  type SecurityIntent,
+} from "../components/SecuritySettingsCard";
 import {
   getSettings,
   refreshAflCache,
@@ -31,6 +34,8 @@ import {
   exportConfig,
   importConfig,
   errorMessage,
+  setupPassword,
+  removePassword,
 } from "../lib/api";
 import { queryKeys } from "../lib/queries";
 import { SettingsFormSchema, type SettingsForm } from "../lib/schemas";
@@ -55,6 +60,9 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(!storeSettings);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [securityIntent, setSecurityIntent] = useState<SecurityIntent>(null);
+  const [securityPassword, setSecurityPassword] = useState("");
+  const [securityConfirm, setSecurityConfirm] = useState("");
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
   const [importingConfig, setImportingConfig] = useState(false);
@@ -122,9 +130,10 @@ export function SettingsPage() {
   });
 
   // Any API key dirty flag also makes the whole form dirty
-  const settingsDirty =
+  const formChanged =
     !loading &&
     (formIsDirty || apiKeyDirty || tmdbApiKeyDirty || fanartApiKeyDirty || ntfyTokenDirty);
+  const settingsDirty = formChanged || securityIntent !== null;
 
   const scheduleReset = (delay = 1800) => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -325,9 +334,65 @@ export function SettingsPage() {
     setSaving(false);
   };
 
-  const handleSave = handleSubmit(onSubmit);
+  const submitSettings = handleSubmit(onSubmit);
 
-  const handleDiscard = () => applySettings(storeSettings);
+  const resetSecurityIntent = () => {
+    setSecurityIntent(null);
+    setSecurityPassword("");
+    setSecurityConfirm("");
+  };
+
+  const applySecurityIntent = async () => {
+    if (securityIntent === "enable") {
+      await setupPassword(securityPassword);
+      queryClient.setQueryData(["authStatus"], {
+        configured: true,
+        authenticated: true,
+      });
+      addNotification("Password turned on", "success");
+    } else if (securityIntent === "disable") {
+      await removePassword();
+      queryClient.setQueryData(["authStatus"], {
+        configured: false,
+        authenticated: false,
+      });
+      addNotification("Password turned off — the dashboard is now open", "success");
+    }
+    resetSecurityIntent();
+  };
+
+  const handleSave = async () => {
+    if (securityIntent === "enable") {
+      if (securityPassword.length < MIN_PASSWORD_LENGTH) {
+        addNotification(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, "error");
+        return;
+      }
+      if (securityPassword !== securityConfirm) {
+        addNotification("Passwords do not match", "error");
+        return;
+      }
+    }
+    if (formChanged) {
+      await submitSettings();
+    }
+    if (securityIntent) {
+      setSaving(true);
+      try {
+        await applySecurityIntent();
+        setSavedFlash(true);
+        if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+        savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
+      } catch (err: unknown) {
+        addNotification("Failed to update password: " + errorMessage(err), "error");
+      }
+      setSaving(false);
+    }
+  };
+
+  const handleDiscard = () => {
+    resetSecurityIntent();
+    applySettings(storeSettings);
+  };
 
   // ── Test connection ──
 
@@ -466,7 +531,6 @@ export function SettingsPage() {
       );
       await loadSettings();
       queryClient.invalidateQueries({ queryKey: queryKeys.shows });
-      queryClient.invalidateQueries({ queryKey: queryKeys.bootstrap });
     } catch (err: unknown) {
       addNotification("Failed to import config: " + errorMessage(err), "error");
     } finally {
@@ -582,6 +646,20 @@ export function SettingsPage() {
           handleTestNtfy={handleTestNtfy}
         />
 
+        {/* Interface */}
+        <InterfaceCard control={control} />
+
+        {/* Security */}
+        <SecuritySettingsCard
+          intent={securityIntent}
+          onIntentChange={setSecurityIntent}
+          password={securityPassword}
+          confirm={securityConfirm}
+          onPasswordChange={setSecurityPassword}
+          onConfirmChange={setSecurityConfirm}
+          isDisabled={saving}
+        />
+
         {/* Backup */}
         <BackupCard
           importingConfig={importingConfig}
@@ -589,15 +667,6 @@ export function SettingsPage() {
           handleExportConfig={handleExportConfig}
           handleImportConfigFile={handleImportConfigFile}
         />
-
-        {/* Interface */}
-        <InterfaceCard control={control} />
-
-        {/* Security */}
-        <SecuritySettingsCard />
-
-        {/* Defaults */}
-        <DefaultsSection control={control} />
       </VStack>
 
       {(settingsDirty || savedFlash) && (

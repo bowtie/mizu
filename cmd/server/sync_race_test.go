@@ -241,7 +241,7 @@ func TestSyncDoesNotClobberMidSyncEpisodeToggle(t *testing.T) {
 
 	// User toggles episode 9001 to monitored while the sync is in flight.
 	rec := httptest.NewRecorder()
-	handleSetEpisodeMonitor(db, e, newEpisodeCache(2*time.Minute))(
+	handleSetEpisodeMonitor(db, e)(
 		rec,
 		requestWithChiParams(http.MethodPut, fmt.Sprintf("/api/mappings/%d/episodes/9001/monitor", id),
 			map[string]string{"id": fmt.Sprint(id), "epId": "9001"}, `{"monitored":true}`),

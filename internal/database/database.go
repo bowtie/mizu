@@ -57,49 +57,6 @@ func (db *DB) Close() error {
 func (db *DB) migrate() error {
 	goose.SetLogger(goose.NopLogger())
 
-	// Check if this is a pre-existing database (tables already exist
-	// but goose_db_version doesn't). If so, mark all current migrations
-	// as applied so goose doesn't try to re-create tables.
-	var tableCount int
-	err := db.conn.QueryRow(`
-		SELECT COUNT(*) FROM sqlite_master
-		WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'goose_db_version'`).Scan(&tableCount)
-	if err != nil {
-		return fmt.Errorf("checking existing tables: %w", err)
-	}
-
-	if tableCount > 0 {
-		var gooseTableExists int
-		err := db.conn.QueryRow(`
-			SELECT COUNT(*) FROM sqlite_master
-			WHERE type = 'table' AND name = 'goose_db_version'`).Scan(&gooseTableExists)
-		if err != nil {
-			return fmt.Errorf("checking goose table: %w", err)
-		}
-		if gooseTableExists == 0 {
-			if _, err := db.conn.Exec(`
-				CREATE TABLE goose_db_version (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					version_id INTEGER NOT NULL,
-					is_applied INTEGER NOT NULL,
-					tstamp TIMESTAMP DEFAULT (datetime('now'))
-				)`); err != nil {
-				return fmt.Errorf("creating goose_db_version: %w", err)
-			}
-			// goose expects a version 0 row to exist before it checks
-			// for applied migrations. Without it, goose tries to recreate
-			// the table and crashes.
-			if _, err := db.conn.Exec(`
-				INSERT INTO goose_db_version (version_id, is_applied) VALUES (0, 1)`); err != nil {
-				return fmt.Errorf("inserting goose zero version: %w", err)
-			}
-			if _, err := db.conn.Exec(`
-				INSERT INTO goose_db_version (version_id, is_applied) VALUES (1, 1)`); err != nil {
-				return fmt.Errorf("marking initial migration as applied: %w", err)
-			}
-		}
-	}
-
 	subFS, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("creating sub-filesystem: %w", err)

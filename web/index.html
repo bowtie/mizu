@@ -22,47 +22,6 @@
       crossorigin
     />
     <title>Mizu</title>
-    <script>
-      // Fire API requests before the main JS bundle downloads/parses.
-      // The inline script executes instantly — the fetch starts in
-      // parallel with the 324KB bundle download, saving 50-200ms.
-      // api.ts picks up the stored Response objects via window.__mizuPrefetch.
-      (function () {
-        var p = (window.__mizuPrefetch = {});
-        // Bootstrap is always needed — shows + settings + providers.
-        p.bootstrap = fetch("/api/bootstrap", {
-          headers: { Accept: "application/json" },
-        });
-        // If on the library page, prefetch Sonarr series (needed for
-        // poster/banner URLs). Starts in parallel with the JS bundle
-        // instead of waiting for ShowsPage to mount.
-        var path = location.pathname;
-        if (path === "/" || path === "/shows") {
-          p.series = fetch("/api/sonarr/series", {
-            headers: { Accept: "application/json" },
-          });
-        }
-        // If navigating directly to a show detail page, prefetch the
-        // combined show + episodes endpoint too.
-        var m = path.match(/^\/shows\/(\d+)/);
-        if (m) {
-          p.detailId = m[1];
-          // Fire show-only and episodes fetches in parallel before the
-          // JS bundle downloads. The show endpoint is a simple DB query
-          // (583B, ~0.5ms) and resolves much faster than the episodes
-          // endpoint (which may need Sonarr + AFL enrichment). This lets
-          // the page show the title and tracking rules immediately.
-          // The episodes endpoint has ETag support for 304 Not Modified
-          // on repeat visits.
-          p.show = fetch("/api/mappings/" + m[1], {
-            headers: { Accept: "application/json" },
-          });
-          p.episodes = fetch("/api/mappings/" + m[1] + "/episodes", {
-            headers: { Accept: "application/json" },
-          });
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root">

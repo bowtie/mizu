@@ -3,7 +3,7 @@
 # =============================================================================
 
 # Stage 1: Build the frontend (Astryx React app via Vite+)
-FROM oven/bun:1 AS frontend
+FROM oven/bun:1.4.2 AS frontend
 
 WORKDIR /frontend
 

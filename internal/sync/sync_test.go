@@ -1,11 +1,14 @@
 package sync
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"mizu/internal/config"
 	"mizu/internal/models"
 )
 
@@ -338,4 +341,23 @@ func TestShouldNotify(t *testing.T) {
 		assert.Equal(t, tt.want, shouldNotify(tt.mode, tt.status, tt.episodesUpdated),
 			"mode=%q status=%q updated=%d", tt.mode, tt.status, tt.episodesUpdated)
 	}
+}
+
+// The run slot belongs to whoever claimed it: an early return inside the
+// run (no API key) must not release it before the claimant's done() does,
+// or a second sync could start and then lose its slot to the first done().
+func TestRunSyncClaimedKeepsSlotUntilDone(t *testing.T) {
+	cfg := config.DefaultConfig() // no Sonarr API key
+	e := New(cfg, nil)
+
+	done, ok := e.TryAcquireRun()
+	require.True(t, ok)
+	require.Error(t, e.RunSyncClaimed(context.Background(), "manual"))
+	assert.True(t, e.IsRunning(), "slot must stay held until done() is called")
+
+	_, ok = e.TryAcquireRun()
+	assert.False(t, ok, "a second sync must not start while the slot is held")
+
+	done()
+	assert.False(t, e.IsRunning())
 }

@@ -2,44 +2,36 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── Module mocks ──
-// The page talks to the backend through getShow/getEpisodes/updateShow/
-// setEpisodeMonitor and friends, to the notification store, and to several
-// react-query hooks. Mock all of them so the tests drive rendering with
-// controlled responses. The heavy child components (virtualized list, rule
-// cards, lazy AlertDialog) are stubbed out.
+// The page reads and writes through the real query hooks (queries.ts); only
+// the HTTP layer (api.ts) is mocked, so these tests also cover the cache
+// wiring. The heavy child components (virtualized list, rule cards, lazy
+// AlertDialog) are stubbed out.
 
 const { addNotificationMock } = vi.hoisted(() => ({ addNotificationMock: vi.fn() }));
 
-// NOTE: the data values must be module-level constants. The page feeds query
-// data into memo/effect deps; a fresh array per render would change the dep
-// every render and loop.
-const EMPTY_SHOWS: never[] = [];
-const EMPTY_SERIES: never[] = [];
-const EMPTY_PROVIDERS: never[] = [];
-
 vi.mock("../lib/api", () => ({
   getShow: vi.fn(),
+  getShows: vi.fn().mockResolvedValue([]),
   getEpisodes: vi.fn(),
+  getSettings: vi.fn().mockRejectedValue(new Error("not needed")),
+  getSonarrSeries: vi.fn().mockResolvedValue([]),
+  getArtworkProviders: vi.fn().mockResolvedValue({ providers: [] }),
+  getSyncLogs: vi.fn(),
+  getAuthStatus: vi.fn(),
   getArtworkBannerUrl: vi.fn().mockReturnValue("/api/artwork/banner/1"),
-  getCachedShowDetail: vi.fn().mockReturnValue(null),
-  clearCachedShowDetail: vi.fn(),
   refreshArtwork: vi.fn(),
   setArtworkSource: vi.fn(),
   selectArtwork: vi.fn(),
   getArtworkCandidates: vi.fn(),
   setEpisodeMonitor: vi.fn(),
   updateShow: vi.fn(),
+  deleteShow: vi.fn(),
+  updateSettings: vi.fn(),
+  triggerSync: vi.fn(),
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
-}));
-
-vi.mock("../lib/queries", () => ({
-  useShows: () => ({ data: EMPTY_SHOWS, isPending: false, isFetched: true }),
-  useArtworkProviders: () => ({ data: EMPTY_PROVIDERS, isPending: false, isFetched: true }),
-  useDeleteShow: () => ({ mutateAsync: vi.fn().mockResolvedValue(undefined) }),
-  useSonarrSeries: () => ({ data: EMPTY_SERIES, isPending: false, isFetched: true }),
-  useSettings: () => ({ data: null, isPending: false, isFetched: true }),
 }));
 
 vi.mock("../lib/store", () => ({
@@ -120,7 +112,10 @@ const EPISODE: Episode = {
 let container: HTMLDivElement;
 let root: Root;
 
+let queryClient: QueryClient;
+
 beforeEach(() => {
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -135,7 +130,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  vi.clearAllMocks();
+  queryClient.clear();
 });
 
 // Real timers: these pages have no polling loop. `flush` drains the async
@@ -152,12 +147,16 @@ async function renderPage() {
   await act(async () => {
     root.render(
       createElement(
-        MemoryRouter,
-        { initialEntries: ["/shows/1"] },
+        QueryClientProvider,
+        { client: queryClient },
         createElement(
-          Routes,
-          null,
-          createElement(Route, { path: "/shows/:id", element: createElement(ShowDetailPage) }),
+          MemoryRouter,
+          { initialEntries: ["/shows/1"] },
+          createElement(
+            Routes,
+            null,
+            createElement(Route, { path: "/shows/:id", element: createElement(ShowDetailPage) }),
+          ),
         ),
       ),
     );
@@ -187,6 +186,7 @@ describe("ShowDetailPage", () => {
   it("keeps Save disabled until a tracking rule changes, then persists via updateShow", async () => {
     mockedGetShow.mockResolvedValue(SHOW);
     mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    mockedUpdateShow.mockResolvedValue({ ...SHOW, watermark_mode: "manual" });
     await renderPage();
 
     // Nothing is dirty yet — clicking Save must not persist anything.
@@ -221,6 +221,18 @@ describe("ShowDetailPage", () => {
       expect.stringContaining("Saved tracking rules"),
       "success",
     );
+    // The saved rules become the new baseline: nothing is dirty any more.
+    expect(container.textContent).not.toContain("Unsaved changes");
+  });
+
+  it("renders the library's copy of the show before its own request resolves", async () => {
+    queryClient.setQueryData(["shows"], [SHOW]);
+    mockedGetShow.mockReturnValue(new Promise(() => {}));
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    await renderPage();
+
+    expect(container.textContent).toContain("Naruto");
+    expect(container.textContent).toContain("Enter: Naruto");
   });
 
   it("opens the picker for a multi-image source and persists a partial pick", async () => {
@@ -297,5 +309,8 @@ describe("ShowDetailPage", () => {
     await flush(2);
 
     expect(mockedSetEpisodeMonitor).toHaveBeenCalledWith("1", 101, true);
+    // The cached episode list is patched in place rather than refetched.
+    expect(mockedGetEpisodes).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[aria-label="Unmonitor episode"]')).not.toBeNull();
   });
 });

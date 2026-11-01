@@ -1,4 +1,5 @@
 import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
 import { Button } from "@astryxdesign/core/Button";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { List, ListItem } from "@astryxdesign/core/List";
@@ -52,15 +53,16 @@ export function FallbackSonarrStep({
           })}
         </List>
       )}
-      {w.selectedSonarrLookup && (
+      <HStack justify="end">
         <Button
           label="Add to Sonarr and match"
           variant="primary"
           onClick={handleAddSelectedSonarrLookup}
           isLoading={w.sonarrAdding}
+          isDisabled={!w.selectedSonarrLookup}
           data-cuelume-press
         />
-      )}
+      </HStack>
     </VStack>
   );
 }

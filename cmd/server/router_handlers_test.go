@@ -214,7 +214,7 @@ func TestHandleTriggerSyncReturns409WhenAlreadyRunning(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/sync", nil)
 	rec := httptest.NewRecorder()
 
-	handleTriggerSync(engine, nil, nil, nil)(rec, req)
+	handleTriggerSync(engine, nil, nil)(rec, req)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 }

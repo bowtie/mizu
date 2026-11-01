@@ -104,12 +104,12 @@ func TestSelectArtworkDownloadsAndPersists(t *testing.T) {
 	defer db.Close()
 	imgSrv := artworkImageServer(t, "picked-jpeg")
 
-	mgr, artDir := newPickerTestManager(t, db, nil)
+	mgr, artDir := newPickerTestManager(t, db, posterCandidates(imgSrv.URL+"/poster.jpg"))
 	id := insertArtworkTestMapping(t, db, 7, "")
 
 	body := fmt.Sprintf(`{"source":"fanart","poster_url":"%s/poster.jpg","banner_url":"","logo_url":""}`, imgSrv.URL)
 	rec := httptest.NewRecorder()
-	handleSelectArtwork(db, mgr)(rec, requestWithChiID(http.MethodPut, "/api/mappings/1/artwork/select", fmt.Sprintf("%d", id), body))
+	handleSelectArtwork(config.DefaultConfig(), db, mgr, nil)(rec, requestWithChiID(http.MethodPut, "/api/mappings/1/artwork/select", fmt.Sprintf("%d", id), body))
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "picked-jpeg", readArtworkPoster(t, artDir, id))
@@ -179,7 +179,7 @@ func TestSelectArtworkSupersededByNewerIntent(t *testing.T) {
 	}))
 	t.Cleanup(imgSrv.Close)
 
-	mgr, artDir := newPickerTestManager(t, db, nil)
+	mgr, artDir := newPickerTestManager(t, db, posterCandidates(imgSrv.URL+"/poster.jpg"))
 	id := insertArtworkTestMapping(t, db, 7, "")
 
 	body := fmt.Sprintf(`{"source":"fanart","poster_url":"%s/poster.jpg","banner_url":"","logo_url":""}`, imgSrv.URL)
@@ -187,7 +187,7 @@ func TestSelectArtworkSupersededByNewerIntent(t *testing.T) {
 	go func() {
 		defer close(done)
 		rec := httptest.NewRecorder()
-		handleSelectArtwork(db, mgr)(rec, requestWithChiID(http.MethodPut, "/api/mappings/1/artwork/select", fmt.Sprintf("%d", id), body))
+		handleSelectArtwork(config.DefaultConfig(), db, mgr, nil)(rec, requestWithChiID(http.MethodPut, "/api/mappings/1/artwork/select", fmt.Sprintf("%d", id), body))
 	}()
 
 	// Wait for the download to actually start, then supersede it.
@@ -205,4 +205,41 @@ func TestSelectArtworkSupersededByNewerIntent(t *testing.T) {
 	assert.Equal(t, "", current.ArtworkPosterPath, "superseded pick must not write DB paths")
 	assert.Equal(t, "", current.ArtworkPosterURL, "superseded pick must not write DB source URLs")
 	assert.Equal(t, "", current.ArtworkSource, "superseded pick must not overwrite the source override")
+}
+
+func posterCandidates(urls ...string) *artwork.ArtworkOptions {
+	opts := &artwork.ArtworkOptions{}
+	for _, u := range urls {
+		opts.Posters = append(opts.Posters, artwork.ArtworkOption{URL: u})
+	}
+	return opts
+}
+
+// TestSelectArtworkRejectsURLNotOffered: the picker may only download URLs
+// the provider listed, so a crafted request can't make the server fetch and
+// re-serve an arbitrary (e.g. internal-network) URL.
+func TestSelectArtworkRejectsURLNotOffered(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	hit := false
+	internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte("secret"))
+	}))
+	t.Cleanup(internal.Close)
+
+	mgr, artDir := newPickerTestManager(t, db, posterCandidates("https://example.com/p1.jpg"))
+	id := insertArtworkTestMapping(t, db, 7, "")
+
+	body := fmt.Sprintf(`{"source":"fanart","poster_url":"%s/admin","banner_url":"","logo_url":""}`, internal.URL)
+	rec := httptest.NewRecorder()
+	handleSelectArtwork(config.DefaultConfig(), db, mgr, nil)(rec, requestWithChiID(http.MethodPut, "/api/mappings/1/artwork/select", fmt.Sprintf("%d", id), body))
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.False(t, hit, "server must not fetch a URL the provider never offered")
+	_, statErr := os.Stat(filepath.Join(artDir, fmt.Sprintf("%d", id), "poster.jpg"))
+	assert.True(t, os.IsNotExist(statErr))
 }

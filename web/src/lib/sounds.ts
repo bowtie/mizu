@@ -1,6 +1,6 @@
 // Lazy-load cuelume — none of these functions are called on first
-// paint. initSounds() runs on idle, applySoundsEnabled() runs when
-// bootstrap resolves. By the time either is called, the dynamic
+// paint. initSounds() runs on idle, applySoundsEnabled() runs when the
+// settings load. By the time either is called, the dynamic
 // import has resolved.
 let cuelumeModule: typeof import("cuelume") | null = null;
 void import("cuelume")

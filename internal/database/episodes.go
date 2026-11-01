@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"mizu/internal/database/sqlcgen"
@@ -21,22 +20,6 @@ func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.Episod
 		episodes = append(episodes, sqlcEpisodeToModel(r))
 	}
 	return episodes, nil
-}
-
-func (db *DB) EpisodeVersion(ctx context.Context, mappingID int64) (string, error) {
-	row, err := db.q.GetEpisodeVersion(ctx, mappingID)
-	if err != nil {
-		return "", err
-	}
-	monitoredSum := "0"
-	if s, ok := row.MonitoredSum.(int64); ok {
-		monitoredSum = strconv.FormatInt(s, 10)
-	}
-	maxScraped := ""
-	if s, ok := row.MaxScraped.(string); ok {
-		maxScraped = s
-	}
-	return strconv.FormatInt(row.Count, 10) + "-" + monitoredSum + "-" + maxScraped, nil
 }
 
 func (db *DB) UpdateEpisodeMonitor(ctx context.Context, mappingID, sonarrEpisodeID int64, monitored bool) error {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -53,7 +52,6 @@ func main() {
 	zerolog.SetGlobalLevel(level)
 
 	log.Info().Str("version", version).Str("listen", cfg.ListenAddr).Str("sonarr", cfg.SonarrURL).Dur("scan_interval", cfg.ScanInterval).Msg("starting Mizu")
-	logAuthMode(cfg)
 
 	db, err := database.New(cfg.DBPath)
 	if err != nil {
@@ -132,13 +130,13 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	if value, ok := settings["sonarr_api_key"]; ok {
 		cfg.SonarrAPIKey = value
 	}
-	if value, ok := settings["default_filler_action"]; ok && value != "" {
+	if value, ok := settings["default_filler_action"]; ok && config.IsValidFillerAction(value) {
 		cfg.DefaultFillerAction = config.FillerAction(value)
 	}
-	if value, ok := settings["default_mixed_canon_action"]; ok && value != "" {
+	if value, ok := settings["default_mixed_canon_action"]; ok && config.IsValidFillerAction(value) {
 		cfg.DefaultMixedCanonAction = config.FillerAction(value)
 	}
-	if value, ok := settings["default_anime_canon_action"]; ok && value != "" {
+	if value, ok := settings["default_anime_canon_action"]; ok && config.IsValidFillerAction(value) {
 		cfg.DefaultAnimeCanonAction = config.FillerAction(value)
 	}
 	if value, ok := settings["sync_interval"]; ok && value != "" {
@@ -154,7 +152,7 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 			cfg.SonarrAddQualityProfileID = id
 		}
 	}
-	if value, ok := settings["sonarr_add_monitor_mode"]; ok && value != "" {
+	if value, ok := settings["sonarr_add_monitor_mode"]; ok && value != "" && config.IsValidSonarrMonitorMode(value) {
 		cfg.SonarrAddMonitorMode = value
 	}
 	if value, ok := settings["sonarr_add_season_folder"]; ok && value != "" {
@@ -176,13 +174,6 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		cfg.NtfyNotifyOn = value
 	}
 	if value, ok := settings["artwork_default_source"]; ok && value != "" {
-		// Migrate legacy "auto" to "sonarr".
-		if value == "auto" {
-			value = "sonarr"
-			if err := db.SetSetting(ctx, "artwork_default_source", "sonarr"); err != nil {
-				log.Warn().Err(err).Msg("failed to migrate artwork_default_source from auto to sonarr")
-			}
-		}
 		cfg.ArtworkDefaultSource = value
 	}
 	if value, ok := settings["tmdb_api_key"]; ok {
@@ -277,29 +268,4 @@ func startScheduler(ctx context.Context, cfg *config.Config, scheduler *schedule
 			}
 		}
 	}
-}
-
-// logAuthMode records the active authentication mode and warns about the
-// combinations that leave the dashboard open to the network.
-func logAuthMode(cfg *config.Config) {
-	ev := log.Info().Str("auth", string(cfg.Auth.Mode))
-	if cfg.Auth.Mode == config.AuthProxy {
-		ev = ev.Str("header", cfg.Auth.ProxyHeader).Int("trusted_proxies", len(cfg.Auth.TrustedProxies))
-	}
-	ev.Msg("authentication mode")
-	if cfg.Auth.Mode == config.AuthNone && !isLoopbackAddr(cfg.ListenAddr) {
-		log.Warn().Str("listen", cfg.ListenAddr).Msg("MIZU_AUTH=none on a non-loopback address: anyone who can reach this port has full access, including your Sonarr API key. Put it behind an authenticating proxy or VPN.")
-	}
-}
-
-func isLoopbackAddr(addr string) bool {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return false
-	}
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }

@@ -6,17 +6,10 @@
       "name": "mizu-web",
       "dependencies": {
         "@astryxdesign/core": "0.7.4",
-        "@astryxdesign/theme-butter": "0.7.4",
-        "@astryxdesign/theme-chocolate": "0.7.4",
-        "@astryxdesign/theme-gothic": "0.7.4",
-        "@astryxdesign/theme-matcha": "0.7.4",
         "@astryxdesign/theme-neutral": "0.7.4",
-        "@astryxdesign/theme-stone": "0.7.4",
-        "@astryxdesign/theme-y2k": "0.7.4",
         "@hookform/resolvers": "^6.0.2",
         "@stylexjs/stylex": "^0.19.1",
         "@tanstack/react-query": "^5.105.0",
-        "@tanstack/react-query-devtools": "^5.105.0",
         "@tanstack/react-virtual": "^3.14.23",
         "cuelume": "^0.2.8",
         "ky": "^2.2.0",
@@ -31,6 +24,7 @@
       "devDependencies": {
         "@astryxdesign/cli": "0.7.4",
         "@stylexjs/unplugin": "^0.19.1",
+        "@tanstack/react-query-devtools": "^5.105.0",
         "@types/node": "^26.6.6",
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
@@ -46,27 +40,12 @@
     "@astryxdesign/core",
     "@astryxdesign/cli",
   ],
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1",
-  },
   "packages": {
     "@astryxdesign/cli": ["@astryxdesign/cli@0.7.4", "", { "dependencies": { "@babel/core": "7.29.7", "@babel/parser": "7.29.8", "@babel/plugin-transform-typescript": "7.29.7", "@babel/types": "7.29.8", "ast-types": "0.16.3", "commander": "^12.1.0", "ignore": "^7.0.5", "jiti": "^2.7.0", "jscodeshift": "^17.3.0", "node-diff3": "3.2.1", "postcss": "^8.5.23", "postcss-selector-parser": "^7.1.6", "recast": "0.23.21", "zod": "^4.4.3" }, "peerDependencies": { "@astryxdesign/charts": "*", "@astryxdesign/core": "*", "@astryxdesign/lab": "*", "@astryxdesign/theme-neutral": "*" }, "optionalPeers": ["@astryxdesign/charts", "@astryxdesign/core", "@astryxdesign/lab", "@astryxdesign/theme-neutral"], "bin": { "cli": "./clients/cli/bin/astryx.mjs", "astryx": "./clients/cli/bin/astryx.mjs" } }, "sha512-5NmAlA4YhZIRYGObvk/zYaVmDINVnKl7A24XyaWz0KxRK747L+/5ZhyZ1aZiV+p1Zn+99zRqXLOy26lafMSnlg=="],
 
     "@astryxdesign/core": ["@astryxdesign/core@0.7.4", "", { "dependencies": { "intl-messageformat": "^11.2.9" }, "peerDependencies": { "@stylexjs/stylex": "^0.19.0", "react": ">=19.0.0", "react-dom": ">=19.0.0" } }, "sha512-zd/XfUw8OH8Dj65w6cPYamMXgb11P7oIgrlXgyBGaHXKJi3aedkU17Q+lERgv7YL3Bv4/UKPMqKL/QZkvoay1w=="],
 
-    "@astryxdesign/theme-butter": ["@astryxdesign/theme-butter@0.7.4", "", { "dependencies": { "lucide-react": "^1.18.0" }, "peerDependencies": { "@astryxdesign/core": "0.7.4", "react": ">=19" } }, "sha512-1pJWIBE0+9lNyB3kE1NcPYN4hGr/3zI9K4bTzkdIQ0HaegreCx3pS1KSUG5euzJuieEq43hzveN3LZykE2gJyQ=="],
-
-    "@astryxdesign/theme-chocolate": ["@astryxdesign/theme-chocolate@0.7.4", "", { "dependencies": { "lucide-react": "^1.18.0" }, "peerDependencies": { "@astryxdesign/core": "0.7.4", "react": ">=19" } }, "sha512-PKjnDjJI9MWiasivsMcZ4wTq2Tep5noJ4MJUwFG/3SKU5k1rocf1vC+f1+e6Y26XhAkaPZQF6/iOziT8jHxEbQ=="],
-
-    "@astryxdesign/theme-gothic": ["@astryxdesign/theme-gothic@0.7.4", "", { "dependencies": { "lucide-react": "^1.18.0" }, "peerDependencies": { "@astryxdesign/core": "0.7.4", "react": ">=19" } }, "sha512-+fuUT8LuWu/yS9FqbrGMOrbPbVG3+E8glGcmHeKQw+BfM77BCZFl+4C3dR+yEp8E0kRyakhfo4rKXuddvYKCMA=="],
-
-    "@astryxdesign/theme-matcha": ["@astryxdesign/theme-matcha@0.7.4", "", { "dependencies": { "lucide-react": "^1.18.0" }, "peerDependencies": { "@astryxdesign/core": "0.7.4", "react": ">=19" } }, "sha512-2TmX6dPeVTTROfHk7ef7oNG0F3DFSnNscM4L5IXmoHGehW8D5IMvYEpPAKMfdgmW15zxVQZKPHUhU3jZtRssfw=="],
-
     "@astryxdesign/theme-neutral": ["@astryxdesign/theme-neutral@0.7.4", "", { "dependencies": { "lucide-react": "^1.18.0" }, "peerDependencies": { "@astryxdesign/core": "0.7.4", "react": ">=19" } }, "sha512-IoGRxRpcAWao4jNL+HsV0t3rlCWeV4EYrzP54iRRRXEzU21XxMdBt+B63y+n/84mBkzyB38vGK/BuYkRbVDBtw=="],
-
-    "@astryxdesign/theme-stone": ["@astryxdesign/theme-stone@0.7.4", "", { "dependencies": { "lucide-react": "^1.18.0" }, "peerDependencies": { "@astryxdesign/core": "0.7.4", "react": ">=19" } }, "sha512-Cg1+GPLNg5JQxI8XYlykazDNFoWJxtinqtUSWk0G+cdZj8UZhRiv8PyYFFiVR3eCdimAgDwmprBNhrFlj37fSw=="],
-
-    "@astryxdesign/theme-y2k": ["@astryxdesign/theme-y2k@0.7.4", "", { "dependencies": { "lucide-react": "^1.18.0" }, "peerDependencies": { "@astryxdesign/core": "0.7.4", "react": ">=19" } }, "sha512-0fXr6wY3+/AY9cZ7StYAaTwN56S3qIvHk/5xeaL+IAPNkU1MdlDGy4oonNekgF9/CgaSJKWO0ezrQO16DVTIyA=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

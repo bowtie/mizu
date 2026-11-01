@@ -1,4 +1,5 @@
 import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
 import { Button } from "@astryxdesign/core/Button";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
@@ -25,6 +26,8 @@ export function FallbackAflStep({
     <VStack gap={4}>
       <TextInput
         label="Cached AFL title"
+        isLabelHidden
+        startIcon={Search}
         value={w.fallbackAflQuery}
         onChange={(v) => {
           dispatch({ type: "SET", payload: { fallbackAflQuery: v } });
@@ -59,14 +62,15 @@ export function FallbackAflStep({
           })}
         </List>
       )}
-      {w.selectedFallbackAfl && (
+      <HStack justify="end">
         <Button
           label="Continue to Sonarr lookup"
           variant="primary"
           onClick={goToFallbackSonarrStep}
+          isDisabled={!w.selectedFallbackAfl}
           data-cuelume-press
         />
-      )}
+      </HStack>
     </VStack>
   );
 }

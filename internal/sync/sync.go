@@ -181,7 +181,9 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 	apiKey := e.cfg.SonarrAPIKey
 	e.cfg.RUnlock()
 	if apiKey == "" {
-		e.running.Store(false)
+		// Don't clear e.running here: the run slot belongs to the caller's
+		// done func. Clearing it early would let a second sync claim the
+		// slot, which the caller's done() would then release under it.
 		log.Warn().Msg("skipping sync: no Sonarr API key configured")
 		return fmt.Errorf("sonarr API key not configured")
 	}

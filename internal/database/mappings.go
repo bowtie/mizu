@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"mizu/internal/database/sqlcgen"
@@ -48,6 +49,12 @@ func (db *DB) GetMappingBySonarrID(ctx context.Context, seriesID int) (*models.S
 }
 
 func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
+	return upsertMapping(ctx, db.q, m)
+}
+
+// upsertMapping runs the upsert against q, which is either the shared
+// queries or a transaction-scoped copy (see ImportConfig).
+func upsertMapping(ctx context.Context, q *sqlcgen.Queries, m *models.ShowMapping) error {
 	if m.StartMode == "" {
 		m.StartMode = models.StartModeCurrentProgress
 	}
@@ -65,7 +72,7 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 	now := time.Now()
 	m.UpdatedAt = now
 
-	err := db.q.UpsertMapping(ctx, sqlcgen.UpsertMappingParams{
+	err := q.UpsertMapping(ctx, sqlcgen.UpsertMappingParams{
 		SonarrSeriesID:   int64(m.SonarrSeriesID),
 		SonarrTitle:      m.SonarrTitle,
 		AflSlug:          m.AFLSlug,
@@ -90,12 +97,35 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 	// Populate the ID on insert (autoincrement). On conflict (update),
 	// LastInsertId returns 0 in modernc.org/sqlite, so fetch it if needed.
 	if m.ID == 0 {
-		id, err := db.q.GetMappingIDBySonarrID(ctx, int64(m.SonarrSeriesID))
+		id, err := q.GetMappingIDBySonarrID(ctx, int64(m.SonarrSeriesID))
 		if err == nil {
 			m.ID = id
 		}
 	}
 	return nil
+}
+
+// ImportConfig writes imported settings and mappings in one transaction, so
+// a failure part-way through leaves the database exactly as it was.
+func (db *DB) ImportConfig(ctx context.Context, settings map[string]string, mappings []models.ShowMapping) error {
+	tx, err := db.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qtx := db.q.WithTx(tx)
+	for k, v := range settings {
+		if err := qtx.SetSetting(ctx, sqlcgen.SetSettingParams{Key: k, Value: v}); err != nil {
+			return fmt.Errorf("setting %s: %w", k, err)
+		}
+	}
+	for i := range mappings {
+		if err := upsertMapping(ctx, qtx, &mappings[i]); err != nil {
+			return fmt.Errorf("mapping for series %d: %w", mappings[i].SonarrSeriesID, err)
+		}
+	}
+	return tx.Commit()
 }
 
 func (db *DB) UpdateArtwork(ctx context.Context, mappingID int64, posterPath, bannerPath, logoPath, posterURL, bannerURL, logoURL string) error {

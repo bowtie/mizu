@@ -10,6 +10,9 @@ internal/web/dist/*
 *.db-shm
 *.db-wal
 
+# Local database snapshots (plaintext API keys) kept for onboarding tests
+/backups/
+
 # Downloaded artwork (stored locally for offline browsing)
 /artwork/
 
@@ -38,3 +41,5 @@ REDESIGN_PROMPT.md
 # Freebuff desktop app local state
 .freebuff/
 
+# Python bytecode (agent skill scripts)
+__pycache__/

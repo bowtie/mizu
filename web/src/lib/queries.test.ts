@@ -2,10 +2,30 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ARTWORK_REFETCH_DELAY_MS, queryKeys, useShowArtworkRefetch } from "./queries";
-import type { Show } from "./schemas";
+import type { Show, Episode } from "./schemas";
 
-// ── Test doubles ──
+vi.mock("./api", () => ({
+  getShow: vi.fn(),
+  getShows: vi.fn(),
+  getEpisodes: vi.fn(),
+  getSettings: vi.fn(),
+  getSonarrSeries: vi.fn(),
+  getArtworkProviders: vi.fn(),
+  getSyncLogs: vi.fn(),
+  updateShow: vi.fn(),
+  deleteShow: vi.fn(),
+  updateSettings: vi.fn(),
+  triggerSync: vi.fn(),
+  setEpisodeMonitor: vi.fn(),
+  getAuthStatus: vi.fn(),
+}));
+
+import { getShow, getEpisodes, setEpisodeMonitor } from "./api";
+import { queryKeys, useEpisodes, useSetEpisodeMonitor, useShow } from "./queries";
+
+const mockedGetShow = vi.mocked(getShow);
+const mockedGetEpisodes = vi.mocked(getEpisodes);
+const mockedSetEpisodeMonitor = vi.mocked(setEpisodeMonitor);
 
 function makeShow(overrides: Partial<Show> = {}): Show {
   return {
@@ -14,215 +34,102 @@ function makeShow(overrides: Partial<Show> = {}): Show {
     sonarr_title: "Frieren",
     sync_watermark: 0,
     enabled: true,
-    filler_action: "keep",
-    mixed_action: "skip",
-    anime_canon_action: "keep",
+    filler_action: "unmonitor",
+    mixed_action: "monitor",
+    anime_canon_action: "monitor",
     watermark_mode: "auto",
     ...overrides,
   };
 }
 
-// A promise we can resolve manually, to hold an invalidateQueries call "in
-// flight" while the test drives a re-schedule or an unmount.
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
-
-// A harness that renders the hook and hands its schedule function to the
-// test, so we can drive it without a query-observing child component.
-let schedule: ((showId: string | number) => void) | null = null;
-
-function Harness() {
-  schedule = useShowArtworkRefetch();
-  return createElement("div");
-}
-
 let container: HTMLDivElement;
 let root: Root;
 let qc: QueryClient;
-let invalidateSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  vi.useFakeTimers();
-  qc = new QueryClient();
-  invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
-  // react-query's notify timers may leave a pending scheduled update, and
-  // React 19 warns if the unmount that flushes it isn't wrapped in act.
-  act(() => {
-    root.unmount();
-  });
+  act(() => root.unmount());
   container.remove();
-  schedule = null;
-  invalidateSpy.mockRestore();
-  vi.useRealTimers();
 });
 
-async function renderHarness() {
+async function flush(rounds = 4) {
+  for (let i = 0; i < rounds; i++) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+}
+
+async function render(child: () => null) {
   await act(async () => {
-    root.render(createElement(QueryClientProvider, { client: qc }, createElement(Harness)));
+    root.render(createElement(QueryClientProvider, { client: qc }, createElement(child)));
   });
 }
 
-// Advance fake timers and let the timer callback's async work settle
-// (invalidateQueries promise chain + react-query's zero-delay notifications)
-// so every state update still happens inside act(). advanceTimersByTimeAsync
-// fires only timers due within the window (unlike runAllTimersAsync, which
-// would fire future timers too) and flushes microtasks between firings; the
-// zero-advances drain any notify timers the promise chain schedules.
-async function advance(ms: number) {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms);
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(0);
+describe("queryKeys", () => {
+  it("addresses the same show whether the id is a number or a URL string", () => {
+    expect(queryKeys.show(5)).toEqual(queryKeys.show("5"));
+    expect(queryKeys.episodes(5)).toEqual(queryKeys.episodes("5"));
   });
-}
+});
 
-describe("useShowArtworkRefetch", () => {
-  it("waits the full delay, then invalidates the show query and patches the cached shows list", async () => {
-    // Seed the cache the way the mutation onSuccess flow leaves it: a fresh
-    // show query (with artwork) and a shows list that still has the old entry.
-    qc.setQueryData(queryKeys.show(5), makeShow({ artwork_poster_path: "new/poster.jpg" }));
-    qc.setQueryData(queryKeys.shows, [makeShow({ artwork_poster_path: "old/poster.jpg" })]);
-    await renderHarness();
+describe("useShow", () => {
+  it("shows the library's copy of the show while its own query loads", async () => {
+    qc.setQueryData(queryKeys.shows, [makeShow({ sonarr_title: "From library" })]);
+    let resolveShow!: (s: Show) => void;
+    mockedGetShow.mockReturnValue(new Promise((r) => (resolveShow = r)));
 
-    // Before the delay elapses: nothing happens.
-    await act(async () => {
-      schedule!(5);
+    let seen: { title?: string; placeholder: boolean }[] = [];
+    await render(() => {
+      const q = useShow("5");
+      seen.push({ title: q.data?.sonarr_title, placeholder: q.isPlaceholderData });
+      return null;
     });
-    await advance(ARTWORK_REFETCH_DELAY_MS - 1);
-    expect(invalidateSpy).not.toHaveBeenCalled();
-    expect(qc.getQueryData<Show[]>(queryKeys.shows)![0].artwork_poster_path).toBe("old/poster.jpg");
+    expect(seen.at(-1)).toEqual({ title: "From library", placeholder: true });
 
-    // The delay elapses: the show query is invalidated and its data is
-    // patched into the cached shows list. (The patch premise is that the
-    // show query has no mounted observer, so invalidateQueries resolves
-    // without refetching and getQueryData returns the seeded data.)
-    await advance(1);
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.show(5) });
-    expect(qc.getQueryData<Show[]>(queryKeys.shows)![0].artwork_poster_path).toBe("new/poster.jpg");
+    seen = [];
+    await act(async () => resolveShow(makeShow({ sonarr_title: "Fresh" })));
+    await flush();
+    expect(seen.at(-1)).toEqual({ title: "Fresh", placeholder: false });
   });
+});
 
-  it("dedupes rapid re-schedules of the same show", async () => {
-    qc.setQueryData(queryKeys.show(7), makeShow({ id: 7 }));
-    await renderHarness();
+describe("useSetEpisodeMonitor", () => {
+  it("patches only the toggled episode in the cached list, without refetching", async () => {
+    const episodes: Episode[] = [
+      { sonarr_episode_id: 1, monitored: false },
+      { sonarr_episode_id: 2, monitored: false },
+    ];
+    mockedGetEpisodes.mockResolvedValue(episodes);
+    mockedSetEpisodeMonitor.mockResolvedValue({ monitored: true });
 
-    // Schedule, wait most of the delay, then re-schedule — the second call
-    // cancels the first timer, so the first deadline passes silently.
-    await act(async () => {
-      schedule!(7);
+    let toggle!: () => Promise<unknown>;
+    await render(() => {
+      useEpisodes(5);
+      const m = useSetEpisodeMonitor();
+      toggle = () => m.mutateAsync({ showId: "5", epId: 2, monitored: true });
+      return null;
     });
-    await advance(ARTWORK_REFETCH_DELAY_MS - 2000);
-    await act(async () => {
-      schedule!(7);
-    });
-    await advance(ARTWORK_REFETCH_DELAY_MS - 2000);
-    expect(invalidateSpy).not.toHaveBeenCalled();
-
-    // Only the (re-scheduled) timer fires, exactly once.
-    await advance(2000);
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps independent timers for different shows", async () => {
-    qc.setQueryData(queryKeys.show(1), makeShow({ id: 1 }));
-    qc.setQueryData(queryKeys.show(2), makeShow({ id: 2 }));
-    await renderHarness();
+    await flush();
+    expect(mockedGetEpisodes).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      schedule!(1);
-      schedule!(2);
+      await toggle();
     });
-    await advance(ARTWORK_REFETCH_DELAY_MS + 10);
-    expect(invalidateSpy).toHaveBeenCalledTimes(2);
-  });
+    await flush();
 
-  it("cancels the pending refetch when the component unmounts", async () => {
-    qc.setQueryData(queryKeys.show(9), makeShow({ id: 9 }));
-    await renderHarness();
-
-    await act(async () => {
-      schedule!(9);
-    });
-    await act(async () => {
-      root.unmount();
-    });
-
-    // Even long after the delay would have elapsed, nothing fires.
-    await advance(ARTWORK_REFETCH_DELAY_MS * 2);
-    expect(invalidateSpy).not.toHaveBeenCalled();
-  });
-
-  it("ignores the stale patch when a re-schedule lands mid-flight", async () => {
-    // Seed the detail query with the pre-refetch snapshot and the shows list
-    // with the same value.
-    qc.setQueryData(queryKeys.show(7), makeShow({ id: 7, sonarr_title: "Initial" }));
-    qc.setQueryData(queryKeys.shows, [makeShow({ id: 7, sonarr_title: "Initial" })]);
-    await renderHarness();
-
-    // The first timer fires and its invalidateQueries stays in flight.
-    const { promise: inFlightA, resolve: resolveA } = deferred();
-    invalidateSpy.mockReturnValueOnce(inFlightA);
-    await act(async () => {
-      schedule!(7);
-    });
-    await advance(ARTWORK_REFETCH_DELAY_MS);
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
-
-    // A re-schedule for the same show lands while that refetch is still
-    // in flight…
-    await act(async () => {
-      schedule!(7);
-    });
-
-    // …and a fresher snapshot arrives in the shows list before the stale
-    // refetch resolves.
-    qc.setQueryData(queryKeys.shows, [makeShow({ id: 7, sonarr_title: "Fresh" })]);
-
-    // The stale refetch resolves now — its patch must not clobber "Fresh".
-    await act(async () => {
-      resolveA();
-    });
-
-    const list = qc.getQueryData<Show[]>(queryKeys.shows)!;
-    expect(list[0].sonarr_title).toBe("Fresh");
-  });
-
-  it("does not patch the shows list when the component unmounts mid-flight", async () => {
-    qc.setQueryData(queryKeys.show(11), makeShow({ id: 11, sonarr_title: "Initial" }));
-    qc.setQueryData(queryKeys.shows, [makeShow({ id: 11, sonarr_title: "Initial" })]);
-    await renderHarness();
-
-    // Fire the timer and keep its invalidateQueries in flight.
-    const { promise: inFlightA, resolve: resolveA } = deferred();
-    invalidateSpy.mockReturnValueOnce(inFlightA);
-    await act(async () => {
-      schedule!(11);
-    });
-    await advance(ARTWORK_REFETCH_DELAY_MS);
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
-
-    // A fresher snapshot lands, then the component unmounts before the
-    // in-flight refetch resolves.
-    qc.setQueryData(queryKeys.shows, [makeShow({ id: 11, sonarr_title: "Fresh" })]);
-    await act(async () => {
-      root.unmount();
-    });
-    await act(async () => {
-      resolveA();
-    });
-
-    const list = qc.getQueryData<Show[]>(queryKeys.shows)!;
-    expect(list[0].sonarr_title).toBe("Fresh");
+    expect(mockedSetEpisodeMonitor).toHaveBeenCalledWith("5", 2, true);
+    expect(qc.getQueryData(queryKeys.episodes(5))).toEqual([
+      { sonarr_episode_id: 1, monitored: false },
+      { sonarr_episode_id: 2, monitored: true },
+    ]);
+    expect(mockedGetEpisodes).toHaveBeenCalledTimes(1);
   });
 });

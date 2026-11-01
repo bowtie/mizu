@@ -1,4 +1,5 @@
 import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Spinner } from "@astryxdesign/core/Spinner";
@@ -46,7 +47,8 @@ export function SeriesStep({
   ) : (
     <VStack gap={4}>
       <TextInput
-        label="Search"
+        label="Search Sonarr anime"
+        isLabelHidden
         value={w.seriesQuery}
         onChange={(v) => dispatch({ type: "SET", payload: { seriesQuery: v } })}
         placeholder="Search Sonarr anime"
@@ -119,9 +121,21 @@ export function SeriesStep({
           })}
         </List>
       )}
-      {w.selectedSonarr && !mappedSeriesIds.has(w.selectedSonarr.id) && (
-        <Button label="Continue" variant="primary" onClick={goToMatchStep} data-cuelume-press />
-      )}
+      <HStack gap={2} justify="between" align="center" wrap="wrap">
+        <Button
+          label="Not in Sonarr? Add from AFL"
+          variant="ghost"
+          onClick={() => goToFallbackAflStep(w.seriesQuery.trim())}
+          data-cuelume-press
+        />
+        <Button
+          label="Continue"
+          variant="primary"
+          onClick={goToMatchStep}
+          isDisabled={!w.selectedSonarr || mappedSeriesIds.has(w.selectedSonarr.id)}
+          data-cuelume-press
+        />
+      </HStack>
     </VStack>
   );
 }

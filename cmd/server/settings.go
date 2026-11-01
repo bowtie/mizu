@@ -55,7 +55,6 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 		}
 		settings["afl_show_cache_refreshed_at"] = cacheRefreshedAt
 		settings["afl_show_cache_count"] = cacheCount
-		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
 		writeJSON(w, http.StatusOK, settings)
 	}
 }
@@ -142,7 +141,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		}
 		if update.ArtworkDefaultSource != nil {
 			src := *update.ArtworkDefaultSource
-			if src != "" && src != "sonarr" && src != "auto" {
+			if src != "" && src != "sonarr" {
 				valid := false
 				for _, p := range artworkMgr.Providers() {
 					if p.ID == src {
@@ -277,7 +276,8 @@ func rebuildArtworkProviders(requestTimeout time.Duration, tmdbKey, fanartKey st
 }
 
 // handleTestSonarr checks a Sonarr URL/key pair. The stored key is never
-// sent to the browser, so an empty api_key means "use the saved one".
+// sent to the browser, so an empty api_key means "use the saved one" — but
+// only against the saved URL, so a request can't ship the key elsewhere.
 func handleTestSonarr(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -290,8 +290,13 @@ func handleTestSonarr(cfg *config.Config) http.HandlerFunc {
 		}
 		if req.APIKey == "" {
 			cfg.RLock()
-			req.APIKey = cfg.SonarrAPIKey
+			savedURL, savedKey := cfg.SonarrURL, cfg.SonarrAPIKey
 			cfg.RUnlock()
+			if savedKey != "" && !sameBaseURL(req.URL, savedURL) {
+				writeError(w, http.StatusBadRequest, "enter the API key to test a different Sonarr URL")
+				return
+			}
+			req.APIKey = savedKey
 		}
 		if req.URL == "" || req.APIKey == "" {
 			writeError(w, http.StatusBadRequest, "url and api_key are required")
@@ -329,6 +334,11 @@ func handleTestNtfy(cfg *config.Config) http.HandlerFunc {
 		token := cfg.NtfyToken
 		cfg.RUnlock()
 		if req.ServerURL != nil {
+			// The saved token belongs to the saved server; never send it
+			// to a different one.
+			if !sameBaseURL(*req.ServerURL, serverURL) {
+				token = ""
+			}
 			serverURL = strings.TrimRight(*req.ServerURL, "/")
 		}
 		if req.Topic != nil {
@@ -349,4 +359,10 @@ func handleTestNtfy(cfg *config.Config) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 	}
+}
+
+// sameBaseURL compares two service base URLs, ignoring case and trailing
+// slashes.
+func sameBaseURL(a, b string) bool {
+	return strings.EqualFold(strings.TrimRight(strings.TrimSpace(a), "/"), strings.TrimRight(strings.TrimSpace(b), "/"))
 }

@@ -98,19 +98,9 @@ func handleGetSonarrSeriesByID(db *database.DB, syncEngine *sync.Engine) http.Ha
 	}
 }
 
-func handleGetSonarrSeries(db *database.DB, engine *sync.Engine, cache *seriesListCache) http.HandlerFunc {
+func handleGetSonarrSeries(db *database.DB, engine *sync.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Serve from in-memory cache if available and fresh.
-		// The matchable_only variant is not cached since it depends on
-		// mappings + AFL cache state which changes more frequently.
 		matchableOnly := r.URL.Query().Get("matchable_only") == "true"
-		if !matchableOnly {
-			if cached, ok := cache.get(); ok {
-				w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=120")
-				writeJSON(w, http.StatusOK, cached)
-				return
-			}
-		}
 
 		c := engine.SonarrClient()
 		series, err := c.GetAnimeSeries(r.Context())
@@ -144,12 +134,6 @@ func handleGetSonarrSeries(db *database.DB, engine *sync.Engine, cache *seriesLi
 		public := make([]models.SonarrSeriesPublic, len(series))
 		for i := range series {
 			public[i] = series[i].Public()
-		}
-
-		if !matchableOnly {
-			// Cache the unfiltered public series list for 2 minutes.
-			cache.set(public)
-			w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=120")
 		}
 
 		writeJSON(w, http.StatusOK, public)

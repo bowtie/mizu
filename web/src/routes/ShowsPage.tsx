@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { LastSyncedText } from "../components/LastSyncedText";
 import { useNotificationStore } from "../lib/store";
-import { useBootstrap, useShows, useSettings, useSonarrSeries } from "../lib/queries";
+import { prefetchEpisodes, useShows, useSettings, useSonarrSeries } from "../lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getArtworkPosterUrl,
@@ -48,7 +48,6 @@ import {
   getSonarrAddOptions,
   getSonarrSeries,
   getSettings,
-  prefetchEpisodes,
   errorMessage,
 } from "../lib/api";
 import { prefetchDetailChunk, prefetchAddDialogChunk } from "../lib/chunkPrefetch";
@@ -94,19 +93,18 @@ export function ShowsPage() {
   const queryClient = useQueryClient();
 
   // ── Data from TanStack Query ──
-  const bootstrap = useBootstrap();
   const showsQuery = useShows();
   const settingsQuery = useSettings();
   const sonarrSeriesQuery = useSonarrSeries();
 
-  const shows = showsQuery.data ?? bootstrap.data?.shows ?? [];
-  const settings = settingsQuery.data ?? bootstrap.data?.settings ?? null;
+  const shows = showsQuery.data ?? [];
+  const settings = settingsQuery.data ?? null;
 
   // ── Page-level state ──
   // If the store already has shows, don't show a loading spinner — render
   // immediately. SonarrSeries data (for poster/banner URLs) loads in the
   // background and populates images when ready.
-  const isFetching = bootstrap.isPending && showsQuery.isPending;
+  const isFetching = showsQuery.isPending;
   const [loading, setLoading] = useState(() => shows.length === 0 && isFetching);
   const [filter, setFilter] = useState("");
   const [sortBy, setSortBy] = useState("title");
@@ -298,10 +296,10 @@ export function ShowsPage() {
 
   // Also clear loading if the query has finished but returned empty
   useEffect(() => {
-    if (showsQuery.isFetched || bootstrap.isFetched) {
+    if (showsQuery.isFetched) {
       if (shows.length === 0) setLoading(false);
     }
-  }, [showsQuery.isFetched, bootstrap.isFetched, shows.length]);
+  }, [showsQuery.isFetched, shows.length]);
 
   const loadLanding = useCallback(
     async (forceRefresh: boolean = false) => {
@@ -495,12 +493,15 @@ export function ShowsPage() {
     [navigate],
   );
 
-  const handleCardHover = useCallback((showId: string | number) => {
-    prefetchDetailChunk();
-    // Only prefetch episodes — the show data is already in the store
-    // (from bootstrap), so prefetchShow() would be a redundant API call.
-    prefetchEpisodes(showId);
-  }, []);
+  const handleCardHover = useCallback(
+    (showId: string | number) => {
+      prefetchDetailChunk();
+      // Only episodes need warming — the detail page shows the library's
+      // copy of the show while its own query loads.
+      void prefetchEpisodes(queryClient, showId);
+    },
+    [queryClient],
+  );
 
   const openExistingMapping = (seriesId: string | number) => {
     const mapped = (shows || []).find((s: Show) => s.sonarr_series_id === seriesId);

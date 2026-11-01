@@ -2,7 +2,7 @@ import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ToastViewport } from "./components/ToastViewport";
 import { prefetchDetailChunk } from "./lib/chunkPrefetch";
-import { useAuthStatus, useBootstrap, useSettings } from "./lib/queries";
+import { useAuthStatus, useSettings } from "./lib/queries";
 import { needsOnboarding } from "./lib/onboarding";
 import { applySoundsEnabled } from "./lib/sounds";
 
@@ -69,14 +69,14 @@ function PageFallback() {
 }
 
 // Applies the persisted "interaction sounds" preference whenever the
-// bootstrap settings load or change. Without this, cuelume keeps its
+// settings load or change. Without this, cuelume keeps its
 // built-in enabled default after every reload while the Settings toggle
 // still shows the saved "off" state. Mounted inside the authenticated
-// tree only, so it never fires bootstrap on the login page.
+// tree only, so it never requests settings on the login page.
 function SoundsPreference() {
-  const { data } = useBootstrap();
+  const { data } = useSettings();
   useEffect(() => {
-    const enabled = data?.settings?.ui_sounds_enabled;
+    const enabled = data?.ui_sounds_enabled;
     if (typeof enabled === "boolean") applySoundsEnabled(enabled);
   }, [data]);
   return null;
@@ -105,11 +105,20 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 // A fresh install has no Sonarr key yet; send those visitors to the welcome
-// flow instead of an empty library. "Skip setup" opts out for this browser.
+// flow instead of an empty library.
 function RequireSonarr({ children }: { children: React.ReactNode }) {
   const { data: settings, isPending } = useSettings();
   if (isPending) return <PageFallback />;
   if (needsOnboarding(settings?.sonarr_api_key_set)) return <Navigate to="/welcome" replace />;
+  return <>{children}</>;
+}
+
+// Setup is one-time: once Sonarr is connected the welcome page is gone and
+// everything lives in Settings.
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  const { data: settings, isPending } = useSettings();
+  if (isPending) return <PageFallback />;
+  if (!needsOnboarding(settings?.sonarr_api_key_set)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -166,9 +175,11 @@ export function App() {
           path="/welcome"
           element={
             <RequireAuth>
-              <Suspense fallback={<PageFallback />}>
-                <OnboardingPage />
-              </Suspense>
+              <OnboardingGate>
+                <Suspense fallback={<PageFallback />}>
+                  <OnboardingPage />
+                </Suspense>
+              </OnboardingGate>
             </RequireAuth>
           }
         />

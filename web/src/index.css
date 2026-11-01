@@ -491,6 +491,16 @@ body {
   align-items: center;
   justify-content: center;
 }
+.onboarding-screen .settings-row {
+  flex-wrap: nowrap;
+  gap: var(--spacing-3);
+}
+
+.onboarding-screen .settings-row-label {
+  min-width: 0;
+  flex: 1;
+}
+
 .onboarding-screen > .section-centered {
   width: 100%;
   margin-block: auto;
@@ -780,9 +790,6 @@ body {
     animation: none;
   }
   .wizard-success-icon {
-    animation: none;
-  }
-  .error-boundary-card {
     animation: none;
   }
   .spin {
@@ -1327,6 +1334,7 @@ body {
 .wizard-steps {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0;
   list-style: none;
   margin: 0;
@@ -1338,13 +1346,14 @@ body {
   align-items: center;
   gap: var(--spacing-2);
   position: relative;
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
 .wizard-step:not(:last-child)::after {
   content: "";
-  flex: 1;
+  flex: none;
+  width: var(--spacing-8);
   height: 1px;
   background-color: var(--color-border);
   margin-inline: var(--spacing-2);
@@ -1431,93 +1440,6 @@ body {
 /* Wizard step content — fade-in on step change */
 .wizard-step-content {
   animation: fade-in-up 0.25s var(--ease-standard);
-}
-
-/* ── Error boundary fallback ── */
-.error-boundary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  padding: var(--spacing-6);
-}
-
-.error-boundary-card {
-  max-width: 420px;
-  width: 100%;
-  background-color: var(--color-background-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-container);
-  padding: var(--spacing-6);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--spacing-3);
-  animation: fade-in-up 0.3s var(--ease-standard);
-  box-shadow: var(--shadow-low);
-}
-
-.error-boundary-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
-  color: var(--color-error);
-}
-
-.error-boundary-title {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.error-boundary-desc {
-  margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-}
-
-.error-boundary-actions {
-  display: flex;
-  gap: var(--spacing-2);
-  margin-block-start: var(--spacing-2);
-}
-
-.error-boundary-btn {
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-inner);
-  border: 1px solid var(--color-border);
-  background-color: var(--color-background-muted);
-  color: var(--color-text-primary);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-standard);
-}
-
-.error-boundary-btn:hover {
-  background-color: var(--color-overlay-hover);
-}
-
-.error-boundary-btn:active {
-  background-color: var(--color-overlay-pressed);
-}
-
-.error-boundary-btn:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.error-boundary-btn-primary {
-  background-color: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-on-accent);
 }
 
 /* ── Skeleton placeholders ── */

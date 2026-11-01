@@ -4,8 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
-import { prefetchShowDetail, logout } from "./lib/api";
-import { isAuthManaged } from "./lib/authMode";
+import { logout } from "./lib/api";
 import { queryClient } from "./lib/queryClient";
 import { useAuthStatus } from "./lib/queries";
 import { Theme } from "@astryxdesign/core/theme";
@@ -52,19 +51,10 @@ import type { DefinedTheme } from "@astryxdesign/core/theme";
 // the main bundle parse avoids a waterfall.
 void import("./routes/ShowsPage");
 
-// If the user navigated directly to a show detail page (e.g. hard
-// refresh on /shows/123), start downloading the ShowDetailPage chunk
-// immediately instead of waiting for the idle prefetch. This avoids a
-// sequential waterfall: main bundle → parse → idle → prefetch → download.
-// Also prefetch the show's episodes + show data so they load instantly
-// once the detail page mounts — the promises are cached and picked up
-// by getEpisodes/getShow.
-const detailMatch = location.pathname.match(/^\/shows\/(\d+)/);
-if (detailMatch) {
+// On a hard refresh of a show page, start downloading its chunk right away
+// instead of waiting for the router to request it.
+if (/^\/shows\/\d+/.test(location.pathname)) {
   void import("./routes/ShowDetailPage");
-  // Use the combined detail endpoint — fetches show + episodes in one
-  // request instead of two separate round-trips.
-  prefetchShowDetail(detailMatch[1]);
 }
 
 const STORAGE_KEY = "mizu-theme";
@@ -147,8 +137,8 @@ function LogoutButton() {
   const { data: status } = useAuthStatus();
   const navigate = useNavigate();
 
-  // Nothing to sign out of when a proxy (or nothing) handles auth.
-  if (!status?.authenticated || isAuthManaged(status)) return null;
+  // Nothing to sign out of while no password is set.
+  if (!status?.authenticated) return null;
 
   const handleLogout = async () => {
     try {
@@ -215,8 +205,8 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
       }
       endContent={
         <HStack gap={2} align="center">
-          <LogoutButton />
           {themeMenu}
+          <LogoutButton />
         </HStack>
       }
     />

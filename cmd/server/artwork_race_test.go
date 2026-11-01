@@ -165,7 +165,7 @@ func TestHandleDeleteMappingDoesNotResurrectArtworkMidFlight(t *testing.T) {
 	go func() {
 		defer close(handlerDone)
 		rec := httptest.NewRecorder()
-		handleDeleteMapping(db, mgr, newEpisodeCache(2*time.Minute))(rec, requestWithChiID(http.MethodDelete, fmt.Sprintf("/api/mappings/%d", id), fmt.Sprintf("%d", id), ""))
+		handleDeleteMapping(db, mgr)(rec, requestWithChiID(http.MethodDelete, fmt.Sprintf("/api/mappings/%d", id), fmt.Sprintf("%d", id), ""))
 		assert.Equal(t, http.StatusOK, rec.Code)
 	}()
 
