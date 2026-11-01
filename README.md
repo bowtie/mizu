@@ -61,26 +61,26 @@ All settings are stored in the embedded SQLite database and managed through the 
 
 ### Settings
 
-| Setting | Default | Description |
-|---|---|---|
-| `sonarr_url` | `http://localhost:8989` | Sonarr instance URL |
-| `sonarr_api_key` | *(required)* | Sonarr API key (Settings > General > Security) |
-| `sync_interval` | `6h` | How often to sync (1h, 3h, 6h, 12h, or 24h) |
-| `default_filler_action` | `unmonitor` | Default action for filler episodes |
-| `default_mixed_canon_action` | `monitor` | Default action for mixed canon episodes |
-| `default_anime_canon_action` | `monitor` | Default action for anime canon episodes |
-| `artwork_default_source` | `sonarr` | Default artwork provider (`sonarr`, `anilist`, `tmdb`, `fanart`, `kitsu`) |
-| `ntfy_enabled` | `false` | Enable ntfy push notifications |
-| `ntfy_server_url` | `https://ntfy.sh` | ntfy server URL |
-| `ntfy_topic` | *(empty)* | ntfy topic name |
-| `ntfy_token` | *(empty)* | ntfy access token (optional) |
+| Setting                      | Default                 | Description                                                               |
+| ---------------------------- | ----------------------- | ------------------------------------------------------------------------- |
+| `sonarr_url`                 | `http://localhost:8989` | Sonarr instance URL                                                       |
+| `sonarr_api_key`             | _(required)_            | Sonarr API key (Settings > General > Security)                            |
+| `sync_interval`              | `6h`                    | How often to sync (1h, 3h, 6h, 12h, or 24h)                               |
+| `default_filler_action`      | `unmonitor`             | Default action for filler episodes                                        |
+| `default_mixed_canon_action` | `monitor`               | Default action for mixed canon episodes                                   |
+| `default_anime_canon_action` | `monitor`               | Default action for anime canon episodes                                   |
+| `artwork_default_source`     | `sonarr`                | Default artwork provider (`sonarr`, `anilist`, `tmdb`, `fanart`, `kitsu`) |
+| `ntfy_enabled`               | `false`                 | Enable ntfy push notifications                                            |
+| `ntfy_server_url`            | `https://ntfy.sh`       | ntfy server URL                                                           |
+| `ntfy_topic`                 | _(empty)_               | ntfy topic name                                                           |
+| `ntfy_token`                 | _(empty)_               | ntfy access token (optional)                                              |
 
 ### Filler Actions
 
-| Action | Behavior |
-|---|---|
+| Action      | Behavior                                                             |
+| ----------- | -------------------------------------------------------------------- |
 | `unmonitor` | Marks filler episodes as unmonitored in Sonarr (won't be downloaded) |
-| `monitor` | Keeps episodes monitored (no change) |
+| `monitor`   | Keeps episodes monitored (no change)                                 |
 
 ## Architecture
 
@@ -124,53 +124,53 @@ If you run your own ntfy server, set the ntfy server URL in Settings and provide
 
 ### Notification Types
 
-| Status | Priority | When |
-|---|---|---|
-| Success | Default (3) | All shows synced without errors |
-| Partial | High (4) | Some shows failed but others succeeded |
-| Failed | Urgent (5) | Sync completely failed |
+| Status  | Priority    | When                                   |
+| ------- | ----------- | -------------------------------------- |
+| Success | Default (3) | All shows synced without errors        |
+| Partial | High (4)    | Some shows failed but others succeeded |
+| Failed  | Urgent (5)  | Sync completely failed                 |
 
 ## API Reference
 
 All endpoints are under `/api`.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Health check with Sonarr connectivity |
-| `GET` | `/api/version` | Version info |
-| `GET` | `/api/stats` | Dashboard statistics |
-| `GET` | `/api/artwork/providers` | List available artwork providers |
-| `GET` | `/api/artwork/{id}/poster` | Serve poster artwork for a mapping |
-| `GET` | `/api/artwork/{id}/banner` | Serve banner artwork for a mapping |
-| `GET` | `/api/artwork/{id}/logo` | Serve logo artwork for a mapping |
-| `POST` | `/api/artwork/refresh-all` | Refresh artwork for all mappings |
-| `GET` | `/api/mappings` | List all show mappings |
-| `POST` | `/api/mappings` | Create mapping (auto-match or manual) |
-| `GET` | `/api/mappings/:id` | Get a single mapping |
-| `PUT` | `/api/mappings/:id` | Update a mapping |
-| `DELETE` | `/api/mappings/:id` | Delete a mapping |
-| `POST` | `/api/mappings/:id/artwork/refresh` | Refresh artwork for a single mapping |
-| `PUT` | `/api/mappings/:id/artwork/source` | Change artwork source for a mapping |
-| `GET` | `/api/mappings/:id/episodes` | Get episodes for a mapping |
-| `GET` | `/api/mappings/:id/episodes/sonarr` | Get Sonarr episode data for a mapping |
-| `PUT` | `/api/mappings/:id/episodes/{epId}/monitor` | Toggle episode monitor status |
-| `POST` | `/api/mappings/:id/resync` | Resync a single mapping |
-| `POST` | `/api/sync` | Trigger manual sync |
-| `GET` | `/api/logs` | Get sync history |
-| `GET` | `/api/settings` | Get current settings |
-| `GET` | `/api/settings/sonarr-api-key` | Get stored Sonarr API key |
-| `PUT` | `/api/settings` | Update settings |
-| `POST` | `/api/settings/afl-cache/refresh` | Refresh AFL cache |
-| `GET` | `/api/sonarr/series` | List Sonarr series |
-| `GET` | `/api/sonarr/series/:id` | Get a single Sonarr series |
-| `POST` | `/api/sonarr/series` | Add a series to Sonarr |
-| `GET` | `/api/sonarr/lookup` | Lookup series in Sonarr |
-| `GET` | `/api/sonarr/add-options` | Get Sonarr add options (root folders, quality profiles) |
-| `POST` | `/api/sonarr/manual-match-pending` | Mark a series as pending manual match |
-| `POST` | `/api/sonarr/test` | Test Sonarr connection |
-| `POST` | `/api/ntfy/test` | Send test ntfy notification |
-| `GET` | `/api/afl/search?q=` | Search AnimeFillerList |
-| `GET` | `/api/afl/suggest` | Get AFL suggestions |
+| Method   | Path                                        | Description                                             |
+| -------- | ------------------------------------------- | ------------------------------------------------------- |
+| `GET`    | `/api/health`                               | Health check with Sonarr connectivity                   |
+| `GET`    | `/api/version`                              | Version info                                            |
+| `GET`    | `/api/stats`                                | Dashboard statistics                                    |
+| `GET`    | `/api/artwork/providers`                    | List available artwork providers                        |
+| `GET`    | `/api/artwork/{id}/poster`                  | Serve poster artwork for a mapping                      |
+| `GET`    | `/api/artwork/{id}/banner`                  | Serve banner artwork for a mapping                      |
+| `GET`    | `/api/artwork/{id}/logo`                    | Serve logo artwork for a mapping                        |
+| `POST`   | `/api/artwork/refresh-all`                  | Refresh artwork for all mappings                        |
+| `GET`    | `/api/mappings`                             | List all show mappings                                  |
+| `POST`   | `/api/mappings`                             | Create mapping (auto-match or manual)                   |
+| `GET`    | `/api/mappings/:id`                         | Get a single mapping                                    |
+| `PUT`    | `/api/mappings/:id`                         | Update a mapping                                        |
+| `DELETE` | `/api/mappings/:id`                         | Delete a mapping                                        |
+| `POST`   | `/api/mappings/:id/artwork/refresh`         | Refresh artwork for a single mapping                    |
+| `PUT`    | `/api/mappings/:id/artwork/source`          | Change artwork source for a mapping                     |
+| `GET`    | `/api/mappings/:id/episodes`                | Get episodes for a mapping                              |
+| `GET`    | `/api/mappings/:id/episodes/sonarr`         | Get Sonarr episode data for a mapping                   |
+| `PUT`    | `/api/mappings/:id/episodes/{epId}/monitor` | Toggle episode monitor status                           |
+| `POST`   | `/api/mappings/:id/resync`                  | Resync a single mapping                                 |
+| `POST`   | `/api/sync`                                 | Trigger manual sync                                     |
+| `GET`    | `/api/logs`                                 | Get sync history                                        |
+| `GET`    | `/api/settings`                             | Get current settings                                    |
+| `GET`    | `/api/settings/sonarr-api-key`              | Get stored Sonarr API key                               |
+| `PUT`    | `/api/settings`                             | Update settings                                         |
+| `POST`   | `/api/settings/afl-cache/refresh`           | Refresh AFL cache                                       |
+| `GET`    | `/api/sonarr/series`                        | List Sonarr series                                      |
+| `GET`    | `/api/sonarr/series/:id`                    | Get a single Sonarr series                              |
+| `POST`   | `/api/sonarr/series`                        | Add a series to Sonarr                                  |
+| `GET`    | `/api/sonarr/lookup`                        | Lookup series in Sonarr                                 |
+| `GET`    | `/api/sonarr/add-options`                   | Get Sonarr add options (root folders, quality profiles) |
+| `POST`   | `/api/sonarr/manual-match-pending`          | Mark a series as pending manual match                   |
+| `POST`   | `/api/sonarr/test`                          | Test Sonarr connection                                  |
+| `POST`   | `/api/ntfy/test`                            | Send test ntfy notification                             |
+| `GET`    | `/api/afl/search?q=`                        | Search AnimeFillerList                                  |
+| `GET`    | `/api/afl/suggest`                          | Get AFL suggestions                                     |
 
 ## Development
 
@@ -201,6 +201,7 @@ cd web-astryx && bun run build
 ```
 
 `bun run dev` starts both processes in one terminal:
+
 - frontend Vite+ dev server on http://localhost:3001
 - backend watcher (air) that restarts `go run ./cmd/server` whenever Go files change
 
@@ -209,4 +210,3 @@ The Vite+ dev server proxies /api requests to the Go backend on port 8978.
 ## License
 
 MIT
-

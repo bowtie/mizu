@@ -165,6 +165,9 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	if value, err := db.GetSetting(ctx, "fanart_api_key"); err == nil {
 		cfg.FanartAPIKey = value
 	}
+	if value, err := db.GetSetting(ctx, "ui_sounds_enabled"); err == nil && value != "" {
+		cfg.UISoundsEnabled = value == "true"
+	}
 }
 
 func startScheduler(ctx context.Context, scheduler *schedulerController, syncEngine *syncengine.Engine) {

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"mizu/internal/models"
 )
 
@@ -19,10 +21,7 @@ func TestInitialWatermarkForEpisodes(t *testing.T) {
 		{SeasonNumber: 2, EpisodeNumber: 1, AbsoluteEpisodeNumber: &absolute, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	got := initialWatermarkForEpisodes(episodes, now)
-	if got != 14 {
-		t.Fatalf("expected watermark 14, got %d", got)
-	}
+	assert.Equal(t, 14, initialWatermarkForEpisodes(episodes, now))
 }
 
 func TestInitialWatermarkForEpisodesIgnoresMonitoredOnlyEpisodes(t *testing.T) {
@@ -34,10 +33,7 @@ func TestInitialWatermarkForEpisodesIgnoresMonitoredOnlyEpisodes(t *testing.T) {
 		{SeasonNumber: 2, EpisodeNumber: 1, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	got := initialWatermarkForEpisodes(episodes, now)
-	if got != 0 {
-		t.Fatalf("expected monitored-only episodes to keep watermark at 0, got %d", got)
-	}
+	assert.Equal(t, 0, initialWatermarkForEpisodes(episodes, now))
 }
 
 func TestInitialWatermarkForEpisodesIgnoresFutureAndSpecialDownloads(t *testing.T) {
@@ -49,19 +45,12 @@ func TestInitialWatermarkForEpisodesIgnoresFutureAndSpecialDownloads(t *testing.
 		{SeasonNumber: 1, EpisodeNumber: 5, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	got := initialWatermarkForEpisodes(episodes, now)
-	if got != 5 {
-		t.Fatalf("expected watermark 5 from the latest eligible download, got %d", got)
-	}
+	assert.Equal(t, 5, initialWatermarkForEpisodes(episodes, now))
 }
 
 func TestNormalizeWatermarkModeDefaults(t *testing.T) {
-	if got := normalizeWatermarkMode("", models.StartModeCurrentProgress); got != models.WatermarkModeAuto {
-		t.Fatalf("expected current progress mappings to default to auto watermark mode, got %q", got)
-	}
-	if got := normalizeWatermarkMode("", models.StartModeFromBeginning); got != models.WatermarkModeManual {
-		t.Fatalf("expected from-beginning mappings to default to manual watermark mode, got %q", got)
-	}
+	assert.Equal(t, models.WatermarkModeAuto, normalizeWatermarkMode("", models.StartModeCurrentProgress))
+	assert.Equal(t, models.WatermarkModeManual, normalizeWatermarkMode("", models.StartModeFromBeginning))
 }
 
 func TestNextAutoWatermarkNeverShrinks(t *testing.T) {
@@ -70,9 +59,7 @@ func TestNextAutoWatermarkNeverShrinks(t *testing.T) {
 		{SeasonNumber: 1, EpisodeNumber: 7, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	if got := nextAutoWatermark(24, episodes, now); got != 24 {
-		t.Fatalf("expected auto watermark to keep existing marker 24, got %d", got)
-	}
+	assert.Equal(t, 24, nextAutoWatermark(24, episodes, now))
 }
 
 func TestNextAutoWatermarkAdvances(t *testing.T) {
@@ -81,9 +68,7 @@ func TestNextAutoWatermarkAdvances(t *testing.T) {
 		{SeasonNumber: 1, EpisodeNumber: 12, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	if got := nextAutoWatermark(5, episodes, now); got != 12 {
-		t.Fatalf("expected auto watermark to advance to 12, got %d", got)
-	}
+	assert.Equal(t, 12, nextAutoWatermark(5, episodes, now))
 }
 
 func TestNextAutoWatermarkDoesNotAdvanceFromMonitoredOnlyEpisodes(t *testing.T) {
@@ -93,21 +78,13 @@ func TestNextAutoWatermarkDoesNotAdvanceFromMonitoredOnlyEpisodes(t *testing.T) 
 		{SeasonNumber: 1, EpisodeNumber: 12, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	if got := nextAutoWatermark(0, episodes, now); got != 0 {
-		t.Fatalf("expected monitored-only episodes not to advance auto watermark, got %d", got)
-	}
+	assert.Equal(t, 0, nextAutoWatermark(0, episodes, now))
 }
 
 func TestIsBelowOrAtWatermark(t *testing.T) {
-	if !isBelowOrAtWatermark(12, 12) {
-		t.Fatal("expected episode equal to watermark to be below the boundary")
-	}
-	if !isBelowOrAtWatermark(5, 12) {
-		t.Fatal("expected episode below watermark to be below the boundary")
-	}
-	if isBelowOrAtWatermark(13, 12) {
-		t.Fatal("expected episode above watermark to remain eligible for rules")
-	}
+	assert.True(t, isBelowOrAtWatermark(12, 12))
+	assert.True(t, isBelowOrAtWatermark(5, 12))
+	assert.False(t, isBelowOrAtWatermark(13, 12))
 }
 
 func TestPreferredAFLEpisodePrefersMixedOverFiller(t *testing.T) {
@@ -115,12 +92,8 @@ func TestPreferredAFLEpisodePrefersMixedOverFiller(t *testing.T) {
 	candidate := models.AFLEpisode{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeMixedCanon}
 
 	got := preferredAFLEpisode(current, candidate)
-	if got.Type != models.EpisodeMixedCanon {
-		t.Fatalf("expected mixed canon to win, got %q", got.Type)
-	}
-	if got.Title != candidate.Title {
-		t.Fatalf("expected mixed canon title to win, got %q", got.Title)
-	}
+	assert.Equal(t, models.EpisodeMixedCanon, got.Type)
+	assert.Equal(t, candidate.Title, got.Title)
 }
 
 func TestMatchSpecialAFLEpisodeByTitlePrefersExactTitle(t *testing.T) {
@@ -130,12 +103,8 @@ func TestMatchSpecialAFLEpisodeByTitlePrefersExactTitle(t *testing.T) {
 	}
 
 	got, ok := matchAFLEpisodeByTitle("Police Academy Arc Wild Police Story CASE. Rei Furuya", candidates)
-	if !ok {
-		t.Fatal("expected a special title match")
-	}
-	if got.Title != candidates[1].Title {
-		t.Fatalf("expected exact special title to win, got %q", got.Title)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, candidates[1].Title, got.Title)
 }
 
 func TestSelectAFLEpisodeForSonarrIncludesMatchedSpecial(t *testing.T) {
@@ -154,15 +123,9 @@ func TestSelectAFLEpisodeForSonarrIncludesMatchedSpecial(t *testing.T) {
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
 	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if !ok {
-		t.Fatal("expected special episode to be matched")
-	}
-	if aflNum != 1076 {
-		t.Fatalf("expected AFL episode 1076, got %d", aflNum)
-	}
-	if got.Type != models.EpisodeMixedCanon {
-		t.Fatalf("expected mixed canon for matched special, got %q", got.Type)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, 1076, aflNum)
+	assert.Equal(t, models.EpisodeMixedCanon, got.Type)
 }
 
 func TestSelectAFLEpisodeForSonarrPrefersTitleMatchedMainlineDuplicate(t *testing.T) {
@@ -181,18 +144,10 @@ func TestSelectAFLEpisodeForSonarrPrefersTitleMatchedMainlineDuplicate(t *testin
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
 	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if !ok {
-		t.Fatal("expected mainline episode to be matched")
-	}
-	if aflNum != 1076 {
-		t.Fatalf("expected AFL episode 1076, got %d", aflNum)
-	}
-	if got.Title != candidates[0].Title {
-		t.Fatalf("expected title-matched filler row to win, got %q", got.Title)
-	}
-	if got.Type != models.EpisodeFiller {
-		t.Fatalf("expected filler for mainline 1076, got %q", got.Type)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, 1076, aflNum)
+	assert.Equal(t, candidates[0].Title, got.Title)
+	assert.Equal(t, models.EpisodeFiller, got.Type)
 }
 
 func TestSelectAFLEpisodeForSonarrSupportsNegativeOneSpecialSeason(t *testing.T) {
@@ -211,12 +166,8 @@ func TestSelectAFLEpisodeForSonarrSupportsNegativeOneSpecialSeason(t *testing.T)
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
 	_, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if !ok {
-		t.Fatal("expected -1 special season to be matched")
-	}
-	if got.Type != models.EpisodeMixedCanon {
-		t.Fatalf("expected mixed canon for -1 special, got %q", got.Type)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, models.EpisodeMixedCanon, got.Type)
 }
 
 func TestSelectAFLEpisodeForSonarrDoesNotStealMainlineForUnmatchedSpecial(t *testing.T) {
@@ -235,9 +186,7 @@ func TestSelectAFLEpisodeForSonarrDoesNotStealMainlineForUnmatchedSpecial(t *tes
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
 	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if ok {
-		t.Fatal("expected unmatched special to remain unmatched")
-	}
+	assert.False(t, ok)
 }
 
 func TestSelectAFLEpisodeForSonarrDoesNotAutoMatchSingleCandidateSpecial(t *testing.T) {
@@ -255,9 +204,7 @@ func TestSelectAFLEpisodeForSonarrDoesNotAutoMatchSingleCandidateSpecial(t *test
 	byNumber := map[int][]models.AFLEpisode{9001: candidates}
 
 	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if ok {
-		t.Fatal("expected special with only a number match to remain unmatched")
-	}
+	assert.False(t, ok)
 }
 
 func TestSelectAFLEpisodeForSonarrRejectsWeakSingleTokenSpecialMatch(t *testing.T) {
@@ -275,9 +222,7 @@ func TestSelectAFLEpisodeForSonarrRejectsWeakSingleTokenSpecialMatch(t *testing.
 	byNumber := map[int][]models.AFLEpisode{1077: candidates}
 
 	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if ok {
-		t.Fatal("expected weak single-token overlap to remain unmatched for a special")
-	}
+	assert.False(t, ok)
 }
 
 func TestSelectAFLEpisodeForSonarrFallsBackToGlobalStrictTitleForSpecial(t *testing.T) {
@@ -295,15 +240,9 @@ func TestSelectAFLEpisodeForSonarrFallsBackToGlobalStrictTitleForSpecial(t *test
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(byNumber[1076][0], byNumber[1076][1])}
 
 	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if !ok {
-		t.Fatal("expected special to match by exact title across AFL lookup")
-	}
-	if aflNum != 1076 {
-		t.Fatalf("expected matched AFL episode 1076, got %d", aflNum)
-	}
-	if got.Type != models.EpisodeMixedCanon {
-		t.Fatalf("expected mixed canon for globally matched special, got %q", got.Type)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, 1076, aflNum)
+	assert.Equal(t, models.EpisodeMixedCanon, got.Type)
 }
 
 func TestSelectAFLEpisodeForSonarrRejectsWeakGlobalSpecialMatch(t *testing.T) {
@@ -320,9 +259,7 @@ func TestSelectAFLEpisodeForSonarrRejectsWeakGlobalSpecialMatch(t *testing.T) {
 	preferred := map[int]models.AFLEpisode{1077: byNumber[1077][0]}
 
 	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
-	if ok {
-		t.Fatal("expected weak global title overlap to remain unmatched for a special")
-	}
+	assert.False(t, ok)
 }
 
 func TestAFLCoverageMaxEpisodeNumber(t *testing.T) {
@@ -332,12 +269,10 @@ func TestAFLCoverageMaxEpisodeNumber(t *testing.T) {
 		{Number: 1196, Title: "1196", Type: models.EpisodeCanon},
 	}
 
-	if got := AFLCoverageMaxEpisodeNumber(aflEpisodes); got != 1196 {
-		t.Fatalf("expected AFL coverage ceiling 1196, got %d", got)
-	}
+	assert.Equal(t, 1196, AFLCoverageMaxEpisodeNumber(aflEpisodes))
 }
 
-func TestIsWithinAFLCoverageRejectsMainlineEpisodeBeyondCeiling(t *testing.T) {
+func TestIsWithinAFLCoverageKeepsMainlineEpisodeBeyondCeiling(t *testing.T) {
 	absolute := 1197
 	sonarrEp := models.SonarrEpisode{
 		SeasonNumber:          21,
@@ -346,9 +281,9 @@ func TestIsWithinAFLCoverageRejectsMainlineEpisodeBeyondCeiling(t *testing.T) {
 		Title:                 "A New Successor Episode",
 	}
 
-	if IsWithinAFLCoverage(sonarrEp, 1197, false, 1196) {
-		t.Fatal("expected mainline episode beyond AFL ceiling to be excluded from coverage")
-	}
+	// Episodes beyond AFL coverage are now kept so they show as "unknown"
+	// in the UI. They get reclassified when AFL updates.
+	assert.True(t, IsWithinAFLCoverage(sonarrEp, 1197, false, 1196))
 }
 
 func TestIsWithinAFLCoverageKeepsMatchedSpecial(t *testing.T) {
@@ -360,7 +295,5 @@ func TestIsWithinAFLCoverageKeepsMatchedSpecial(t *testing.T) {
 		Title:                 "Special Episode",
 	}
 
-	if !IsWithinAFLCoverage(sonarrEp, 1076, true, 1076) {
-		t.Fatal("expected matched special to remain inside AFL coverage")
-	}
+	assert.True(t, IsWithinAFLCoverage(sonarrEp, 1076, true, 1076))
 }

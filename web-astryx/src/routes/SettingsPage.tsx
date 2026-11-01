@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { valibotResolver } from "@hookform/resolvers/valibot";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Section } from "@astryxdesign/core/Section";
@@ -14,7 +16,9 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
 import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
-import { useAppStore } from "../lib/store";
+import { useNotificationStore } from "../lib/store";
+import { useSettings, useArtworkProviders, useUpdateSettings } from "../lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { applySoundsEnabled } from "../lib/sounds";
 import { SettingsRow } from "../components/SettingsRow";
 import { TrackingRuleCard } from "../components/TrackingRuleCard";
@@ -24,9 +28,9 @@ import {
   refreshAllArtwork,
   testNtfyConnection,
   testSonarrConnection,
-  updateSettings,
   errorMessage,
 } from "../lib/api";
+import { SettingsFormSchema, type SettingsForm } from "../lib/schemas";
 import type { Settings as SettingsType, SelectOption } from "../lib/types";
 
 const actionToTracked = (action: string | undefined, fallback = true): boolean =>
@@ -43,106 +47,85 @@ const syncIntervalOptions: SelectOption[] = [
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-interface PristineSnapshot {
-  sonarrUrl: string;
-  apiKeyDirty: boolean;
-  syncInterval: string;
-  artworkDefaultSource: string;
-  tmdbApiKeyDirty: boolean;
-  fanartApiKeyDirty: boolean;
-  trackFillerDefault: boolean;
-  trackMixedDefault: boolean;
-  trackAnimeCanonDefault: boolean;
-  ntfyEnabled: boolean;
-  ntfyServerUrl: string;
-  ntfyTopic: string;
-  ntfyTokenDirty: boolean;
-  uiSoundsEnabled: boolean;
-}
-
 export function SettingsPage() {
-  const { settings: storeSettings, artworkProviders, setSettings, addNotification } = useAppStore();
+  const addNotification = useNotificationStore((s) => s.addNotification);
+  const queryClient = useQueryClient();
+  const settingsQuery = useSettings();
+  const storeSettings = settingsQuery.data ?? null;
+  const { data: artworkProviders = [] } = useArtworkProviders();
+  const updateSettingsMutation = useUpdateSettings();
   const [loading, setLoading] = useState(!storeSettings);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
-  const [soundsEnabled, setSoundsEnabledState] = useState(true);
   const [testPhase, setTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
 
-  const [sonarrUrl, setSonarrUrl] = useState("");
-  const [sonarrApiKey, setSonarrApiKey] = useState("");
+  // ── API key UI state (visibility, masked display, dirty tracking) ──
+  // These stay as useState because they're presentation logic, not form data.
   const [savedApiKeyMasked, setSavedApiKeyMasked] = useState("");
   const [savedApiKeyFull, setSavedApiKeyFull] = useState("");
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
-  const [syncInterval, setSyncInterval] = useState("6h");
-  const [artworkDefaultSource, setArtworkDefaultSource] = useState("sonarr");
-  const [tmdbApiKey, setTmdbApiKey] = useState("");
+
   const [savedTmdbApiKeyMasked, setSavedTmdbApiKeyMasked] = useState("");
   const [savedTmdbApiKeyFull, setSavedTmdbApiKeyFull] = useState("");
   const [tmdbApiKeySet, setTmdbApiKeySet] = useState(false);
   const [tmdbApiKeyVisible, setTmdbApiKeyVisible] = useState(false);
   const [tmdbApiKeyDirty, setTmdbApiKeyDirty] = useState(false);
-  const [fanartApiKey, setFanartApiKey] = useState("");
+
   const [savedFanartApiKeyMasked, setSavedFanartApiKeyMasked] = useState("");
   const [savedFanartApiKeyFull, setSavedFanartApiKeyFull] = useState("");
   const [fanartApiKeySet, setFanartApiKeySet] = useState(false);
   const [fanartApiKeyVisible, setFanartApiKeyVisible] = useState(false);
   const [fanartApiKeyDirty, setFanartApiKeyDirty] = useState(false);
-  const [trackFillerDefault, setTrackFillerDefault] = useState(false);
-  const [trackMixedDefault, setTrackMixedDefault] = useState(true);
-  const [trackAnimeCanonDefault, setTrackAnimeCanonDefault] = useState(true);
-  const [cacheRefreshedAt, setCacheRefreshedAt] = useState<string | null>(null);
-  const [cacheCount, setCacheCount] = useState(0);
 
-  const [ntfyEnabled, setNtfyEnabled] = useState(false);
-  const [ntfyServerUrl, setNtfyServerUrl] = useState("");
-  const [ntfyTopic, setNtfyTopic] = useState("");
-  const [ntfyToken, setNtfyToken] = useState("");
   const [ntfyTokenSet, setNtfyTokenSet] = useState(false);
   const [ntfyTokenDirty, setNtfyTokenDirty] = useState(false);
-  const [ntfyTestPhase, setNtfyTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
+  const [ntfyTestPhase, setNtfyTestPhase] = useState<"idle" | "connecting" | "success" | "error">(
+    "idle",
+  );
 
-  const [pristine, setPristine] = useState<PristineSnapshot>({
-    sonarrUrl: "",
-    apiKeyDirty: false,
-    syncInterval: "6h",
-    artworkDefaultSource: "sonarr",
-    tmdbApiKeyDirty: false,
-    fanartApiKeyDirty: false,
-    trackFillerDefault: false,
-    trackMixedDefault: true,
-    trackAnimeCanonDefault: true,
-    ntfyEnabled: false,
-    ntfyServerUrl: "",
-    ntfyTopic: "",
-    ntfyTokenDirty: false,
-    uiSoundsEnabled: true,
-  });
+  // Cache info (display-only, not form fields)
+  const [cacheRefreshedAt, setCacheRefreshedAt] = useState<string | null>(null);
+  const [cacheCount, setCacheCount] = useState(0);
 
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ntfyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── React Hook Form ──
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isDirty: formIsDirty, errors },
+    getValues,
+  } = useForm<SettingsForm>({
+    resolver: valibotResolver(SettingsFormSchema),
+    defaultValues: {
+      sonarrUrl: "",
+      sonarrApiKey: "",
+      syncInterval: "6h",
+      artworkDefaultSource: "sonarr",
+      tmdbApiKey: "",
+      fanartApiKey: "",
+      trackFillerDefault: false,
+      trackMixedDefault: true,
+      trackAnimeCanonDefault: true,
+      ntfyEnabled: false,
+      ntfyServerUrl: "",
+      ntfyTopic: "",
+      ntfyToken: "",
+      soundsEnabled: true,
+    },
+    mode: "onChange",
+  });
+
+  // Any API key dirty flag also makes the whole form dirty
   const settingsDirty =
     !loading &&
-    (sonarrUrl !== pristine.sonarrUrl ||
-      apiKeyDirty ||
-      syncInterval !== pristine.syncInterval ||
-      artworkDefaultSource !== pristine.artworkDefaultSource ||
-      tmdbApiKeyDirty ||
-      fanartApiKeyDirty ||
-      trackFillerDefault !== pristine.trackFillerDefault ||
-      trackMixedDefault !== pristine.trackMixedDefault ||
-      trackAnimeCanonDefault !== pristine.trackAnimeCanonDefault ||
-      ntfyEnabled !== pristine.ntfyEnabled ||
-      ntfyServerUrl !== pristine.ntfyServerUrl ||
-      ntfyTopic !== pristine.ntfyTopic ||
-      ntfyTokenDirty ||
-      soundsEnabled !== pristine.uiSoundsEnabled);
-
-  const urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
+    (formIsDirty || apiKeyDirty || tmdbApiKeyDirty || fanartApiKeyDirty || ntfyTokenDirty);
 
   const scheduleReset = (delay = 1800) => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -171,70 +154,69 @@ export function SettingsPage() {
     };
   }, []);
 
-  const applySettings = useCallback((data: Settings | null) => {
-    if (!data || (data as { error?: string }).error) return;
-    setSonarrUrl(data.sonarr_url || "");
-    setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
-    setSavedApiKeyFull(data.sonarr_api_key || "");
-    setHasSavedApiKey(!!data.sonarr_api_key_set);
-    setSonarrApiKey(data.sonarr_api_key_masked || "");
-    setApiKeyVisible(false);
-    setApiKeyDirty(false);
-    setSyncInterval(data.sync_interval || "6h");
-    setArtworkDefaultSource(data.artwork_default_source || "sonarr");
-    setSavedTmdbApiKeyMasked(data.tmdb_api_key_masked || "");
-    setSavedTmdbApiKeyFull(data.tmdb_api_key || "");
-    setTmdbApiKeySet(!!data.tmdb_api_key_set);
-    setTmdbApiKey(data.tmdb_api_key_masked || "");
-    setTmdbApiKeyVisible(false);
-    setTmdbApiKeyDirty(false);
-    setSavedFanartApiKeyMasked(data.fanart_api_key_masked || "");
-    setSavedFanartApiKeyFull(data.fanart_api_key || "");
-    setFanartApiKeySet(!!data.fanart_api_key_set);
-    setFanartApiKey(data.fanart_api_key_masked || "");
-    setFanartApiKeyVisible(false);
-    setFanartApiKeyDirty(false);
-    setTrackFillerDefault(actionToTracked(data.default_filler_action, false));
-    setTrackMixedDefault(actionToTracked(data.default_mixed_canon_action, true));
-    setTrackAnimeCanonDefault(actionToTracked(data.default_anime_canon_action, true));
-    setCacheRefreshedAt(data.afl_show_cache_refreshed_at || null);
-    setCacheCount(data.afl_show_cache_count || 0);
-    setNtfyEnabled(!!data.ntfy_enabled);
-    setNtfyServerUrl(data.ntfy_server_url || "");
-    setNtfyTopic(data.ntfy_topic || "");
-    setNtfyTokenSet(!!data.ntfy_token_set);
-    setNtfyToken("");
-    setNtfyTokenDirty(false);
-    setNtfyTestPhase("idle");
-    setSoundsEnabledState(data.ui_sounds_enabled !== false);
-    setSettings(data);
-    setPristine({
-      sonarrUrl: data.sonarr_url || "",
-      apiKeyDirty: false,
-      syncInterval: data.sync_interval || "6h",
-      artworkDefaultSource: data.artwork_default_source || "sonarr",
-      tmdbApiKeyDirty: false,
-      fanartApiKeyDirty: false,
-      trackFillerDefault: actionToTracked(data.default_filler_action, false),
-      trackMixedDefault: actionToTracked(data.default_mixed_canon_action, true),
-      trackAnimeCanonDefault: actionToTracked(data.default_anime_canon_action, true),
-      ntfyEnabled: !!data.ntfy_enabled,
-      ntfyServerUrl: data.ntfy_server_url || "",
-      ntfyTopic: data.ntfy_topic || "",
-      ntfyTokenDirty: false,
-      uiSoundsEnabled: data.ui_sounds_enabled !== false,
-    });
-  }, [setSettings]);
+  const applySettings = useCallback(
+    (data: SettingsType | null) => {
+      if (!data || (data as { error?: string }).error) return;
+
+      // Reset form fields
+      reset({
+        sonarrUrl: data.sonarr_url || "",
+        sonarrApiKey: data.sonarr_api_key_masked || "",
+        syncInterval: data.sync_interval || "6h",
+        artworkDefaultSource: data.artwork_default_source || "sonarr",
+        tmdbApiKey: data.tmdb_api_key_masked || "",
+        fanartApiKey: data.fanart_api_key_masked || "",
+        trackFillerDefault: actionToTracked(data.default_filler_action, false),
+        trackMixedDefault: actionToTracked(data.default_mixed_canon_action, true),
+        trackAnimeCanonDefault: actionToTracked(data.default_anime_canon_action, true),
+        ntfyEnabled: !!data.ntfy_enabled,
+        ntfyServerUrl: data.ntfy_server_url || "",
+        ntfyTopic: data.ntfy_topic || "",
+        ntfyToken: "",
+        soundsEnabled: data.ui_sounds_enabled !== false,
+      });
+
+      // Reset API key UI state
+      setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
+      setSavedApiKeyFull(data.sonarr_api_key || "");
+      setHasSavedApiKey(!!data.sonarr_api_key_set);
+      setApiKeyVisible(false);
+      setApiKeyDirty(false);
+
+      setSavedTmdbApiKeyMasked(data.tmdb_api_key_masked || "");
+      setSavedTmdbApiKeyFull(data.tmdb_api_key || "");
+      setTmdbApiKeySet(!!data.tmdb_api_key_set);
+      setTmdbApiKeyVisible(false);
+      setTmdbApiKeyDirty(false);
+
+      setSavedFanartApiKeyMasked(data.fanart_api_key_masked || "");
+      setSavedFanartApiKeyFull(data.fanart_api_key || "");
+      setFanartApiKeySet(!!data.fanart_api_key_set);
+      setFanartApiKeyVisible(false);
+      setFanartApiKeyDirty(false);
+
+      setNtfyTokenSet(!!data.ntfy_token_set);
+      setNtfyTokenDirty(false);
+      setNtfyTestPhase("idle");
+
+      setCacheRefreshedAt(data.afl_show_cache_refreshed_at || null);
+      setCacheCount(data.afl_show_cache_count || 0);
+    },
+    [reset],
+  );
 
   const loadSettings = useCallback(async () => {
     try {
-      const data = await getSettings();
+      const data = await queryClient.fetchQuery({
+        queryKey: ["settings"],
+        queryFn: getSettings,
+      });
       applySettings(data);
     } catch (err: unknown) {
       addNotification("Failed to load settings: " + errorMessage(err), "error");
     }
     setLoading(false);
-  }, [applySettings, addNotification]);
+  }, [applySettings, addNotification, queryClient]);
 
   // If the store already has settings (fetched on app mount), populate
   // immediately and skip the loading spinner. Still do a background
@@ -250,6 +232,17 @@ export function SettingsPage() {
     loadSettings();
   }, [loadSettings]);
 
+  // Warn user when navigating away with unsaved changes
+  useEffect(() => {
+    if (!settingsDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [settingsDirty]);
+
   const artworkSourceOptions = useMemo<SelectOption[]>(() => {
     const opts: SelectOption[] = [{ value: "sonarr", label: "Sonarr (local)" }];
     for (const p of artworkProviders) {
@@ -259,69 +252,94 @@ export function SettingsPage() {
     return opts;
   }, [artworkProviders]);
 
-  const handleApiKeyInput = (value: string) => {
-    setApiKeyDirty(true);
-    setSonarrApiKey(value);
-    clearTestResult();
-  };
-
-  const handleUrlInput = (value: string) => {
-    setSonarrUrl(value);
-    clearTestResult();
-  };
+  // ── API key helpers ──
 
   const toggleApiKeyVisibility = () => {
     if (apiKeyVisible) {
       setApiKeyVisible(false);
       if (!apiKeyDirty && hasSavedApiKey) {
-        setSonarrApiKey(savedApiKeyMasked);
+        reset({ ...getValues(), sonarrApiKey: savedApiKeyMasked });
       }
       return;
     }
     if (!apiKeyDirty && hasSavedApiKey) {
-      setSonarrApiKey(savedApiKeyFull);
+      reset({ ...getValues(), sonarrApiKey: savedApiKeyFull });
     }
     setApiKeyVisible(true);
   };
 
   const resolveApiKeyForTest = (): string => {
+    const current = getValues("sonarrApiKey");
     if (apiKeyDirty || apiKeyVisible || !hasSavedApiKey) {
-      return sonarrApiKey;
+      return current;
     }
     return savedApiKeyFull;
   };
 
-  const handleSave = async () => {
+  const toggleTmdbApiKeyVisibility = () => {
+    if (tmdbApiKeyVisible) {
+      setTmdbApiKeyVisible(false);
+      if (!tmdbApiKeyDirty && tmdbApiKeySet) {
+        reset({ ...getValues(), tmdbApiKey: savedTmdbApiKeyMasked });
+      }
+    } else {
+      if (!tmdbApiKeyDirty && tmdbApiKeySet) {
+        reset({ ...getValues(), tmdbApiKey: savedTmdbApiKeyFull });
+      }
+      setTmdbApiKeyVisible(true);
+    }
+  };
+
+  const toggleFanartApiKeyVisibility = () => {
+    if (fanartApiKeyVisible) {
+      setFanartApiKeyVisible(false);
+      if (!fanartApiKeyDirty && fanartApiKeySet) {
+        reset({ ...getValues(), fanartApiKey: savedFanartApiKeyMasked });
+      }
+    } else {
+      if (!fanartApiKeyDirty && fanartApiKeySet) {
+        reset({ ...getValues(), fanartApiKey: savedFanartApiKeyFull });
+      }
+      setFanartApiKeyVisible(true);
+    }
+  };
+
+  // ── Save ──
+
+  const onSubmit = async (formData: SettingsForm) => {
     setSaving(true);
-    const sourceChanged = artworkDefaultSource !== pristine.artworkDefaultSource;
+    const pristineValues = {
+      artworkDefaultSource: storeSettings?.artwork_default_source || "sonarr",
+    };
+    const sourceChanged = formData.artworkDefaultSource !== pristineValues.artworkDefaultSource;
     try {
       const payload: Partial<SettingsType> = {
-        sonarr_url: sonarrUrl,
-        default_filler_action: trackedToAction(trackFillerDefault),
-        default_mixed_canon_action: trackedToAction(trackMixedDefault),
-        default_anime_canon_action: trackedToAction(trackAnimeCanonDefault),
-        sync_interval: syncInterval,
-        artwork_default_source: artworkDefaultSource,
+        sonarr_url: formData.sonarrUrl,
+        default_filler_action: trackedToAction(formData.trackFillerDefault),
+        default_mixed_canon_action: trackedToAction(formData.trackMixedDefault),
+        default_anime_canon_action: trackedToAction(formData.trackAnimeCanonDefault),
+        sync_interval: formData.syncInterval,
+        artwork_default_source: formData.artworkDefaultSource,
       };
-      if (apiKeyDirty && sonarrApiKey) {
-        payload.sonarr_api_key = sonarrApiKey;
+      if (apiKeyDirty && formData.sonarrApiKey) {
+        payload.sonarr_api_key = formData.sonarrApiKey;
       }
-      if (tmdbApiKeyDirty && tmdbApiKey) {
-        payload.tmdb_api_key = tmdbApiKey;
+      if (tmdbApiKeyDirty && formData.tmdbApiKey) {
+        payload.tmdb_api_key = formData.tmdbApiKey;
       }
-      if (fanartApiKeyDirty && fanartApiKey) {
-        payload.fanart_api_key = fanartApiKey;
+      if (fanartApiKeyDirty && formData.fanartApiKey) {
+        payload.fanart_api_key = formData.fanartApiKey;
       }
-      payload.ntfy_enabled = ntfyEnabled;
-      payload.ntfy_server_url = ntfyServerUrl;
-      payload.ntfy_topic = ntfyTopic;
+      payload.ntfy_enabled = formData.ntfyEnabled;
+      payload.ntfy_server_url = formData.ntfyServerUrl;
+      payload.ntfy_topic = formData.ntfyTopic;
       if (ntfyTokenDirty) {
-        payload.ntfy_token = ntfyToken;
+        payload.ntfy_token = formData.ntfyToken;
       }
-      payload.ui_sounds_enabled = soundsEnabled;
-      await updateSettings(payload);
+      payload.ui_sounds_enabled = formData.soundsEnabled;
+      await updateSettingsMutation.mutateAsync(payload);
       addNotification("Settings saved", "success");
-      applySoundsEnabled(soundsEnabled);
+      applySoundsEnabled(formData.soundsEnabled);
       await loadSettings();
 
       // If the global artwork source changed, trigger a background refresh
@@ -336,22 +354,28 @@ export function SettingsPage() {
             addNotification("Background artwork refresh failed: " + errorMessage(err), "error");
           });
       }
+      setSavedFlash(true);
+      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+      savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
     } catch (err: unknown) {
       addNotification("Failed to save settings: " + errorMessage(err), "error");
     }
     setSaving(false);
-    setSavedFlash(true);
-    if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
-    savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
   };
+
+  const handleSave = handleSubmit(onSubmit);
+
+  // ── Test connection ──
 
   const handleTestConnection = async () => {
     if (testPhase !== "idle") return;
+    const sonarrUrl = getValues("sonarrUrl");
     if (!sonarrUrl) {
       addNotification("Enter a Sonarr URL first", "error");
       setTestPhase("error");
       return;
     }
+    const urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
     if (!urlValid) {
       addNotification("URL must start with http:// or https://", "error");
       setTestPhase("error");
@@ -395,12 +419,13 @@ export function SettingsPage() {
 
   const handleTestNtfy = async () => {
     if (ntfyTestPhase !== "idle") return;
-    if (!ntfyServerUrl) {
+    const formData = getValues();
+    if (!formData.ntfyServerUrl) {
       addNotification("Enter a server URL first", "error");
       setNtfyTestPhase("error");
       return;
     }
-    if (!ntfyTopic) {
+    if (!formData.ntfyTopic) {
       addNotification("Enter a topic first", "error");
       setNtfyTestPhase("error");
       return;
@@ -410,9 +435,9 @@ export function SettingsPage() {
     const minDelay = 1100;
     try {
       const result = await testNtfyConnection({
-        server_url: ntfyServerUrl,
-        topic: ntfyTopic,
-        token: ntfyTokenDirty ? ntfyToken : undefined,
+        server_url: formData.ntfyServerUrl,
+        topic: formData.ntfyTopic,
+        token: ntfyTokenDirty ? formData.ntfyToken : undefined,
       });
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
@@ -450,33 +475,72 @@ export function SettingsPage() {
               <div className="skeleton-text-lg" style={{ width: 120 }} />
               <div className="skeleton-text" style={{ width: 280 }} />
             </div>
-            <div className="skeleton" style={{ width: 110, height: 36, borderRadius: "var(--radius-inner)" }} />
+            <div
+              className="skeleton"
+              style={{ width: 110, height: 36, borderRadius: "var(--radius-inner)" }}
+            />
           </div>
           {/* Skeleton connection card */}
-          <div className="skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
+          <div
+            className="skeleton-card"
+            style={{
+              padding: "var(--spacing-4)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--spacing-3)",
+            }}
+          >
             <div className="skeleton-text-lg" style={{ width: 120 }} />
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
               <div className="skeleton-text" style={{ width: 80 }} />
-              <div className="skeleton" style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }} />
+              <div
+                className="skeleton"
+                style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }}
+              />
               <div className="skeleton-text" style={{ width: 60 }} />
-              <div className="skeleton" style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }} />
+              <div
+                className="skeleton"
+                style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }}
+              />
             </div>
           </div>
           {/* Skeleton sync card */}
-          <div className="skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
+          <div
+            className="skeleton-card"
+            style={{
+              padding: "var(--spacing-4)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--spacing-3)",
+            }}
+          >
             <div className="skeleton-text-lg" style={{ width: 80 }} />
             <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
               <div className="skeleton-text" style={{ width: 100 }} />
-              <div className="skeleton" style={{ width: 160, height: 36, borderRadius: "var(--radius-inner)" }} />
+              <div
+                className="skeleton"
+                style={{ width: 160, height: 36, borderRadius: "var(--radius-inner)" }}
+              />
             </div>
           </div>
           {/* Skeleton notifications card */}
-          <div className="skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
+          <div
+            className="skeleton-card"
+            style={{
+              padding: "var(--spacing-4)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--spacing-3)",
+            }}
+          >
             <div className="skeleton-text-lg" style={{ width: 110 }} />
             <div className="skeleton" style={{ width: 44, height: 24, borderRadius: 12 }} />
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
               <div className="skeleton-text" style={{ width: 70 }} />
-              <div className="skeleton" style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }} />
+              <div
+                className="skeleton"
+                style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }}
+              />
             </div>
           </div>
         </VStack>
@@ -500,7 +564,9 @@ export function SettingsPage() {
             <Button
               label={savedFlash ? "Saved" : saving ? "Saving..." : "Save settings"}
               variant="primary"
-              icon={savedFlash ? <Check size={14} color="var(--color-success)" /> : <Save size={16} />}
+              icon={
+                savedFlash ? <Check size={14} color="var(--color-success)" /> : <Save size={16} />
+              }
               onClick={handleSave}
               isDisabled={saving || !settingsDirty}
               isLoading={saving}
@@ -512,363 +578,398 @@ export function SettingsPage() {
 
         {/* Connection */}
         <Card variant="muted" padding={4}>
-        <VStack gap={3}>
-          <Heading level={2}>Connection</Heading>
-          <Divider />
+          <VStack gap={3}>
+            <Heading level={2}>Connection</Heading>
+            <Divider />
 
-          <SettingsRow
-            label="Sonarr URL"
-            description="Base URL of your Sonarr instance."
-            error={sonarrUrl && !urlValid ? "URL must start with http:// or https://" : undefined}
-          >
-            <TextInput
+            <SettingsRow
               label="Sonarr URL"
-              value={sonarrUrl}
-              onChange={handleUrlInput}
-              placeholder="http://localhost:8989"
-              isLabelHidden
-              width={320}
-            />
-          </SettingsRow>
-          <Divider />
-
-          <SettingsRow
-            label="API key"
-            description="Found in Sonarr under Settings, General."
-          >
-            <HStack gap={2} align="center">
-              <TextInput
-                label="API key"
-                type={apiKeyVisible ? "text" : "password"}
-                value={sonarrApiKey}
-                onChange={handleApiKeyInput}
-                placeholder={hasSavedApiKey ? "Saved API key" : "Your Sonarr API key"}
-                isLabelHidden
-                width={280}
+              description="Base URL of your Sonarr instance."
+              error={errors.sonarrUrl?.message}
+            >
+              <Controller
+                control={control}
+                name="sonarrUrl"
+                render={({ field }) => (
+                  <TextInput
+                    label="Sonarr URL"
+                    value={field.value}
+                    onChange={(v) => {
+                      field.onChange(v);
+                      clearTestResult();
+                    }}
+                    placeholder="http://localhost:8989"
+                    isLabelHidden
+                    width={320}
+                  />
+                )}
               />
-              {(hasSavedApiKey || apiKeyDirty) && (
-                <Button
-                  label={apiKeyVisible ? "Hide" : "Show"}
-                  variant="ghost"
-                  isIconOnly
-                  icon={
-                    apiKeyVisible ? (
-                      <EyeOff size={16} />
-                    ) : (
-                      <Eye size={16} />
-                    )
-                  }
-                  onClick={toggleApiKeyVisibility}
-                  data-cuelume-toggle="whisper"
-                />
-              )}
-            </HStack>
-          </SettingsRow>
-          <Divider />
+            </SettingsRow>
+            <Divider />
 
-          <SettingsRow
-            label="Test connection"
-            description="Check that Mizu can reach Sonarr with the URL and API key above."
-          >
-            <Button
-              label={
-                testPhase === "connecting"
-                  ? "Testing"
-                  : testPhase === "success"
-                    ? "Connected"
-                    : testPhase === "error"
-                      ? "Retry"
-                      : "Test"
-              }
-              variant={
-                testPhase === "error"
-                  ? "destructive"
-                  : "secondary"
-              }
-              icon={
-                testPhase === "connecting" ? (
-                  <Spinner size="sm" />
-                ) : testPhase === "success" ? (
-                  <Check size={16} color="var(--color-on-success, #fff)" />
-                ) : testPhase === "error" ? (
-                  <AlertTriangle size={16} />
-                ) : (
-                  <Plug size={16} />
-                )
-              }
-              onClick={handleTestConnection}
-              isDisabled={!sonarrUrl || !urlValid}
-              className={testPhase !== "idle" ? "test-status-btn" : undefined}
-              data-test-success={testPhase === "success" ? "true" : undefined}
-              data-cuelume-press
-            />
-          </SettingsRow>
-        </VStack>
+            <SettingsRow label="API key" description="Found in Sonarr under Settings, General.">
+              <HStack gap={2} align="center">
+                <Controller
+                  control={control}
+                  name="sonarrApiKey"
+                  render={({ field }) => (
+                    <TextInput
+                      label="API key"
+                      type={apiKeyVisible ? "text" : "password"}
+                      value={field.value}
+                      onChange={(v) => {
+                        field.onChange(v);
+                        setApiKeyDirty(true);
+                        clearTestResult();
+                      }}
+                      placeholder={hasSavedApiKey ? "Saved API key" : "Your Sonarr API key"}
+                      isLabelHidden
+                      width={280}
+                    />
+                  )}
+                />
+                {(hasSavedApiKey || apiKeyDirty) && (
+                  <Button
+                    label={apiKeyVisible ? "Hide" : "Show"}
+                    variant="ghost"
+                    isIconOnly
+                    icon={apiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    onClick={toggleApiKeyVisibility}
+                    data-cuelume-toggle="whisper"
+                  />
+                )}
+              </HStack>
+            </SettingsRow>
+            <Divider />
+
+            <SettingsRow
+              label="Test connection"
+              description="Check that Mizu can reach Sonarr with the URL and API key above."
+            >
+              <Button
+                label={
+                  testPhase === "connecting"
+                    ? "Testing"
+                    : testPhase === "success"
+                      ? "Connected"
+                      : testPhase === "error"
+                        ? "Retry"
+                        : "Test"
+                }
+                variant={testPhase === "error" ? "destructive" : "secondary"}
+                icon={
+                  testPhase === "connecting" ? (
+                    <Spinner size="sm" />
+                  ) : testPhase === "success" ? (
+                    <Check size={16} color="var(--color-on-success, #fff)" />
+                  ) : testPhase === "error" ? (
+                    <AlertTriangle size={16} />
+                  ) : (
+                    <Plug size={16} />
+                  )
+                }
+                onClick={handleTestConnection}
+                isDisabled={!getValues("sonarrUrl") || !!errors.sonarrUrl}
+                className={testPhase !== "idle" ? "test-status-btn" : undefined}
+                data-test-success={testPhase === "success" ? "true" : undefined}
+                data-cuelume-press
+              />
+            </SettingsRow>
+          </VStack>
         </Card>
 
         {/* Sync */}
         <Card variant="muted" padding={4}>
-        <VStack gap={3}>
-          <Heading level={2}>Sync</Heading>
-          <Divider />
+          <VStack gap={3}>
+            <Heading level={2}>Sync</Heading>
+            <Divider />
 
-          <SettingsRow
-            label="Sync interval"
-            description="How often Mizu checks for episode changes and updates Sonarr."
-          >
-            <Selector
+            <SettingsRow
               label="Sync interval"
-              value={syncInterval}
-              options={syncIntervalOptions}
-              onChange={(v) => setSyncInterval(v as string)}
-              isLabelHidden
-              width={180}
-            />
-          </SettingsRow>
-          <Divider />
+              description="How often Mizu checks for episode changes and updates Sonarr."
+            >
+              <Controller
+                control={control}
+                name="syncInterval"
+                render={({ field }) => (
+                  <Selector
+                    label="Sync interval"
+                    value={field.value}
+                    options={syncIntervalOptions}
+                    onChange={(v) => field.onChange(v as string)}
+                    isLabelHidden
+                    width={180}
+                  />
+                )}
+              />
+            </SettingsRow>
+            <Divider />
 
-          {/* Multi-source artwork system */}
-          <SettingsRow
-            label="Artwork source"
-            description="Default provider for fetching show artwork. Images are downloaded and stored locally so browsing works offline."
-          >
-            <Selector
+            {/* Multi-source artwork system */}
+            <SettingsRow
               label="Artwork source"
-              value={artworkDefaultSource}
-              options={artworkSourceOptions}
-              onChange={(v) => setArtworkDefaultSource(v as string)}
-              isLabelHidden
-              width={220}
-            />
-          </SettingsRow>
-          <Divider />
-
-          <SettingsRow
-            label="TMDB API key"
-            description="Required for TMDB artwork. Get a free key at themoviedb.org."
-          >
-            <HStack gap={2} align="center">
-              <TextInput
-                label="TMDB API key"
-                type={tmdbApiKeyVisible ? "text" : "password"}
-                value={tmdbApiKey}
-                onChange={(v) => {
-                  setTmdbApiKey(v);
-                  setTmdbApiKeyDirty(true);
-                }}
-                placeholder={tmdbApiKeySet ? "Saved API key" : "Enter TMDB API key"}
-                isLabelHidden
-                width={260}
+              description="Default provider for fetching show artwork. Images are downloaded and stored locally so browsing works offline."
+            >
+              <Controller
+                control={control}
+                name="artworkDefaultSource"
+                render={({ field }) => (
+                  <Selector
+                    label="Artwork source"
+                    value={field.value}
+                    options={artworkSourceOptions}
+                    onChange={(v) => field.onChange(v as string)}
+                    isLabelHidden
+                    width={220}
+                  />
+                )}
               />
-              {(tmdbApiKeySet || tmdbApiKeyDirty) && (
-                <Button
-                  label={tmdbApiKeyVisible ? "Hide" : "Show"}
-                  variant="ghost"
-                  isIconOnly
-                  icon={tmdbApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                  onClick={() => {
-                    if (tmdbApiKeyVisible) {
-                      setTmdbApiKeyVisible(false);
-                      if (!tmdbApiKeyDirty && tmdbApiKeySet) setTmdbApiKey(savedTmdbApiKeyMasked);
-                    } else {
-                      if (!tmdbApiKeyDirty && tmdbApiKeySet) setTmdbApiKey(savedTmdbApiKeyFull);
-                      setTmdbApiKeyVisible(true);
-                    }
-                  }}
-                  data-cuelume-toggle="whisper"
-                />
-              )}
-            </HStack>
-          </SettingsRow>
-          <Divider />
+            </SettingsRow>
+            <Divider />
 
-          <SettingsRow
-            label="Fanart.tv API key"
-            description="Required for Fanart.tv artwork. Get a free key at fanart.tv."
-          >
-            <HStack gap={2} align="center">
-              <TextInput
-                label="Fanart.tv API key"
-                type={fanartApiKeyVisible ? "text" : "password"}
-                value={fanartApiKey}
-                onChange={(v) => {
-                  setFanartApiKey(v);
-                  setFanartApiKeyDirty(true);
-                }}
-                placeholder={fanartApiKeySet ? "Saved API key" : "Enter Fanart.tv API key"}
-                isLabelHidden
-                width={260}
+            <SettingsRow
+              label="TMDB API key"
+              description="Required for TMDB artwork. Get a free key at themoviedb.org."
+            >
+              <HStack gap={2} align="center">
+                <Controller
+                  control={control}
+                  name="tmdbApiKey"
+                  render={({ field }) => (
+                    <TextInput
+                      label="TMDB API key"
+                      type={tmdbApiKeyVisible ? "text" : "password"}
+                      value={field.value}
+                      onChange={(v) => {
+                        field.onChange(v);
+                        setTmdbApiKeyDirty(true);
+                      }}
+                      placeholder={tmdbApiKeySet ? "Saved API key" : "Enter TMDB API key"}
+                      isLabelHidden
+                      width={260}
+                    />
+                  )}
+                />
+                {(tmdbApiKeySet || tmdbApiKeyDirty) && (
+                  <Button
+                    label={tmdbApiKeyVisible ? "Hide" : "Show"}
+                    variant="ghost"
+                    isIconOnly
+                    icon={tmdbApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    onClick={toggleTmdbApiKeyVisibility}
+                    data-cuelume-toggle="whisper"
+                  />
+                )}
+              </HStack>
+            </SettingsRow>
+            <Divider />
+
+            <SettingsRow
+              label="Fanart.tv API key"
+              description="Required for Fanart.tv artwork. Get a free key at fanart.tv."
+            >
+              <HStack gap={2} align="center">
+                <Controller
+                  control={control}
+                  name="fanartApiKey"
+                  render={({ field }) => (
+                    <TextInput
+                      label="Fanart.tv API key"
+                      type={fanartApiKeyVisible ? "text" : "password"}
+                      value={field.value}
+                      onChange={(v) => {
+                        field.onChange(v);
+                        setFanartApiKeyDirty(true);
+                      }}
+                      placeholder={fanartApiKeySet ? "Saved API key" : "Enter Fanart.tv API key"}
+                      isLabelHidden
+                      width={260}
+                    />
+                  )}
+                />
+                {(fanartApiKeySet || fanartApiKeyDirty) && (
+                  <Button
+                    label={fanartApiKeyVisible ? "Hide" : "Show"}
+                    variant="ghost"
+                    isIconOnly
+                    icon={fanartApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    onClick={toggleFanartApiKeyVisibility}
+                    data-cuelume-toggle="whisper"
+                  />
+                )}
+              </HStack>
+            </SettingsRow>
+            <Divider />
+
+            <SettingsRow
+              label="AFL cache"
+              description={`${cacheCount} shows cached, refreshed ${formatCacheTime(cacheRefreshedAt)}.`}
+            >
+              <Button
+                label={refreshingCache ? "Refreshing..." : "Refresh"}
+                variant="secondary"
+                icon={<RefreshCw size={16} />}
+                onClick={handleRefreshCache}
+                isLoading={refreshingCache}
+                data-cuelume-press
               />
-              {(fanartApiKeySet || fanartApiKeyDirty) && (
-                <Button
-                  label={fanartApiKeyVisible ? "Hide" : "Show"}
-                  variant="ghost"
-                  isIconOnly
-                  icon={fanartApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                  onClick={() => {
-                    if (fanartApiKeyVisible) {
-                      setFanartApiKeyVisible(false);
-                      if (!fanartApiKeyDirty && fanartApiKeySet) setFanartApiKey(savedFanartApiKeyMasked);
-                    } else {
-                      if (!fanartApiKeyDirty && fanartApiKeySet) setFanartApiKey(savedFanartApiKeyFull);
-                      setFanartApiKeyVisible(true);
-                    }
-                  }}
-                  data-cuelume-toggle="whisper"
-                />
-              )}
-            </HStack>
-          </SettingsRow>
-          <Divider />
-
-          <SettingsRow
-            label="AFL cache"
-            description={`${cacheCount} shows cached, refreshed ${formatCacheTime(cacheRefreshedAt)}.`}
-          >
-            <Button
-              label={refreshingCache ? "Refreshing..." : "Refresh"}
-              variant="secondary"
-              icon={<RefreshCw size={16} />}
-              onClick={handleRefreshCache}
-              isLoading={refreshingCache}
-              data-cuelume-press
-            />
-          </SettingsRow>
-        </VStack>
+            </SettingsRow>
+          </VStack>
         </Card>
 
         {/* Notifications */}
         <Card variant="muted" padding={4}>
-        <VStack gap={3}>
-          <Heading level={2}>Notifications</Heading>
-          <Divider />
+          <VStack gap={3}>
+            <Heading level={2}>Notifications</Heading>
+            <Divider />
 
-          <SettingsRow
-            label="Enable notifications"
-            description="Get a push notification after each sync via ntfy.sh."
-          >
-            <Switch
+            <SettingsRow
               label="Enable notifications"
-              value={ntfyEnabled}
-              onChange={setNtfyEnabled}
-              isLabelHidden
-              data-cuelume-toggle
-            />
-          </SettingsRow>
-          <Divider />
-
-          <SettingsRow
-            label="Server URL"
-            description="ntfy server URL (self-hosted or public ntfy.sh)."
-          >
-            <TextInput
-              label="Server URL"
-              value={ntfyServerUrl}
-              onChange={setNtfyServerUrl}
-              placeholder="https://ntfy.sh"
-              isLabelHidden
-              width={320}
-            />
-          </SettingsRow>
-          <Divider />
-
-          <SettingsRow
-            label="Topic"
-            description="ntfy topic name to publish to."
-          >
-            <TextInput
-              label="Topic"
-              value={ntfyTopic}
-              onChange={setNtfyTopic}
-              placeholder="my-anime-sync"
-              isLabelHidden
-              width={320}
-            />
-          </SettingsRow>
-          <Divider />
-
-          <SettingsRow
-            label="Access token"
-            description="Optional — only needed if your ntfy server requires authentication."
-          >
-            <HStack gap={2} align="center">
-              <TextInput
-                label="Access token"
-                type="password"
-                value={ntfyToken}
-                onChange={(v) => {
-                  setNtfyToken(v);
-                  setNtfyTokenDirty(true);
-                }}
-                placeholder={ntfyTokenSet ? "Saved token" : "Enter access token"}
-                isLabelHidden
-                width={260}
+              description="Get a push notification after each sync via ntfy.sh."
+            >
+              <Controller
+                control={control}
+                name="ntfyEnabled"
+                render={({ field }) => (
+                  <Switch
+                    label="Enable notifications"
+                    value={field.value}
+                    onChange={field.onChange}
+                    isLabelHidden
+                    data-cuelume-toggle
+                  />
+                )}
               />
-              {ntfyTokenSet && !ntfyTokenDirty && (
-                <Badge variant="success" label="Token set" />
-              )}
-            </HStack>
-          </SettingsRow>
-          <Divider />
+            </SettingsRow>
+            <Divider />
 
-          <SettingsRow
-            label="Test notification"
-            description="Send a test notification to verify your configuration."
-          >
-            <Button
-              label={
-                ntfyTestPhase === "connecting"
-                  ? "Sending"
-                  : ntfyTestPhase === "success"
-                    ? "Sent"
-                    : ntfyTestPhase === "error"
-                      ? "Retry"
-                      : "Test"
-              }
-              variant={
-                ntfyTestPhase === "error"
-                  ? "destructive"
-                  : "secondary"
-              }
-              icon={
-                ntfyTestPhase === "connecting" ? (
-                  <Spinner size="sm" />
-                ) : ntfyTestPhase === "success" ? (
-                  <Check size={16} color="var(--color-on-success, #fff)" />
-                ) : ntfyTestPhase === "error" ? (
-                  <AlertTriangle size={16} />
-                ) : (
-                  <Plug size={16} />
-                )
-              }
-              onClick={handleTestNtfy}
-              isDisabled={!ntfyServerUrl || !ntfyTopic}
-              className={ntfyTestPhase !== "idle" ? "test-status-btn" : undefined}
-              data-test-success={ntfyTestPhase === "success" ? "true" : undefined}
-              data-cuelume-press
-            />
-          </SettingsRow>
-        </VStack>
+            <SettingsRow
+              label="Server URL"
+              description="ntfy server URL (self-hosted or public ntfy.sh)."
+            >
+              <Controller
+                control={control}
+                name="ntfyServerUrl"
+                render={({ field }) => (
+                  <TextInput
+                    label="Server URL"
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="https://ntfy.sh"
+                    isLabelHidden
+                    width={320}
+                  />
+                )}
+              />
+            </SettingsRow>
+            <Divider />
+
+            <SettingsRow label="Topic" description="ntfy topic name to publish to.">
+              <Controller
+                control={control}
+                name="ntfyTopic"
+                render={({ field }) => (
+                  <TextInput
+                    label="Topic"
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="my-anime-sync"
+                    isLabelHidden
+                    width={320}
+                  />
+                )}
+              />
+            </SettingsRow>
+            <Divider />
+
+            <SettingsRow
+              label="Access token"
+              description="Optional — only needed if your ntfy server requires authentication."
+            >
+              <HStack gap={2} align="center">
+                <Controller
+                  control={control}
+                  name="ntfyToken"
+                  render={({ field }) => (
+                    <TextInput
+                      label="Access token"
+                      type="password"
+                      value={field.value}
+                      onChange={(v) => {
+                        field.onChange(v);
+                        setNtfyTokenDirty(true);
+                      }}
+                      placeholder={ntfyTokenSet ? "Saved token" : "Enter access token"}
+                      isLabelHidden
+                      width={260}
+                    />
+                  )}
+                />
+                {ntfyTokenSet && !ntfyTokenDirty && <Badge variant="success" label="Token set" />}
+              </HStack>
+            </SettingsRow>
+            <Divider />
+
+            <SettingsRow
+              label="Test notification"
+              description="Send a test notification to verify your configuration."
+            >
+              <Button
+                label={
+                  ntfyTestPhase === "connecting"
+                    ? "Sending"
+                    : ntfyTestPhase === "success"
+                      ? "Sent"
+                      : ntfyTestPhase === "error"
+                        ? "Retry"
+                        : "Test"
+                }
+                variant={ntfyTestPhase === "error" ? "destructive" : "secondary"}
+                icon={
+                  ntfyTestPhase === "connecting" ? (
+                    <Spinner size="sm" />
+                  ) : ntfyTestPhase === "success" ? (
+                    <Check size={16} color="var(--color-on-success, #fff)" />
+                  ) : ntfyTestPhase === "error" ? (
+                    <AlertTriangle size={16} />
+                  ) : (
+                    <Plug size={16} />
+                  )
+                }
+                onClick={handleTestNtfy}
+                isDisabled={!getValues("ntfyServerUrl") || !getValues("ntfyTopic")}
+                className={ntfyTestPhase !== "idle" ? "test-status-btn" : undefined}
+                data-test-success={ntfyTestPhase === "success" ? "true" : undefined}
+                data-cuelume-press
+              />
+            </SettingsRow>
+          </VStack>
         </Card>
 
         {/* Interface */}
         <Card variant="muted" padding={4}>
-        <VStack gap={3}>
-          <Heading level={2}>Interface</Heading>
-          <Divider />
-          <SettingsRow
-            label="Interaction sounds"
-            description="Play subtle audio cues on hover, press, toggle, and notifications."
-          >
-            <Switch
-              label="Enable interaction sounds"
-              value={soundsEnabled}
-              onChange={setSoundsEnabledState}
-              isLabelHidden
-              data-cuelume-toggle
-            />
-          </SettingsRow>
-        </VStack>
+          <VStack gap={3}>
+            <Heading level={2}>Interface</Heading>
+            <Divider />
+            <SettingsRow
+              label="Interaction sounds"
+              description="Play subtle audio cues on hover, press, toggle, and notifications."
+            >
+              <Controller
+                control={control}
+                name="soundsEnabled"
+                render={({ field }) => (
+                  <Switch
+                    label="Enable interaction sounds"
+                    value={field.value}
+                    onChange={field.onChange}
+                    isLabelHidden
+                    data-cuelume-toggle
+                  />
+                )}
+              />
+            </SettingsRow>
+          </VStack>
         </Card>
 
         {/* Defaults */}
@@ -882,29 +983,47 @@ export function SettingsPage() {
           </VStack>
 
           <Grid columns={{ minWidth: 240, max: 3 }} gap={4} align="start">
-            <TrackingRuleCard
-              variant="green"
-              label="Canon"
-              description="Main plot episodes"
-              switchLabel="Track canon"
-              value={trackAnimeCanonDefault}
-              onChange={setTrackAnimeCanonDefault}
+            <Controller
+              control={control}
+              name="trackAnimeCanonDefault"
+              render={({ field }) => (
+                <TrackingRuleCard
+                  variant="green"
+                  label="Canon"
+                  description="Main plot episodes"
+                  switchLabel="Track canon"
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
-            <TrackingRuleCard
-              variant="yellow"
-              label="Mixed"
-              description="Mix of canon and filler"
-              switchLabel="Track mixed"
-              value={trackMixedDefault}
-              onChange={setTrackMixedDefault}
+            <Controller
+              control={control}
+              name="trackMixedDefault"
+              render={({ field }) => (
+                <TrackingRuleCard
+                  variant="yellow"
+                  label="Mixed"
+                  description="Mix of canon and filler"
+                  switchLabel="Track mixed"
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
-            <TrackingRuleCard
-              variant="red"
-              label="Filler"
-              description="Skippable, no plot impact"
-              switchLabel="Track filler"
-              value={trackFillerDefault}
-              onChange={setTrackFillerDefault}
+            <Controller
+              control={control}
+              name="trackFillerDefault"
+              render={({ field }) => (
+                <TrackingRuleCard
+                  variant="red"
+                  label="Filler"
+                  description="Skippable, no plot impact"
+                  switchLabel="Track filler"
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
           </Grid>
         </VStack>

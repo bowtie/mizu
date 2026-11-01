@@ -5,6 +5,5 @@
  * Generated: 2026-07-28T05:20:54.665Z
  */
 
-/// <reference path="./tokyo-night.variants.d.ts" />
-import type { DefinedTheme } from '@astryxdesign/core/theme';
+import type { DefinedTheme } from "@astryxdesign/core/theme";
 export declare const tokyoNightTheme: DefinedTheme;

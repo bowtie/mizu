@@ -3,6 +3,8 @@ package scraper
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"mizu/internal/models"
 )
 
@@ -22,9 +24,7 @@ func TestParseEpisodeType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := parseEpisodeType(tt.input); got != tt.want {
-				t.Fatalf("parseEpisodeType(%q) = %q, want %q", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, parseEpisodeType(tt.input))
 		})
 	}
 }

@@ -26,6 +26,11 @@ type Manager struct {
 	artDir     string
 	httpClient *http.Client
 	db         *database.DB
+
+	// Per-mapping locks prevent concurrent FetchAndStore calls for the
+	// same mapping from corrupting each other's file writes.
+	mapMu   sync.Mutex
+	mapLocks map[int64]*sync.Mutex
 }
 
 // NewManager creates a Manager that stores images under artDir.
@@ -36,7 +41,8 @@ func NewManager(artDir string, db *database.DB) *Manager {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		db: db,
+		db:       db,
+		mapLocks: make(map[int64]*sync.Mutex),
 	}
 }
 
@@ -78,6 +84,18 @@ func (m *Manager) Providers() []ProviderInfo {
 	return result
 }
 
+// lockMapping returns a per-mapping mutex, creating it if needed.
+// This prevents concurrent FetchAndStore calls for the same mapping
+// from interleaving file operations (delete + create + download).
+func (m *Manager) lockMapping(mappingID int64) *sync.Mutex {
+	m.mapMu.Lock()
+	defer m.mapMu.Unlock()
+	if m.mapLocks[mappingID] == nil {
+		m.mapLocks[mappingID] = &sync.Mutex{}
+	}
+	return m.mapLocks[mappingID]
+}
+
 // ResolveSource returns the effective source for a mapping: the per-show
 // override if set, otherwise the global default.
 func (m *Manager) ResolveSource(override, defaultSource string) string {
@@ -92,6 +110,12 @@ func (m *Manager) ResolveSource(override, defaultSource string) string {
 // empty source skips provider fetch — the frontend will fall back to Sonarr
 // image URLs.
 func (m *Manager) FetchAndStore(ctx context.Context, mappingID int64, series models.SonarrSeries, source string) (*FetchResult, error) {
+	// Lock per-mapping to prevent concurrent file operations from
+	// corrupting each other (e.g. background artwork fetch overlapping
+	// with a manual refresh for the same show).
+	m.lockMapping(mappingID).Lock()
+	defer m.lockMapping(mappingID).Unlock()
+
 	art, err := m.fetchFromSource(ctx, series, source)
 	if err != nil {
 		return nil, err
@@ -265,10 +289,10 @@ type RefreshResult struct {
 
 // RefreshAllSummary is the aggregate result returned by RefreshAll.
 type RefreshAllSummary struct {
-	Total     int            `json:"total"`
-	Succeeded int            `json:"succeeded"`
-	Failed    int            `json:"failed"`
-	NotFound  int            `json:"not_found"`
+	Total     int             `json:"total"`
+	Succeeded int             `json:"succeeded"`
+	Failed    int             `json:"failed"`
+	NotFound  int             `json:"not_found"`
 	Results   []RefreshResult `json:"results"`
 }
 

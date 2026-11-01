@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestIsValidFillerAction(t *testing.T) {
 	tests := []struct {
@@ -15,9 +19,7 @@ func TestIsValidFillerAction(t *testing.T) {
 		{"banana", false},
 	}
 	for _, tt := range tests {
-		if got := IsValidFillerAction(tt.value); got != tt.want {
-			t.Errorf("IsValidFillerAction(%q) = %v, want %v", tt.value, got, tt.want)
-		}
+		assert.Equal(t, tt.want, IsValidFillerAction(tt.value))
 	}
 }
 
@@ -38,8 +40,6 @@ func TestIsValidSonarrMonitorMode(t *testing.T) {
 		{"everything", false},
 	}
 	for _, tt := range tests {
-		if got := IsValidSonarrMonitorMode(tt.value); got != tt.want {
-			t.Errorf("IsValidSonarrMonitorMode(%q) = %v, want %v", tt.value, got, tt.want)
-		}
+		assert.Equal(t, tt.want, IsValidSonarrMonitorMode(tt.value))
 	}
 }

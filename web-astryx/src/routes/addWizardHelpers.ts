@@ -6,7 +6,7 @@ import type { AFLMatch, SelectOption, SonarrSeries } from "../lib/types";
 
 // ── Constants ──
 
-const START_FROM_BEGINNING = "from_beginning";
+export const START_FROM_BEGINNING = "from_beginning";
 export const START_FROM_CURRENT = "from_current_progress";
 export const ADD_STEP_SERIES = "series";
 export const ADD_STEP_FALLBACK_AFL = "fallback_afl";
@@ -140,6 +140,7 @@ export function addWizardReducer(state: AddWizardState, action: AddWizardAction)
         addOutcome: null,
         selectedAfl: null,
         selectedFallbackAfl: null,
+        selectedSonarr: null,
         selectedSonarrLookup: null,
         sonarrLookupResults: [],
         fallbackAflResults: [],

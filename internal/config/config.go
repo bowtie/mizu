@@ -56,6 +56,9 @@ type Config struct {
 
 	// Logging
 	LogLevel string
+
+	// Interface
+	UISoundsEnabled bool
 }
 
 // RLock acquires a read lock on the config. Callers must call RUnlock when done.
@@ -102,6 +105,7 @@ func DefaultConfig() *Config {
 		TMDBAPIKey:                "",
 		FanartAPIKey:              "",
 		LogLevel:                  "info",
+		UISoundsEnabled:           true,
 	}
 }
 

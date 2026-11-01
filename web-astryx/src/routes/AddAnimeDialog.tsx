@@ -447,9 +447,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
               data-state={isCurrent ? "current" : isPast ? "past" : "future"}
               aria-current={isCurrent ? "step" : undefined}
             >
-              <span className="wizard-step-dot">
-                {isPast ? <Check size={12} /> : i + 1}
-              </span>
+              <span className="wizard-step-dot">{isPast ? <Check size={12} /> : i + 1}</span>
               <span className="wizard-step-label">{step.label}</span>
             </li>
           );
@@ -467,356 +465,368 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
 
       {/* Step content — keyed div re-mounts on step change for fade-in animation */}
       <div key={w.addStep} className="wizard-step-content">
-      {w.addStep === ADD_STEP_SERIES &&
-        (w.sonarrLoading ? (
-          <VStack gap={3} hAlign="center" padding={6}>
-            <Spinner size="lg" label="Loading available Sonarr anime" />
-          </VStack>
-        ) : allSeries.length === 0 ? (
-          <EmptyState
-            title="No anime found in Sonarr"
-            description="Sonarr returned no anime series for this library."
-            icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
-          />
-        ) : (
+        {w.addStep === ADD_STEP_SERIES &&
+          (w.sonarrLoading ? (
+            <VStack gap={3} hAlign="center" padding={6}>
+              <Spinner size="lg" label="Loading available Sonarr anime" />
+            </VStack>
+          ) : allSeries.length === 0 ? (
+            <EmptyState
+              title="No anime found in Sonarr"
+              description="Sonarr returned no anime series for this library."
+              icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
+            />
+          ) : (
+            <VStack gap={4}>
+              <TextInput
+                label="Search"
+                value={w.seriesQuery}
+                onChange={(v) => dispatch({ type: "SET", payload: { seriesQuery: v } })}
+                placeholder="Search Sonarr anime"
+                startIcon={Search}
+              />
+              {filteredSeriesLibrary.length === 0 ? (
+                <EmptyState
+                  title="No anime match that search"
+                  description="Try a different title, year, or jump into the cached AFL list and add it from there."
+                  icon={<Icon icon={Search} size="lg" color="secondary" />}
+                  actions={
+                    <Button
+                      label="Not in Sonarr? Search AFL and add to Sonarr"
+                      variant="secondary"
+                      icon={<Search size={16} />}
+                      onClick={() => goToFallbackAflStep(w.seriesQuery.trim())}
+                      data-cuelume-press
+                    />
+                  }
+                />
+              ) : (
+                <List hasDividers className="wizard-list">
+                  {filteredSeriesLibrary.map((series) => {
+                    const seriesMapped = mappedSeriesIds.has(series.id);
+                    const manualPending = !!series.manualMatchPending;
+                    const isSelected = w.selectedSonarr?.id === series.id;
+                    return (
+                      <ListItem
+                        key={series.id}
+                        label={series.title}
+                        description={`${series.year || "Anime"}${series.statistics?.episodeCount ? ` · ${series.statistics.episodeCount} eps` : ""}${manualPending ? " · Needs match" : seriesMapped ? " · Already added" : ""}`}
+                        onClick={() => {
+                          if (seriesMapped) {
+                            openExistingMapping(series.id);
+                            return;
+                          }
+                          dispatch({ type: "SET", payload: { selectedSonarr: series } });
+                        }}
+                        startContent={
+                          posterUrl(series) ? (
+                            <div className="wizard-poster-wrap">
+                              <div className="wizard-poster-placeholder" />
+                              <img
+                                src={posterUrl(series)}
+                                alt=""
+                                loading="lazy"
+                                className="wizard-poster-thumb"
+                                onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                              />
+                            </div>
+                          ) : (
+                            <div className="wizard-poster-wrap">
+                              <div className="wizard-poster-placeholder" />
+                            </div>
+                          )
+                        }
+                        endContent={
+                          seriesMapped ? (
+                            <Text type="supporting">Open</Text>
+                          ) : manualPending ? (
+                            <Text type="supporting" color="accent">
+                              Match
+                            </Text>
+                          ) : isSelected ? (
+                            <Check size={16} color="var(--color-accent)" />
+                          ) : undefined
+                        }
+                      />
+                    );
+                  })}
+                </List>
+              )}
+              {w.selectedSonarr && !mappedSeriesIds.has(w.selectedSonarr.id) && (
+                <Button
+                  label="Continue"
+                  variant="primary"
+                  onClick={goToMatchStep}
+                  data-cuelume-press
+                />
+              )}
+            </VStack>
+          ))}
+
+        {w.addStep === ADD_STEP_FALLBACK_AFL && (
           <VStack gap={4}>
             <TextInput
-              label="Search"
-              value={w.seriesQuery}
-              onChange={(v) => dispatch({ type: "SET", payload: { seriesQuery: v } })}
-              placeholder="Search Sonarr anime"
-              startIcon={Search}
+              label="Cached AFL title"
+              value={w.fallbackAflQuery}
+              onChange={(v) => {
+                dispatch({ type: "SET", payload: { fallbackAflQuery: v } });
+                scheduleFallbackAflFilter();
+              }}
+              placeholder="Filter cached AnimeFillerList titles"
             />
-            {filteredSeriesLibrary.length === 0 ? (
+            {w.fallbackAflLoading ? (
+              <VStack gap={3} hAlign="center" padding={6}>
+                <Spinner size="lg" label="Loading cached AnimeFillerList titles" />
+              </VStack>
+            ) : w.fallbackAflResults.length === 0 ? (
               <EmptyState
-                title="No anime match that search"
-                description="Try a different title, year, or jump into the cached AFL list and add it from there."
+                title="No cached AFL titles found"
+                description="Try another filter or refresh the AFL cache in Settings if this anime is new."
                 icon={<Icon icon={Search} size="lg" color="secondary" />}
-                actions={
-                  <Button
-                    label="Not in Sonarr? Search AFL and add to Sonarr"
-                    variant="secondary"
-                    icon={<Search size={16} />}
-                    onClick={() => goToFallbackAflStep(w.seriesQuery.trim())}
-                    data-cuelume-press
-                  />
-                }
               />
             ) : (
               <List hasDividers className="wizard-list">
-                {filteredSeriesLibrary.map((series) => {
-                  const seriesMapped = mappedSeriesIds.has(series.id);
-                  const manualPending = !!series.manualMatchPending;
-                  const isSelected = w.selectedSonarr?.id === series.id;
+                {w.fallbackAflResults.map((result) => {
+                  const isSelected = w.selectedFallbackAfl?.slug === result.slug;
                   return (
                     <ListItem
-                      key={series.id}
-                      label={series.title}
-                      description={`${series.year || "Anime"}${series.statistics?.episodeCount ? ` · ${series.statistics.episodeCount} eps` : ""}${manualPending ? " · Needs match" : seriesMapped ? " · Already added" : ""}`}
-                      onClick={() => {
-                        if (seriesMapped) {
-                          openExistingMapping(series.id);
-                          return;
-                        }
-                        dispatch({ type: "SET", payload: { selectedSonarr: series } });
-                      }}
-                      startContent={
-                        posterUrl(series) ? (
-                          <div className="wizard-poster-wrap">
-                            <div className="wizard-poster-placeholder" />
-                            <img
-                              src={posterUrl(series)}
-                              alt=""
-                              loading="lazy"
-                              className="wizard-poster-thumb"
-                              onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
-                            />
-                          </div>
-                        ) : (
-                          <div className="wizard-poster-wrap">
-                            <div className="wizard-poster-placeholder" />
-                          </div>
-                        )
+                      key={result.slug}
+                      label={result.title || ""}
+                      onClick={() =>
+                        dispatch({ type: "SET", payload: { selectedFallbackAfl: result } })
                       }
                       endContent={
-                        seriesMapped ? (
-                          <Text type="supporting">Open</Text>
-                        ) : manualPending ? (
-                          <Text type="supporting" color="accent">
-                            Match
-                          </Text>
-                        ) : isSelected ? (
-                          <Check size={16} color="var(--color-accent)" />
-                        ) : undefined
+                        isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined
                       }
                     />
                   );
                 })}
               </List>
             )}
-            {w.selectedSonarr && !mappedSeriesIds.has(w.selectedSonarr.id) && (
-              <Button label="Continue" variant="primary" onClick={goToMatchStep} data-cuelume-press />
-            )}
-          </VStack>
-        ))}
-
-      {w.addStep === ADD_STEP_FALLBACK_AFL && (
-        <VStack gap={4}>
-          <TextInput
-            label="Cached AFL title"
-            value={w.fallbackAflQuery}
-            onChange={(v) => {
-              dispatch({ type: "SET", payload: { fallbackAflQuery: v } });
-              scheduleFallbackAflFilter();
-            }}
-            placeholder="Filter cached AnimeFillerList titles"
-          />
-          {w.fallbackAflLoading ? (
-            <VStack gap={3} hAlign="center" padding={6}>
-              <Spinner size="lg" label="Loading cached AnimeFillerList titles" />
-            </VStack>
-          ) : w.fallbackAflResults.length === 0 ? (
-            <EmptyState
-              title="No cached AFL titles found"
-              description="Try another filter or refresh the AFL cache in Settings if this anime is new."
-              icon={<Icon icon={Search} size="lg" color="secondary" />}
-            />
-          ) : (
-            <List hasDividers className="wizard-list">
-              {w.fallbackAflResults.map((result) => {
-                const isSelected = w.selectedFallbackAfl?.slug === result.slug;
-                return (
-                  <ListItem
-                    key={result.slug}
-                    label={result.title || ""}
-                    onClick={() =>
-                      dispatch({ type: "SET", payload: { selectedFallbackAfl: result } })
-                    }
-                    endContent={
-                      isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined
-                    }
-                  />
-                );
-              })}
-            </List>
-          )}
-          {w.selectedFallbackAfl && (
-            <Button
-              label="Continue to Sonarr lookup"
-              variant="primary"
-              onClick={goToFallbackSonarrStep}
-              data-cuelume-press
-            />
-          )}
-        </VStack>
-      )}
-
-      {w.addStep === ADD_STEP_FALLBACK_SONARR && (
-        <VStack gap={4}>
-          <TextInput
-            label="Sonarr lookup"
-            value={w.sonarrLookupQuery}
-            onChange={(v) => dispatch({ type: "SET", payload: { sonarrLookupQuery: v } })}
-            placeholder="Search Sonarr for series to add"
-            startIcon={Search}
-          />
-          <Button
-            label="Search Sonarr"
-            variant="secondary"
-            onClick={() => loadSonarrLookupResults()}
-            isLoading={w.sonarrLookupLoading}
-            data-cuelume-press
-          />
-          {w.sonarrLookupResults.length > 0 && (
-            <List hasDividers className="wizard-list">
-              {w.sonarrLookupResults.map((series) => {
-                const isSelected = w.selectedSonarrLookup?.id === series.id;
-                return (
-                  <ListItem
-                    key={series.id}
-                    label={series.title}
-                    description={String(series.year || "Anime")}
-                    onClick={() =>
-                      dispatch({ type: "SET", payload: { selectedSonarrLookup: series } })
-                    }
-                    endContent={
-                      isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined
-                    }
-                  />
-                );
-              })}
-            </List>
-          )}
-          {w.selectedSonarrLookup && (
-            <Button
-              label="Add to Sonarr and match"
-              variant="primary"
-              onClick={handleAddSelectedSonarrLookup}
-              isLoading={w.sonarrAdding}
-              data-cuelume-press
-            />
-          )}
-        </VStack>
-      )}
-
-      {(w.addStep === ADD_STEP_MATCH || w.addStep === ADD_STEP_UNSAFE_MATCH) && (
-        <VStack gap={4}>
-          {w.matchLoading ? (
-            <VStack gap={3} hAlign="center" padding={6}>
-              <Spinner size="lg" label="Loading AFL suggestions" />
-            </VStack>
-          ) : (
-            <>
-              {w.manualSearchVisible && (
-                <VStack gap={2}>
-                  <TextInput
-                    label="Manual AFL search"
-                    value={w.manualQuery}
-                    onChange={(v) => dispatch({ type: "SET", payload: { manualQuery: v } })}
-                    placeholder="Search AnimeFillerList"
-                    startIcon={Search}
-                  />
-                  <Button
-                    label="Search"
-                    variant="secondary"
-                    onClick={handleManualSearch}
-                    isLoading={w.manualSearching}
-                    data-cuelume-press
-                  />
-                </VStack>
-              )}
-              {w.displayedMatches.length > 0 ? (
-                <List hasDividers className="wizard-list">
-                  {w.displayedMatches.map((match) => {
-                    const isSelected = matchSlug(w.selectedAfl) === matchSlug(match);
-                    const unsafe = isUnsafeMatch(match);
-                    return (
-                      <ListItem
-                        key={matchSlug(match)}
-                        label={matchTitle(match)}
-                        description={unsafe ? "Needs confirmation" : undefined}
-                        onClick={() => dispatch({ type: "SET", payload: { selectedAfl: match } })}
-                        endContent={
-                          <HStack gap={2} align="center">
-                            {match.confidence != null && (
-                              <Text type="supporting" hasTabularNumbers>
-                                {Math.round(match.confidence * 100)}%
-                              </Text>
-                            )}
-                            {isSelected && <Check size={16} color="var(--color-accent)" />}
-                          </HStack>
-                        }
-                      />
-                    );
-                  })}
-                </List>
-              ) : (
-                !w.manualSearchVisible && (
-                  <EmptyState
-                    title="No AFL matches"
-                    description="Try a manual search above."
-                    icon={<Icon icon={Search} size="lg" color="secondary" />}
-                  />
-                )
-              )}
-
-              {/* Tracking rules */}
-              <Divider />
-              <Card variant="muted" padding={4}>
-                <VStack gap={3}>
-                  <Heading level={3}>Tracking rules</Heading>
-                  <Grid columns={{ minWidth: 240 }} gap={3}>
-                    <TrackingRuleCard
-                      variant="red"
-                      label="Filler"
-                      description="Skippable, no plot impact"
-                      switchLabel="Track filler"
-                      value={w.addTrackFiller}
-                      onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
-                    />
-                    <TrackingRuleCard
-                      variant="yellow"
-                      label="Mixed"
-                      description="Mix of canon and filler"
-                      switchLabel="Track mixed canon"
-                      value={w.addTrackMixed}
-                      onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
-                    />
-                    <TrackingRuleCard
-                      variant="green"
-                      label="Canon"
-                      description="Main plot episodes"
-                      switchLabel="Track anime canon"
-                      value={w.addTrackAnimeCanon}
-                      onChange={(v) => dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })}
-                    />
-                  </Grid>
-                  <Selector
-                    label="Start tracking from"
-                    options={startModeOptions}
-                    value={w.addStartMode}
-                    onChange={(v) => dispatch({ type: "SET", payload: { addStartMode: v } })}
-                  />
-                </VStack>
-              </Card>
-
-              {w.addStep === ADD_STEP_UNSAFE_MATCH ? (
-                <Button
-                  label="Confirm match"
-                  variant="primary"
-                  onClick={handleConfirmMatch}
-                  isLoading={w.confirming}
-                  data-cuelume-press
-                />
-              ) : (
-                <HStack gap={2}>
-                  <Button
-                    label="Keep Sonarr only"
-                    variant="secondary"
-                    onClick={handleKeepSonarrOnly}
-                    data-cuelume-press
-                  />
-                  <Button
-                    label="Confirm match"
-                    variant="primary"
-                    onClick={handlePrimaryMatchAction}
-                    isLoading={w.confirming}
-                    data-cuelume-press
-                  />
-                </HStack>
-              )}
-            </>
-          )}
-        </VStack>
-      )}
-
-      {w.addStep === ADD_STEP_POST_ADD && (
-        <VStack gap={4} hAlign="center" padding={6} className="wizard-success">
-          <div className="wizard-success-icon">
-            <Check size={32} color="var(--color-success)" />
-          </div>
-          <Heading level={3}>{w.addOutcome?.title}</Heading>
-          <Text type="supporting">
-            {w.addOutcome?.type === "mapping_created"
-              ? "Now tracked by Mizu."
-              : "In Sonarr now, but still needs a safe AFL mapping before Mizu can track it."}
-          </Text>
-          <HStack gap={2}>
-            {w.addOutcome?.mappingId && (
+            {w.selectedFallbackAfl && (
               <Button
-                label="Open anime"
+                label="Continue to Sonarr lookup"
                 variant="primary"
-                onClick={() => {
-                  dispatch({ type: "SET", payload: { showAddModal: false } });
-                  openShow(w.addOutcome!.mappingId!);
-                }}
+                onClick={goToFallbackSonarrStep}
                 data-cuelume-press
               />
             )}
-            <Button label="Add another" variant="secondary" onClick={() => returnToSeriesStep()} data-cuelume-press />
-          </HStack>
-        </VStack>
-      )}
+          </VStack>
+        )}
+
+        {w.addStep === ADD_STEP_FALLBACK_SONARR && (
+          <VStack gap={4}>
+            <TextInput
+              label="Sonarr lookup"
+              value={w.sonarrLookupQuery}
+              onChange={(v) => dispatch({ type: "SET", payload: { sonarrLookupQuery: v } })}
+              placeholder="Search Sonarr for series to add"
+              startIcon={Search}
+            />
+            <Button
+              label="Search Sonarr"
+              variant="secondary"
+              onClick={() => loadSonarrLookupResults()}
+              isLoading={w.sonarrLookupLoading}
+              data-cuelume-press
+            />
+            {w.sonarrLookupResults.length > 0 && (
+              <List hasDividers className="wizard-list">
+                {w.sonarrLookupResults.map((series) => {
+                  const isSelected = w.selectedSonarrLookup?.id === series.id;
+                  return (
+                    <ListItem
+                      key={series.id}
+                      label={series.title}
+                      description={String(series.year || "Anime")}
+                      onClick={() =>
+                        dispatch({ type: "SET", payload: { selectedSonarrLookup: series } })
+                      }
+                      endContent={
+                        isSelected ? <Check size={16} color="var(--color-accent)" /> : undefined
+                      }
+                    />
+                  );
+                })}
+              </List>
+            )}
+            {w.selectedSonarrLookup && (
+              <Button
+                label="Add to Sonarr and match"
+                variant="primary"
+                onClick={handleAddSelectedSonarrLookup}
+                isLoading={w.sonarrAdding}
+                data-cuelume-press
+              />
+            )}
+          </VStack>
+        )}
+
+        {(w.addStep === ADD_STEP_MATCH || w.addStep === ADD_STEP_UNSAFE_MATCH) && (
+          <VStack gap={4}>
+            {w.matchLoading ? (
+              <VStack gap={3} hAlign="center" padding={6}>
+                <Spinner size="lg" label="Loading AFL suggestions" />
+              </VStack>
+            ) : (
+              <>
+                {w.manualSearchVisible && (
+                  <VStack gap={2}>
+                    <TextInput
+                      label="Manual AFL search"
+                      value={w.manualQuery}
+                      onChange={(v) => dispatch({ type: "SET", payload: { manualQuery: v } })}
+                      placeholder="Search AnimeFillerList"
+                      startIcon={Search}
+                    />
+                    <Button
+                      label="Search"
+                      variant="secondary"
+                      onClick={handleManualSearch}
+                      isLoading={w.manualSearching}
+                      data-cuelume-press
+                    />
+                  </VStack>
+                )}
+                {w.displayedMatches.length > 0 ? (
+                  <List hasDividers className="wizard-list">
+                    {w.displayedMatches.map((match) => {
+                      const isSelected = matchSlug(w.selectedAfl) === matchSlug(match);
+                      const unsafe = isUnsafeMatch(match);
+                      return (
+                        <ListItem
+                          key={matchSlug(match)}
+                          label={matchTitle(match)}
+                          description={unsafe ? "Needs confirmation" : undefined}
+                          onClick={() => dispatch({ type: "SET", payload: { selectedAfl: match } })}
+                          endContent={
+                            <HStack gap={2} align="center">
+                              {match.confidence != null && (
+                                <Text type="supporting" hasTabularNumbers>
+                                  {Math.round(match.confidence * 100)}%
+                                </Text>
+                              )}
+                              {isSelected && <Check size={16} color="var(--color-accent)" />}
+                            </HStack>
+                          }
+                        />
+                      );
+                    })}
+                  </List>
+                ) : (
+                  !w.manualSearchVisible && (
+                    <EmptyState
+                      title="No AFL matches"
+                      description="Try a manual search above."
+                      icon={<Icon icon={Search} size="lg" color="secondary" />}
+                    />
+                  )
+                )}
+
+                {/* Tracking rules */}
+                <Divider />
+                <Card variant="muted" padding={4}>
+                  <VStack gap={3}>
+                    <Heading level={3}>Tracking rules</Heading>
+                    <Grid columns={{ minWidth: 240 }} gap={3}>
+                      <TrackingRuleCard
+                        variant="red"
+                        label="Filler"
+                        description="Skippable, no plot impact"
+                        switchLabel="Track filler"
+                        value={w.addTrackFiller}
+                        onChange={(v) => dispatch({ type: "SET", payload: { addTrackFiller: v } })}
+                      />
+                      <TrackingRuleCard
+                        variant="yellow"
+                        label="Mixed"
+                        description="Mix of canon and filler"
+                        switchLabel="Track mixed canon"
+                        value={w.addTrackMixed}
+                        onChange={(v) => dispatch({ type: "SET", payload: { addTrackMixed: v } })}
+                      />
+                      <TrackingRuleCard
+                        variant="green"
+                        label="Canon"
+                        description="Main plot episodes"
+                        switchLabel="Track anime canon"
+                        value={w.addTrackAnimeCanon}
+                        onChange={(v) =>
+                          dispatch({ type: "SET", payload: { addTrackAnimeCanon: v } })
+                        }
+                      />
+                    </Grid>
+                    <Selector
+                      label="Start tracking from"
+                      options={startModeOptions}
+                      value={w.addStartMode}
+                      onChange={(v) => dispatch({ type: "SET", payload: { addStartMode: v } })}
+                    />
+                  </VStack>
+                </Card>
+
+                {w.addStep === ADD_STEP_UNSAFE_MATCH ? (
+                  <Button
+                    label="Confirm match"
+                    variant="primary"
+                    onClick={() => handleConfirmMatch()}
+                    isLoading={w.confirming}
+                    data-cuelume-press
+                  />
+                ) : (
+                  <HStack gap={2}>
+                    <Button
+                      label="Keep Sonarr only"
+                      variant="secondary"
+                      onClick={handleKeepSonarrOnly}
+                      data-cuelume-press
+                    />
+                    <Button
+                      label="Confirm match"
+                      variant="primary"
+                      onClick={handlePrimaryMatchAction}
+                      isLoading={w.confirming}
+                      data-cuelume-press
+                    />
+                  </HStack>
+                )}
+              </>
+            )}
+          </VStack>
+        )}
+
+        {w.addStep === ADD_STEP_POST_ADD && (
+          <VStack gap={4} hAlign="center" padding={6} className="wizard-success">
+            <div className="wizard-success-icon">
+              <Check size={32} color="var(--color-success)" />
+            </div>
+            <Heading level={3}>{w.addOutcome?.title}</Heading>
+            <Text type="supporting">
+              {w.addOutcome?.type === "mapping_created"
+                ? "Now tracked by Mizu."
+                : "In Sonarr now, but still needs a safe AFL mapping before Mizu can track it."}
+            </Text>
+            <HStack gap={2}>
+              {w.addOutcome?.mappingId && (
+                <Button
+                  label="Open anime"
+                  variant="primary"
+                  onClick={() => {
+                    dispatch({ type: "SET", payload: { showAddModal: false } });
+                    openShow(w.addOutcome!.mappingId!);
+                  }}
+                  data-cuelume-press
+                />
+              )}
+              <Button
+                label="Add another"
+                variant="secondary"
+                onClick={() => returnToSeriesStep()}
+                data-cuelume-press
+              />
+            </HStack>
+          </VStack>
+        )}
       </div>
     </VStack>
   );

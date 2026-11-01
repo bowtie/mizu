@@ -3,9 +3,13 @@
 // bootstrap resolves. By the time either is called, the dynamic
 // import has resolved.
 let cuelumeModule: typeof import("cuelume") | null = null;
-const cuelumePromise = import("cuelume").then((m) => {
-  cuelumeModule = m;
-}).catch(() => { /* cuelume optional */ });
+void import("cuelume")
+  .then((m) => {
+    cuelumeModule = m;
+  })
+  .catch(() => {
+    /* cuelume optional */
+  });
 
 const DEFAULT_VOLUME = 0.5;
 

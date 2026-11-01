@@ -13,19 +13,21 @@ const PRECACHE_URLS = ["/", "/index.html"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(ASSET_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting()),
+    caches
+      .open(ASSET_CACHE)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((k) => !k.startsWith(CACHE_VERSION))
-          .map((k) => caches.delete(k)),
-      ),
-    ).then(() => self.clients.claim()),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => !k.startsWith(CACHE_VERSION)).map((k) => caches.delete(k))),
+      )
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -68,16 +70,26 @@ self.addEventListener("fetch", (event) => {
   }
 
   // API responses — stale-while-revalidate.
+  // Skip caching for endpoints that return sensitive data (API keys).
   if (url.pathname.startsWith("/api/")) {
+    // Never cache settings or bootstrap — they contain full API keys.
+    const isSensitive = url.pathname === "/api/settings" ||
+      url.pathname === "/api/bootstrap";
+    if (isSensitive) {
+      event.respondWith(fetch(req).catch(() => caches.match(req)));
+      return;
+    }
     event.respondWith(
       caches.match(req).then((cached) => {
-        const networkFetch = fetch(req).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(API_CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        }).catch(() => cached);
+        const networkFetch = fetch(req)
+          .then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(API_CACHE).then((c) => c.put(req, copy));
+            }
+            return res;
+          })
+          .catch(() => cached);
         return cached || networkFetch;
       }),
     );

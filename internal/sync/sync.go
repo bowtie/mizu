@@ -66,7 +66,7 @@ func (e *Engine) IsRunning() bool                    { return e.running.Load() }
 
 // SetRunning is a test helper to force the running flag. Production code
 // should use CompareAndSwap via RunSync/RunResync instead.
-func (e *Engine) SetRunning(v bool)                  { e.running.Store(v) }
+func (e *Engine) SetRunning(v bool) { e.running.Store(v) }
 
 // sonarrClient returns the current Sonarr client under a read lock.
 func (e *Engine) sonarrClient() *sonarr.Client {
@@ -439,6 +439,32 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 		result.EpisodesSeen++
 
+		// For mainline episodes beyond AFL coverage without an absolute
+		// episode number from Sonarr, compute one from the last known
+		// absolute number in the same season so the episode displays
+		// correctly (e.g. S23E17 → 1172, not 17).
+		if !found && !isSpecialSeason(ep.SeasonNumber) && ep.AbsoluteEpisodeNumber == nil {
+			lastAbs := 0
+			lastSonarrEp := 0
+			for _, dbe := range dbEpisodes {
+				if dbe.SeasonNumber == ep.SeasonNumber && dbe.AbsoluteEpisodeNumber != nil {
+					if *dbe.AbsoluteEpisodeNumber > lastAbs {
+						lastAbs = *dbe.AbsoluteEpisodeNumber
+						lastSonarrEp = dbe.SonarrEpisodeNumber
+					}
+				}
+			}
+			if lastAbs > 0 && lastSonarrEp > 0 {
+				computed := lastAbs + (ep.EpisodeNumber - lastSonarrEp)
+				// Only use the computed absolute number if it's greater than
+				// the last known absolute — out-of-order episodes (recaps,
+				// rebroadcasts) can produce incorrect or negative values.
+				if computed > lastAbs {
+					aflNum = computed
+				}
+			}
+		}
+
 		epType := models.EpisodeUnknown
 		title := ep.Title
 		if found {
@@ -493,26 +519,77 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 
+	// Build a set of episodes whose monitored status will change so
+	// we can update the DB accordingly before saving.
+	unmonitorSet := make(map[int]bool, len(toUnmonitor))
+	for _, id := range toUnmonitor {
+		unmonitorSet[id] = true
+	}
+	monitorSet := make(map[int]bool, len(toMonitor))
+	for _, id := range toMonitor {
+		monitorSet[id] = true
+	}
+	// Update dbEpisodes to reflect the post-sync monitored status so
+	// the frontend sees the correct state immediately.
+	for i := range dbEpisodes {
+		if unmonitorSet[dbEpisodes[i].SonarrEpisodeID] {
+			dbEpisodes[i].Monitored = false
+		} else if monitorSet[dbEpisodes[i].SonarrEpisodeID] {
+			dbEpisodes[i].Monitored = true
+		}
+	}
+
 	if err := e.db.ReplaceEpisodesForMapping(ctx, mapping.ID, dbEpisodes); err != nil {
 		log.Warn().Err(err).Str("series", series.Title).Msg("failed to cache episode data")
 	}
 
+	// Apply Sonarr bulk monitor changes first. Only update the DB monitored
+	// status for episodes where the Sonarr operation succeeded, so the DB
+	// stays in sync with Sonarr's actual state.
+	unmonitorSucceeded := false
 	if len(toUnmonitor) > 0 {
 		if err := e.sonarrClient().BulkSetEpisodesMonitored(ctx, toUnmonitor, false); err != nil {
 			log.Error().Err(err).Str("series", series.Title).Int("count", len(toUnmonitor)).Msg("failed to unmonitor episodes")
 		} else {
+			unmonitorSucceeded = true
 			result.UnmonitoredCount = len(toUnmonitor)
 			result.EpisodesUpdated += len(toUnmonitor)
 			log.Info().Str("series", series.Title).Int("count", len(toUnmonitor)).Msg("unmonitored episodes")
 		}
 	}
+	monitorSucceeded := false
 	if len(toMonitor) > 0 {
 		if err := e.sonarrClient().BulkSetEpisodesMonitored(ctx, toMonitor, true); err != nil {
 			log.Error().Err(err).Str("series", series.Title).Int("count", len(toMonitor)).Msg("failed to monitor episodes")
 		} else {
+			monitorSucceeded = true
 			result.MonitoredCount = len(toMonitor)
 			result.EpisodesUpdated += len(toMonitor)
 			log.Info().Str("series", series.Title).Int("count", len(toMonitor)).Msg("monitored episodes")
+		}
+	}
+
+	// Reconcile DB monitored status with Sonarr results. If a bulk operation
+	// failed, revert the DB monitored status for those episodes to match
+	// Sonarr's actual state.
+	if len(toUnmonitor) > 0 && !unmonitorSucceeded {
+		for i := range dbEpisodes {
+			if unmonitorSet[dbEpisodes[i].SonarrEpisodeID] {
+				dbEpisodes[i].Monitored = true
+			}
+		}
+	}
+	if len(toMonitor) > 0 && !monitorSucceeded {
+		for i := range dbEpisodes {
+			if monitorSet[dbEpisodes[i].SonarrEpisodeID] {
+				dbEpisodes[i].Monitored = false
+			}
+		}
+	}
+	// If either bulk operation failed, re-persist the corrected DB state.
+	if (len(toUnmonitor) > 0 && !unmonitorSucceeded) || (len(toMonitor) > 0 && !monitorSucceeded) {
+		if err := e.db.ReplaceEpisodesForMapping(ctx, mapping.ID, dbEpisodes); err != nil {
+			log.Warn().Err(err).Str("series", series.Title).Msg("failed to reconcile episode data after partial Sonarr failure")
 		}
 	}
 
@@ -581,14 +658,24 @@ func IsWithinAFLCoverage(sonarrEp models.SonarrEpisode, aflNum int, found bool, 
 	if isSpecialSeason(sonarrEp.SeasonNumber) {
 		return found
 	}
-	if coverageMax <= 0 {
-		return false
-	}
-	return aflNum <= coverageMax
+	// Mainline episodes within AFL coverage are always included.
+	// Episodes beyond coverageMax are also included but will be typed
+	// as "unknown" (no AFL match) — they show up in the UI so the user
+	// knows they exist, and get reclassified when AFL updates.
+	return true
 }
 
 func SelectAFLEpisodeForSonarr(sonarrEp models.SonarrEpisode, aflByNumber map[int][]models.AFLEpisode, aflPreferred map[int]models.AFLEpisode) (int, models.AFLEpisode, bool) {
 	aflNum := matcherpkg.MapEpisodeNumber(sonarrEp, 0)
+	// For mainline episodes without an absolute episode number, the
+	// season-relative number can collide with existing AFL entries (e.g.
+	// S23E17 → aflNum 17, which matches AFL ep 17 from season 2). When
+	// the absolute number is missing, skip AFL matching entirely — the
+	// episode will be typed as "unknown" and get a computed absolute
+	// number in the sync loop.
+	if aflNum > 0 && !isSpecialSeason(sonarrEp.SeasonNumber) && sonarrEp.AbsoluteEpisodeNumber == nil {
+		return aflNum, models.AFLEpisode{}, false
+	}
 	if aflNum <= 0 {
 		if isSpecialSeason(sonarrEp.SeasonNumber) {
 			if matched, ok := matchAFLEpisodeByTitleAcrossLookupStrict(sonarrEp.Title, aflByNumber); ok {
@@ -905,6 +992,12 @@ func (e *Engine) autoMatch(ctx context.Context, series models.SonarrSeries, best
 
 	if err := e.db.UpsertMapping(ctx, mapping); err != nil {
 		return nil, fmt.Errorf("saving auto-match: %w", err)
+	}
+	// UpsertMapping doesn't persist overview — save it separately.
+	if series.Overview != "" && mapping.ID != 0 {
+		if err := e.db.UpdateOverview(ctx, mapping.ID, series.Overview); err != nil {
+			log.Warn().Err(err).Int64("mapping_id", mapping.ID).Msg("failed to save overview on auto-match")
+		}
 	}
 	return mapping, nil
 }

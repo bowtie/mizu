@@ -13,7 +13,7 @@ services:
     ports:
       - "8978:8978"
     environment:
-      - TZ=America/New_York              # Your timezone
+      - TZ=America/New_York # Your timezone
     volumes:
       - ./config/mizu:/config
     networks:

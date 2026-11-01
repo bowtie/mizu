@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"mizu/internal/models"
 )
 
@@ -22,10 +25,7 @@ func TestNormalize(t *testing.T) {
 	m := New(0.7)
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := m.Normalize(tt.input)
-			if got != tt.want {
-				t.Errorf("Normalize(%q) = %q, want %q", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, m.Normalize(tt.input))
 		})
 	}
 }
@@ -44,9 +44,7 @@ func TestJaroWinkler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.a+"_vs_"+tt.b, func(t *testing.T) {
 			score := JaroWinkler(tt.a, tt.b)
-			if score < tt.min {
-				t.Errorf("JaroWinkler(%q, %q) = %f, want >= %f", tt.a, tt.b, score, tt.min)
-			}
+			assert.GreaterOrEqual(t, score, tt.min)
 		})
 	}
 }
@@ -61,13 +59,8 @@ func TestFindMatchesRejectsWeakFuzzyWithoutSharedTokens(t *testing.T) {
 	}
 
 	matches := m.FindMatches(context.Background(), series, aflShows)
-	if len(matches) != 1 {
-		t.Fatalf("FindMatches() returned %d matches, want 1", len(matches))
-	}
-
-	if matches[0].AFLShow.Title != "Dragon Ball Super" {
-		t.Fatalf("FindMatches() top match = %q, want %q", matches[0].AFLShow.Title, "Dragon Ball Super")
-	}
+	require.Len(t, matches, 1)
+	assert.Equal(t, "Dragon Ball Super", matches[0].AFLShow.Title)
 }
 
 func TestFindMatchesRejectsSingleSharedFranchiseTokenFalsePositive(t *testing.T) {
@@ -78,7 +71,5 @@ func TestFindMatchesRejectsSingleSharedFranchiseTokenFalsePositive(t *testing.T)
 	}
 
 	matches := m.FindMatches(context.Background(), series, aflShows)
-	if len(matches) != 0 {
-		t.Fatalf("FindMatches() returned %d matches, want 0 for franchise-only overlap", len(matches))
-	}
+	assert.Empty(t, matches)
 }

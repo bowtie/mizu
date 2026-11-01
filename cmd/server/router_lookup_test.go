@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"mizu/internal/config"
 	"mizu/internal/database"
 	"mizu/internal/models"
@@ -15,12 +18,8 @@ import (
 
 func TestHandleLookupSonarrSeriesKeepsStandardLookupResults(t *testing.T) {
 	sonarr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v3/series/lookup" {
-			t.Fatalf("unexpected path %q", r.URL.Path)
-		}
-		if got := r.URL.Query().Get("term"); got != "Ranma 1/2" {
-			t.Fatalf("unexpected lookup term %q", got)
-		}
+		assert.Equal(t, "/api/v3/series/lookup", r.URL.Path)
+		assert.Equal(t, "Ranma 1/2", r.URL.Query().Get("term"))
 		_ = json.NewEncoder(w).Encode([]models.SonarrSeries{
 			{Title: "Ranma 1/2", SeriesType: "standard", TVDBID: 1},
 			{Title: "Bleach", SeriesType: "anime", TVDBID: 2},
@@ -29,9 +28,7 @@ func TestHandleLookupSonarrSeriesKeepsStandardLookupResults(t *testing.T) {
 	defer sonarr.Close()
 
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := &config.Config{
@@ -45,17 +42,11 @@ func TestHandleLookupSonarrSeriesKeepsStandardLookupResults(t *testing.T) {
 
 	handleLookupSonarrSeries(engine)(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("unexpected status %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	var got []models.SonarrSeries
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("expected both standard and anime lookup results, got %+v", got)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Len(t, got, 2)
 }
 
 func TestPreferredSonarrRootFolderPrefersExistingAnimeLibraryRoot(t *testing.T) {
@@ -70,9 +61,7 @@ func TestPreferredSonarrRootFolderPrefersExistingAnimeLibraryRoot(t *testing.T) 
 		},
 	)
 
-	if got != "/data/anime" {
-		t.Fatalf("preferredSonarrRootFolder() = %q, want /data/anime", got)
-	}
+	assert.Equal(t, "/data/anime", got)
 }
 
 func TestPreferredSonarrRootFolderFallsBackToFirstRootFolder(t *testing.T) {
@@ -81,7 +70,5 @@ func TestPreferredSonarrRootFolderFallsBackToFirstRootFolder(t *testing.T) {
 		{Path: "/data/secondary"},
 	})
 
-	if got != "/data/default" {
-		t.Fatalf("preferredSonarrRootFolder() = %q, want /data/default", got)
-	}
+	assert.Equal(t, "/data/default", got)
 }

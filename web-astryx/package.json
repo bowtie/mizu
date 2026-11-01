@@ -7,6 +7,8 @@
     "dev": "vp dev",
     "build": "tsc -b && vp build",
     "preview": "vp preview",
+    "check": "vp check",
+    "test": "vp test",
     "astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs"
   },
   "dependencies": {
@@ -18,11 +20,20 @@
     "@astryxdesign/theme-neutral": "^0.1.6",
     "@astryxdesign/theme-stone": "^0.1.7",
     "@astryxdesign/theme-y2k": "^0.1.7",
+    "@hookform/resolvers": "^5.5.7",
     "@stylexjs/stylex": "^0.19.0",
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query-devtools": "^5.101.4",
+    "@tanstack/react-virtual": "^3.14.9",
+    "cuelume": "^0.2.1",
+    "ky": "^2.0.2",
     "lucide-react": "^0.544.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.8.0"
+    "react-hook-form": "^7.83.0",
+    "react-router-dom": "^7.8.0",
+    "valibot": "^1.4.2",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@astryxdesign/cli": "^0.1.6",

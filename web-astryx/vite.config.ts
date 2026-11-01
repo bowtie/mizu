@@ -17,6 +17,10 @@ const lightningcssTargets = {
 
 export default defineConfig({
   fmt: {},
+  lint: {},
+  test: {
+    include: ["src/**/*.test.ts"],
+  },
   plugins: lazyPlugins(() => [
     // Declare CSS layer order so theme overrides beat component base styles.
     {
@@ -47,7 +51,10 @@ export default defineConfig({
       apply: "build",
       transformIndexHtml: {
         order: "post" as const,
-        handler(html: string, ctx: { bundle?: Record<string, { name?: string; fileName: string }> }) {
+        handler(
+          html: string,
+          ctx: { bundle?: Record<string, { name?: string; fileName: string }> },
+        ) {
           if (!ctx.bundle) return html;
           let showsPageUrl = "";
           let detailPageUrl = "";

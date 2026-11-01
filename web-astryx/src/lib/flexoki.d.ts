@@ -5,6 +5,5 @@
  * Generated: 2026-07-28T05:20:51.459Z
  */
 
-/// <reference path="./flexoki.variants.d.ts" />
-import type { DefinedTheme } from '@astryxdesign/core/theme';
+import type { DefinedTheme } from "@astryxdesign/core/theme";
 export declare const flexokiTheme: DefinedTheme;

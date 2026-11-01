@@ -3,9 +3,18 @@ import { VStack } from "@astryxdesign/core/VStack";
 import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
 import { Switch } from "@astryxdesign/core/Switch";
-import { play as cuelumePlay } from "cuelume";
 import { memo } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
+
+// Lazy-load cuelume — it's optional. If it fails to load, sound calls are no-ops.
+let cuelumePlay: ((sound: string, opts?: { volume?: number }) => void) | null = null;
+void import("cuelume")
+  .then((m) => {
+    cuelumePlay = m.play as (sound: string, opts?: { volume?: number }) => void;
+  })
+  .catch(() => {
+    /* cuelume optional */
+  });
 
 type RuleVariant = "green" | "yellow" | "red";
 
@@ -37,7 +46,7 @@ export const TrackingRuleCard = memo(function TrackingRuleCard({
     if (target.tagName === "INPUT" || target.closest("input")) {
       return;
     }
-    cuelumePlay("toggle", { volume: 0.5 });
+    if (cuelumePlay) cuelumePlay("toggle", { volume: 0.5 });
     onChange(!value);
   };
 
@@ -80,7 +89,7 @@ export const TrackingRuleCard = memo(function TrackingRuleCard({
             label={switchLabel}
             value={value}
             onChange={(v) => {
-              cuelumePlay("toggle", { volume: 0.5 });
+              if (cuelumePlay) cuelumePlay("toggle", { volume: 0.5 });
               onChange(v);
             }}
             isLabelHidden

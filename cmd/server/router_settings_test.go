@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"mizu/internal/config"
 	"mizu/internal/database"
@@ -14,9 +19,7 @@ import (
 
 func TestHandleUpdateSettingsRejectsInvalidFillerAction(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := config.DefaultConfig()
@@ -26,16 +29,12 @@ func TestHandleUpdateSettingsRejectsInvalidFillerAction(t *testing.T) {
 
 	handleUpdateSettings(cfg, db, newSchedulerController(cfg.ScanInterval), nil, nil)(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid filler action, got %d: %s", rec.Code, rec.Body.String())
-	}
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestHandleUpdateSettingsRejectsInvalidMixedCanonAction(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := config.DefaultConfig()
@@ -45,16 +44,12 @@ func TestHandleUpdateSettingsRejectsInvalidMixedCanonAction(t *testing.T) {
 
 	handleUpdateSettings(cfg, db, newSchedulerController(cfg.ScanInterval), nil, nil)(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid mixed canon action, got %d: %s", rec.Code, rec.Body.String())
-	}
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestHandleUpdateSettingsAcceptsValidFillerAction(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := config.DefaultConfig()
@@ -64,19 +59,13 @@ func TestHandleUpdateSettingsAcceptsValidFillerAction(t *testing.T) {
 
 	handleUpdateSettings(cfg, db, newSchedulerController(cfg.ScanInterval), nil, nil)(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for valid filler action, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if cfg.DefaultFillerAction != config.ActionUnmonitor {
-		t.Fatalf("expected cfg.DefaultFillerAction to be 'unmonitor', got %q", cfg.DefaultFillerAction)
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, config.ActionUnmonitor, cfg.DefaultFillerAction)
 }
 
 func TestHandleUpdateSettingsPersistsNtfySettings(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := config.DefaultConfig()
@@ -86,31 +75,25 @@ func TestHandleUpdateSettingsPersistsNtfySettings(t *testing.T) {
 
 	handleUpdateSettings(cfg, db, newSchedulerController(cfg.ScanInterval), nil, nil)(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
 
-	// Verify values were applied to cfg
-	if !cfg.NtfyEnabled || cfg.NtfyServerURL != "https://ntfy.example.com" || cfg.NtfyTopic != "my-topic" || cfg.NtfyToken != "tok123" {
-		t.Fatalf("cfg not updated correctly: %+v", cfg)
-	}
+	assert.True(t, cfg.NtfyEnabled)
+	assert.Equal(t, "https://ntfy.example.com", cfg.NtfyServerURL)
+	assert.Equal(t, "my-topic", cfg.NtfyTopic)
+	assert.Equal(t, "tok123", cfg.NtfyToken)
 
-	// Verify values were persisted to DB
 	val, err := db.GetSetting(req.Context(), "ntfy_enabled")
-	if err != nil || val != "true" {
-		t.Fatalf("expected ntfy_enabled=true in DB, got %q err=%v", val, err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "true", val)
+
 	val, err = db.GetSetting(req.Context(), "ntfy_topic")
-	if err != nil || val != "my-topic" {
-		t.Fatalf("expected ntfy_topic=my-topic in DB, got %q err=%v", val, err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "my-topic", val)
 }
 
 func TestHandleUpdateSettingsRejectsNtfyEnabledWithoutConfig(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := config.DefaultConfig()
@@ -120,19 +103,13 @@ func TestHandleUpdateSettingsRejectsNtfyEnabledWithoutConfig(t *testing.T) {
 
 	handleUpdateSettings(cfg, db, newSchedulerController(cfg.ScanInterval), nil, nil)(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for enabling ntfy without server URL/topic, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if cfg.NtfyEnabled {
-		t.Fatal("expected NtfyEnabled to remain false after rejected update")
-	}
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.False(t, cfg.NtfyEnabled)
 }
 
 func TestHandleGetSettingsReturnsNtfyFields(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := config.DefaultConfig()
@@ -145,30 +122,18 @@ func TestHandleGetSettingsReturnsNtfyFields(t *testing.T) {
 
 	handleGetSettings(cfg, db)(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	var result map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
-	if result["ntfy_enabled"] != true {
-		t.Fatalf("expected ntfy_enabled=true, got %v", result["ntfy_enabled"])
-	}
-	if result["ntfy_topic"] != "test-topic" {
-		t.Fatalf("expected ntfy_topic=test-topic, got %v", result["ntfy_topic"])
-	}
-	if result["ntfy_token_set"] != true {
-		t.Fatalf("expected ntfy_token_set=true, got %v", result["ntfy_token_set"])
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &result))
+	assert.Equal(t, true, result["ntfy_enabled"])
+	assert.Equal(t, "test-topic", result["ntfy_topic"])
+	assert.Equal(t, true, result["ntfy_token_set"])
 }
 
 func TestHandleCreateMappingRejectsInvalidFillerAction(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	cfg := config.DefaultConfig()
@@ -176,9 +141,7 @@ func TestHandleCreateMappingRejectsInvalidFillerAction(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/mappings", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	handleCreateMapping(cfg, db, nil)(rec, req)
+	handleCreateMapping(cfg, db, nil, nil, context.Background(), &sync.WaitGroup{})(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid filler action, got %d: %s", rec.Code, rec.Body.String())
-	}
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }

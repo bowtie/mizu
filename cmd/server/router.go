@@ -71,7 +71,7 @@ func (c *episodeCache) set(mappingID int64, data []models.EpisodeInfo) {
 	// Enforce max size by evicting the soonest-expiring entries.
 	if c.maxSize > 0 && len(c.entries) >= c.maxSize {
 		type idExp struct {
-			id       int64
+			id        int64
 			expiresAt time.Time
 		}
 		all := make([]idExp, 0, len(c.entries))
@@ -91,6 +91,12 @@ func (c *episodeCache) invalidate(mappingID int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.entries, mappingID)
+}
+
+func (c *episodeCache) invalidateAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[int64]episodeCacheEntry)
 }
 
 // seriesListCache provides a short-lived in-memory cache for the full
@@ -125,13 +131,6 @@ func (c *seriesListCache) set(data []models.SonarrSeriesPublic) {
 	c.data = make([]models.SonarrSeriesPublic, len(data))
 	copy(c.data, data)
 	c.expiresAt = time.Now().Add(c.ttl)
-}
-
-func (c *seriesListCache) invalidate() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.data = nil
-	c.expiresAt = time.Time{}
 }
 
 func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, scheduler *schedulerController, appCtx context.Context, bgWG *stdsync.WaitGroup) http.Handler {
@@ -174,7 +173,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			if latest, err := db.GetLatestSyncLog(r.Context()); err == nil {
 				payload["last_sync_at"] = latest.CompletedAt
 				interval := scheduler.Interval()
-				if interval > 0 {
+				if interval > 0 && latest.CompletedAt != nil {
 					next := latest.CompletedAt.Add(interval)
 					if next.Before(time.Now()) {
 						next = time.Now().Add(interval)
@@ -202,7 +201,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 
 		r.Route("/mappings", func(r chi.Router) {
 			r.Get("/", handleGetMappings(db))
-			r.Post("/", handleCreateMapping(cfg, db, syncEngine))
+			r.Post("/", handleCreateMapping(cfg, db, syncEngine, artworkMgr, appCtx, bgWG))
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", handleGetMapping(db))
 				r.Get("/detail", handleGetMappingDetail(db, syncEngine, epCache))
@@ -213,11 +212,11 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 				r.Get("/episodes", handleGetEpisodes(db, syncEngine, epCache))
 				r.Get("/episodes/sonarr", handleGetSonarrEpisodes(db, syncEngine))
 				r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(db, syncEngine, epCache))
-				r.Post("/resync", handleResyncMapping(syncEngine, appCtx, bgWG))
+				r.Post("/resync", handleResyncMapping(syncEngine, appCtx, bgWG, epCache))
 			})
 		})
 
-		r.Post("/sync", handleTriggerSync(syncEngine, appCtx, bgWG))
+		r.Post("/sync", handleTriggerSync(syncEngine, appCtx, bgWG, epCache))
 		r.Get("/logs", handleGetLogs(db))
 		r.Get("/settings", handleGetSettings(cfg, db))
 		r.Put("/settings", handleUpdateSettings(cfg, db, scheduler, syncEngine, artworkMgr))
@@ -401,7 +400,7 @@ var aflCacheRefreshing atomic.Bool
 // two simultaneous refreshes waste bandwidth and race on file writes.
 var artworkRefreshing atomic.Bool
 
-func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.Engine) http.HandlerFunc {
+func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, artworkMgr *artwork.Manager, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			SonarrSeriesID   int     `json:"sonarr_series_id"`
@@ -431,6 +430,15 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 				writeError(w, http.StatusInternalServerError, "auto-match unavailable")
 				return
 			}
+			// Check AFL cache freshness before attempting auto-match.
+			// If the cache is empty or stale, AutoMatchSeries would
+			// synchronously scrape the entire AFL website, likely
+			// exceeding the HTTP timeout. Return a clear error instead.
+			cacheCount, _, cacheErr := db.GetAFLShowCacheStatus(r.Context())
+			if cacheErr != nil || cacheCount == 0 {
+				writeError(w, http.StatusConflict, "AFL cache is empty — refresh the AFL cache before using auto-match")
+				return
+			}
 			mapping, err := syncEngine.AutoMatchSeries(r.Context(), req.SonarrSeriesID)
 			if err != nil {
 				writeError(w, http.StatusBadGateway, "auto-match failed: "+err.Error())
@@ -456,6 +464,7 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			if err := clearManualMatchPendingSeriesID(r.Context(), db, req.SonarrSeriesID); err != nil {
 				log.Warn().Err(err).Int("sonarr_series_id", req.SonarrSeriesID).Msg("failed to clear manual-match pending series")
 			}
+			triggerArtworkFetch(appCtx, bgWG, artworkMgr, cfg, syncEngine, storedMapping)
 			writeJSON(w, http.StatusCreated, storedMapping)
 			return
 		}
@@ -536,6 +545,14 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			return
 		}
 
+		// UpsertMapping doesn't persist the overview column (it's not in
+		// the sqlc query), so save it separately if we have one.
+		if sonarrOverview != "" {
+			if err := db.UpdateOverview(r.Context(), mapping.ID, sonarrOverview); err != nil {
+				log.Warn().Err(err).Int64("mapping_id", mapping.ID).Msg("failed to save overview on creation")
+			}
+		}
+
 		storedMapping, err := db.GetMappingBySonarrID(r.Context(), req.SonarrSeriesID)
 		if err != nil || storedMapping == nil {
 			writeError(w, http.StatusInternalServerError, "failed to load saved mapping")
@@ -557,8 +574,54 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			log.Warn().Err(err).Int("sonarr_series_id", req.SonarrSeriesID).Msg("failed to clear manual-match pending series")
 		}
 
+		triggerArtworkFetch(appCtx, bgWG, artworkMgr, cfg, syncEngine, storedMapping)
 		writeJSON(w, http.StatusCreated, storedMapping)
 	}
+}
+
+// triggerArtworkFetch starts a background artwork fetch for a newly created
+// mapping. It uses the app context (not the request context) so the fetch
+// survives after the HTTP response is sent. If the default source is "sonarr"
+// there's nothing to download — the frontend uses Sonarr URLs directly — so we
+// skip the fetch in that case.
+func triggerArtworkFetch(appCtx context.Context, bgWG *stdsync.WaitGroup, mgr *artwork.Manager, cfg *config.Config, syncEngine *sync.Engine, mapping *models.ShowMapping) {
+	if mgr == nil || mapping == nil {
+		return
+	}
+	cfg.RLock()
+	artworkDefaultSource := cfg.ArtworkDefaultSource
+	cfg.RUnlock()
+	source := mgr.ResolveSource(mapping.ArtworkSource, artworkDefaultSource)
+	if source == "sonarr" || source == "" {
+		return
+	}
+
+	bgWG.Add(1)
+	go func() {
+		defer bgWG.Done()
+		series := models.SonarrSeries{
+			ID:    mapping.SonarrSeriesID,
+			Title: mapping.SonarrTitle,
+		}
+		if syncEngine != nil {
+			if fetched, err := syncEngine.SonarrClient().GetSeries(appCtx, mapping.SonarrSeriesID); err == nil && fetched != nil {
+				series = *fetched
+			} else if err != nil {
+				log.Warn().Err(err).Int("sonarr_series_id", mapping.SonarrSeriesID).Msg("failed to fetch Sonarr series for artwork-on-create")
+			}
+		}
+		if mapping.AFLSlug != "" {
+			series.AlternateTitles = append(series.AlternateTitles, models.SonarrAltTitle{Title: mapping.AFLSlug})
+		}
+		result, err := mgr.FetchAndStore(appCtx, mapping.ID, series, source)
+		if err != nil {
+			log.Warn().Err(err).Int64("mapping_id", mapping.ID).Msg("artwork fetch on mapping create failed")
+			return
+		}
+		if result != nil && result.Found {
+			log.Info().Int64("mapping_id", mapping.ID).Str("source", result.Source).Msg("artwork fetched on mapping create")
+		}
+	}()
 }
 
 func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerFunc {
@@ -875,15 +938,16 @@ func handleSetEpisodeMonitor(db *database.DB, syncEngine *sync.Engine, epCache *
 			writeError(w, http.StatusBadGateway, "failed to update episode in Sonarr: "+err.Error())
 			return
 		}
-		// Invalidate cache for this mapping so the next fetch reflects the change
+		// Update the local DB so the change persists beyond cache invalidation
 		if id, idErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64); idErr == nil {
+			_ = db.UpdateEpisodeMonitor(r.Context(), id, int64(epID), req.Monitored)
 			epCache.invalidate(id)
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"monitored": req.Monitored})
 	}
 }
 
-func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
+func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup, epCache *episodeCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
@@ -900,12 +964,13 @@ func handleResyncMapping(engine *sync.Engine, appCtx context.Context, bgWG *stds
 			if err := engine.RunResync(appCtx, id); err != nil {
 				log.Error().Err(err).Int64("mapping_id", id).Msg("resync failed")
 			}
+			epCache.invalidate(id)
 		}()
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "resync triggered"})
 	}
 }
 
-func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup) http.HandlerFunc {
+func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsync.WaitGroup, epCache *episodeCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if engine.IsRunning() {
 			writeError(w, http.StatusConflict, "sync already in progress")
@@ -917,6 +982,7 @@ func handleTriggerSync(engine *sync.Engine, appCtx context.Context, bgWG *stdsyn
 			if err := engine.RunSync(appCtx, "manual"); err != nil {
 				log.Error().Err(err).Msg("manual sync failed")
 			}
+			epCache.invalidateAll()
 		}()
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "sync triggered"})
 	}
@@ -1082,92 +1148,53 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			return
 		}
 
-		cfg.Lock()
-
-		if update.SonarrURL != nil {
-			cfg.SonarrURL = strings.TrimRight(*update.SonarrURL, "/")
+		// Validate all fields before mutating any config. This prevents
+		// partial in-memory mutations when a later field fails validation,
+		// which would leave the running config out of sync with the DB.
+		if update.DefaultFillerAction != nil && !config.IsValidFillerAction(*update.DefaultFillerAction) {
+			writeError(w, http.StatusBadRequest, "invalid default_filler_action")
+			return
 		}
-		if update.SonarrAPIKey != nil && *update.SonarrAPIKey != "" {
-			cfg.SonarrAPIKey = *update.SonarrAPIKey
+		if update.DefaultMixedCanonAction != nil && !config.IsValidFillerAction(*update.DefaultMixedCanonAction) {
+			writeError(w, http.StatusBadRequest, "invalid default_mixed_canon_action")
+			return
 		}
-		if update.DefaultFillerAction != nil {
-			if !config.IsValidFillerAction(*update.DefaultFillerAction) {
-				cfg.Unlock()
-				writeError(w, http.StatusBadRequest, "invalid default_filler_action")
-				return
-			}
-			cfg.DefaultFillerAction = config.FillerAction(*update.DefaultFillerAction)
+		if update.DefaultAnimeCanonAction != nil && !config.IsValidFillerAction(*update.DefaultAnimeCanonAction) {
+			writeError(w, http.StatusBadRequest, "invalid default_anime_canon_action")
+			return
 		}
-		if update.DefaultMixedCanonAction != nil {
-			if !config.IsValidFillerAction(*update.DefaultMixedCanonAction) {
-				cfg.Unlock()
-				writeError(w, http.StatusBadRequest, "invalid default_mixed_canon_action")
-				return
-			}
-			cfg.DefaultMixedCanonAction = config.FillerAction(*update.DefaultMixedCanonAction)
-		}
-		if update.DefaultAnimeCanonAction != nil {
-			if !config.IsValidFillerAction(*update.DefaultAnimeCanonAction) {
-				cfg.Unlock()
-				writeError(w, http.StatusBadRequest, "invalid default_anime_canon_action")
-				return
-			}
-			cfg.DefaultAnimeCanonAction = config.FillerAction(*update.DefaultAnimeCanonAction)
-		}
+		var normalizedSyncInterval string
+		var syncDuration time.Duration
 		if update.SyncInterval != nil {
-			normalized, d, err := normalizeScanInterval(*update.SyncInterval)
+			var err error
+			normalizedSyncInterval, syncDuration, err = normalizeScanInterval(*update.SyncInterval)
 			if err != nil {
-				cfg.Unlock()
 				writeError(w, http.StatusBadRequest, "invalid sync interval")
 				return
 			}
-			cfg.ScanInterval = d
-			scheduler.UpdateInterval(d)
-			update.SyncInterval = &normalized
 		}
-		if update.SonarrAddRootFolder != nil {
-			cfg.SonarrAddRootFolder = *update.SonarrAddRootFolder
+		if update.SonarrAddMonitorMode != nil && !config.IsValidSonarrMonitorMode(*update.SonarrAddMonitorMode) {
+			writeError(w, http.StatusBadRequest, "invalid Sonarr monitor mode")
+			return
 		}
-		if update.SonarrAddQualityProfileID != nil {
-			cfg.SonarrAddQualityProfileID = *update.SonarrAddQualityProfileID
-		}
-		if update.SonarrAddMonitorMode != nil {
-			if !config.IsValidSonarrMonitorMode(*update.SonarrAddMonitorMode) {
-				cfg.Unlock()
-				writeError(w, http.StatusBadRequest, "invalid Sonarr monitor mode")
-				return
-			}
-			cfg.SonarrAddMonitorMode = *update.SonarrAddMonitorMode
-		}
-		if update.SonarrAddSeasonFolder != nil {
-			cfg.SonarrAddSeasonFolder = *update.SonarrAddSeasonFolder
-		}
-		// Compute effective ntfy values before applying, so we can validate
-		// without mutating cfg on a failed validation.
+		// Compute effective ntfy values to validate without mutating cfg.
+		cfg.RLock()
 		ntfyEnabled := cfg.NtfyEnabled
+		ntfyServerURL := cfg.NtfyServerURL
+		ntfyTopic := cfg.NtfyTopic
+		cfg.RUnlock()
 		if update.NtfyEnabled != nil {
 			ntfyEnabled = *update.NtfyEnabled
 		}
-		ntfyServerURL := cfg.NtfyServerURL
 		if update.NtfyServerURL != nil {
 			ntfyServerURL = strings.TrimRight(*update.NtfyServerURL, "/")
 		}
-		ntfyTopic := cfg.NtfyTopic
 		if update.NtfyTopic != nil {
 			ntfyTopic = *update.NtfyTopic
 		}
-		// Validate ntfy config: if enabled, server URL and topic are required.
 		if ntfyEnabled && (ntfyServerURL == "" || ntfyTopic == "") {
-			cfg.Unlock()
 			writeError(w, http.StatusBadRequest, "ntfy_server_url and ntfy_topic are required when ntfy is enabled")
 			return
-		}
-		// Validation passed — apply ntfy values.
-		cfg.NtfyEnabled = ntfyEnabled
-		cfg.NtfyServerURL = ntfyServerURL
-		cfg.NtfyTopic = ntfyTopic
-		if update.NtfyToken != nil {
-			cfg.NtfyToken = *update.NtfyToken
 		}
 		if update.ArtworkDefaultSource != nil {
 			src := *update.ArtworkDefaultSource
@@ -1180,17 +1207,60 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 					}
 				}
 				if !valid {
-					cfg.Unlock()
 					writeError(w, http.StatusBadRequest, "invalid artwork_default_source: "+src)
 					return
 				}
 			}
-			cfg.ArtworkDefaultSource = src
 		}
-		if update.TMDBAPIKey != nil && *update.TMDBAPIKey != "" {
+
+		// All validation passed — apply mutations under the write lock.
+		cfg.Lock()
+
+		if update.SonarrURL != nil {
+			cfg.SonarrURL = strings.TrimRight(*update.SonarrURL, "/")
+		}
+		if update.SonarrAPIKey != nil {
+			cfg.SonarrAPIKey = *update.SonarrAPIKey
+		}
+		if update.DefaultFillerAction != nil {
+			cfg.DefaultFillerAction = config.FillerAction(*update.DefaultFillerAction)
+		}
+		if update.DefaultMixedCanonAction != nil {
+			cfg.DefaultMixedCanonAction = config.FillerAction(*update.DefaultMixedCanonAction)
+		}
+		if update.DefaultAnimeCanonAction != nil {
+			cfg.DefaultAnimeCanonAction = config.FillerAction(*update.DefaultAnimeCanonAction)
+		}
+		if update.SyncInterval != nil {
+			cfg.ScanInterval = syncDuration
+			scheduler.UpdateInterval(syncDuration)
+			update.SyncInterval = &normalizedSyncInterval
+		}
+		if update.SonarrAddRootFolder != nil {
+			cfg.SonarrAddRootFolder = *update.SonarrAddRootFolder
+		}
+		if update.SonarrAddQualityProfileID != nil {
+			cfg.SonarrAddQualityProfileID = *update.SonarrAddQualityProfileID
+		}
+		if update.SonarrAddMonitorMode != nil {
+			cfg.SonarrAddMonitorMode = *update.SonarrAddMonitorMode
+		}
+		if update.SonarrAddSeasonFolder != nil {
+			cfg.SonarrAddSeasonFolder = *update.SonarrAddSeasonFolder
+		}
+		cfg.NtfyEnabled = ntfyEnabled
+		cfg.NtfyServerURL = ntfyServerURL
+		cfg.NtfyTopic = ntfyTopic
+		if update.NtfyToken != nil {
+			cfg.NtfyToken = *update.NtfyToken
+		}
+		if update.ArtworkDefaultSource != nil {
+			cfg.ArtworkDefaultSource = *update.ArtworkDefaultSource
+		}
+		if update.TMDBAPIKey != nil {
 			cfg.TMDBAPIKey = *update.TMDBAPIKey
 		}
-		if update.FanartAPIKey != nil && *update.FanartAPIKey != "" {
+		if update.FanartAPIKey != nil {
 			cfg.FanartAPIKey = *update.FanartAPIKey
 		}
 		if update.UISoundsEnabled != nil {
@@ -1290,9 +1360,9 @@ func handleRefreshAFLCache(engine *sync.Engine, db *database.DB) http.HandlerFun
 			}
 		}
 		status := "success"
-		if len(newSlugs) > 0 {
-			status = "partial" // has new items to review
-		}
+		// "partial" is reserved for partial failures. A successful refresh
+		// that detects new shows is still a success — the new items are
+		// logged individually with "new_in_cache" status.
 		if logID > 0 {
 			if err := db.CompleteSyncLog(r.Context(), logID, status, len(newSlugs), 0, ""); err != nil {
 				log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
@@ -1754,7 +1824,7 @@ func handleGetSonarrSeriesByID(db *database.DB, syncEngine *sync.Engine) http.Ha
 		force := r.URL.Query().Get("force") == "true"
 		if !force {
 			if cached, ok := db.GetCachedSonarrSeries(r.Context(), id, 30*24*time.Hour); ok {
-				writeJSON(w, http.StatusOK, cached)
+				writeJSON(w, http.StatusOK, cached.Public())
 				return
 			}
 		}
@@ -2215,8 +2285,8 @@ func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerF
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		// Validate source: empty (use global default), "sonarr", or a registered provider.
-		if body.Source != "" && body.Source != "sonarr" {
+		// Validate source: empty (use global default), "sonarr", "auto", or a registered provider.
+		if body.Source != "" && body.Source != "sonarr" && body.Source != "auto" {
 			valid := false
 			for _, p := range mgr.Providers() {
 				if p.ID == body.Source {

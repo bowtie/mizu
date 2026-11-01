@@ -1,8 +1,11 @@
 import { StrictMode, useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
-import { prefetchEpisodes, prefetchShowDetail } from "./lib/api";
+import { prefetchShowDetail } from "./lib/api";
+import { queryClient } from "./lib/queryClient";
 import { Theme } from "@astryxdesign/core/theme";
 import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";
@@ -24,7 +27,7 @@ const DropdownMenu = lazy(() =>
 // Import theme CSS files
 import "@astryxdesign/core/reset.css";
 import "@astryxdesign/core/astryx.css";
-import "@astryxdesign/theme-neutral/theme.css";
+import "./lib/flexokiTheme.css";
 
 import "./fonts.css";
 import "./index.css";
@@ -148,8 +151,20 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
       centerContent={
         <>
           <TopNavItem label="Library" href="/" isSelected={isShows} as={Link} />
-          <TopNavItem label="Activity" href="/activity" isSelected={isActivity} as={Link} onMouseEnter={prefetchActivityChunk} />
-          <TopNavItem label="Settings" href="/settings" isSelected={isSettings} as={Link} onMouseEnter={prefetchSettingsChunk} />
+          <TopNavItem
+            label="Activity"
+            href="/activity"
+            isSelected={isActivity}
+            as={Link}
+            onMouseEnter={prefetchActivityChunk}
+          />
+          <TopNavItem
+            label="Settings"
+            href="/settings"
+            isSelected={isSettings}
+            as={Link}
+            onMouseEnter={prefetchSettingsChunk}
+          />
         </>
       }
       endContent={themeMenu}
@@ -159,8 +174,8 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
 
 function Root() {
   // Store only the theme ID — the actual theme definition is loaded
-  // lazily. This keeps ~32KB of custom theme tokens out of the initial
-  // bundle for users who stick with the default (neutral) theme.
+  // lazily. This keeps custom theme tokens out of the initial bundle
+  // for users who stick with the default (flexoki) theme.
   const [themeId, setThemeId] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEY) ?? defaultTheme.id;
   });
@@ -168,7 +183,7 @@ function Root() {
   const [themeMode, setThemeMode] = useState<"dark" | "light" | "system">("system");
 
   // On mount, load the saved theme's definition + CSS if it's a custom
-  // theme. Eager themes (neutral, y2k) are available immediately.
+  // theme. The eager theme (flexoki) is available immediately.
   useEffect(() => {
     const meta = themeMetas.find((t) => t.id === themeId);
     if (meta?.mode) setThemeMode(meta.mode);
@@ -178,7 +193,9 @@ function Root() {
       if (cancelled) return;
       setTheme(def);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = useCallback((id: string) => {
@@ -194,9 +211,10 @@ function Root() {
   // Wire cuelume interaction sounds once on mount — deferred to idle
   // time so it doesn't compete with first paint.
   useEffect(() => {
-    const ric = "requestIdleCallback" in window
-      ? (cb: () => void) => (window as Window).requestIdleCallback(cb, { timeout: 2000 })
-      : (cb: () => void) => setTimeout(cb, 100);
+    const ric =
+      "requestIdleCallback" in window
+        ? (cb: () => void) => (window as Window).requestIdleCallback(cb, { timeout: 2000 })
+        : (cb: () => void) => setTimeout(cb, 100);
     ric(() => initSounds());
   }, []);
 
@@ -204,17 +222,16 @@ function Root() {
 
   return (
     <StrictMode>
-      <Theme theme={theme} mode={themeMode}>
-        <BrowserRouter>
-          <AppShell
-            variant="surface"
-            height="auto"
-            topNav={<Nav themeMenu={menu} />}
-          >
-            <App />
-          </AppShell>
-        </BrowserRouter>
-      </Theme>
+      <QueryClientProvider client={queryClient}>
+        <Theme theme={theme} mode={themeMode}>
+          <BrowserRouter>
+            <AppShell variant="surface" height="auto" topNav={<Nav themeMenu={menu} />}>
+              <App />
+            </AppShell>
+          </BrowserRouter>
+        </Theme>
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      </QueryClientProvider>
     </StrictMode>
   );
 }

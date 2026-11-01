@@ -6,8 +6,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/rs/zerolog/log"
 	"mizu/internal/models"
+
+	"github.com/rs/zerolog/log"
 )
 
 // MatchResult represents a potential match between a Sonarr series and an AFL show.

@@ -1,4 +1,13 @@
-import { useEffect, useState, useCallback, useMemo, useReducer, useRef, lazy, Suspense } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useReducer,
+  useRef,
+  lazy,
+  Suspense,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -15,11 +24,24 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
-import { Plus, Search, Waves, CircleAlert, RefreshCw, Check, ArrowDownUp } from "lucide-react";
-import { useAppStore } from "../lib/store";
-import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, getArtworkRefreshStatus, prefetchEpisodes, errorMessage } from "../lib/api";
+import { Plus, Search, Waves, CircleAlert, RefreshCw, Check, ArrowDownUp, LayoutGrid, Image } from "lucide-react";
+import { useNotificationStore } from "../lib/store";
+import { useBootstrap, useShows, useSettings, useSonarrSeries } from "../lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getArtworkPosterUrl,
+  getArtworkBannerUrl,
+  getArtworkLogoUrl,
+  refreshAllArtwork,
+  getArtworkRefreshStatus,
+  getSonarrAddOptions,
+  getSonarrSeries,
+  getSettings,
+  prefetchEpisodes,
+  errorMessage,
+} from "../lib/api";
 import { prefetchDetailChunk, prefetchAddDialogChunk } from "../lib/chunkPrefetch";
-import type { SelectOption, Settings, Show, SonarrAddOptions, SonarrSeries } from "../lib/types";
+import type { SelectOption, Settings, Show, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { syncStateBadge } from "../lib/fox";
 import {
@@ -46,15 +68,29 @@ const sortOptions: SelectOption[] = [
 
 export function ShowsPage() {
   const navigate = useNavigate();
-  const { shows, setShows, settings, setSettings, addNotification } = useAppStore();
+  const addNotification = useNotificationStore((s) => s.addNotification);
+  const queryClient = useQueryClient();
+
+  // ── Data from TanStack Query ──
+  const bootstrap = useBootstrap();
+  const showsQuery = useShows();
+  const settingsQuery = useSettings();
+  const sonarrSeriesQuery = useSonarrSeries();
+
+  const shows = showsQuery.data ?? bootstrap.data?.shows ?? [];
+  const settings = settingsQuery.data ?? bootstrap.data?.settings ?? null;
 
   // ── Page-level state ──
   // If the store already has shows, don't show a loading spinner — render
   // immediately. SonarrSeries data (for poster/banner URLs) loads in the
   // background and populates images when ready.
-  const [loading, setLoading] = useState(() => !shows || shows.length === 0);
+  const isFetching = bootstrap.isPending && showsQuery.isPending;
+  const [loading, setLoading] = useState(() => shows.length === 0 && isFetching);
   const [filter, setFilter] = useState("");
   const [sortBy, setSortBy] = useState("title");
+  const [viewMode, setViewMode] = useState<"banner" | "poster">(() => {
+    return (localStorage.getItem("mizu-view-mode") as "banner" | "poster") || "banner";
+  });
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const artworkReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [allSeries, setAllSeries] = useState<SonarrSeries[]>([]);
@@ -219,85 +255,40 @@ export function ShowsPage() {
   const showsRef = useRef(shows);
   showsRef.current = shows;
 
-  const loadLanding = useCallback(async (forceRefresh: boolean = false) => {
-    // If the store already has shows and we're not forcing a refresh,
-    // skip the redundant getShows + getSettings round-trip — only
-    // SonarrSeries (for poster/banner URLs) needs fetching since it's
-    // not in the store.
-    const currentShows = showsRef.current;
-    if (!forceRefresh && currentShows && currentShows.length > 0) {
-      setLoading(false);
-      getSonarrSeries()
-        .then((nextSeries) => {
-          setAllSeries(nextSeries || []);
-          setSeriesById(Object.fromEntries((nextSeries || []).map((s) => [s.id, s])));
-        })
-        .catch((err: unknown) => {
-          addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
-        });
-      return;
-    }
-
-    // First load with no store data: the store is already fetching
-    // bootstrap (shows + settings + providers) on mount. Don't make
-    // redundant getShows() + getSettings() calls — just fetch
-    // SonarrSeries in the background. The store will populate shows
-    // when bootstrap resolves, and the shows-changed effect below
-    // will clear the loading state.
-    if (!forceRefresh) {
-      getSonarrSeries()
-        .then((nextSeries) => {
-          setAllSeries(nextSeries || []);
-          setSeriesById(Object.fromEntries((nextSeries || []).map((s) => [s.id, s])));
-        })
-        .catch((err: unknown) => {
-          addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
-        });
-      return;
-    }
-
-    // Forced refresh — fetch shows + settings first, then SonarrSeries
-    // in the background.
-    const [showsRes, settingsRes] = await Promise.allSettled([
-      getShows(),
-      getSettings(),
-    ]);
-    if (showsRes.status === "fulfilled") {
-      setShows(showsRes.value || []);
-    } else {
-      setShows([]);
-      addNotification("Failed to load anime: " + errorMessage(showsRes.reason), "error");
-    }
-    if (settingsRes.status === "fulfilled") {
-      setSettings(settingsRes.value ?? null);
-    }
-    setLoading(false);
-
-    // Load Sonarr series in the background — needed for poster/banner
-    // URLs on shows without local artwork. Don't block the page render.
-    getSonarrSeries()
-      .then((nextSeries) => {
-        setAllSeries(nextSeries || []);
-        setSeriesById(Object.fromEntries((nextSeries || []).map((s) => [s.id, s])));
-      })
-      .catch((err: unknown) => {
-        addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
-      });
-  }, [setShows, setSettings, addNotification]);
-
-  // When the store populates shows (from bootstrap), clear the loading
-  // state. This handles the first-load case where ShowsPage mounts
-  // before bootstrap resolves — the store will update shows, and this
-  // effect reacts to it without making redundant API calls.
+  // Populate local series state from the query data
   useEffect(() => {
-    if (shows && shows.length > 0) {
+    if (sonarrSeriesQuery.data) {
+      setAllSeries(sonarrSeriesQuery.data);
+      setSeriesById(Object.fromEntries(sonarrSeriesQuery.data.map((s) => [s.id, s])));
+    }
+  }, [sonarrSeriesQuery.data]);
+
+  // Clear loading when shows are available
+  useEffect(() => {
+    if (shows.length > 0) {
       setLoading(false);
     }
   }, [shows]);
 
+  // Also clear loading if the query has finished but returned empty
   useEffect(() => {
-    loadLanding();
-  }, [loadLanding]);
+    if (showsQuery.isFetched || bootstrap.isFetched) {
+      if (shows.length === 0) setLoading(false);
+    }
+  }, [showsQuery.isFetched, bootstrap.isFetched, shows.length]);
+
+  const loadLanding = useCallback(
+    async (forceRefresh: boolean = false) => {
+      if (forceRefresh) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["shows"] }),
+          queryClient.invalidateQueries({ queryKey: ["settings"] }),
+          queryClient.invalidateQueries({ queryKey: ["sonarrSeries"] }),
+        ]);
+      }
+    },
+    [queryClient],
+  );
 
   useEffect(() => {
     return () => {
@@ -342,14 +333,11 @@ export function ShowsPage() {
   };
 
   const refreshSettings = async (): Promise<Settings | null> => {
-    try {
-      const current = await getSettings();
-      setSettings(current);
-      return current;
-    } catch (err: unknown) {
-      addNotification("Failed to load settings: " + errorMessage(err), "error");
-      return null;
-    }
+    const result = await queryClient.fetchQuery({
+      queryKey: ["settings"],
+      queryFn: getSettings,
+    });
+    return result ?? null;
   };
 
   const resetAddRuleDefaults = (current: Settings | null = settings) => {
@@ -366,7 +354,10 @@ export function ShowsPage() {
 
   const loadSonarrAddOptions = async () => {
     try {
-      const data: SonarrAddOptions = await getSonarrAddOptions();
+      const data = await queryClient.fetchQuery({
+        queryKey: ["sonarrAddOptions"],
+        queryFn: getSonarrAddOptions,
+      });
       const payload: Partial<AddWizardState> = {
         sonarrRootFolderOptions: (data.root_folders || []).map((f) => ({
           value: f.path,
@@ -409,9 +400,12 @@ export function ShowsPage() {
     dispatch({ type: "SET", payload: { sonarrLoading: false } });
   };
 
-  const openShow = useCallback((showId: string | number) => {
-    navigate(`/shows/${showId}`);
-  }, [navigate]);
+  const openShow = useCallback(
+    (showId: string | number) => {
+      navigate(`/shows/${showId}`);
+    },
+    [navigate],
+  );
 
   const handleCardHover = useCallback((showId: string | number) => {
     prefetchDetailChunk();
@@ -488,15 +482,37 @@ export function ShowsPage() {
               }))}
             />
           </StackItem>
+          <StackItem size="static">
+            <Button
+              label={viewMode === "poster" ? "Banner view" : "Poster view"}
+              variant="ghost"
+              size="lg"
+              isIconOnly
+              icon={viewMode === "poster" ? <LayoutGrid size={16} /> : <Image size={16} />}
+              onClick={() => {
+                const next = viewMode === "poster" ? "banner" : "poster";
+                setViewMode(next);
+                localStorage.setItem("mizu-view-mode", next);
+              }}
+              data-cuelume-press
+            />
+          </StackItem>
         </HStack>
 
         {/* Content */}
         {loading ? (
           <Grid columns={{ minWidth: 320 }} gap={4}>
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: Math.max(1, shows.length) }).map((_, i) => (
               <div key={i} className="mizu-card skeleton-card" style={{ overflow: "hidden" }}>
                 <div className="skeleton" style={{ width: "100%", height: 160, borderRadius: 0 }} />
-                <div style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
+                <div
+                  style={{
+                    padding: "var(--spacing-4)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--spacing-2)",
+                  }}
+                >
                   <div className="skeleton-text-lg" style={{ width: "70%" }} />
                   <div className="skeleton-text" style={{ width: "50%" }} />
                 </div>
@@ -525,83 +541,83 @@ export function ShowsPage() {
             description="Try another title, slug, or keyword."
             icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
             actions={
-              <Button label="Clear search" variant="secondary" onClick={() => setFilter("")} data-cuelume-press />
+              <Button
+                label="Clear search"
+                variant="secondary"
+                onClick={() => setFilter("")}
+                data-cuelume-press
+              />
             }
           />
         ) : (
           <VStack gap={4}>
-            <Grid columns={{ minWidth: 320 }} gap={4}>
-              {filteredShows.map((show: Show & { poster?: string; banner?: string; logo?: string }) => {
-                const badge = syncStateBadge(show.enabled);
-                const img = show.banner || show.poster;
-                const logo = show.logo;
-                return (
-                  <ClickableCard
-                    key={String(show.id)}
-                    label={show.sonarr_title}
-                    onClick={() => openShow(show.id)}
-                    padding={0}
-                    className="mizu-card"
-                    onMouseEnter={() => handleCardHover(show.id)}
-                  >
-                    <div className={`mizu-card-img-wrap${img ? "" : " is-empty"}`}>
-                      {img ? (
-                        <img
-                          src={img}
-                          alt=""
-                          loading="lazy"
-                          onLoad={(e) => {
-                            e.currentTarget.classList.add("is-loaded");
-                          }}
-                          className="mizu-card-img"
-                        />
-                      ) : (
-                        <div className="mizu-card-img-placeholder">
-                          <Waves size={24} color="var(--color-icon-secondary)" />
-                        </div>
-                      )}
-                      {img && (
-                        <div className="mizu-card-overlay">
-                          {logo ? (
-                            <img
-                              src={logo}
-                              alt={show.sonarr_title}
-                              className="mizu-card-logo"
-                            />
-                          ) : (
-                            <span className="mizu-card-overlay-title">{show.sonarr_title}</span>
-                          )}
-                          <Badge
-                            variant={show.enabled ? "success" : "neutral"}
-                            label={badge.label}
+            <Grid columns={viewMode === "poster" ? { minWidth: 180 } : { minWidth: 320 }} gap={4}>
+              {filteredShows.map(
+                (show: Show & { poster?: string; banner?: string; logo?: string }) => {
+                  const badge = syncStateBadge(show.enabled);
+                  const img = viewMode === "poster" ? (show.poster || show.banner) : (show.banner || show.poster);
+                  const logo = show.logo;
+                  return (
+                    <ClickableCard
+                      key={String(show.id)}
+                      label={show.sonarr_title}
+                      onClick={() => openShow(show.id)}
+                      padding={0}
+                      className={`mizu-card${viewMode === "poster" ? " mizu-card-poster" : ""}`}
+                      onMouseEnter={() => handleCardHover(show.id)}
+                    >
+                      <div className={`mizu-card-img-wrap${img ? "" : " is-empty"}`}>
+                        {img ? (
+                          <img
+                            src={img}
+                            alt=""
+                            loading="lazy"
+                            onLoad={(e) => {
+                              e.currentTarget.classList.add("is-loaded");
+                            }}
+                            className="mizu-card-img"
                           />
-                        </div>
-                      )}
-                    </div>
-                    {!img && (
-                      <Section variant="transparent" padding={3}>
-                        <VStack gap={1}>
-                          <HStack justify="between" align="center" wrap="nowrap">
-                            <Heading
-                              level={3}
-                              className="mizu-card-title"
-                            >
-                              {show.sonarr_title}
-                            </Heading>
+                        ) : (
+                          <div className="mizu-card-img-placeholder">
+                            <Waves size={24} color="var(--color-icon-secondary)" />
+                          </div>
+                        )}
+                        {img && (
+                          <div className="mizu-card-overlay">
+                            {viewMode !== "poster" && logo ? (
+                              <img src={logo} alt={show.sonarr_title} className="mizu-card-logo" />
+                            ) : viewMode !== "poster" ? (
+                              <span className="mizu-card-overlay-title">{show.sonarr_title}</span>
+                            ) : null}
                             <Badge
                               variant={show.enabled ? "success" : "neutral"}
                               label={badge.label}
                             />
-                          </HStack>
-                          <Text type="supporting" size="sm">
-                            #{show.sync_watermark > 0 ? show.sync_watermark : 0}
-                          </Text>
-                        </VStack>
-                      </Section>
-                    )}
-                  </ClickableCard>
-                );
-              })}
+                          </div>
+                        )}
+                      </div>
+                      {!img && (
+                        <Section variant="transparent" padding={3}>
+                          <VStack gap={1}>
+                            <HStack justify="between" align="center" wrap="nowrap">
+                              <Heading level={3} className="mizu-card-title">
+                                {show.sonarr_title}
+                              </Heading>
+                              <Badge
+                                variant={show.enabled ? "success" : "neutral"}
+                                label={badge.label}
+                              />
+                            </HStack>
+                            <Text type="supporting" size="sm">
+                              #{show.sync_watermark > 0 ? show.sync_watermark : 0}
+                            </Text>
+                          </VStack>
+                        </Section>
+                      )}
+                    </ClickableCard>
+                  );
+                },
+              )}
             </Grid>
           </VStack>
         )}
@@ -618,24 +634,24 @@ export function ShowsPage() {
         purpose="form"
       >
         <Suspense fallback={null}>
-        <AddAnimeDialog
-          w={w}
-          dispatch={dispatch}
-          allSeries={allSeries}
-          setAllSeries={setAllSeries}
-          setSeriesById={setSeriesById}
-          mappedSeriesIds={mappedSeriesIds}
-          filteredSeriesLibrary={filteredSeriesLibrary}
-          activeWizardSteps={activeWizardSteps}
-          currentStepIndex={currentStepIndex}
-          addNotification={addNotification}
-          loadLanding={loadLanding}
-          openShow={openShow}
-          openExistingMapping={openExistingMapping}
-          preferredAnimeRootFolder={preferredAnimeRootFolder}
-          preferredAnimeQualityProfileId={preferredAnimeQualityProfileId}
-          posterUrl={posterUrlForSeries}
-        />
+          <AddAnimeDialog
+            w={w}
+            dispatch={dispatch}
+            allSeries={allSeries}
+            setAllSeries={setAllSeries}
+            setSeriesById={setSeriesById}
+            mappedSeriesIds={mappedSeriesIds}
+            filteredSeriesLibrary={filteredSeriesLibrary}
+            activeWizardSteps={activeWizardSteps}
+            currentStepIndex={currentStepIndex}
+            addNotification={addNotification}
+            loadLanding={loadLanding}
+            openShow={openShow}
+            openExistingMapping={openExistingMapping}
+            preferredAnimeRootFolder={preferredAnimeRootFolder}
+            preferredAnimeQualityProfileId={preferredAnimeQualityProfileId}
+            posterUrl={posterUrlForSeries}
+          />
         </Suspense>
       </Dialog>
     </Section>

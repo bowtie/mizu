@@ -1,3 +1,4 @@
+import ky, { HTTPError } from "ky";
 import type {
   AFLMatch,
   ArtworkProvider,
@@ -26,21 +27,41 @@ interface MizuPrefetch {
   show?: Promise<Response>;
   series?: Promise<Response>;
 }
-const prefetch = (window as unknown as { __mizuPrefetch?: MizuPrefetch }).__mizuPrefetch;
+const prefetch = (globalThis as unknown as { window?: { __mizuPrefetch?: MizuPrefetch } }).window
+  ?.__mizuPrefetch;
+
+// ky instance — handles JSON serialization, error parsing, and retries.
+// The prefetch system (inline script Responses) and ETag-based episode
+// caching still use raw fetch because ky can't consume pre-fired Response
+// objects or handle 304 Not Modified.
+const api = ky.create({
+  prefix: BASE + "/",
+  headers: { "Content-Type": "application/json" },
+  retry: 0, // TanStack Query handles retries at a higher level
+  hooks: {
+    beforeError: [
+      async (state) => {
+        const { error } = state;
+        if (error instanceof HTTPError && error.response) {
+          try {
+            const body = (await error.response.clone().json()) as { error?: string };
+            if (body.error) {
+              error.message = body.error;
+            }
+          } catch {
+            // response body isn't JSON — keep ky's default message
+          }
+        }
+        return error;
+      },
+    ],
+  },
+});
 
 async function request<T>(method: string, path: string, body: unknown = null): Promise<T> {
-  const opts: RequestInit = {
-    method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (body) opts.body = JSON.stringify(body);
-
-  const res = await fetch(BASE + path, opts);
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
-    throw new Error(err.error || res.statusText);
-  }
-  return res.json() as Promise<T>;
+  const init: Record<string, unknown> = { method };
+  if (body) init.json = body;
+  return api(path, init).json() as Promise<T>;
 }
 
 // Like request(), but reuses a pre-fired Response from the inline
@@ -57,20 +78,6 @@ async function requestPrefetched<T>(
     if (res.status === 404) throw new Error("not found");
   }
   return request<T>("GET", fallbackPath);
-}
-
-// In-memory cache for Sonarr series by ID — survives navigations within
-// the session. The backend also caches in SQLite for 24h, but this avoids
-// a network round-trip when revisiting a show in the same session.
-const seriesCache = new Map<number, SonarrSeries>();
-
-export function getSonarrSeriesById(seriesId: number): Promise<SonarrSeries> {
-  const cached = seriesCache.get(seriesId);
-  if (cached) return Promise.resolve(cached);
-  return request<SonarrSeries>("GET", "/sonarr/series/" + seriesId).then((series) => {
-    seriesCache.set(seriesId, series);
-    return series;
-  });
 }
 
 export function getSonarrSeries(matchableOnly: boolean = false): Promise<SonarrSeries[]> {
@@ -92,11 +99,7 @@ export function lookupSonarrSeries(query: string): Promise<SonarrSeries[]> {
 }
 
 export function addSonarrSeries(data: SonarrAddPayload): Promise<SonarrSeries> {
-  return request<SonarrSeries>("POST", "/sonarr/series", data).then((series) => {
-    // Cache the freshly created series so subsequent lookups are instant.
-    seriesCache.set(series.id, series);
-    return series;
-  });
+  return request<SonarrSeries>("POST", "/sonarr/series", data);
 }
 
 export function getSonarrAddOptions(): Promise<SonarrAddOptions> {
@@ -187,6 +190,10 @@ export function clearCachedShowDetail(id: string | number): void {
   const key = String(id);
   detailDataCache.delete(key);
   detailPrefetch.delete(key);
+  // Also clear episode ETag/data caches to prevent unbounded memory
+  // growth in long sessions where the user visits many show pages.
+  episodeETags.delete(key);
+  episodeDataCache.delete(key);
 }
 
 /** Prefetch show + episodes data. Used in main.tsx on direct
@@ -202,10 +209,14 @@ export function prefetchShowDetail(id: string | number): void {
   if (detailPrefetch.has(key)) return;
   // Reuse the pre-fired Responses from the inline script if available.
   const showPreFired = prefetch?.show && prefetch.detailId === key ? prefetch.show : undefined;
-  const episodesPreFired = prefetch?.episodes && prefetch.detailId === key ? prefetch.episodes : undefined;
+  const episodesPreFired =
+    prefetch?.episodes && prefetch.detailId === key ? prefetch.episodes : undefined;
 
   const showPromise = showPreFired
-    ? showPreFired.then((res) => { if (!res.ok) throw new Error("prefetch failed"); return res.clone().json() as Promise<Show>; })
+    ? showPreFired.then((res) => {
+        if (!res.ok) throw new Error("prefetch failed");
+        return res.clone().json() as Promise<Show>;
+      })
     : request<Show>("GET", "/mappings/" + key);
   const episodesPromise = episodesPreFired
     ? episodesPreFired.then(async (res) => {
@@ -225,7 +236,9 @@ export function prefetchShowDetail(id: string | number): void {
     .then(([show, episodes]) => {
       detailDataCache.set(key, { show, episodes });
     })
-    .catch(() => { /* ignore — effect will re-fetch */ });
+    .catch(() => {
+      /* ignore — effect will re-fetch */
+    });
 }
 
 export function createShow(data: MappingCreate): Promise<Show> {
@@ -326,8 +339,14 @@ async function requestEpisodesWithETag(key: string): Promise<Episode[]> {
   if (etag) headers["If-None-Match"] = etag;
 
   const res = await fetch(BASE + "/mappings/" + key + "/episodes", { headers });
-  if (res.status === 304 && episodeDataCache.has(key)) {
-    return episodeDataCache.get(key)!;
+  if (res.status === 304) {
+    if (episodeDataCache.has(key)) {
+      return episodeDataCache.get(key)!;
+    }
+    // 304 with no cached data — the ETag is stale (e.g. cache was cleared).
+    // Drop the ETag and re-fetch without conditional headers.
+    episodeETags.delete(key);
+    return requestEpisodesWithETag(key);
   }
   if (!res.ok) {
     const err = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
@@ -376,21 +395,14 @@ export function refreshArtwork(
   source?: string,
 ): Promise<ArtworkRefreshResult> {
   const query = source ? `?source=${encodeURIComponent(source)}` : "";
-  return request<ArtworkRefreshResult>(
-    "POST",
-    `/mappings/${showId}/artwork/refresh${query}`,
-  );
+  return request<ArtworkRefreshResult>("POST", `/mappings/${showId}/artwork/refresh${query}`);
 }
 
 export function setArtworkSource(
   showId: string | number,
   source: string,
 ): Promise<{ status: string }> {
-  return request<{ status: string }>(
-    "PUT",
-    `/mappings/${showId}/artwork/source`,
-    { source },
-  );
+  return request<{ status: string }>("PUT", `/mappings/${showId}/artwork/source`, { source });
 }
 
 export function refreshAllArtwork(): Promise<{ status: string }> {
@@ -406,9 +418,13 @@ export function setEpisodeMonitor(
   epId: string | number,
   monitored: boolean,
 ): Promise<{ monitored: boolean }> {
-  return request<{ monitored: boolean }>("PUT", "/mappings/" + showId + "/episodes/" + epId + "/monitor", {
-    monitored,
-  });
+  return request<{ monitored: boolean }>(
+    "PUT",
+    "/mappings/" + showId + "/episodes/" + epId + "/monitor",
+    {
+      monitored,
+    },
+  );
 }
 
 export function triggerSync(): Promise<unknown> {
@@ -445,20 +461,22 @@ export function testNtfyConnection(data: {
 /** Safely extract a human-readable message from an unknown catch value. */
 export function errorMessage(err: unknown): string {
   if (err instanceof Error) {
-    return err.message
-      // Strip Go-style prefixes like 'Post "url": dial tcp: ...'
-      .replace(/^(?:Post|Get|Put|Delete)\s+"[^"]+":\s*/i, "")
-      // Trim 'dial tcp: lookup hostname: no such host' → 'hostname could not be reached'
-      .replace(/^dial tcp:\s*lookup\s+\S+:\s*no such host/i, (m, _g) => {
-        const host = m.match(/lookup\s+(\S+)/)?.[1] ?? "server";
-        return `${host} could not be reached`;
-      })
-      // 'connection refused' → friendlier
-      .replace(/^dial tcp.*: connection refused/i, "connection was refused by the server")
-      // 'i/o timeout' → friendlier
-      .replace(/^dial tcp.*: i\/o timeout/i, "connection timed out")
-      // Collapse 'context deadline exceeded (client timeout exceeded while awaiting headers)'
-      .replace(/^context deadline exceeded.*$/i, "request timed out");
+    return (
+      err.message
+        // Strip Go-style prefixes like 'Post "url": dial tcp: ...'
+        .replace(/^(?:Post|Get|Put|Delete)\s+"[^"]+":\s*/i, "")
+        // Trim 'dial tcp: lookup hostname: no such host' → 'hostname could not be reached'
+        .replace(/^dial tcp:\s*lookup\s+\S+:\s*no such host/i, (m, _g) => {
+          const host = m.match(/lookup\s+(\S+)/)?.[1] ?? "server";
+          return `${host} could not be reached`;
+        })
+        // 'connection refused' → friendlier
+        .replace(/^dial tcp.*: connection refused/i, "connection was refused by the server")
+        // 'i/o timeout' → friendlier
+        .replace(/^dial tcp.*: i\/o timeout/i, "connection timed out")
+        // Collapse 'context deadline exceeded (client timeout exceeded while awaiting headers)'
+        .replace(/^context deadline exceeded.*$/i, "request timed out")
+    );
   }
   return String(err);
 }

@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNotifierEnabled(t *testing.T) {
@@ -25,9 +28,7 @@ func TestNotifierEnabled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			n := New(tt.serverURL, tt.topic, "")
-			if got := n.Enabled(); got != tt.want {
-				t.Errorf("Enabled() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, n.Enabled())
 		})
 	}
 }
@@ -36,12 +37,10 @@ func TestSendSyncResult(t *testing.T) {
 	var received map[string]interface{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer test-token" {
-			t.Error("expected Authorization header")
-		}
-		json.NewDecoder(r.Body).Decode(&received)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		_ = json.NewDecoder(r.Body).Decode(&received)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"id": "test123"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": "test123"})
 	}))
 	defer ts.Close()
 
@@ -55,31 +54,20 @@ func TestSendSyncResult(t *testing.T) {
 		Trigger:         "manual",
 	}
 
-	err := n.SendSyncResult(context.Background(), result)
-	if err != nil {
-		t.Fatalf("SendSyncResult() error = %v", err)
-	}
-
-	if received["topic"] != "test-topic" {
-		t.Errorf("expected topic 'test-topic', got %v", received["topic"])
-	}
-	if received["title"] != "Sync Complete" {
-		t.Errorf("expected title 'Sync Complete', got %v", received["title"])
-	}
+	require.NoError(t, n.SendSyncResult(context.Background(), result))
+	assert.Equal(t, "test-topic", received["topic"])
+	assert.Equal(t, "Sync Complete", received["title"])
 }
 
 func TestSendSyncResultPartial(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&payload)
+		_ = json.NewDecoder(r.Body).Decode(&payload)
 
-		// Priority should be 4 (high) for partial
-		if payload["priority"].(float64) != 4 {
-			t.Errorf("expected priority 4 for partial, got %v", payload["priority"])
-		}
+		assert.Equal(t, float64(4), payload["priority"])
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"id": "test456"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": "test456"})
 	}))
 	defer ts.Close()
 
@@ -94,20 +82,14 @@ func TestSendSyncResultPartial(t *testing.T) {
 		Trigger:         "scheduled",
 	}
 
-	err := n.SendSyncResult(context.Background(), result)
-	if err != nil {
-		t.Fatalf("SendSyncResult() error = %v", err)
-	}
+	require.NoError(t, n.SendSyncResult(context.Background(), result))
 }
 
 func TestSendNotificationDisabled(t *testing.T) {
 	n := New("", "", "")
 
 	result := SyncResult{Status: "success"}
-	err := n.SendSyncResult(context.Background(), result)
-	if err != nil {
-		t.Fatalf("expected no error when disabled, got %v", err)
-	}
+	require.NoError(t, n.SendSyncResult(context.Background(), result))
 }
 
 func TestSendNotificationHTTPError(t *testing.T) {
@@ -118,10 +100,7 @@ func TestSendNotificationHTTPError(t *testing.T) {
 
 	n := New(ts.URL, "test-topic", "bad-token")
 
-	err := n.SendTestNotification(context.Background())
-	if err == nil {
-		t.Fatal("expected error for 403 response")
-	}
+	assert.Error(t, n.SendTestNotification(context.Background()))
 }
 
 func TestFormatSyncMessage(t *testing.T) {
@@ -138,12 +117,8 @@ func TestFormatSyncMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.status, func(t *testing.T) {
 			title, _, priority, _ := formatSyncMessage(SyncResult{Status: tt.status})
-			if title != tt.wantTitle {
-				t.Errorf("title = %q, want %q", title, tt.wantTitle)
-			}
-			if priority != tt.wantPriority {
-				t.Errorf("priority = %d, want %d", priority, tt.wantPriority)
-			}
+			assert.Equal(t, tt.wantTitle, title)
+			assert.Equal(t, tt.wantPriority, priority)
 		})
 	}
 }

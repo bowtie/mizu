@@ -9,7 +9,7 @@ export const episodeTypeMeta: Record<string, BadgeMeta> = {
   anime_canon: { label: "Anime" },
   filler: { label: "Filler" },
   special: { label: "Special" },
-  unknown: { label: "Unknown" },
+  unknown: { label: "TBD" },
 };
 
 export function episodeTypeBadge(type: string | undefined | null): BadgeMeta {

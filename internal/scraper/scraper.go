@@ -9,10 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
-	"github.com/rs/zerolog/log"
 	"mizu/internal/database"
 	"mizu/internal/models"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/rs/zerolog/log"
 )
 
 const (

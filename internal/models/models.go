@@ -60,10 +60,10 @@ type ShowMapping struct {
 	SonarrTitle       string        `json:"sonarr_title"`
 	AFLSlug           string        `json:"afl_slug"` // e.g., "naruto-shippuden"
 	AFLTitle          string        `json:"afl_title"`
-	AutoMatched       bool          `json:"-"` // internal only, not used by frontend
-	MatchConfidence   float64       `json:"-"` // internal only, not used by frontend
-	FillerAction      FillerAction  `json:"filler_action"`    // per-show override
-	MixedAction       FillerAction  `json:"mixed_action"`     // per-show override
+	AutoMatched       bool          `json:"-"`             // internal only, not used by frontend
+	MatchConfidence   float64       `json:"-"`             // internal only, not used by frontend
+	FillerAction      FillerAction  `json:"filler_action"` // per-show override
+	MixedAction       FillerAction  `json:"mixed_action"`  // per-show override
 	AnimeCanonAction  FillerAction  `json:"anime_canon_action"`
 	Enabled           bool          `json:"enabled"`
 	StartMode         StartMode     `json:"start_mode"`
@@ -74,8 +74,8 @@ type ShowMapping struct {
 	ArtworkBannerPath string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file
 	ArtworkLogoPath   string        `json:"artwork_logo_path,omitempty"`   // relative path to local logo file
 	Overview          string        `json:"overview,omitempty"`            // series synopsis (cached from Sonarr)
-	CreatedAt         time.Time     `json:"-"` // internal only, not used by frontend
-	UpdatedAt         time.Time     `json:"-"` // internal only, not used by frontend
+	CreatedAt         time.Time     `json:"-"`                             // internal only, not used by frontend
+	UpdatedAt         time.Time     `json:"-"`                             // internal only, not used by frontend
 }
 
 // EpisodeInfo holds filler data for a single episode.
@@ -83,7 +83,7 @@ type EpisodeInfo struct {
 	ID                    int64       `json:"-"`
 	MappingID             int64       `json:"-"`
 	EpisodeNum            int         `json:"episode_num"` // UI identity/display number
-	AFLEpisodeNumber      int         `json:"-"` // internal only, not used by frontend
+	AFLEpisodeNumber      int         `json:"-"`           // internal only, not used by frontend
 	Title                 string      `json:"title"`
 	Type                  EpisodeType `json:"type"`
 	LastScraped           time.Time   `json:"-"`
@@ -111,7 +111,7 @@ type SyncLogItem struct {
 type SyncLog struct {
 	ID              int64         `json:"id"`
 	StartedAt       time.Time     `json:"started_at"`
-	CompletedAt     time.Time     `json:"completed_at"`
+	CompletedAt     *time.Time    `json:"completed_at,omitempty"`
 	Status          string        `json:"status"` // "success", "partial", "failed"
 	ShowsProcessed  int           `json:"shows_processed"`
 	EpisodesUpdated int           `json:"episodes_updated"`

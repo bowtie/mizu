@@ -14,14 +14,6 @@ var allowedScanIntervals = map[string]time.Duration{
 	"24h": 24 * time.Hour,
 }
 
-func scanIntervalToDuration(value string) (time.Duration, error) {
-	d, ok := allowedScanIntervals[value]
-	if !ok {
-		return 0, fmt.Errorf("unsupported sync interval %q", value)
-	}
-	return d, nil
-}
-
 func scanIntervalToValue(d time.Duration) string {
 	for value, allowed := range allowedScanIntervals {
 		if d == allowed {

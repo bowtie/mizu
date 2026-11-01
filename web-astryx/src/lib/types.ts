@@ -22,13 +22,16 @@ export interface Settings {
   afl_show_cache_count: number;
   artwork_default_source?: string;
   tmdb_api_key?: string;
+  tmdb_api_key_masked?: string;
   tmdb_api_key_set?: boolean;
   fanart_api_key?: string;
+  fanart_api_key_masked?: string;
   fanart_api_key_set?: boolean;
   ntfy_enabled?: boolean;
   ntfy_server_url?: string;
   ntfy_topic?: string;
   ntfy_token_set?: boolean;
+  ui_sounds_enabled?: boolean;
   [key: string]: unknown;
 }
 
@@ -188,9 +191,4 @@ export interface SyncLogResponse {
 export interface TestConnectionResult {
   success: boolean;
   error?: string;
-}
-
-export interface StoredApiKeyResponse {
-  sonarr_api_key?: string;
-  sonarr_api_key_set?: boolean;
 }

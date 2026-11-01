@@ -5,20 +5,24 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 	"time"
 
+	"mizu/internal/database/sqlcgen"
 	"mizu/internal/models"
 
 	_ "modernc.org/sqlite"
 
+	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 )
 
-// DB wraps the SQLite database connection.
+// DB wraps the SQLite database connection and sqlc-generated queries.
 type DB struct {
 	conn *sql.DB
+	q    *sqlcgen.Queries
 }
 
 // New opens or creates a SQLite database at the given path.
@@ -42,7 +46,7 @@ func New(dbPath string) (*DB, error) {
 	conn.SetMaxIdleConns(4)
 	conn.SetConnMaxLifetime(0)
 
-	db := &DB{conn: conn}
+	db := &DB{conn: conn, q: sqlcgen.New(conn)}
 	if err := db.migrate(); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("running migrations: %w", err)
@@ -56,223 +60,196 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) migrate() error {
-	migrations := []string{
-		`CREATE TABLE IF NOT EXISTS show_mappings (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			sonarr_series_id INTEGER NOT NULL UNIQUE,
-			sonarr_title TEXT NOT NULL,
-			afl_slug TEXT NOT NULL,
-			afl_title TEXT NOT NULL,
-			auto_matched INTEGER NOT NULL DEFAULT 1,
-			match_confidence REAL NOT NULL DEFAULT 0.0,
-			filler_action TEXT NOT NULL DEFAULT 'unmonitor',
-			mixed_action TEXT NOT NULL DEFAULT 'monitor',
-			anime_canon_action TEXT NOT NULL DEFAULT 'monitor',
-			enabled INTEGER NOT NULL DEFAULT 1,
-			start_mode TEXT NOT NULL DEFAULT 'from_current_progress',
-			watermark_mode TEXT NOT NULL DEFAULT 'auto',
-			sync_watermark INTEGER NOT NULL DEFAULT 0,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS episode_info (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			mapping_id INTEGER NOT NULL,
-			episode_num INTEGER NOT NULL,
-			title TEXT NOT NULL DEFAULT '',
-			type TEXT NOT NULL DEFAULT 'unknown',
-			last_scraped DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			sonarr_episode_id INTEGER NOT NULL DEFAULT 0,
-			season_number INTEGER NOT NULL DEFAULT 0,
-			sonarr_episode_number INTEGER NOT NULL DEFAULT 0,
-			absolute_episode_number INTEGER,
-			monitored INTEGER NOT NULL DEFAULT 0,
-			air_date DATETIME,
-			FOREIGN KEY (mapping_id) REFERENCES show_mappings(id) ON DELETE CASCADE,
-			UNIQUE(mapping_id, episode_num)
-		)`,
-		`CREATE TABLE IF NOT EXISTS sync_logs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			completed_at DATETIME,
-			status TEXT NOT NULL DEFAULT 'running',
-			shows_processed INTEGER NOT NULL DEFAULT 0,
-			episodes_updated INTEGER NOT NULL DEFAULT 0,
-			errors TEXT NOT NULL DEFAULT '',
-			trigger_type TEXT NOT NULL DEFAULT 'manual'
-		)`,
-		`CREATE TABLE IF NOT EXISTS sync_log_items (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			sync_log_id INTEGER NOT NULL,
-			mapping_id INTEGER NOT NULL DEFAULT 0,
-			sonarr_title TEXT NOT NULL DEFAULT '',
-			status TEXT NOT NULL DEFAULT 'checked',
-			episodes_changed INTEGER NOT NULL DEFAULT 0,
-			summary TEXT NOT NULL DEFAULT '',
-			error TEXT NOT NULL DEFAULT '',
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (sync_log_id) REFERENCES sync_logs(id) ON DELETE CASCADE
-		)`,
-		`CREATE TABLE IF NOT EXISTS app_settings (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL DEFAULT ''
-		)`,
-		`CREATE TABLE IF NOT EXISTS afl_show_cache (
-			slug TEXT PRIMARY KEY,
-			title TEXT NOT NULL,
-			url TEXT NOT NULL,
-			refreshed_at DATETIME NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS sonarr_series_cache (
-			series_id INTEGER PRIMARY KEY,
-			data_json TEXT NOT NULL,
-			cached_at DATETIME NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_episode_info_mapping ON episode_info(mapping_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_episode_info_mapping_num ON episode_info(mapping_id, episode_num)`,
-		`CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_sync_log_items_log_id ON sync_log_items(sync_log_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_afl_show_cache_title ON afl_show_cache(title COLLATE NOCASE)`,
+	goose.SetLogger(goose.NopLogger())
+
+	// Check if this is a pre-existing database (tables already exist
+	// but goose_db_version doesn't). If so, mark all current migrations
+	// as applied so goose doesn't try to re-create tables.
+	var tableCount int
+	err := db.conn.QueryRow(`
+		SELECT COUNT(*) FROM sqlite_master
+		WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'goose_db_version'`).Scan(&tableCount)
+	if err != nil {
+		return fmt.Errorf("checking existing tables: %w", err)
 	}
 
-	for _, m := range migrations {
-		if _, err := db.conn.Exec(m); err != nil {
-			return fmt.Errorf("executing migration: %w", err)
+	if tableCount > 0 {
+		var gooseTableExists int
+		err := db.conn.QueryRow(`
+			SELECT COUNT(*) FROM sqlite_master
+			WHERE type = 'table' AND name = 'goose_db_version'`).Scan(&gooseTableExists)
+		if err != nil {
+			return fmt.Errorf("checking goose table: %w", err)
+		}
+		if gooseTableExists == 0 {
+			if _, err := db.conn.Exec(`
+				CREATE TABLE goose_db_version (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					version_id INTEGER NOT NULL,
+					is_applied INTEGER NOT NULL,
+					tstamp TIMESTAMP DEFAULT (datetime('now'))
+				)`); err != nil {
+				return fmt.Errorf("creating goose_db_version: %w", err)
+			}
+			// goose expects a version 0 row to exist before it checks
+			// for applied migrations. Without it, goose tries to recreate
+			// the table and crashes.
+			if _, err := db.conn.Exec(`
+				INSERT INTO goose_db_version (version_id, is_applied) VALUES (0, 1)`); err != nil {
+				return fmt.Errorf("inserting goose zero version: %w", err)
+			}
+			if _, err := db.conn.Exec(`
+				INSERT INTO goose_db_version (version_id, is_applied) VALUES (1, 1)`); err != nil {
+				return fmt.Errorf("marking initial migration as applied: %w", err)
+			}
 		}
 	}
 
-	// ALTER TABLE statements run after CREATE TABLE to upgrade existing databases
-	// with columns that were added in later versions. On fresh databases these
-	// will fail silently because the columns already exist in the CREATE TABLE.
-	for _, alterSQL := range []string{
-		"ALTER TABLE show_mappings ADD COLUMN anime_canon_action TEXT NOT NULL DEFAULT 'monitor'",
-		"ALTER TABLE show_mappings ADD COLUMN sync_watermark INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE show_mappings ADD COLUMN start_mode TEXT NOT NULL DEFAULT 'from_current_progress'",
-		"ALTER TABLE show_mappings ADD COLUMN watermark_mode TEXT NOT NULL DEFAULT 'auto'",
-		"ALTER TABLE episode_info ADD COLUMN sonarr_episode_id INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE episode_info ADD COLUMN season_number INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE episode_info ADD COLUMN sonarr_episode_number INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE episode_info ADD COLUMN absolute_episode_number INTEGER",
-		"ALTER TABLE episode_info ADD COLUMN monitored INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE episode_info ADD COLUMN air_date DATETIME",
-		"ALTER TABLE show_mappings ADD COLUMN artwork_source TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE show_mappings ADD COLUMN artwork_poster_path TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE show_mappings ADD COLUMN artwork_banner_path TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE show_mappings ADD COLUMN artwork_logo_path TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE show_mappings ADD COLUMN overview TEXT NOT NULL DEFAULT ''",
-	} {
-		db.conn.Exec(alterSQL)
+	subFS, err := fs.Sub(migrationsFS, "migrations")
+	if err != nil {
+		return fmt.Errorf("creating sub-filesystem: %w", err)
 	}
-
-	for _, dropSQL := range []string{
-		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS episode_cutoff",
-		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS season_cutoff",
-		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS episode_offset",
-		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS anilist_poster_url",
-		"ALTER TABLE show_mappings DROP COLUMN IF EXISTS anilist_banner_url",
-		"ALTER TABLE episode_info DROP COLUMN IF EXISTS arc_name",
-	} {
-		db.conn.Exec(dropSQL)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, db.conn, subFS)
+	if err != nil {
+		return fmt.Errorf("creating goose provider: %w", err)
 	}
-
-	// Data migration: "auto" source no longer exists — clear it so those
-	// mappings fall back to the global default.
-	db.conn.Exec("UPDATE show_mappings SET artwork_source = '' WHERE artwork_source = 'auto'")
-
-	// One-time backfill: copy overview from sonarr_series_cache into
-	// show_mappings for existing shows that predate the overview column.
-	// The cache stores the full SonarrSeries as JSON; we extract overview
-	// with json_extract (available in SQLite >= 3.38).
-	db.conn.Exec(`
-		UPDATE show_mappings
-		SET overview = json_extract(c.data_json, '$.overview')
-		FROM sonarr_series_cache c
-		WHERE show_mappings.sonarr_series_id = c.series_id
-		  AND show_mappings.overview = ''
-		  AND json_extract(c.data_json, '$.overview') IS NOT NULL
-		  AND json_extract(c.data_json, '$.overview') != ''`)
+	if _, err := provider.Up(context.Background()); err != nil {
+		return fmt.Errorf("running goose migrations: %w", err)
+	}
 
 	return nil
 }
 
+// ── Conversion helpers ──
+
+func sqlcMappingToModel(s sqlcgen.ShowMapping) models.ShowMapping {
+	return models.ShowMapping{
+		ID:                s.ID,
+		SonarrSeriesID:    int(s.SonarrSeriesID),
+		SonarrTitle:       s.SonarrTitle,
+		AFLSlug:           s.AflSlug,
+		AFLTitle:          s.AflTitle,
+		AutoMatched:       s.AutoMatched != 0,
+		MatchConfidence:   s.MatchConfidence,
+		FillerAction:      models.FillerAction(s.FillerAction),
+		MixedAction:       models.FillerAction(s.MixedAction),
+		AnimeCanonAction:  models.FillerAction(s.AnimeCanonAction),
+		Enabled:           s.Enabled != 0,
+		StartMode:         models.StartMode(s.StartMode),
+		WatermarkMode:     models.WatermarkMode(s.WatermarkMode),
+		SyncWatermark:     int(s.SyncWatermark),
+		ArtworkSource:     s.ArtworkSource,
+		ArtworkPosterPath: s.ArtworkPosterPath,
+		ArtworkBannerPath: s.ArtworkBannerPath,
+		ArtworkLogoPath:   s.ArtworkLogoPath,
+		Overview:          s.Overview,
+		CreatedAt:         s.CreatedAt,
+		UpdatedAt:         s.UpdatedAt,
+	}
+}
+
+func sqlcEpisodeToModel(s sqlcgen.GetEpisodesByMappingRow) models.EpisodeInfo {
+	e := models.EpisodeInfo{
+		EpisodeNum:          int(s.EpisodeNum),
+		Title:               s.Title,
+		Type:                models.EpisodeType(s.Type),
+		SonarrEpisodeID:     int(s.SonarrEpisodeID),
+		SeasonNumber:        int(s.SeasonNumber),
+		SonarrEpisodeNumber: int(s.SonarrEpisodeNumber),
+		Monitored:           s.Monitored != 0,
+	}
+	if s.AbsoluteEpisodeNumber != nil {
+		val := int(*s.AbsoluteEpisodeNumber)
+		e.AbsoluteEpisodeNumber = &val
+	}
+	if s.AirDate != nil {
+		d := models.DateOnly(*s.AirDate)
+		e.AirDate = &d
+	}
+	return e
+}
+
+func sqlcSyncLogToModel(s sqlcgen.SyncLog) models.SyncLog {
+	l := models.SyncLog{
+		ID:              s.ID,
+		StartedAt:       s.StartedAt,
+		Status:          s.Status,
+		ShowsProcessed:  int(s.ShowsProcessed),
+		EpisodesUpdated: int(s.EpisodesUpdated),
+		Errors:          s.Errors,
+		Trigger:         s.TriggerType,
+	}
+	if s.CompletedAt != nil {
+		l.CompletedAt = s.CompletedAt
+	}
+	return l
+}
+
+func sqlcSyncLogItemToModel(s sqlcgen.GetSyncLogItemsByLogIDRow) models.SyncLogItem {
+	return models.SyncLogItem{
+		ID:              s.ID,
+		SyncLogID:       s.SyncLogID,
+		MappingID:       s.MappingID,
+		SonarrTitle:     s.SonarrTitle,
+		Status:          s.Status,
+		EpisodesChanged: int(s.EpisodesChanged),
+		Summary:         s.Summary,
+		Error:           s.Error,
+	}
+}
+
+func normalizeMapping(m models.ShowMapping) models.ShowMapping {
+	if m.StartMode == "" {
+		m.StartMode = models.StartModeCurrentProgress
+	}
+	if m.WatermarkMode == "" {
+		if m.StartMode == models.StartModeFromBeginning {
+			m.WatermarkMode = models.WatermarkModeManual
+		} else {
+			m.WatermarkMode = models.WatermarkModeAuto
+		}
+	}
+	if m.SyncWatermark < 0 {
+		m.SyncWatermark = 0
+	}
+	return m
+}
+
+// ── Mappings ──
+
 func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) {
-	rows, err := db.conn.QueryContext(ctx, `
-		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
-		       auto_matched, match_confidence, filler_action, mixed_action,
-		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-		       overview, created_at, updated_at
-		FROM show_mappings ORDER BY sonarr_title ASC`)
+	rows, err := db.q.GetAllMappings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var mappings []models.ShowMapping
-	for rows.Next() {
-		var m models.ShowMapping
-		err := rows.Scan(
-			&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
-			&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
-			&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-			&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
-			&m.Overview, &m.CreatedAt, &m.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		mappings = append(mappings, normalizeMapping(m))
+	mappings := make([]models.ShowMapping, 0, len(rows))
+	for _, r := range rows {
+		mappings = append(mappings, normalizeMapping(sqlcMappingToModel(r)))
 	}
-	return mappings, rows.Err()
+	return mappings, nil
 }
 
 func (db *DB) GetMappingByID(ctx context.Context, id int64) (*models.ShowMapping, error) {
-	var m models.ShowMapping
-	err := db.conn.QueryRowContext(ctx, `
-		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
-		       auto_matched, match_confidence, filler_action, mixed_action,
-		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-		       overview, created_at, updated_at
-		FROM show_mappings WHERE id = ?`, id).Scan(
-		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
-		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
-		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
-		&m.Overview, &m.CreatedAt, &m.UpdatedAt,
-	)
+	row, err := db.q.GetMappingByID(ctx, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	m = normalizeMapping(m)
+	m := normalizeMapping(sqlcMappingToModel(row))
 	return &m, nil
 }
 
 func (db *DB) GetMappingBySonarrID(ctx context.Context, seriesID int) (*models.ShowMapping, error) {
-	var m models.ShowMapping
-	err := db.conn.QueryRowContext(ctx, `
-		SELECT id, sonarr_series_id, sonarr_title, afl_slug, afl_title,
-		       auto_matched, match_confidence, filler_action, mixed_action,
-		       anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-		       artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
-		       overview, created_at, updated_at
-		FROM show_mappings WHERE sonarr_series_id = ?`, seriesID).Scan(
-		&m.ID, &m.SonarrSeriesID, &m.SonarrTitle, &m.AFLSlug, &m.AFLTitle,
-		&m.AutoMatched, &m.MatchConfidence, &m.FillerAction, &m.MixedAction,
-		&m.AnimeCanonAction, &m.Enabled, &m.StartMode, &m.WatermarkMode, &m.SyncWatermark,
-		&m.ArtworkSource, &m.ArtworkPosterPath, &m.ArtworkBannerPath, &m.ArtworkLogoPath,
-		&m.Overview, &m.CreatedAt, &m.UpdatedAt,
-	)
+	row, err := db.q.GetMappingBySonarrID(ctx, int64(seriesID))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	m = normalizeMapping(m)
+	m := normalizeMapping(sqlcMappingToModel(row))
 	return &m, nil
 }
 
@@ -294,74 +271,59 @@ func (db *DB) UpsertMapping(ctx context.Context, m *models.ShowMapping) error {
 	now := time.Now()
 	m.UpdatedAt = now
 
-	result, err := db.conn.ExecContext(ctx, `
-		INSERT INTO show_mappings (sonarr_series_id, sonarr_title, afl_slug, afl_title,
-		    auto_matched, match_confidence, filler_action, mixed_action,
-		    anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(sonarr_series_id) DO UPDATE SET
-		    sonarr_title = excluded.sonarr_title,
-		    afl_slug = excluded.afl_slug,
-		    afl_title = excluded.afl_title,
-		    auto_matched = excluded.auto_matched,
-		    match_confidence = excluded.match_confidence,
-		    filler_action = excluded.filler_action,
-		    mixed_action = excluded.mixed_action,
-		    anime_canon_action = excluded.anime_canon_action,
-		    enabled = excluded.enabled,
-		    start_mode = excluded.start_mode,
-		    watermark_mode = excluded.watermark_mode,
-		    sync_watermark = excluded.sync_watermark,
-		    updated_at = excluded.updated_at`,
-		m.SonarrSeriesID, m.SonarrTitle, m.AFLSlug, m.AFLTitle,
-		m.AutoMatched, m.MatchConfidence, m.FillerAction, m.MixedAction,
-		m.AnimeCanonAction, m.Enabled, m.StartMode, m.WatermarkMode, m.SyncWatermark, now, now,
-	)
+	err := db.q.UpsertMapping(ctx, sqlcgen.UpsertMappingParams{
+		SonarrSeriesID:   int64(m.SonarrSeriesID),
+		SonarrTitle:      m.SonarrTitle,
+		AflSlug:          m.AFLSlug,
+		AflTitle:         m.AFLTitle,
+		AutoMatched:      boolToInt(m.AutoMatched),
+		MatchConfidence:  m.MatchConfidence,
+		FillerAction:     string(m.FillerAction),
+		MixedAction:      string(m.MixedAction),
+		AnimeCanonAction: string(m.AnimeCanonAction),
+		Enabled:          boolToInt(m.Enabled),
+		StartMode:        string(m.StartMode),
+		WatermarkMode:    string(m.WatermarkMode),
+		SyncWatermark:    int64(m.SyncWatermark),
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	})
 	if err != nil {
 		return err
 	}
+
 	// Populate the ID on insert (autoincrement). On conflict (update),
 	// LastInsertId returns 0 in modernc.org/sqlite, so fetch it if needed.
 	if m.ID == 0 {
-		if id, _ := result.LastInsertId(); id > 0 {
+		id, err := db.q.GetMappingIDBySonarrID(ctx, int64(m.SonarrSeriesID))
+		if err == nil {
 			m.ID = id
-		} else {
-			// ON CONFLICT path — look up the existing ID.
-			var existingID int64
-			if err := db.conn.QueryRowContext(ctx,
-				`SELECT id FROM show_mappings WHERE sonarr_series_id = ?`, m.SonarrSeriesID).
-				Scan(&existingID); err == nil {
-				m.ID = existingID
-			}
 		}
 	}
 	return nil
 }
 
-// UpdateArtworkFiles stores only the local file paths (not the source override).
-// Called after downloading images so the source override is preserved.
 func (db *DB) UpdateArtworkFiles(ctx context.Context, mappingID int64, posterPath, bannerPath, logoPath string) error {
-	_, err := db.conn.ExecContext(ctx,
-		`UPDATE show_mappings SET artwork_poster_path = ?, artwork_banner_path = ?, artwork_logo_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-		posterPath, bannerPath, logoPath, mappingID)
-	return err
+	return db.q.UpdateArtworkFiles(ctx, sqlcgen.UpdateArtworkFilesParams{
+		ArtworkPosterPath: posterPath,
+		ArtworkBannerPath: bannerPath,
+		ArtworkLogoPath:   logoPath,
+		ID:                mappingID,
+	})
 }
 
-// UpdateArtworkSource sets the per-show provider override (empty = use global default).
 func (db *DB) UpdateArtworkSource(ctx context.Context, mappingID int64, source string) error {
-	_, err := db.conn.ExecContext(ctx,
-		`UPDATE show_mappings SET artwork_source = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-		source, mappingID)
-	return err
+	return db.q.UpdateArtworkSource(ctx, sqlcgen.UpdateArtworkSourceParams{
+		ArtworkSource: source,
+		ID:            mappingID,
+	})
 }
 
-// UpdateOverview caches the series synopsis on the mapping so the frontend
-// doesn't need a separate Sonarr API call to display it.
 func (db *DB) UpdateOverview(ctx context.Context, mappingID int64, overview string) error {
-	_, err := db.conn.ExecContext(ctx,
-		`UPDATE show_mappings SET overview = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-		overview, mappingID)
-	return err
+	return db.q.UpdateOverview(ctx, sqlcgen.UpdateOverviewParams{
+		Overview: overview,
+		ID:       mappingID,
+	})
 }
 
 func (db *DB) UpdateWatermarkState(ctx context.Context, mappingID int64, watermark int, mode models.WatermarkMode) error {
@@ -371,63 +333,53 @@ func (db *DB) UpdateWatermarkState(ctx context.Context, mappingID int64, waterma
 	if mode == "" {
 		mode = models.WatermarkModeAuto
 	}
-	_, err := db.conn.ExecContext(ctx, `UPDATE show_mappings SET sync_watermark = ?, watermark_mode = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, watermark, mode, mappingID)
-	return err
+	return db.q.UpdateWatermarkState(ctx, sqlcgen.UpdateWatermarkStateParams{
+		SyncWatermark: int64(watermark),
+		WatermarkMode: string(mode),
+		ID:            mappingID,
+	})
 }
 
 func (db *DB) DeleteMapping(ctx context.Context, id int64) error {
-	_, err := db.conn.ExecContext(ctx, `DELETE FROM show_mappings WHERE id = ?`, id)
-	return err
+	return db.q.DeleteMapping(ctx, id)
 }
 
+// ── Episodes ──
+
 func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.EpisodeInfo, error) {
-	rows, err := db.conn.QueryContext(ctx, `
-		SELECT episode_num, title, type,
-		       sonarr_episode_id, season_number, sonarr_episode_number,
-		       absolute_episode_number, monitored, air_date
-		FROM episode_info WHERE mapping_id = ? ORDER BY episode_num ASC`, mappingID)
+	rows, err := db.q.GetEpisodesByMapping(ctx, mappingID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var episodes []models.EpisodeInfo
-	for rows.Next() {
-		var e models.EpisodeInfo
-		var absNum sql.NullInt64
-		var airDate sql.NullTime
-		err := rows.Scan(&e.EpisodeNum, &e.Title, &e.Type,
-			&e.SonarrEpisodeID, &e.SeasonNumber, &e.SonarrEpisodeNumber,
-			&absNum, &e.Monitored, &airDate)
-		if err != nil {
-			return nil, err
-		}
-		if absNum.Valid {
-			val := int(absNum.Int64)
-			e.AbsoluteEpisodeNumber = &val
-		}
-		if airDate.Valid {
-			d := models.DateOnly(airDate.Time)
-			e.AirDate = &d
-		}
-		episodes = append(episodes, e)
+	episodes := make([]models.EpisodeInfo, 0, len(rows))
+	for _, r := range rows {
+		episodes = append(episodes, sqlcEpisodeToModel(r))
 	}
-	return episodes, rows.Err()
+	return episodes, nil
 }
 
-// EpisodeVersion returns a cheap version tag for a mapping's episodes.
-// It changes when episodes are added/removed, re-scraped, or monitored
-// status changes — everything needed for ETag-based caching.
 func (db *DB) EpisodeVersion(ctx context.Context, mappingID int64) (string, error) {
-	var count, monitoredSum int
-	var maxScraped string
-	err := db.conn.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(monitored), 0), COALESCE(MAX(last_scraped), '')
-		 FROM episode_info WHERE mapping_id = ?`, mappingID).Scan(&count, &monitoredSum, &maxScraped)
+	row, err := db.q.GetEpisodeVersion(ctx, mappingID)
 	if err != nil {
 		return "", err
 	}
-	return strconv.Itoa(count) + "-" + strconv.Itoa(monitoredSum) + "-" + maxScraped, nil
+	monitoredSum := "0"
+	if s, ok := row.MonitoredSum.(int64); ok {
+		monitoredSum = strconv.FormatInt(s, 10)
+	}
+	maxScraped := ""
+	if s, ok := row.MaxScraped.(string); ok {
+		maxScraped = s
+	}
+	return strconv.FormatInt(row.Count, 10) + "-" + monitoredSum + "-" + maxScraped, nil
+}
+
+func (db *DB) UpdateEpisodeMonitor(ctx context.Context, mappingID, sonarrEpisodeID int64, monitored bool) error {
+	return db.q.UpdateEpisodeMonitor(ctx, sqlcgen.UpdateEpisodeMonitorParams{
+		Monitored:       boolToInt(monitored),
+		MappingID:       mappingID,
+		SonarrEpisodeID: sonarrEpisodeID,
+	})
 }
 
 func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, episodes []models.EpisodeInfo) error {
@@ -437,7 +389,9 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM episode_info WHERE mapping_id = ?`, mappingID); err != nil {
+	qtx := db.q.WithTx(tx)
+
+	if err := qtx.DeleteEpisodesByMapping(ctx, mappingID); err != nil {
 		return err
 	}
 
@@ -445,28 +399,31 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 		return tx.Commit()
 	}
 
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO episode_info (mapping_id, episode_num, title, type, last_scraped,
-			sonarr_episode_id, season_number, sonarr_episode_number, absolute_episode_number, monitored, air_date)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
 	now := time.Now()
 	for _, e := range episodes {
-		var absNum any
+		var absNum *int64
 		if e.AbsoluteEpisodeNumber != nil {
-			absNum = *e.AbsoluteEpisodeNumber
+			v := int64(*e.AbsoluteEpisodeNumber)
+			absNum = &v
 		}
-		var airDate any
+		var airDate *time.Time
 		if e.AirDate != nil {
-			airDate = time.Time(*e.AirDate)
+			t := time.Time(*e.AirDate)
+			airDate = &t
 		}
-		_, err := stmt.ExecContext(ctx, mappingID, e.EpisodeNum, e.Title, e.Type, now,
-			e.SonarrEpisodeID, e.SeasonNumber, e.SonarrEpisodeNumber, absNum, e.Monitored, airDate)
-		if err != nil {
+		if err := qtx.InsertEpisode(ctx, sqlcgen.InsertEpisodeParams{
+			MappingID:             mappingID,
+			EpisodeNum:            int64(e.EpisodeNum),
+			Title:                 e.Title,
+			Type:                  string(e.Type),
+			LastScraped:           now,
+			SonarrEpisodeID:       int64(e.SonarrEpisodeID),
+			SeasonNumber:          int64(e.SeasonNumber),
+			SonarrEpisodeNumber:   int64(e.SonarrEpisodeNumber),
+			AbsoluteEpisodeNumber: absNum,
+			Monitored:             boolToInt(e.Monitored),
+			AirDate:               airDate,
+		}); err != nil {
 			return err
 		}
 	}
@@ -474,24 +431,29 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 	return tx.Commit()
 }
 
+// ── Sync logs ──
+
 func (db *DB) CreateSyncLog(ctx context.Context, triggerType string) (int64, error) {
-	result, err := db.conn.ExecContext(ctx, `
-		INSERT INTO sync_logs (trigger_type) VALUES (?)`, triggerType)
+	row, err := db.q.CreateSyncLog(ctx, triggerType)
 	if err != nil {
 		return 0, err
 	}
-	return result.LastInsertId()
+	return row.ID, nil
 }
 
 func (db *DB) CompleteSyncLog(ctx context.Context, id int64, status string, showsProcessed, episodesUpdated int, errors string) error {
 	if id == 0 {
 		return nil
 	}
-	_, err := db.conn.ExecContext(ctx, `
-		UPDATE sync_logs SET completed_at = ?, status = ?, shows_processed = ?,
-		    episodes_updated = ?, errors = ?
-		WHERE id = ?`, time.Now(), status, showsProcessed, episodesUpdated, errors, id)
-	return err
+	now := time.Now()
+	return db.q.CompleteSyncLog(ctx, sqlcgen.CompleteSyncLogParams{
+		CompletedAt:     &now,
+		Status:          status,
+		ShowsProcessed:  int64(showsProcessed),
+		EpisodesUpdated: int64(episodesUpdated),
+		Errors:          errors,
+		ID:              id,
+	})
 }
 
 func (db *DB) ReplaceSyncLogItems(ctx context.Context, logID int64, items []models.SyncLogItem) error {
@@ -505,23 +467,22 @@ func (db *DB) ReplaceSyncLogItems(ctx context.Context, logID int64, items []mode
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sync_log_items WHERE sync_log_id = ?`, logID); err != nil {
-		return err
-	}
-	if len(items) == 0 {
-		return tx.Commit()
-	}
+	qtx := db.q.WithTx(tx)
 
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO sync_log_items (sync_log_id, mapping_id, sonarr_title, status, episodes_changed, summary, error)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`)
-	if err != nil {
+	if err := qtx.DeleteSyncLogItemsByLog(ctx, logID); err != nil {
 		return err
 	}
-	defer stmt.Close()
 
 	for _, item := range items {
-		if _, err := stmt.ExecContext(ctx, logID, item.MappingID, item.SonarrTitle, item.Status, item.EpisodesChanged, item.Summary, item.Error); err != nil {
+		if err := qtx.InsertSyncLogItem(ctx, sqlcgen.InsertSyncLogItemParams{
+			SyncLogID:       logID,
+			MappingID:       item.MappingID,
+			SonarrTitle:     item.SonarrTitle,
+			Status:          item.Status,
+			EpisodesChanged: int64(item.EpisodesChanged),
+			Summary:         item.Summary,
+			Error:           item.Error,
+		}); err != nil {
 			return err
 		}
 	}
@@ -529,19 +490,12 @@ func (db *DB) ReplaceSyncLogItems(ctx context.Context, logID int64, items []mode
 	return tx.Commit()
 }
 
-// GetLatestSyncLog returns the most recent completed sync log, or sql.ErrNoRows if none.
 func (db *DB) GetLatestSyncLog(ctx context.Context) (models.SyncLog, error) {
-	var log models.SyncLog
-	row := db.conn.QueryRowContext(ctx, `
-		SELECT id, started_at, completed_at, status, shows_processed,
-		       episodes_updated, errors, trigger_type
-		FROM sync_logs WHERE completed_at IS NOT NULL
-		ORDER BY started_at DESC LIMIT 1`)
-	err := row.Scan(
-		&log.ID, &log.StartedAt, &log.CompletedAt, &log.Status,
-		&log.ShowsProcessed, &log.EpisodesUpdated, &log.Errors, &log.Trigger,
-	)
-	return log, err
+	row, err := db.q.GetLatestSyncLog(ctx)
+	if err != nil {
+		return models.SyncLog{}, err
+	}
+	return sqlcSyncLogToModel(row), nil
 }
 
 func (db *DB) GetSyncLogsPage(ctx context.Context, limit, offset int) (models.SyncLogPage, error) {
@@ -555,29 +509,17 @@ func (db *DB) GetSyncLogsPage(ctx context.Context, limit, offset int) (models.Sy
 		offset = 0
 	}
 
-	rows, err := db.conn.QueryContext(ctx, `
-		SELECT id, started_at, completed_at, status, shows_processed,
-		       episodes_updated, errors, trigger_type
-		FROM sync_logs ORDER BY started_at DESC LIMIT ? OFFSET ?`, limit+1, offset)
+	rows, err := db.q.GetSyncLogsPage(ctx, sqlcgen.GetSyncLogsPageParams{
+		Limit:  int64(limit + 1),
+		Offset: int64(offset),
+	})
 	if err != nil {
 		return models.SyncLogPage{}, err
 	}
-	defer rows.Close()
 
-	logs := make([]models.SyncLog, 0, limit+1)
-	for rows.Next() {
-		var l models.SyncLog
-		var completedAt sql.NullTime
-		if err := rows.Scan(&l.ID, &l.StartedAt, &completedAt, &l.Status, &l.ShowsProcessed, &l.EpisodesUpdated, &l.Errors, &l.Trigger); err != nil {
-			return models.SyncLogPage{}, err
-		}
-		if completedAt.Valid {
-			l.CompletedAt = completedAt.Time
-		}
-		logs = append(logs, l)
-	}
-	if err := rows.Err(); err != nil {
-		return models.SyncLogPage{}, err
+	logs := make([]models.SyncLog, 0, len(rows))
+	for _, r := range rows {
+		logs = append(logs, sqlcSyncLogToModel(r))
 	}
 
 	page := models.SyncLogPage{}
@@ -591,11 +533,11 @@ func (db *DB) GetSyncLogsPage(ctx context.Context, limit, offset int) (models.Sy
 		return page, nil
 	}
 
-	logIDs := make([]int64, 0, len(logs))
-	for _, log := range logs {
-		logIDs = append(logIDs, log.ID)
+	logIDs := make([]int64, len(page.Items))
+	for i := range page.Items {
+		logIDs[i] = page.Items[i].ID
 	}
-	itemsByLog, err := db.GetSyncLogItems(ctx, logIDs)
+	itemsByLog, err := db.getSyncLogItemsBatch(ctx, logIDs)
 	if err != nil {
 		return models.SyncLogPage{}, err
 	}
@@ -607,23 +549,27 @@ func (db *DB) GetSyncLogsPage(ctx context.Context, limit, offset int) (models.Sy
 }
 
 func (db *DB) GetSyncLogItems(ctx context.Context, logIDs []int64) (map[int64][]models.SyncLogItem, error) {
+	return db.getSyncLogItemsBatch(ctx, logIDs)
+}
+
+// getSyncLogItemsBatch fetches sync log items for multiple log IDs in a single
+// query, avoiding N+1 patterns.
+func (db *DB) getSyncLogItemsBatch(ctx context.Context, logIDs []int64) (map[int64][]models.SyncLogItem, error) {
 	itemsByLog := make(map[int64][]models.SyncLogItem, len(logIDs))
 	if len(logIDs) == 0 {
 		return itemsByLog, nil
 	}
 
 	placeholders := make([]string, len(logIDs))
-	args := make([]interface{}, len(logIDs))
+	args := make([]any, len(logIDs))
 	for i, id := range logIDs {
 		placeholders[i] = "?"
 		args[i] = id
 	}
+	query := "SELECT id, sync_log_id, mapping_id, sonarr_title, status, episodes_changed, summary, error " +
+		"FROM sync_log_items WHERE sync_log_id IN (" + strings.Join(placeholders, ",") + ") " +
+		"ORDER BY sonarr_title COLLATE NOCASE ASC"
 
-	query := `
-		SELECT id, sync_log_id, mapping_id, sonarr_title, status, episodes_changed, summary, error
-		FROM sync_log_items
-		WHERE sync_log_id IN (` + strings.Join(placeholders, ",") + `)
-		ORDER BY sync_log_id DESC, sonarr_title COLLATE NOCASE ASC`
 	rows, err := db.conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -632,58 +578,69 @@ func (db *DB) GetSyncLogItems(ctx context.Context, logIDs []int64) (map[int64][]
 
 	for rows.Next() {
 		var item models.SyncLogItem
-		if err := rows.Scan(&item.ID, &item.SyncLogID, &item.MappingID, &item.SonarrTitle, &item.Status, &item.EpisodesChanged, &item.Summary, &item.Error); err != nil {
+		var syncLogID int64
+		var episodesChanged int64
+		if err := rows.Scan(
+			&item.ID,
+			&syncLogID,
+			&item.MappingID,
+			&item.SonarrTitle,
+			&item.Status,
+			&episodesChanged,
+			&item.Summary,
+			&item.Error,
+		); err != nil {
 			return nil, err
 		}
-		itemsByLog[item.SyncLogID] = append(itemsByLog[item.SyncLogID], item)
+		item.EpisodesChanged = int(episodesChanged)
+		itemsByLog[syncLogID] = append(itemsByLog[syncLogID], item)
 	}
-	return itemsByLog, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return itemsByLog, nil
 }
 
+// ── Settings ──
+
 func (db *DB) GetSetting(ctx context.Context, key string) (string, error) {
-	var value string
-	err := db.conn.QueryRowContext(ctx, `SELECT value FROM app_settings WHERE key = ?`, key).Scan(&value)
+	row, err := db.q.GetSetting(ctx, key)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
-	return value, err
+	return row.Value, err
 }
 
 func (db *DB) SetSetting(ctx context.Context, key, value string) error {
-	_, err := db.conn.ExecContext(ctx, `
-		INSERT INTO app_settings (key, value) VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
-	return err
+	return db.q.SetSetting(ctx, sqlcgen.SetSettingParams{
+		Key:   key,
+		Value: value,
+	})
 }
 
+// ── AFL cache ──
+
 func (db *DB) GetCachedAFLShows(ctx context.Context) ([]models.AFLShow, time.Time, error) {
-	rows, err := db.conn.QueryContext(ctx, `
-		SELECT title, slug, url, refreshed_at
-		FROM afl_show_cache
-		ORDER BY title COLLATE NOCASE ASC`)
+	rows, err := db.q.GetAllCachedAFLShows(ctx)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	defer rows.Close()
 
-	var shows []models.AFLShow
+	shows := make([]models.AFLShow, 0, len(rows))
 	var refreshedAt time.Time
-	for rows.Next() {
-		var show models.AFLShow
-		var rowRefreshedAt time.Time
-		if err := rows.Scan(&show.Title, &show.Slug, &show.URL, &rowRefreshedAt); err != nil {
-			return nil, time.Time{}, err
+	for _, r := range rows {
+		shows = append(shows, models.AFLShow{
+			Title: r.Title,
+			Slug:  r.Slug,
+			URL:   r.Url,
+		})
+		if refreshedAt.IsZero() || r.RefreshedAt.After(refreshedAt) {
+			refreshedAt = r.RefreshedAt
 		}
-		if refreshedAt.IsZero() || rowRefreshedAt.After(refreshedAt) {
-			refreshedAt = rowRefreshedAt
-		}
-		shows = append(shows, show)
 	}
-	return shows, refreshedAt, rows.Err()
+	return shows, refreshedAt, nil
 }
 
-// ReplaceCachedAFLShows replaces the AFL show cache and returns the slugs
-// of shows that are new (not present in the previous cache).
 func (db *DB) ReplaceCachedAFLShows(ctx context.Context, shows []models.AFLShow, refreshedAt time.Time) ([]string, error) {
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -691,44 +648,33 @@ func (db *DB) ReplaceCachedAFLShows(ctx context.Context, shows []models.AFLShow,
 	}
 	defer tx.Rollback()
 
+	qtx := db.q.WithTx(tx)
+
 	// Collect existing slugs before deleting so we can detect new ones.
-	existingSlugs := make(map[string]bool)
-	rows, err := tx.QueryContext(ctx, `SELECT slug FROM afl_show_cache`)
+	existingSlugs, err := qtx.GetAllCachedAFLSlugs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		existingSlugs[slug] = true
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, err
-	}
-	rows.Close()
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM afl_show_cache`); err != nil {
-		return nil, err
+	existingSet := make(map[string]bool, len(existingSlugs))
+	for _, s := range existingSlugs {
+		existingSet[s] = true
 	}
 
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO afl_show_cache (slug, title, url, refreshed_at)
-		VALUES (?, ?, ?, ?)`)
-	if err != nil {
+	if err := qtx.DeleteAllCachedAFLShows(ctx); err != nil {
 		return nil, err
 	}
-	defer stmt.Close()
 
 	var newSlugs []string
 	for _, show := range shows {
-		if _, err := stmt.ExecContext(ctx, show.Slug, show.Title, show.URL, refreshedAt); err != nil {
+		if err := qtx.InsertCachedAFLShow(ctx, sqlcgen.InsertCachedAFLShowParams{
+			Slug:        show.Slug,
+			Title:       show.Title,
+			Url:         show.URL,
+			RefreshedAt: refreshedAt,
+		}); err != nil {
 			return nil, err
 		}
-		if !existingSlugs[show.Slug] {
+		if !existingSet[show.Slug] {
 			newSlugs = append(newSlugs, show.Slug)
 		}
 	}
@@ -745,52 +691,53 @@ func (db *DB) ReplaceCachedAFLShows(ctx context.Context, shows []models.AFLShow,
 }
 
 func (db *DB) GetAFLShowCacheStatus(ctx context.Context) (int, time.Time, error) {
-	var count int
-	if err := db.conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM afl_show_cache`).Scan(&count); err != nil {
+	count, err := db.q.CountCachedAFLShows(ctx)
+	if err != nil {
 		return 0, time.Time{}, err
 	}
 
 	value, err := db.GetSetting(ctx, "afl_show_cache_refreshed_at")
 	if err != nil || value == "" {
-		return count, time.Time{}, err
+		return int(count), time.Time{}, err
 	}
 
 	refreshedAt, parseErr := time.Parse(time.RFC3339, value)
 	if parseErr != nil {
-		return count, time.Time{}, nil
+		return int(count), time.Time{}, nil
 	}
-	return count, refreshedAt, nil
+	return int(count), refreshedAt, nil
 }
 
+// ── Filler stats ──
+
 func (db *DB) GetFillerStats(ctx context.Context) (canon, mixed, animeCanon, filler, total int, err error) {
-	err = db.conn.QueryRowContext(ctx, `
-		SELECT
-			COALESCE(SUM(CASE WHEN type = 'canon' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN type = 'mixed_canon' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN type = 'anime_canon' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN type = 'filler' THEN 1 ELSE 0 END), 0),
-			COUNT(*)
-		FROM episode_info`).Scan(&canon, &mixed, &animeCanon, &filler, &total)
+	row, err := db.q.GetFillerStats(ctx)
 	if err == sql.ErrNoRows {
 		return 0, 0, 0, 0, 0, nil
 	}
+	if err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+	canon = toInt(row.Canon)
+	mixed = toInt(row.Mixed)
+	animeCanon = toInt(row.AnimeCanon)
+	filler = toInt(row.Filler)
+	total = int(row.Total)
 	return
 }
 
+// ── Sonarr cache ──
+
 func (db *DB) GetCachedSonarrSeries(ctx context.Context, seriesID int, maxAge time.Duration) (*models.SonarrSeries, bool) {
-	var dataJSON string
-	var cachedAt time.Time
-	err := db.conn.QueryRowContext(ctx,
-		`SELECT data_json, cached_at FROM sonarr_series_cache WHERE series_id = ?`, seriesID).
-		Scan(&dataJSON, &cachedAt)
+	row, err := db.q.GetCachedSonarrSeries(ctx, int64(seriesID))
 	if err != nil {
 		return nil, false
 	}
-	if time.Since(cachedAt) > maxAge {
+	if time.Since(row.CachedAt) > maxAge {
 		return nil, false
 	}
 	var series models.SonarrSeries
-	if err := json.Unmarshal([]byte(dataJSON), &series); err != nil {
+	if err := json.Unmarshal([]byte(row.DataJson), &series); err != nil {
 		return nil, false
 	}
 	return &series, true
@@ -801,26 +748,29 @@ func (db *DB) SetCachedSonarrSeries(ctx context.Context, seriesID int, series *m
 	if err != nil {
 		return err
 	}
-	_, err = db.conn.ExecContext(ctx,
-		`INSERT INTO sonarr_series_cache (series_id, data_json, cached_at) VALUES (?, ?, ?)
-		ON CONFLICT(series_id) DO UPDATE SET data_json = excluded.data_json, cached_at = excluded.cached_at`,
-		seriesID, string(dataJSON), time.Now())
-	return err
+	return db.q.SetCachedSonarrSeries(ctx, sqlcgen.SetCachedSonarrSeriesParams{
+		SeriesID: int64(seriesID),
+		DataJson: string(dataJSON),
+		CachedAt: time.Now(),
+	})
 }
 
-func normalizeMapping(m models.ShowMapping) models.ShowMapping {
-	if m.StartMode == "" {
-		m.StartMode = models.StartModeCurrentProgress
+// ── Helpers ──
+
+func boolToInt(b bool) int64 {
+	if b {
+		return 1
 	}
-	if m.WatermarkMode == "" {
-		if m.StartMode == models.StartModeFromBeginning {
-			m.WatermarkMode = models.WatermarkModeManual
-		} else {
-			m.WatermarkMode = models.WatermarkModeAuto
-		}
+	return 0
+}
+
+func toInt(v interface{}) int {
+	switch n := v.(type) {
+	case int64:
+		return int(n)
+	case int:
+		return n
+	default:
+		return 0
 	}
-	if m.SyncWatermark < 0 {
-		m.SyncWatermark = 0
-	}
-	return m
 }

@@ -1,6 +1,5 @@
 import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { AppProvider } from "./lib/store";
 import { ToastViewport } from "./components/ToastViewport";
 import { prefetchDetailChunk } from "./lib/chunkPrefetch";
 
@@ -8,9 +7,7 @@ import { prefetchDetailChunk } from "./lib/chunkPrefetch";
 // (landing) is also lazy but its import is fired immediately in
 // main.tsx so the browser starts downloading it in parallel with
 // the main bundle parse.
-const ShowsPage = lazy(() =>
-  import("./routes/ShowsPage").then((m) => ({ default: m.ShowsPage })),
-);
+const ShowsPage = lazy(() => import("./routes/ShowsPage").then((m) => ({ default: m.ShowsPage })));
 const ShowDetailPage = lazy(() =>
   import("./routes/ShowDetailPage").then((m) => ({ default: m.ShowDetailPage })),
 );
@@ -36,10 +33,28 @@ function PageFallback() {
   // HTML, so this typically shows for <50ms on first visit.
   return (
     <div style={{ padding: "var(--spacing-5)", maxWidth: 900, margin: "0 auto" }}>
-      <div className="skeleton" style={{ width: 120, height: 28, borderRadius: "var(--radius-inner)", marginBottom: "var(--spacing-4)" }} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "var(--spacing-4)" }}>
+      <div
+        className="skeleton"
+        style={{
+          width: 120,
+          height: 28,
+          borderRadius: "var(--radius-inner)",
+          marginBottom: "var(--spacing-4)",
+        }}
+      />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+          gap: "var(--spacing-4)",
+        }}
+      >
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="skeleton" style={{ height: 280, borderRadius: "var(--radius-container)" }} />
+          <div
+            key={i}
+            className="skeleton"
+            style={{ height: 280, borderRadius: "var(--radius-container)" }}
+          />
         ))}
       </div>
     </div>
@@ -52,14 +67,15 @@ export function App() {
   // the landing page — prefetching it eliminates the chunk load delay
   // for users who click without hovering first.
   useEffect(() => {
-    const ric = "requestIdleCallback" in window
-      ? (cb: () => void) => (window as Window).requestIdleCallback(cb, { timeout: 3000 })
-      : (cb: () => void) => setTimeout(cb, 500);
+    const ric =
+      "requestIdleCallback" in window
+        ? (cb: () => void) => (window as Window).requestIdleCallback(cb, { timeout: 3000 })
+        : (cb: () => void) => setTimeout(cb, 500);
     ric(() => prefetchDetailChunk());
   }, []);
 
   return (
-    <AppProvider>
+    <>
       <ScrollToTop />
       <Routes>
         <Route
@@ -105,6 +121,6 @@ export function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastViewport />
-    </AppProvider>
+    </>
   );
 }

@@ -11,10 +11,20 @@ import { Card } from "@astryxdesign/core/Card";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Search } from "lucide-react";
-import { RefreshCw, History, ChevronDown, TriangleAlert, Check, CircleAlert, Loader2, CircleDot } from "lucide-react";
+import {
+  RefreshCw,
+  History,
+  ChevronDown,
+  TriangleAlert,
+  Check,
+  CircleAlert,
+  Loader2,
+  CircleDot,
+} from "lucide-react";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
-import { useAppStore } from "../lib/store";
-import { getSyncLogs, triggerSync, errorMessage } from "../lib/api";
+import { useNotificationStore } from "../lib/store";
+import { useTriggerSync } from "../lib/queries";
+import { getSyncLogs, errorMessage } from "../lib/api";
 import type { SyncLog } from "../lib/types";
 import {
   formatDuration,
@@ -35,7 +45,10 @@ function statusIcon(status: string | undefined | null) {
     case "failed":
       return { icon: <CircleAlert size={14} />, className: "activity-status-icon-failed" };
     case "running":
-      return { icon: <Loader2 size={14} className="spin" />, className: "activity-status-icon-running" };
+      return {
+        icon: <Loader2 size={14} className="spin" />,
+        className: "activity-status-icon-running",
+      };
     default:
       return { icon: <CircleDot size={14} />, className: "activity-status-icon-neutral" };
   }
@@ -55,7 +68,8 @@ function itemStatusIcon(status: string | undefined | null) {
 }
 
 export function ActivityPage() {
-  const { addNotification } = useAppStore();
+  const addNotification = useNotificationStore((s) => s.addNotification);
+  const triggerSyncMutation = useTriggerSync();
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<SyncLog[]>([]);
   const [syncing, setSyncing] = useState(false);
@@ -68,6 +82,7 @@ export function ActivityPage() {
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoad = useRef(true);
   const isMounted = useRef(true);
+  const logsRef = useRef<SyncLog[]>([]);
 
   const filteredLogs = useMemo(
     () =>
@@ -106,7 +121,9 @@ export function ActivityPage() {
           next_offset: 0,
         };
         const newLogs = page.items || [];
-        setLogs(reset ? newLogs : (prev) => [...prev, ...newLogs]);
+        const updatedLogs = reset ? newLogs : [...logsRef.current, ...newLogs];
+        logsRef.current = updatedLogs;
+        setLogs(updatedLogs);
         setHasMore(!!page.has_more);
         setNextOffset(page.next_offset ?? (reset ? newLogs.length : offset + newLogs.length));
       } catch (err: unknown) {
@@ -139,12 +156,10 @@ export function ActivityPage() {
       attempts++;
       await loadActivity(true);
       if (!isMounted.current) return;
-      setLogs((current) => {
-        if (current.some((l) => l.status === "running") && attempts < 20) {
-          pollTimer.current = setTimeout(poll, 2000);
-        }
-        return current;
-      });
+      const hasRunning = logsRef.current.some((l) => l.status === "running");
+      if (hasRunning && attempts < 20) {
+        pollTimer.current = setTimeout(poll, 2000);
+      }
     };
     pollTimer.current = setTimeout(poll, 1800);
   };
@@ -152,7 +167,7 @@ export function ActivityPage() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await triggerSync();
+      await triggerSyncMutation.mutateAsync();
       addNotification("Sync started", "info");
       startPolling();
     } catch (err: unknown) {
@@ -189,9 +204,21 @@ export function ActivityPage() {
         {loading ? (
           <VStack gap={3}>
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="activity-log-card skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
+              <div
+                key={i}
+                className="activity-log-card skeleton-card"
+                style={{
+                  padding: "var(--spacing-4)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--spacing-2)",
+                }}
+              >
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
-                  <div className="skeleton" style={{ width: 28, height: 28, borderRadius: "50%" }} />
+                  <div
+                    className="skeleton"
+                    style={{ width: 28, height: 28, borderRadius: "50%" }}
+                  />
                   <div className="skeleton-text" style={{ width: 140 }} />
                   <div style={{ flex: 1 }} />
                   <div className="skeleton-text" style={{ width: 80 }} />
@@ -266,13 +293,26 @@ export function ActivityPage() {
                 {filteredLogs.map((log) => {
                   const isExpanded = expandedId === log.id;
                   return (
-                    <Card key={String(log.id)} padding={3} variant="muted" className={`activity-log-card${isExpanded ? " activity-log-card-expanded" : ""}`}>
+                    <Card
+                      key={String(log.id)}
+                      padding={3}
+                      variant="muted"
+                      className={`activity-log-card${isExpanded ? " activity-log-card-expanded" : ""}`}
+                    >
                       <VStack gap={2}>
                         <HStack gap={3} align="center" wrap="nowrap" width="100%">
-                          <div className={`activity-status-icon ${statusIcon(log.status).className}`}>
+                          <div
+                            className={`activity-status-icon ${statusIcon(log.status).className}`}
+                          >
                             {statusIcon(log.status).icon}
                           </div>
-                          <HStack justify="between" align="center" wrap="wrap" gap={2} className="activity-log-body">
+                          <HStack
+                            justify="between"
+                            align="center"
+                            wrap="wrap"
+                            gap={2}
+                            className="activity-log-body"
+                          >
                             <VStack
                               gap={1}
                               className="activity-log-summary"
@@ -293,11 +333,7 @@ export function ActivityPage() {
                               <Text type="body" weight="medium">
                                 {humanSummary(log)}
                               </Text>
-                              <Text
-                                type="supporting"
-                                hasTabularNumbers
-                                size="sm"
-                              >
+                              <Text type="supporting" hasTabularNumbers size="sm">
                                 {formatTrigger(log.trigger)}{" "}
                                 {formatDuration(log.started_at, log.completed_at)}{" "}
                                 <Timestamp
@@ -360,7 +396,9 @@ export function ActivityPage() {
                                             </HStack>
                                           )}
                                         </VStack>
-                                        <div className={`activity-status-icon activity-status-icon-sm ${si.className}`}>
+                                        <div
+                                          className={`activity-status-icon activity-status-icon-sm ${si.className}`}
+                                        >
                                           {si.icon}
                                         </div>
                                       </HStack>
@@ -396,6 +434,7 @@ export function ActivityPage() {
                   variant="secondary"
                   onClick={() => loadActivity(false)}
                   isLoading={loadingMore}
+                  isDisabled={loadingMore}
                   data-cuelume-press
                 />
               </HStack>
