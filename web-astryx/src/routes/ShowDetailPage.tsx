@@ -684,8 +684,8 @@ export function ShowDetailPage() {
       </Section>
 
       {/* Page content — constrained width */}
-      <Section padding={0} maxWidth={900} className="section-centered page-enter">
-        <VStack gap={6} padding={4} className="show-content-padded">
+      <Section variant="transparent" padding={0} maxWidth={900} className="section-centered page-enter">
+        <VStack gap={6} className="show-content-padded">
           {/* Artwork controls */}
           <Card padding={4} variant="muted" className="artwork-card">
             <VStack gap={3}>

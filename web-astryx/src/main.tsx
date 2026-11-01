@@ -1,9 +1,11 @@
 import { StrictMode, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Theme } from "@astryxdesign/core/theme";
+import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { TopNavHeading } from "@astryxdesign/core/TopNav";
 import { TopNavItem } from "@astryxdesign/core/TopNav";
+import { NavIcon } from "@astryxdesign/core/NavIcon";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Check, Palette } from "lucide-react";
 import { BrowserRouter, useLocation, Link } from "react-router-dom";
@@ -60,8 +62,15 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
   return (
     <TopNav
       label="Mizu navigation"
-      heading={<TopNavHeading heading="Mizu" headingHref="/" as={Link} />}
-      startContent={
+      heading={
+        <TopNavHeading
+          heading="Mizu"
+          headingHref="/"
+          as={Link}
+          logo={<NavIcon icon={<span style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>~</span>} />}
+        />
+      }
+      centerContent={
         <>
           <TopNavItem label="Library" href="/" isSelected={isShows} as={Link} />
           <TopNavItem label="Activity" href="/activity" isSelected={isActivity} as={Link} />
@@ -89,14 +98,13 @@ function Root() {
     <StrictMode>
       <Theme theme={selected.theme} mode={selected.mode ?? "system"}>
         <BrowserRouter>
-          <div className="app-root">
-            <div className="app-nav-sticky">
-              <div className="app-nav-inner">
-                <Nav themeMenu={menu} />
-              </div>
-            </div>
+          <AppShell
+            variant="surface"
+            height="auto"
+            topNav={<Nav themeMenu={menu} />}
+          >
             <App />
-          </div>
+          </AppShell>
         </BrowserRouter>
       </Theme>
     </StrictMode>

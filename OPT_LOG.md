@@ -849,3 +849,98 @@
 **Fix 2:** Added `padding-inline: clamp(12px, 4vw, 32px)` and `box-sizing: border-box` to `.show-shell`, matching the content's horizontal padding exactly. The hero image is now inset by the same amount as the content text, so both align vertically.
 
 **Outcome:** Kept. tsc clean. All pages should now be properly centered, and the ShowDetailPage hero aligns with the content below it.
+
+## Iteration D69 — Centered TopNav layout with tilde NavIcon logo
+
+**Target:** `web-astryx/src/main.tsx` — Nav component
+
+**Problem:** The TopNav used `startContent` for nav items, placing them immediately after the heading on the left side. This is a standard left-aligned layout. The user wanted a centered navigation pattern (heading left, nav items centered, actions right) matching the Astryx example with `centerContent`. The heading also lacked a logo/icon.
+
+**What changed:**
+1. Switched from `startContent` to `centerContent` for the nav items — this triggers Astryx's grid layout mode where heading is left, nav items are centered, and endContent is right.
+2. Added a `NavIcon` with a tilde (`~`) as the logo in the `TopNavHeading`. The NavIcon renders as a circular accent-colored badge containing the tilde character, styled with `fontSize: 18, fontWeight: 700`.
+3. Imported `NavIcon` from `@astryxdesign/core/NavIcon`.
+
+**Outcome:** Kept. tsc clean. The nav now uses the centered layout pattern — "Mizu" heading with a tilde logo on the left, Library/Activity/Settings nav items centered, and the theme picker on the right.
+
+## Iteration D70 — Harmonize transition timings to design tokens
+
+**Target:** `web-astryx/src/index.css` — 9 transition declarations using hardcoded `0.2s ease` or `200ms ease`
+
+**Problem:** UI element transitions (hover states, border-color, background-color, transform, opacity for non-image elements) used a mix of `0.2s ease` and `200ms ease` — same duration but inconsistent notation, and neither used the Astryx design system tokens. The token `--duration-fast` (175ms) with `--ease-standard` (cubic-bezier(0.24, 1, 0.4, 1)) is the correct pair for quick UI feedback.
+
+**What changed:** Replaced all 9 occurrences of `0.2s ease` / `200ms ease` on UI element transitions with `var(--duration-fast) var(--ease-standard)`. Affected: `.mizu-card-overlay` transform, `.save-flash` color transitions, `.season-card`/`.artwork-card` border-color, `.wizard-poster-thumb` opacity, `.activity-log-card` border-color, `.button-icon-chevron` transform, `.wizard-step-dot` background/color/box-shadow, `.wizard-step-label` color, `.wizard-step::after` background-color.
+
+**Not changed:** Image-related transitions (`0.3s`/`0.4s` on `.mizu-card-img`, `.mizu-card-img-wrap::after`, `.show-hero-img`) — these intentionally use longer durations for image loading/fade-in. Keyframe animations (`0.2s ease-out`) — these use a different easing curve and can't use tokens in the shorthand.
+
+**Outcome:** Kept. tsc clean. All UI feedback transitions now use consistent design system tokens (175ms with standard easing), making the app feel more unified.
+
+## Iteration D71 — Replace manual layout with AppShell
+
+**Target:** `web-astryx/src/main.tsx` + `web-astryx/src/index.css`
+
+**Problem:** The app used a manual layout (`div.app-root > div.app-nav-sticky > div.app-nav-inner > Nav`) instead of Astryx's AppShell component. This meant we were missing AppShell's built-in features: skip-to-content link, `role="main"` on content area, proper sticky header in auto height mode, and responsive nav handling. The manual layout also required custom CSS for sticky positioning and centering that fought with StyleX.
+
+**What changed:**
+1. Replaced the manual `div.app-root`/`div.app-nav-sticky`/`div.app-nav-inner` structure with `<AppShell variant="surface" height="auto" topNav={<Nav />}>`. AppShell handles the layout frame, sticky header, and accessibility.
+2. Removed `.app-root`, `.app-nav-sticky`, `.app-nav-inner` CSS rules.
+3. Added `.astryx-app-shell-header` CSS to apply the backdrop-blur effect (semi-transparent surface + blur + saturate) that the manual nav had, targeting AppShell's header class.
+4. Kept `.section-centered { marginInline: auto !important }` for content centering within the AppShell content area.
+
+**Outcome:** Kept. tsc clean. The app now uses AppShell for structural layout with proper accessibility (skip link, role=main), and the nav retains its backdrop-blur effect.
+
+## Iteration D72 — Update favicon to tilde matching NavIcon logo
+
+**Target:** `web-astryx/index.html` — favicon
+
+**Problem:** The favicon was a 🌊 emoji but D69 changed the nav logo to a tilde (`~`) in a NavIcon. The favicon didn't match the new branding.
+
+**What changed:** Updated the SVG favicon from 🌊 to `~` with `font-weight: 700` to match the NavIcon styling.
+
+**Outcome:** Kept. tsc clean. Favicon now matches the tilde logo in the nav.
+
+## Iteration D73-D76 — Settings spacing, token-based colors, section variant consistency, activity spacing fix
+
+**Targets:** `index.css`, `ShowDetailPage.tsx`
+
+**Problems:**
+1. Settings section headers (`Connection`, `Sync`, `Notifications`) had `padding-bottom: var(--spacing-2)` (8px) — too tight against the Divider below. Changed to `--spacing-3` (12px) for proper breathing room.
+2. `.mizu-card-overlay-title` used hardcoded `color: #fff` and `text-shadow: rgba(0,0,0,0.6)` — not theme-aware. Replaced with `var(--color-text-on-accent, #fff)` and `color-mix(in srgb, var(--color-background-body) 70%, transparent)` for the shadow, so both adapt to active theme.
+3. ShowDetailPage content Section used default `variant="section"` (surface background) while the hero used `variant="transparent"`. Since AppShell already provides a surface background, this created a visible seam between hero and content. Changed content Section to `variant="transparent"`.
+4. Activity page `.load-more-bar` had `margin-block-start: var(--spacing-2)` on top of being inside a `VStack gap={3}` — double spacing. Removed the redundant margin.
+
+**Outcome:** Kept. tsc clean. Four small consistency fixes — settings headers have more breathing room, card overlay text is theme-aware, show detail page has no surface background seam, activity load-more has correct spacing.
+
+## Iteration D77 — Fix content centering + navbar width + revert favicon
+
+**Targets:** `index.css`, `index.html`
+
+**Problems:**
+1. Content hugged the left side — `.section-centered { marginInline: auto !important }` was fighting StyleX's negative escape margins on Section's outer div. The `!important` wasn't reliably winning.
+2. Navbar spanned full page width with no max-width constraint — didn't match the 900px content area.
+3. Favicon was changed to `~` in D72 but user preferred the original 🌊 wave.
+
+**What changed:**
+1. Added `#astryx-app-shell-main { max-width: 900px; margin-inline: auto; }` — constrains the AppShell's main content area to 900px and centers it. This is the proper fix: center the container, not each individual Section.
+2. Added `.astryx-top-nav { max-width: 900px; margin-inline: auto; }` — constrains the nav bar to match the content width.
+3. Removed `!important` from `.section-centered` — no longer needed since the parent container handles centering.
+4. Reverted favicon from `~` back to 🌊.
+
+**Outcome:** Kept. tsc clean. Content and navbar are both centered at 900px max-width. Favicon restored to wave.
+
+## Iteration D78 — Fix show detail z-index + hero/content width mismatch
+
+**Targets:** `index.css`, `ShowDetailPage.tsx`
+
+**Problems:**
+1. On the anime details page, content scrolled over the sticky header — `.show-hero` had `z-index: 2` which was higher than AppShell's header `z-index: 1`.
+2. The hero header was narrower than the content below it — the content VStack had `padding={4}` (16px from Astryx) **plus** `.show-content-padded`'s `clamp(12px, 4vw, 32px)`, while the hero only had the clamp padding from `.show-shell`. Double padding = content inset by extra 16px on each side.
+
+**What changed:**
+1. Removed `z-index: 2` from `.show-hero` — `isolation: isolate` alone is enough for internal stacking (image → gradient → content), and without the z-index it won't overlap the sticky header.
+2. Added `z-index: 100` to `.astryx-app-shell-header` to ensure the header stays above all page content.
+3. Removed `padding={4}` from the content VStack in ShowDetailPage — `.show-content-padded` already handles horizontal padding with the same `clamp(12px, 4vw, 32px)` as `.show-shell`.
+4. Added `paddingBlock: var(--spacing-4)` to `.show-content-padded` to compensate for the removed VStack vertical padding.
+5. Removed redundant `max-width: 900px; margin-inline: auto` from `.show-shell` — `#astryx-app-shell-main` already constrains and centers the container.
+
+**Outcome:** Kept. tsc clean. Header stays above content (z-index 100), hero and content have matching horizontal padding.
