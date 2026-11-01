@@ -680,10 +680,10 @@ export function ShowDetailPage() {
       </Section>
 
       {/* Page content — constrained width */}
-      <Section padding={0} maxWidth={900} className="section-centered">
+      <Section padding={0} maxWidth={900} className="section-centered page-enter">
         <VStack gap={6} padding={4} className="show-content-padded">
           {/* Artwork controls */}
-          <Card padding={4}>
+          <Card padding={4} variant="muted" className="artwork-card">
             <VStack gap={3}>
               <HStack gap={3} align="center">
                 <ImageIcon size={16} />
@@ -837,7 +837,7 @@ export function ShowDetailPage() {
             ) : (
               <VStack gap={4}>
                 {groupedBySeason.map((group) => (
-                  <Card key={group.season} padding={4} variant="muted">
+                  <Card key={group.season} padding={4} variant="muted" className="season-card">
                     <Collapsible
                       trigger={
                         <>

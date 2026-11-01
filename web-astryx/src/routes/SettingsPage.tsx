@@ -437,7 +437,7 @@ export function SettingsPage() {
   }
 
   return (
-    <Section padding={4} maxWidth={900} className="section-centered">
+    <Section padding={4} maxWidth={900} className="section-centered page-enter">
       <VStack gap={8}>
         {/* Header */}
         <HStack justify="between" align="center" wrap="wrap" gap={4}>

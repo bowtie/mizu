@@ -609,7 +609,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         })}
       </ol>
 
-      <Text type="supporting">{stepDescription()}</Text>
+      <Text type="supporting" className="wizard-step-description">{stepDescription()}</Text>
 
       <Divider />
 
@@ -673,6 +673,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                             alt=""
                             loading="lazy"
                             className="wizard-poster-thumb"
+                            onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
                           />
                         ) : (
                           <div className="wizard-poster-placeholder" />
@@ -912,8 +913,10 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       )}
 
       {w.addStep === ADD_STEP_POST_ADD && (
-        <VStack gap={4} hAlign="center" padding={6}>
-          <Check size={32} color="var(--color-success)" />
+        <VStack gap={4} hAlign="center" padding={6} className="wizard-success">
+          <div className="wizard-success-icon">
+            <Check size={32} color="var(--color-success)" />
+          </div>
           <Heading level={3}>{w.addOutcome?.title}</Heading>
           <Text type="supporting">
             {w.addOutcome?.type === "mapping_created"

@@ -366,7 +366,7 @@ export function ShowsPage() {
   // ── Render ──
 
   return (
-    <Section padding={4} maxWidth={900} className="section-centered">
+    <Section padding={4} maxWidth={900} className="section-centered page-enter">
       <VStack gap={6}>
         {/* Row 1: title + supporting text left, add right */}
         <HStack justify="between" align="center" wrap="wrap" gap={4}>

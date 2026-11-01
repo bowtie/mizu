@@ -169,3 +169,160 @@
 - `.settings-row-error` CSS class — replaces inline `color: var(--color-error)`
 
 **Outcome:** Kept. tsc clean. Zero inline `style={{}}` patterns remain in the entire `src/` directory. The only remaining `xstyle` usages are astryx-native stylex props on Divider (3x in ShowDetailPage) which is the intended API.
+
+## Iteration 11 — AddAnimeDialog: poster fade-in + step description styling
+
+**Target:** `AddAnimeDialog.tsx` — poster thumbnails and step description text
+
+**Problem:** Poster thumbnails in the series list appeared abruptly with no fade-in (inconsistent with card images which now fade in). The step description text sat as plain unstyled text between the wizard steps and the divider — no visual hierarchy separating it from the content below.
+
+**What changed:**
+- Added `opacity: 0` + `transition: opacity 0.2s ease` to `.wizard-poster-thumb`, with `.is-loaded` class added via `onLoad` handler — consistent with card/hero image fade-in pattern
+- Added `.wizard-step-description` CSS class — muted background, rounded corners, and secondary text color to visually distinguish the contextual help text from the step content below it
+
+**Outcome:** Kept. tsc clean. Poster thumbnails now fade in smoothly. Step description has visual weight as a contextual hint rather than floating plain text.
+
+## Iteration 12 — Page entrance animation + reduced-motion coverage
+
+**Target:** All route pages — page mount animation and reduced-motion audit
+
+**Problem:** Pages appeared instantly with no transition, making navigation feel abrupt. The `prefers-reduced-motion` block didn't cover several newer transitions (wizard steps, poster fade-in, chevron).
+
+**What changed:**
+- Added `@keyframes fade-in-up` — subtle 8px upward translate + opacity fade over 300ms
+- Added `.page-enter` class — applied to the main content Section of all 4 pages (ShowsPage, ActivityPage, SettingsPage, ShowDetailPage content section)
+- Expanded `prefers-reduced-motion: reduce` block to cover all new transitions: `.wizard-poster-thumb`, `.wizard-step-dot`, `.wizard-step-label`, `.wizard-step::after`, `.button-icon-chevron`, and disabled `.page-enter` animation
+
+**Outcome:** Kept. tsc clean. Page transitions now have a subtle entrance animation. All animations respect reduced-motion preferences.
+
+## Iteration 13 — Card grid staggered entrance animation
+
+**Target:** ShowsPage card grid — cards animate in with a cascade effect
+
+**Problem:** Cards in the library grid appeared all at once. A staggered entrance creates a more polished, app-like feel.
+
+**What changed:**
+- Added `@keyframes card-enter` — 12px upward translate + slight scale (0.98→1) + opacity fade over 350ms
+- Applied to `.mizu-card` with `backwards` fill mode (cards start invisible before their delay)
+- Staggered delays via `nth-child` selectors — first 8 cards get 40ms incremental delays, cards 9-11 get diminishing increments, card 12+ all at 360ms (caps the cascade for large libraries)
+- Added `.mizu-card { animation: none }` to reduced-motion block
+
+**Outcome:** Kept. tsc clean. Library cards now cascade in on page load — subtle but noticeable polish.
+
+## Iteration 14 — ActivityPage log card hover + expanded details animation
+
+**Target:** `ActivityPage.tsx` — log cards and expandable details section
+
+**Problem:** Activity log cards had no hover feedback. The expanded details section appeared instantly with no transition when clicking "Details".
+
+**What changed:**
+- `.activity-log-card` CSS class — border-color transition on hover (muted → emphasized border), gives interactive feedback
+- `.activity-details-expanded` CSS class — reuses `fade-in-up` keyframe for a 200ms entrance animation when details expand
+- Both added to reduced-motion block
+
+**Outcome:** Kept. tsc clean. Log cards now respond to hover, details section animates in smoothly.
+
+## Iteration 15 — ShowDetailPage season card hover + episode list fade-in
+
+**Target:** ShowDetailPage season cards and Collapsible content
+
+**Problem:** Season cards had no hover feedback. Episode list content inside Collapsible appeared instantly when expanded.
+
+**What changed:**
+- `.season-card` CSS class — border-color transition on hover (same pattern as activity log cards)
+- `.episode-list-wrap` — reuses `fade-in-up` keyframe for 200ms entrance animation when Collapsible expands
+- Both added to reduced-motion block
+
+**Outcome:** Kept. tsc clean. Season cards respond to hover, episode lists fade in smoothly when expanded.
+
+## Iteration 16 — Favicon fix + minor cleanup
+
+**Target:** `web-astryx/index.html` — missing favicon causing 404
+
+**Problem:** No favicon was defined, causing a 404 request for `/favicon.ico` on every page load.
+
+**What changed:**
+- Added an inline SVG emoji favicon (🌊 wave, matching the app's theme) via data URI — no extra file needed, no 404
+
+**Outcome:** Kept. tsc clean. No more favicon 404 in console.
+
+## Iteration 17 — Custom scrollbar styling + text selection color
+
+**Target:** Global CSS — scrollbars and text selection
+
+**Problem:** Default browser scrollbars looked out of place against the themed UI. Text selection used the browser default blue.
+
+**What changed:**
+- `scrollbar-width: thin` + `scrollbar-color` for Firefox — thin themed scrollbars
+- `::-webkit-scrollbar` styling for Chrome/Safari — 8px width, transparent track, themed thumb with rounded corners and hover state
+- `::selection` — accent-tinted selection background using `color-mix` at 25% opacity
+
+**Outcome:** Kept. tsc clean. Scrollbars and text selection now match the app's theme.
+
+## Iteration 18 — AddAnimeDialog success screen + logo fade-in regression fix
+
+**Target:** AddAnimeDialog post-add success screen + ShowsPage card logo visibility
+
+**Problem:** The success screen had a plain Check icon with no visual weight. Also, D4's image fade-in rule (`.mizu-card-img-wrap img { opacity: 0 }`) was hiding overlay logos because it targeted all images inside the wrap, not just the backdrop.
+
+**What changed:**
+- **Logo fix:** Scoped fade-in to `.mizu-card-img` only (the backdrop image class), not `.mizu-card-img-wrap img` (which also matched the logo)
+- **Success screen:** Wrapped Check icon in `.wizard-success-icon` — 64px circular badge with success-tinted background and border
+- **Success pulse animation:** `@keyframes success-pulse` — scale from 0.8→1.05→1 with opacity fade, gives a satisfying "pop" on appearance
+- **Success screen entrance:** `.wizard-success` reuses `fade-in-up` for the whole section
+- All added to reduced-motion block
+
+**Outcome:** Kept. tsc clean. Logos visible again. Success screen now has a polished circular badge with a pulse animation.
+
+## Iteration 19 — ShowDetailPage artwork card visual consistency
+
+**Target:** ShowDetailPage artwork card
+
+**Problem:** The artwork Card used the default variant (white/surface background) while the season cards below used `variant="muted"` — visual inconsistency within the same page. No hover feedback on the artwork card.
+
+**What changed:**
+- Changed artwork Card to `variant="muted"` to match season cards
+- Added `.artwork-card` class with same hover border transition as `.season-card`
+- Combined hover rules for both card classes
+
+**Outcome:** Kept. tsc clean. Artwork card now visually consistent with season cards on the same page.
+
+## Iteration 20 — ShowDetailPage hero text readability
+
+**Target:** ShowDetailPage hero title and overview text
+
+**Problem:** Hero title and overview text sit over a backdrop image with a gradient overlay. In some themes or with bright/busy images, the text could be hard to read where the gradient is weaker (upper portion of the content area).
+
+**What changed:**
+- Added `text-shadow: 0 1px 6px color-mix(in srgb, var(--color-background-body) 60%, transparent)` to hero `h1` and `.show-hero-overview`
+- Uses the body background color at 60% opacity — dark shadow in dark mode (behind light text), light shadow in light mode (behind dark text) — ensures readability in both themes
+- Subtle enough not to look heavy-handed
+
+**Outcome:** Kept. tsc clean. Hero text remains readable over any backdrop image in both light and dark themes.
+
+## Iteration 21 — ActivityPage error rows — tinted background + left border accent
+
+**Target:** ActivityPage error rows (both run-level and item-level)
+
+**Problem:** Error rows were just red text with an alert icon — no visual container to make them scannable at a glance when scanning a list of activity items.
+
+**What changed:**
+- Added tinted background: `color-mix(in srgb, var(--color-error) 8%, transparent)` — subtle red tint
+- Added left border accent: 2px solid error-colored border on the inline-start side
+- Added padding and margin for spacing
+- Rounded corners on the right side (matching the left border accent)
+- Works in both light and dark themes via `color-mix`
+
+**Outcome:** Kept. tsc clean. Errors now stand out visually with a tinted container and accent border.
+
+## Iteration 22 — ShowsPage card overlay gradient + empty placeholder
+
+**Target:** ShowsPage card image overlay gradient and empty card placeholder
+
+**Problem:** The overlay gradient used hardcoded `rgba(0, 0, 0, ...)` which doesn't adapt to theme. The empty card placeholder had no background — just a centered icon on the muted wrap background.
+
+**What changed:**
+- **Overlay gradient:** Replaced hardcoded `rgba(0, 0, 0, 0.45→0)` with `color-mix(in srgb, var(--color-background-body) 50%→20%→0%)` — adapts to light/dark themes. Extended gradient to 55% height for smoother fade. Added opacity transition on hover (fades to 70% on hover, letting the image show through more).
+- **Empty placeholder:** Added 135° gradient from `--color-background-muted` to a mix of surface and muted — gives empty cards a subtle visual texture instead of a flat background.
+
+**Outcome:** Kept. tsc clean. Card overlays now theme-aware, empty cards have subtle depth.

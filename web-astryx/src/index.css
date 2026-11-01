@@ -9,10 +9,85 @@
   animation: spin 0.8s linear infinite;
 }
 
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fade-in-up 0.3s ease-out;
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.mizu-card {
+  animation: card-enter 0.35s ease-out backwards;
+}
+
+/* Stagger card entrance — first 12 cards get incremental delays */
+.mizu-card:nth-child(1) { animation-delay: 0ms; }
+.mizu-card:nth-child(2) { animation-delay: 40ms; }
+.mizu-card:nth-child(3) { animation-delay: 80ms; }
+.mizu-card:nth-child(4) { animation-delay: 120ms; }
+.mizu-card:nth-child(5) { animation-delay: 160ms; }
+.mizu-card:nth-child(6) { animation-delay: 200ms; }
+.mizu-card:nth-child(7) { animation-delay: 240ms; }
+.mizu-card:nth-child(8) { animation-delay: 280ms; }
+.mizu-card:nth-child(9) { animation-delay: 300ms; }
+.mizu-card:nth-child(10) { animation-delay: 320ms; }
+.mizu-card:nth-child(11) { animation-delay: 340ms; }
+.mizu-card:nth-child(n+12) { animation-delay: 360ms; }
+
 body {
   background: var(--color-background-body);
   color: var(--color-text-primary);
   min-height: 100vh;
+}
+
+/* Custom scrollbars — subtle, themed */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-emphasized) transparent;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-border-emphasized);
+  background-clip: content-box;
 }
 
 /* ── App shell ── */
@@ -80,11 +155,11 @@ body {
   background: var(--color-background-muted);
 }
 
-.mizu-card-img-wrap img {
+.mizu-card-img {
   transition: transform 0.3s ease;
 }
 
-.mizu-card:hover .mizu-card-img-wrap img {
+.mizu-card:hover .mizu-card-img {
   transform: scale(1.04);
 }
 
@@ -102,6 +177,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(
+    135deg,
+    var(--color-background-muted),
+    color-mix(in srgb, var(--color-background-surface) 50%, var(--color-background-muted))
+  );
 }
 
 .mizu-card-logo {
@@ -121,8 +201,18 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 45%);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-background-body) 50%, transparent) 0%,
+    color-mix(in srgb, var(--color-background-body) 20%, transparent) 30%,
+    transparent 55%
+  );
   pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.mizu-card:hover .mizu-card-img-wrap::after {
+  opacity: 0.7;
 }
 
 .mizu-card-img-wrap.is-empty::after {
@@ -151,12 +241,12 @@ body {
   white-space: nowrap;
 }
 
-/* Card image fade-in on load */
-.mizu-card-img-wrap img {
+/* Card image fade-in on load — scoped to backdrop only, not overlay logos */
+.mizu-card-img {
   opacity: 0;
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
-.mizu-card-img-wrap img.is-loaded {
+.mizu-card-img.is-loaded {
   opacity: 1;
 }
 
@@ -333,6 +423,11 @@ body {
   padding: clamp(20px, 5vw, 32px) clamp(12px, 4vw, 32px);
 }
 
+.show-hero-content h1,
+.show-hero-content .show-hero-overview {
+  text-shadow: 0 1px 6px color-mix(in srgb, var(--color-background-body) 60%, transparent);
+}
+
 .show-hero-overview {
   margin-top: 8px;
   max-width: 640px;
@@ -400,11 +495,34 @@ body {
   .controls-reveal,
   .show-actions-bar,
   .mizu-card,
-  .mizu-card-img-wrap img,
-  .show-hero-img {
+  .mizu-card-img,
+  .show-hero-img,
+  .wizard-poster-thumb,
+  .wizard-step-dot,
+  .wizard-step-label,
+  .wizard-step::after,
+  .button-icon-chevron {
     transition: none;
   }
-  .mizu-card:hover .mizu-card-img-wrap img {
+  .page-enter {
+    animation: none;
+  }
+  .mizu-card {
+    animation: none;
+  }
+  .activity-details-expanded {
+    animation: none;
+  }
+  .episode-list-wrap {
+    animation: none;
+  }
+  .wizard-success {
+    animation: none;
+  }
+  .wizard-success-icon {
+    animation: none;
+  }
+  .mizu-card:hover .mizu-card-img {
     transform: none;
   }
 }
@@ -517,6 +635,20 @@ body {
 /* Episode list — padding inside collapsible */
 .episode-list-wrap {
   padding-block-start: var(--spacing-4);
+  animation: fade-in-up 0.2s ease-out;
+}
+
+/* Season card hover */
+.season-card,
+.artwork-card {
+  transition: border-color 0.2s ease;
+}
+
+@media (hover: hover) {
+  .season-card:hover,
+  .artwork-card:hover {
+    border-color: var(--color-border-emphasized);
+  }
 }
 
 /* Show detail content — responsive horizontal padding */
@@ -553,6 +685,11 @@ body {
   height: 44px;
   object-fit: cover;
   border-radius: var(--radius-1);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.wizard-poster-thumb.is-loaded {
+  opacity: 1;
 }
 
 .wizard-poster-placeholder {
@@ -561,6 +698,61 @@ body {
   border-radius: var(--radius-1);
   background: var(--color-background-muted);
   flex-shrink: 0;
+}
+
+/* AddAnimeDialog — step description */
+.wizard-step-description {
+  padding: var(--spacing-2) var(--spacing-3);
+  background-color: var(--color-background-muted);
+  border-radius: var(--radius-2, 8px);
+  color: var(--color-text-secondary);
+}
+
+/* AddAnimeDialog — success screen */
+.wizard-success {
+  animation: fade-in-up 0.3s ease-out;
+}
+
+.wizard-success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+  border: 2px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+  animation: success-pulse 0.6s ease-out;
+}
+
+@keyframes success-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Activity page — log card hover */
+.activity-log-card {
+  transition: border-color 0.2s ease;
+}
+
+@media (hover: hover) {
+  .activity-log-card:hover {
+    border-color: var(--color-border-emphasized);
+  }
+}
+
+/* Activity page — expanded details entrance */
+.activity-details-expanded {
+  animation: fade-in-up 0.2s ease-out;
 }
 
 /* Activity page — utility classes */
@@ -572,6 +764,11 @@ body {
 
 .activity-error-row {
   color: var(--color-error);
+  padding: var(--spacing-1) var(--spacing-2);
+  margin-block-start: var(--spacing-1);
+  border-inline-start: 2px solid color-mix(in srgb, var(--color-error) 40%, transparent);
+  background-color: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-radius: 0 var(--radius-1, 4px) var(--radius-1, 4px) 0;
 }
 
 /* Chevron rotation — transition always on, rotation via .chevron-expanded */

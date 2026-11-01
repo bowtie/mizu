@@ -146,7 +146,7 @@ export function ActivityPage() {
   };
 
   return (
-    <Section padding={4} maxWidth={900} className="section-centered">
+    <Section padding={4} maxWidth={900} className="section-centered page-enter">
       <VStack gap={6}>
         {/* Header */}
         <HStack justify="between" align="center" wrap="wrap" gap={3}>
@@ -233,7 +233,7 @@ export function ActivityPage() {
                   const isExpanded = expandedId === log.id;
                   const runBadge = runStatusBadge(log.status);
                   return (
-                    <Card key={String(log.id)} padding={3} variant="muted">
+                    <Card key={String(log.id)} padding={3} variant="muted" className="activity-log-card">
                       <VStack gap={2}>
                         <HStack justify="between" align="center" wrap="wrap" gap={2}>
                           <VStack gap={1} className="activity-log-summary">
@@ -288,7 +288,7 @@ export function ActivityPage() {
                         )}
 
                         {isExpanded && hasDetails(log) && (
-                          <VStack gap={2}>
+                          <VStack gap={2} className="activity-details-expanded">
                             {log.items?.length && (
                               <VStack gap={2}>
                                 {log.items.map((item, idx) => {
