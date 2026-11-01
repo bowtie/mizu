@@ -13,6 +13,7 @@ import { KeyRound, LogOut } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
 import { useAuthStatus } from "../lib/queries";
 import { changePassword, logout, errorMessage } from "../lib/api";
+import { isAuthManaged } from "../lib/authMode";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -33,6 +34,22 @@ export function SecuritySettingsCard() {
     setNewPassword("");
     setConfirmPassword("");
   }, [status?.configured]);
+
+  if (isAuthManaged(status)) {
+    return (
+      <Card variant="muted" padding={4}>
+        <VStack gap={3}>
+          <Heading level={2}>Security</Heading>
+          <Divider />
+          <Text type="supporting" color="secondary" display="block">
+            {status?.mode === "proxy"
+              ? `Sign-in is handled by your reverse proxy${status.user ? ` (signed in as ${status.user})` : ""}. Set by MIZU_AUTH=proxy.`
+              : "Authentication is turned off (MIZU_AUTH=none). Make sure Mizu is only reachable through something that protects it."}
+          </Text>
+        </VStack>
+      </Card>
+    );
+  }
 
   if (!status?.configured) return null;
 

@@ -483,6 +483,19 @@ body {
   margin-inline: auto;
 }
 
+/* Standalone screens (welcome, sign-in): centered both ways, no app chrome. */
+.onboarding-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.onboarding-screen > .section-centered {
+  width: 100%;
+  margin-block: auto;
+}
+
 /* Show detail hero — backdrop image with gradient overlay */
 .show-shell {
   position: relative;

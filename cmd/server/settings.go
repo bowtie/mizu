@@ -25,7 +25,6 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 		settings := map[string]interface{}{
 			"sonarr_url":                    cfg.SonarrURL,
 			"sonarr_api_key_masked":         maskedSonarrKey,
-			"sonarr_api_key":                cfg.SonarrAPIKey,
 			"sonarr_api_key_set":            cfg.SonarrAPIKey != "",
 			"default_filler_action":         string(cfg.DefaultFillerAction),
 			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
@@ -41,10 +40,8 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"ntfy_token_set":                cfg.NtfyToken != "",
 			"ntfy_notify_on":                cfg.NtfyNotifyOn,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
-			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"tmdb_api_key_masked":           maskedTmdbKey,
 			"tmdb_api_key_set":              cfg.TMDBAPIKey != "",
-			"fanart_api_key":                cfg.FanartAPIKey,
 			"fanart_api_key_masked":         maskedFanartKey,
 			"fanart_api_key_set":            cfg.FanartAPIKey != "",
 			"ui_sounds_enabled":             cfg.UISoundsEnabled,
@@ -279,7 +276,9 @@ func rebuildArtworkProviders(requestTimeout time.Duration, tmdbKey, fanartKey st
 	})
 }
 
-func handleTestSonarr() http.HandlerFunc {
+// handleTestSonarr checks a Sonarr URL/key pair. The stored key is never
+// sent to the browser, so an empty api_key means "use the saved one".
+func handleTestSonarr(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			URL    string `json:"url"`
@@ -288,6 +287,11 @@ func handleTestSonarr() http.HandlerFunc {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
+		}
+		if req.APIKey == "" {
+			cfg.RLock()
+			req.APIKey = cfg.SonarrAPIKey
+			cfg.RUnlock()
 		}
 		if req.URL == "" || req.APIKey == "" {
 			writeError(w, http.StatusBadRequest, "url and api_key are required")

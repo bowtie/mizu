@@ -98,6 +98,34 @@ MIZU_PASSWORD=your-password ./mizu
 
 The env var only applies while no password is configured; rotate via Settings afterwards. Sessions last 30 days, and changing the password revokes all existing sessions. Health and version endpoints stay public for monitoring.
 
+### Authentication Modes
+
+`MIZU_AUTH` chooses who signs users in. It is read from the environment only, never from the UI, so a compromised session cannot turn authentication off.
+
+| `MIZU_AUTH` | Behavior |
+| --- | --- |
+| `builtin` (default) | The dashboard password described above. |
+| `none` | No authentication. Use this when Mizu is only reachable through a VPN/tailnet or an authenticating proxy. The password endpoints return 404 and the UI hides password setup and sign-out. |
+| `proxy` | Trust an identity header from a reverse proxy (tinyauth, Authelia, Authentik, oauth2-proxy, ...). Requests must come from `MIZU_TRUSTED_PROXIES` **and** carry the header, otherwise they get 401. |
+
+Proxy-mode settings:
+
+- `MIZU_TRUSTED_PROXIES` (required): comma- or space-separated IPs/CIDRs of your proxy, e.g. `172.18.0.0/16`. Matched against the TCP peer address only; `X-Forwarded-For` is never trusted.
+- `MIZU_AUTH_PROXY_HEADER` (default `Remote-User`): the header carrying the signed-in user, e.g. `X-Forwarded-User` or `Remote-Email`.
+
+```yaml
+environment:
+  MIZU_AUTH: proxy
+  MIZU_TRUSTED_PROXIES: 172.18.0.0/16
+  MIZU_AUTH_PROXY_HEADER: Remote-User
+```
+
+Notes:
+
+- Have the proxy strip the identity header from incoming client requests and pass `Host` through unchanged; Mizu rejects cross-origin writes by comparing `Origin` to `Host`.
+- `MIZU_AUTH=none` on a non-loopback `MIZU_ADDR` logs a warning at startup: anyone who can reach the port can use the dashboard.
+- Health, version and metrics endpoints stay public in every mode. The API never returns stored API keys in full; only a masked form is sent to the browser.
+
 ### Metrics
 
 Mizu exposes Prometheus-style metrics at `/metrics` (public, like `/api/health`): request counts by method/route/status, sync cycle outcomes, episodes updated, AFL cache refresh outcomes, and Go runtime gauges. Point any scraper at it — no service discovery or extra config required.

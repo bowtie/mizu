@@ -64,7 +64,6 @@ export function SettingsPage() {
   // ── API key UI state (visibility, masked display, dirty tracking) ──
   // These stay as useState because they're presentation logic, not form data.
   const [savedApiKeyMasked, setSavedApiKeyMasked] = useState("");
-  const [savedApiKeyFull, setSavedApiKeyFull] = useState("");
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
 
@@ -183,7 +182,6 @@ export function SettingsPage() {
 
       // Reset API key UI state
       setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
-      setSavedApiKeyFull(data.sonarr_api_key || "");
       setHasSavedApiKey(!!data.sonarr_api_key_set);
       setApiKeyDirty(false);
 
@@ -262,7 +260,9 @@ export function SettingsPage() {
     if (apiKeyDirty || !hasSavedApiKey) {
       return current;
     }
-    return savedApiKeyFull;
+    // The saved key never reaches the browser; an empty key tells the
+    // server to test with the stored one.
+    return "";
   };
 
   // ── Save ──

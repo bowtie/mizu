@@ -25,7 +25,6 @@ const EMPTY_PROVIDERS: never[] = [];
 // store-settings effect dep never changes between renders.
 const SETTINGS = {
   sonarr_url: "http://localhost:8989",
-  sonarr_api_key: "secret",
   sonarr_api_key_masked: "••••",
   sonarr_api_key_set: true,
   default_filler_action: "unmonitor",

@@ -126,6 +126,7 @@ export function markManualMatchPending(seriesId: string | number): Promise<unkno
   return request<unknown>("POST", "/sonarr/manual-match-pending", { sonarr_series_id: seriesId });
 }
 
+/** An empty `apiKey` tests with the key already saved on the server. */
 export function testSonarrConnection(url: string, apiKey: string): Promise<TestConnectionResult> {
   return request<TestConnectionResult>("POST", "/sonarr/test", { url, api_key: apiKey });
 }
@@ -606,9 +607,15 @@ export function testNtfyConnection(data: {
 
 // ── Auth ──
 
+export type AuthMode = "builtin" | "none" | "proxy";
+
 export interface AuthStatus {
   configured: boolean;
   authenticated: boolean;
+  /** Who authenticates users: Mizu itself, nobody, or a reverse proxy. */
+  mode?: AuthMode;
+  /** Identity asserted by the reverse proxy (proxy mode only). */
+  user?: string;
 }
 
 export function getAuthStatus(): Promise<AuthStatus> {

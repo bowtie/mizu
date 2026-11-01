@@ -77,7 +77,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Handle("/metrics", metrics.Handler())
 
 		r.Route("/auth", func(r chi.Router) {
-			r.Get("/status", handleAuthStatus(authMgr))
+			r.Get("/status", handleAuthStatus(cfg.Auth, authMgr))
 			// Login and setup are the password-guessing surfaces — bound
 			// by a per-source and a global fixed window so neither a
 			// single client nor a key-rotating one can brute-force freely.
@@ -87,16 +87,20 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 					limitMiddleware(authLimiter, h).ServeHTTP(w, r)
 				}
 			}
-			r.Post("/setup", wrapLimited(handleAuthSetup(authMgr)))
-			r.Post("/login", wrapLimited(handleAuthLogin(authMgr)))
-			r.Post("/logout", handleAuthLogout(authMgr))
+			// Password endpoints only exist in builtin mode.
+			r.Group(func(r chi.Router) {
+				r.Use(builtinAuthOnly(cfg.Auth))
+				r.Post("/setup", wrapLimited(handleAuthSetup(authMgr)))
+				r.Post("/login", wrapLimited(handleAuthLogin(authMgr)))
+				r.Post("/logout", handleAuthLogout(authMgr))
+			})
 		})
 
 		// ── Protected: everything below requires a valid session ──
 		r.Group(func(r chi.Router) {
-			r.Use(requireSession(authMgr))
+			r.Use(requireAuth(cfg.Auth, authMgr))
 
-			r.Post("/auth/change-password", handleAuthChangePassword(authMgr))
+			r.With(builtinAuthOnly(cfg.Auth)).Post("/auth/change-password", handleAuthChangePassword(authMgr))
 			r.Get("/bootstrap", handleBootstrap(cfg, db, artworkMgr))
 
 			r.Get("/stats", handleGetStats(db))
@@ -140,7 +144,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			r.Get("/sonarr/lookup", handleLookupSonarrSeries(syncEngine))
 			r.Get("/sonarr/add-options", handleGetSonarrAddOptions(syncEngine))
 			r.Post("/sonarr/manual-match-pending", handleMarkManualMatchPending(db))
-			r.Post("/sonarr/test", handleTestSonarr())
+			r.Post("/sonarr/test", handleTestSonarr(cfg))
 			r.Post("/ntfy/test", handleTestNtfy(cfg))
 			r.Get("/afl/search", handleAFLSearch(syncEngine, db))
 			r.Get("/afl/suggest", handleAFLSuggest(syncEngine, db))

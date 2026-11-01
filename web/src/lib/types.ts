@@ -7,7 +7,6 @@ export interface Notification {
 
 export interface Settings {
   sonarr_url: string;
-  sonarr_api_key: string;
   sonarr_api_key_masked?: string;
   sonarr_api_key_set?: boolean;
   default_filler_action: string;
@@ -21,10 +20,8 @@ export interface Settings {
   afl_show_cache_refreshed_at: string | null;
   afl_show_cache_count: number;
   artwork_default_source?: string;
-  tmdb_api_key?: string;
   tmdb_api_key_masked?: string;
   tmdb_api_key_set?: boolean;
-  fanart_api_key?: string;
   fanart_api_key_masked?: string;
   fanart_api_key_set?: boolean;
   ntfy_enabled?: boolean;

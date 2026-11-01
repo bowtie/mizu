@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
 import { prefetchShowDetail, logout } from "./lib/api";
+import { isAuthManaged } from "./lib/authMode";
 import { queryClient } from "./lib/queryClient";
 import { useAuthStatus } from "./lib/queries";
 import { Theme } from "@astryxdesign/core/theme";
@@ -146,7 +147,8 @@ function LogoutButton() {
   const { data: status } = useAuthStatus();
   const navigate = useNavigate();
 
-  if (!status?.authenticated) return null;
+  // Nothing to sign out of when a proxy (or nothing) handles auth.
+  if (!status?.authenticated || isAuthManaged(status)) return null;
 
   const handleLogout = async () => {
     try {
@@ -180,9 +182,6 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
     currentPath === "/" || currentPath === "/shows" || currentPath.startsWith("/shows/");
   const isActivity = currentPath === "/activity";
   const isSettings = currentPath === "/settings";
-
-  // Setup and sign-in are focused, standalone screens: no app navigation.
-  if (currentPath === "/welcome" || currentPath === "/login") return null;
 
   return (
     <TopNav
@@ -221,6 +220,24 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
         </HStack>
       }
     />
+  );
+}
+
+// Setup and sign-in are focused, standalone screens: no app navigation, and
+// no top-nav slot at all (an empty slot still reserves a bar).
+function Shell({ themeMenu }: { themeMenu: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const standalone = pathname === "/welcome" || pathname === "/login";
+  return (
+    <AppShell
+      variant="surface"
+      height="auto"
+      topNav={standalone ? undefined : <Nav themeMenu={themeMenu} />}
+    >
+      <RouteBoundary>
+        <App />
+      </RouteBoundary>
+    </AppShell>
   );
 }
 
@@ -286,11 +303,7 @@ function Root() {
       <QueryClientProvider client={queryClient}>
         <Theme theme={theme} mode={themeMode}>
           <BrowserRouter>
-            <AppShell variant="surface" height="auto" topNav={<Nav themeMenu={menu} />}>
-              <RouteBoundary>
-                <App />
-              </RouteBoundary>
-            </AppShell>
+            <Shell themeMenu={menu} />
           </BrowserRouter>
         </Theme>
         {import.meta.env.DEV && (

@@ -7,19 +7,36 @@ import (
 	"time"
 
 	"mizu/internal/auth"
+	"mizu/internal/config"
 
 	"github.com/rs/zerolog/log"
 )
 
 // ── Middleware ──
 
-// requireSession rejects requests without a valid session cookie.
-// Mounted on every /api route except health, version, and /api/auth/*.
-// While no password is configured, auth is disabled and everything
-// passes through — the *arr first-run behavior.
-func requireSession(mgr *auth.Manager) func(http.Handler) http.Handler {
+// requireAuth gates every /api route except health, version, metrics and
+// /api/auth/*, according to the configured auth mode:
+//
+//   - none: everything passes through (auth is handled outside Mizu).
+//   - proxy: the request must come from a trusted proxy address and carry
+//     the identity header.
+//   - builtin: a valid session cookie is required. While no password is
+//     configured, everything passes through — the *arr first-run behavior.
+func requireAuth(settings config.AuthSettings, mgr *auth.Manager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch settings.Mode {
+			case config.AuthNone:
+				next.ServeHTTP(w, r)
+				return
+			case config.AuthProxy:
+				if settings.ProxyUser(r) == "" {
+					writeError(w, http.StatusUnauthorized, "authentication required")
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
 			configured, err := mgr.IsConfigured(r.Context())
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
@@ -37,6 +54,20 @@ func requireSession(mgr *auth.Manager) func(http.Handler) http.Handler {
 				}
 			}
 			writeError(w, http.StatusUnauthorized, "authentication required")
+		})
+	}
+}
+
+// builtinAuthOnly 404s the password endpoints when authentication is
+// managed externally, so there is no second, weaker way in.
+func builtinAuthOnly(settings config.AuthSettings) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if settings.Managed() {
+				writeError(w, http.StatusNotFound, "authentication is managed externally")
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
@@ -92,12 +123,29 @@ func requestScheme(r *http.Request) string {
 // ── Handlers ──
 
 type authStatusResponse struct {
-	Configured    bool `json:"configured"`
-	Authenticated bool `json:"authenticated"`
+	Configured    bool   `json:"configured"`
+	Authenticated bool   `json:"authenticated"`
+	Mode          string `json:"mode"`
+	// User is the identity asserted by the reverse proxy (proxy mode only).
+	User string `json:"user,omitempty"`
 }
 
-func handleAuthStatus(mgr *auth.Manager) http.HandlerFunc {
+func handleAuthStatus(settings config.AuthSettings, mgr *auth.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		switch settings.Mode {
+		case config.AuthNone:
+			writeJSON(w, http.StatusOK, authStatusResponse{Authenticated: true, Mode: string(config.AuthNone)})
+			return
+		case config.AuthProxy:
+			user := settings.ProxyUser(r)
+			writeJSON(w, http.StatusOK, authStatusResponse{
+				Configured:    true,
+				Authenticated: user != "",
+				Mode:          string(config.AuthProxy),
+				User:          user,
+			})
+			return
+		}
 		configured, err := mgr.IsConfigured(r.Context())
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -113,6 +161,7 @@ func handleAuthStatus(mgr *auth.Manager) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, authStatusResponse{
 			Configured:    configured,
 			Authenticated: authenticated,
+			Mode:          string(config.AuthBuiltin),
 		})
 	}
 }

@@ -8,8 +8,9 @@ import (
 )
 
 // Config holds all application configuration.
-// All values are loaded from SQLite (app_settings table) and overlaid
-// onto DefaultConfig() at startup. No YAML, no env vars.
+// Runtime values are loaded from SQLite (app_settings table) and overlaid
+// onto DefaultConfig() at startup. Only deployment-level settings (listen
+// address, authentication mode) come from environment variables.
 // The RWMutex protects fields from concurrent reads (HTTP handlers) and
 // writes (handleUpdateSettings). Callers must hold RLock before reading
 // and Lock before writing when running in a concurrent context.
@@ -64,6 +65,10 @@ type Config struct {
 
 	// Interface
 	UISoundsEnabled bool
+
+	// Auth is set once from the environment in Load and never mutated, so
+	// it is read without the lock.
+	Auth AuthSettings
 }
 
 // RLock acquires a read lock on the config. Callers must call RUnlock when done.
@@ -112,6 +117,7 @@ func DefaultConfig() *Config {
 		FanartAPIKey:              "",
 		LogLevel:                  "info",
 		UISoundsEnabled:           true,
+		Auth:                      AuthSettings{Mode: AuthBuiltin, ProxyHeader: DefaultProxyHeader},
 	}
 }
 
@@ -127,6 +133,11 @@ func Load() (*Config, error) {
 	if addr := os.Getenv("MIZU_ADDR"); addr != "" {
 		cfg.ListenAddr = addr
 	}
+	authSettings, err := loadAuthSettings(os.Getenv)
+	if err != nil {
+		return nil, fmt.Errorf("config validation: %w", err)
+	}
+	cfg.Auth = authSettings
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}

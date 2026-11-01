@@ -4,7 +4,6 @@ import * as v from "valibot";
 
 export const SettingsSchema = v.object({
   sonarr_url: v.string(),
-  sonarr_api_key: v.string(),
   sonarr_api_key_masked: v.optional(v.string()),
   sonarr_api_key_set: v.optional(v.boolean()),
   default_filler_action: v.string(),
@@ -18,10 +17,8 @@ export const SettingsSchema = v.object({
   afl_show_cache_refreshed_at: v.union([v.string(), v.null()]),
   afl_show_cache_count: v.number(),
   artwork_default_source: v.optional(v.string()),
-  tmdb_api_key: v.optional(v.string()),
   tmdb_api_key_masked: v.optional(v.string()),
   tmdb_api_key_set: v.optional(v.boolean()),
-  fanart_api_key: v.optional(v.string()),
   fanart_api_key_masked: v.optional(v.string()),
   fanart_api_key_set: v.optional(v.boolean()),
   ntfy_enabled: v.optional(v.boolean()),

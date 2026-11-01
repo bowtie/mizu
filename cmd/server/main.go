@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -52,6 +53,7 @@ func main() {
 	zerolog.SetGlobalLevel(level)
 
 	log.Info().Str("version", version).Str("listen", cfg.ListenAddr).Str("sonarr", cfg.SonarrURL).Dur("scan_interval", cfg.ScanInterval).Msg("starting Mizu")
+	logAuthMode(cfg)
 
 	db, err := database.New(cfg.DBPath)
 	if err != nil {
@@ -275,4 +277,29 @@ func startScheduler(ctx context.Context, cfg *config.Config, scheduler *schedule
 			}
 		}
 	}
+}
+
+// logAuthMode records the active authentication mode and warns about the
+// combinations that leave the dashboard open to the network.
+func logAuthMode(cfg *config.Config) {
+	ev := log.Info().Str("auth", string(cfg.Auth.Mode))
+	if cfg.Auth.Mode == config.AuthProxy {
+		ev = ev.Str("header", cfg.Auth.ProxyHeader).Int("trusted_proxies", len(cfg.Auth.TrustedProxies))
+	}
+	ev.Msg("authentication mode")
+	if cfg.Auth.Mode == config.AuthNone && !isLoopbackAddr(cfg.ListenAddr) {
+		log.Warn().Str("listen", cfg.ListenAddr).Msg("MIZU_AUTH=none on a non-loopback address: anyone who can reach this port has full access, including your Sonarr API key. Put it behind an authenticating proxy or VPN.")
+	}
+}
+
+func isLoopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

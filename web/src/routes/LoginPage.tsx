@@ -78,6 +78,7 @@ export function LoginPage() {
         queryClient.setQueryData(["authStatus"], {
           configured: true,
           authenticated: true,
+          mode: "builtin",
         });
         navigate(from, { replace: true });
       } catch (err) {
@@ -100,7 +101,7 @@ export function LoginPage() {
           alignItems: "center",
           justifyContent: "center",
           gap: "var(--spacing-3)",
-          minHeight: "60vh",
+          minHeight: "100dvh",
         }}
       >
         <Spinner size="lg" />
@@ -109,18 +110,31 @@ export function LoginPage() {
     );
   }
 
+  // MIZU_AUTH=proxy and not authenticated: there is no password to type.
+  // The reverse proxy should have signed the visitor in before reaching us.
+  if (status?.mode === "proxy") {
+    return (
+      <div className="onboarding-screen" style={{ padding: "var(--spacing-5)" }}>
+        <Card style={{ width: "100%", maxWidth: 400 }}>
+          <VStack gap={4} align="center">
+            <Waves size={24} aria-hidden="true" />
+            <Heading level={1}>Sign-in handled by your proxy</Heading>
+            <Text size="sm" color="secondary" style={{ textAlign: "center" }}>
+              Mizu didn't receive a signed-in user from your reverse proxy. Open it through the
+              proxy's address, or check that the proxy forwards the identity header and is listed in
+              MIZU_TRUSTED_PROXIES.
+            </Text>
+            <Button variant="primary" label="Try again" onClick={() => window.location.reload()} />
+          </VStack>
+        </Card>
+      </div>
+    );
+  }
+
   const isSetup = status !== null && !status.configured;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "70vh",
-        padding: "var(--spacing-5)",
-      }}
-    >
+    <div className="onboarding-screen" style={{ padding: "var(--spacing-5)" }}>
       <Card style={{ width: "100%", maxWidth: 400 }}>
         <VStack gap={5} as="form" onSubmit={handleSubmit}>
           <VStack gap={2} align="center">

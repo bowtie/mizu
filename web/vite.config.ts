@@ -177,7 +177,9 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://localhost:8978",
-        changeOrigin: true,
+        // Keep the browser's Host so it matches its Origin; the backend's
+        // sameOriginGuard rejects mutations when the two differ.
+        changeOrigin: false,
       },
     },
   },

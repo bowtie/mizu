@@ -56,7 +56,6 @@ func handleBootstrap(cfg *config.Config, db *database.DB, mgr *artwork.Manager) 
 		settings := map[string]interface{}{
 			"sonarr_url":                    cfg.SonarrURL,
 			"sonarr_api_key_masked":         maskedSonarrKey,
-			"sonarr_api_key":                cfg.SonarrAPIKey,
 			"sonarr_api_key_set":            cfg.SonarrAPIKey != "",
 			"default_filler_action":         string(cfg.DefaultFillerAction),
 			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
@@ -72,10 +71,8 @@ func handleBootstrap(cfg *config.Config, db *database.DB, mgr *artwork.Manager) 
 			"ntfy_token_set":                cfg.NtfyToken != "",
 			"ntfy_notify_on":                cfg.NtfyNotifyOn,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
-			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"tmdb_api_key_masked":           maskedTmdbKey,
 			"tmdb_api_key_set":              cfg.TMDBAPIKey != "",
-			"fanart_api_key":                cfg.FanartAPIKey,
 			"fanart_api_key_masked":         maskedFanartKey,
 			"fanart_api_key_set":            cfg.FanartAPIKey != "",
 			"ui_sounds_enabled":             cfg.UISoundsEnabled,
