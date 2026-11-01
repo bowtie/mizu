@@ -13,6 +13,7 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Card } from "@astryxdesign/core/Card";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
@@ -861,30 +862,33 @@ export function ShowDetailPage() {
                             const monitored = episodeMonitored(ep);
                             const key = epSyncKey(group.season, ep);
                             const isSyncing = syncingEps[key];
-                            const airDate = ep.air_date ? new Date(ep.air_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : null;
                             return (
                               <ListItem
                                 key={`${group.season}-${displayEpisodeNumber(ep)}`}
                                 label={ep.title || "—"}
-                                description={`Episode ${displayEpisodeNumber(ep)}${airDate ? ` · ${airDate}` : ""}`}
+                                description={`Episode ${displayEpisodeNumber(ep)}`}
                                 endContent={
                                   <HStack gap={4} align="center">
+                                    {ep.air_date && (
+                                      <Timestamp value={ep.air_date} format="date" />
+                                    )}
                                     <Badge
                                       variant={badgeVariantForType(ep.type)}
                                       label={typeBadge.label}
                                     />
-                                    <ToggleButton
-                                      label={monitored ? "Unmonitor episode" : "Monitor episode"}
-                                      isIconOnly
-                                      size="sm"
-                                      icon={<Eye size={14} />}
-                                      pressedIcon={<EyeOff size={14} color="var(--color-accent)" />}
-                                      isPressed={monitored}
-                                      isDisabled={isSyncing || !ep.sonarr_episode_id}
-                                      isLoading={isSyncing}
-                                      tooltip={monitored ? "Unmonitor" : "Monitor"}
-                                      onPressedChange={() => toggleEpisodeMonitor(group.season, ep)}
-                                    />
+                                    <Tooltip content={monitored ? "Unmonitor" : "Monitor"} placement="start">
+                                      <ToggleButton
+                                        label={monitored ? "Unmonitor episode" : "Monitor episode"}
+                                        isIconOnly
+                                        size="sm"
+                                        icon={<Eye size={14} />}
+                                        pressedIcon={<EyeOff size={14} />}
+                                        isPressed={monitored}
+                                        isDisabled={isSyncing || !ep.sonarr_episode_id}
+                                        isLoading={isSyncing}
+                                        onPressedChange={() => toggleEpisodeMonitor(group.season, ep)}
+                                      />
+                                    </Tooltip>
                                   </HStack>
                                 }
                               />
