@@ -175,7 +175,6 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Post("/sync", handleTriggerSync(syncEngine, appCtx, bgWG))
 		r.Get("/logs", handleGetLogs(db))
 		r.Get("/settings", handleGetSettings(cfg, db))
-		r.Get("/settings/sonarr-api-key", handleGetStoredSonarrAPIKey(cfg))
 		r.Put("/settings", handleUpdateSettings(cfg, db, scheduler, syncEngine, artworkMgr))
 		r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db))
 		r.Get("/sonarr/series", handleGetSonarrSeries(db, syncEngine))
@@ -589,6 +588,17 @@ func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine, epCache *episod
 			return
 		}
 
+		// Compute a cheap version tag for ETag-based caching.
+		version, verr := db.EpisodeVersion(r.Context(), id)
+		if verr == nil && version != "" {
+			etag := `"` + version + `"`
+			w.Header().Set("ETag", etag)
+			if match := r.Header.Get("If-None-Match"); match == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+
 		// Serve from in-memory cache if available
 		if cached, ok := epCache.get(id); ok {
 			writeJSON(w, http.StatusOK, cached)
@@ -689,6 +699,7 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 		}
 
 		airDate := ep.AirDateUTC
+		airDateOnly := models.DateOnly(airDate)
 		enriched = append(enriched, models.EpisodeInfo{
 			MappingID:             mappingID,
 			EpisodeNum:            episodeNum,
@@ -699,7 +710,7 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 			SeasonNumber:          ep.SeasonNumber,
 			SonarrEpisodeNumber:   ep.EpisodeNumber,
 			AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
-			AirDate:               &airDate,
+			AirDate:               &airDateOnly,
 			Monitored:             ep.Monitored,
 		})
 	}
@@ -824,15 +835,13 @@ func handleGetLogs(db *database.DB) http.HandlerFunc {
 func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cfg.RLock()
-		maskedKey := ""
-		if len(cfg.SonarrAPIKey) >= 8 {
-			maskedKey = cfg.SonarrAPIKey[:4] + "..." + cfg.SonarrAPIKey[len(cfg.SonarrAPIKey)-4:]
-		} else if len(cfg.SonarrAPIKey) > 0 {
-			maskedKey = cfg.SonarrAPIKey[:1] + "..."
-		}
+		maskedSonarrKey := maskKey(cfg.SonarrAPIKey)
+		maskedTmdbKey := maskKey(cfg.TMDBAPIKey)
+		maskedFanartKey := maskKey(cfg.FanartAPIKey)
 		settings := map[string]interface{}{
 			"sonarr_url":                    cfg.SonarrURL,
-			"sonarr_api_key_masked":         maskedKey,
+			"sonarr_api_key_masked":         maskedSonarrKey,
+			"sonarr_api_key":                cfg.SonarrAPIKey,
 			"sonarr_api_key_set":            cfg.SonarrAPIKey != "",
 			"default_filler_action":         string(cfg.DefaultFillerAction),
 			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
@@ -847,8 +856,13 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"ntfy_topic":                    cfg.NtfyTopic,
 			"ntfy_token_set":                cfg.NtfyToken != "",
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
+			"tmdb_api_key":                  cfg.TMDBAPIKey,
+			"tmdb_api_key_masked":           maskedTmdbKey,
 			"tmdb_api_key_set":              cfg.TMDBAPIKey != "",
+			"fanart_api_key":                cfg.FanartAPIKey,
+			"fanart_api_key_masked":         maskedFanartKey,
 			"fanart_api_key_set":            cfg.FanartAPIKey != "",
+			"ui_sounds_enabled":             cfg.UISoundsEnabled,
 		}
 		cfg.RUnlock()
 
@@ -860,17 +874,6 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 		settings["afl_show_cache_refreshed_at"] = cacheRefreshedAt
 		settings["afl_show_cache_count"] = cacheCount
 		writeJSON(w, http.StatusOK, settings)
-	}
-}
-
-func handleGetStoredSonarrAPIKey(cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		cfg.RLock()
-		defer cfg.RUnlock()
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"sonarr_api_key":     cfg.SonarrAPIKey,
-			"sonarr_api_key_set": cfg.SonarrAPIKey != "",
-		})
 	}
 }
 
@@ -894,6 +897,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			ArtworkDefaultSource      *string `json:"artwork_default_source"`
 			TMDBAPIKey                *string `json:"tmdb_api_key"`
 			FanartAPIKey              *string `json:"fanart_api_key"`
+			UISoundsEnabled           *bool   `json:"ui_sounds_enabled"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -1011,6 +1015,9 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		if update.FanartAPIKey != nil && *update.FanartAPIKey != "" {
 			cfg.FanartAPIKey = *update.FanartAPIKey
 		}
+		if update.UISoundsEnabled != nil {
+			cfg.UISoundsEnabled = *update.UISoundsEnabled
+		}
 
 		// Snapshot values for DB persistence while still holding the lock.
 		settingsSnapshot := map[string]string{
@@ -1031,6 +1038,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"fanart_api_key":                cfg.FanartAPIKey,
+			"ui_sounds_enabled":             strconv.FormatBool(cfg.UISoundsEnabled),
 		}
 		tmdbKey := cfg.TMDBAPIKey
 		fanartKey := cfg.FanartAPIKey
@@ -1145,7 +1153,7 @@ func handleTestSonarr() http.HandlerFunc {
 		c := sonarr.New(strings.TrimRight(req.URL, "/"), req.APIKey, 10*time.Second)
 		info, err := c.TestConnection(r.Context())
 		if err != nil {
-			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": humanizeError(err)})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "version": info})
@@ -1189,7 +1197,7 @@ func handleTestNtfy(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 		if err := n.SendTestNotification(r.Context()); err != nil {
-			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": humanizeError(err)})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
@@ -1766,8 +1774,82 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	}
 }
 
+// maskKey returns a masked version of an API key for display.
+// Keys >= 8 chars show first 4 + "..." + last 4; shorter keys show first char + "...".
+func maskKey(key string) string {
+	if len(key) >= 8 {
+		return key[:4] + "..." + key[len(key)-4:]
+	} else if len(key) > 0 {
+		return key[:1] + "..."
+	}
+	return ""
+}
+
+// humanizeError translates raw Go networking errors into user-friendly messages.
+func humanizeError(err error) string {
+	return humanizeErrString(err.Error())
+}
+
 func writeError(w http.ResponseWriter, status int, message string) {
+	// Humanize any embedded Go networking errors in the message.
+	message = humanizeMessage(message)
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// humanizeMessage applies humanizeError to the raw-error portion of a
+// prefixed message like "failed to X: <raw error>".
+func humanizeMessage(msg string) string {
+	idx := strings.Index(msg, ": ")
+	if idx < 0 {
+		return msg
+	}
+	prefix := msg[:idx+2]
+	rest := msg[idx+2:]
+	// Only humanize if the rest looks like a raw error (contains typical Go
+	// error markers). Otherwise leave it as-is.
+	if strings.Contains(rest, "dial tcp") ||
+		strings.Contains(rest, "no such host") ||
+		strings.Contains(rest, "connection refused") ||
+		strings.Contains(rest, "context deadline exceeded") ||
+		strings.Contains(rest, "returned ") ||
+		strings.Contains(rest, `Post "`) ||
+		strings.Contains(rest, `Get "`) {
+		return prefix + humanizeErrString(rest)
+	}
+	return msg
+}
+
+func humanizeErrString(msg string) string {
+	msg = strings.TrimPrefix(msg, `Post "`)
+	if idx := strings.Index(msg, `": `); idx >= 0 {
+		msg = msg[idx+3:]
+	}
+	msg = strings.TrimPrefix(msg, `Get "`)
+	if idx := strings.Index(msg, `": `); idx >= 0 {
+		msg = msg[idx+3:]
+	}
+	if strings.Contains(msg, "no such host") {
+		if parts := strings.SplitN(msg, "lookup ", 2); len(parts) == 2 {
+			host := strings.SplitN(parts[1], ":", 2)[0]
+			return host + " could not be reached"
+		}
+	}
+	msg = strings.ReplaceAll(msg, "dial tcp: connection refused", "connection was refused by the server")
+	msg = strings.ReplaceAll(msg, "dial tcp: i/o timeout", "connection timed out")
+	msg = strings.ReplaceAll(msg, "context deadline exceeded", "request timed out")
+	if strings.Contains(msg, "returned 401") {
+		return "unauthorized — check your API key"
+	}
+	if strings.Contains(msg, "returned 403") {
+		return "forbidden — check your API key and permissions"
+	}
+	if strings.Contains(msg, "returned 404") {
+		return "not found — check the server URL"
+	}
+	if strings.Contains(msg, "returned 500") || strings.Contains(msg, "returned 502") || strings.Contains(msg, "returned 503") {
+		return "server error — the remote service may be down"
+	}
+	return msg
 }
 
 // --- Artwork handlers ---

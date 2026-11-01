@@ -376,6 +376,13 @@ body {
   cursor: default;
 }
 
+/* Green background when the test succeeded */
+.test-status-btn[data-test-success="true"] {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-on-success, #fff);
+}
+
 /* Save button — subtle green ring when save succeeds (icon + label already
    convey the state; this adds a non-intrusive color cue without fighting
    the StyleX-compiled variant background). */
@@ -1184,4 +1191,73 @@ body {
 /* Wizard step content — fade-in on step change */
 .wizard-step-content {
   animation: fade-in-up 0.25s var(--ease-standard);
+}
+
+/* ── Skeleton placeholders ── */
+.skeleton {
+  background: linear-gradient(
+    135deg,
+    var(--color-background-muted),
+    color-mix(in srgb, var(--color-background-surface) 50%, var(--color-background-muted))
+  );
+  animation: skeleton-pulse var(--duration-medium) var(--ease-standard) alternate infinite;
+  border-radius: var(--radius-inner);
+}
+
+.skeleton-text {
+  height: 1em;
+  border-radius: var(--radius-inner);
+  background: linear-gradient(
+    135deg,
+    var(--color-background-muted),
+    color-mix(in srgb, var(--color-background-surface) 50%, var(--color-background-muted))
+  );
+  animation: skeleton-pulse var(--duration-medium) var(--ease-standard) alternate infinite;
+}
+
+.skeleton-text-lg {
+  height: 1.5em;
+  border-radius: var(--radius-inner);
+  background: linear-gradient(
+    135deg,
+    var(--color-background-muted),
+    color-mix(in srgb, var(--color-background-surface) 50%, var(--color-background-muted))
+  );
+  animation: skeleton-pulse var(--duration-medium) var(--ease-standard) alternate infinite;
+}
+
+.skeleton-card {
+  border-radius: var(--radius-container);
+  border: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+}
+
+.skeleton-rule-card {
+  border-radius: var(--radius-container);
+  border: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+  padding: var(--spacing-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  min-height: 140px;
+}
+
+.skeleton-season-card {
+  border-radius: var(--radius-container);
+  border: 1px solid var(--color-border);
+  background: var(--color-background-muted);
+  padding: var(--spacing-4) var(--spacing-5);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-height: 52px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .skeleton-text,
+  .skeleton-text-lg {
+    animation: none;
+  }
 }

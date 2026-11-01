@@ -1,5 +1,7 @@
 import { StrictMode, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { initSounds } from "./lib/sounds";
+import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
 import { Theme } from "@astryxdesign/core/theme";
 import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";
@@ -92,8 +94,8 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
       centerContent={
         <>
           <TopNavItem label="Library" href="/" isSelected={isShows} as={Link} />
-          <TopNavItem label="Activity" href="/activity" isSelected={isActivity} as={Link} />
-          <TopNavItem label="Settings" href="/settings" isSelected={isSettings} as={Link} />
+          <TopNavItem label="Activity" href="/activity" isSelected={isActivity} as={Link} onMouseEnter={prefetchActivityChunk} />
+          <TopNavItem label="Settings" href="/settings" isSelected={isSettings} as={Link} onMouseEnter={prefetchSettingsChunk} />
         </>
       }
       endContent={themeMenu}
@@ -110,6 +112,11 @@ function Root() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, selected.id);
   }, [selected.id]);
+
+  // Wire cuelume interaction sounds once on mount.
+  useEffect(() => {
+    initSounds();
+  }, []);
 
   const menu = <ThemeMenu selected={selected} onSelect={setSelected} />;
 

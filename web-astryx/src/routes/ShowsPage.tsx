@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useReducer, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useReducer, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -8,7 +8,6 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Badge } from "@astryxdesign/core/Badge";
-import { Spinner } from "@astryxdesign/core/Spinner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Dialog } from "@astryxdesign/core/Dialog";
@@ -18,12 +17,12 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Plus, Search, Waves, CircleAlert, RefreshCw, Check, ArrowDownUp } from "lucide-react";
 import { useAppStore } from "../lib/store";
-import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, getArtworkRefreshStatus, errorMessage } from "../lib/api";
+import { getShows, getSettings, getSonarrAddOptions, getSonarrSeries, getArtworkPosterUrl, getArtworkBannerUrl, getArtworkLogoUrl, refreshAllArtwork, getArtworkRefreshStatus, prefetchEpisodes, prefetchShow, errorMessage } from "../lib/api";
+import { prefetchDetailChunk, prefetchAddDialogChunk } from "../lib/chunkPrefetch";
 import type { SelectOption, Settings, Show, SonarrAddOptions, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { syncStateBadge } from "../lib/fox";
 import {
-  AddAnimeDialog,
   addWizardReducer,
   INITIAL_WIZARD,
   actionToTracked,
@@ -31,6 +30,13 @@ import {
   START_FROM_CURRENT,
 } from "./AddAnimeDialog";
 import type { AddWizardState } from "./AddAnimeDialog";
+
+// Lazy-load the AddAnimeDialog component — it's 700+ lines of wizard UI
+// that's only needed when the user opens the "Add anime" dialog. The
+// reducer/helpers above are tiny and stay eager.
+const AddAnimeDialog = lazy(() =>
+  import("./AddAnimeDialog").then((m) => ({ default: m.AddAnimeDialog })),
+);
 
 const sortOptions: SelectOption[] = [
   { value: "title", label: "Title (A-Z)" },
@@ -43,7 +49,10 @@ export function ShowsPage() {
   const { shows, setShows, settings, setSettings, addNotification } = useAppStore();
 
   // ── Page-level state ──
-  const [loading, setLoading] = useState(true);
+  // If the store already has shows, don't show a loading spinner — render
+  // immediately. SonarrSeries data (for poster/banner URLs) loads in the
+  // background and populates images when ready.
+  const [loading, setLoading] = useState(() => !shows || shows.length === 0);
   const [filter, setFilter] = useState("");
   const [sortBy, setSortBy] = useState("title");
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
@@ -207,11 +216,28 @@ export function ShowsPage() {
 
   // ── Data loading ──
 
-  const loadLanding = useCallback(async () => {
-    setLoading(true);
-    const [showsRes, seriesRes, settingsRes] = await Promise.allSettled([
+  const loadLanding = useCallback(async (forceRefresh: boolean = false) => {
+    // If the store already has shows and we're not forcing a refresh,
+    // skip the redundant getShows + getSettings round-trip — only
+    // SonarrSeries (for poster/banner URLs) needs fetching since it's
+    // not in the store.
+    if (!forceRefresh && shows && shows.length > 0) {
+      setLoading(false);
+      getSonarrSeries()
+        .then((nextSeries) => {
+          setAllSeries(nextSeries || []);
+          setSeriesById(Object.fromEntries((nextSeries || []).map((s) => [s.id, s])));
+        })
+        .catch((err: unknown) => {
+          addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
+        });
+      return;
+    }
+
+    // First load or forced refresh — fetch shows + settings first,
+    // then SonarrSeries in the background.
+    const [showsRes, settingsRes] = await Promise.allSettled([
       getShows(),
-      getSonarrSeries(),
       getSettings(),
     ]);
     if (showsRes.status === "fulfilled") {
@@ -220,18 +246,22 @@ export function ShowsPage() {
       setShows([]);
       addNotification("Failed to load anime: " + errorMessage(showsRes.reason), "error");
     }
-    if (seriesRes.status === "fulfilled") {
-      const nextSeries = seriesRes.value || [];
-      setAllSeries(nextSeries);
-      setSeriesById(Object.fromEntries(nextSeries.map((s) => [s.id, s])));
-    } else {
-      addNotification("Failed to load Sonarr series: " + errorMessage(seriesRes.reason), "error");
-    }
     if (settingsRes.status === "fulfilled") {
       setSettings(settingsRes.value ?? null);
     }
     setLoading(false);
-  }, [setShows, setSettings, addNotification]);
+
+    // Load Sonarr series in the background — needed for poster/banner
+    // URLs on shows without local artwork. Don't block the page render.
+    getSonarrSeries()
+      .then((nextSeries) => {
+        setAllSeries(nextSeries || []);
+        setSeriesById(Object.fromEntries((nextSeries || []).map((s) => [s.id, s])));
+      })
+      .catch((err: unknown) => {
+        addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
+      });
+  }, [shows, setShows, setSettings, addNotification]);
 
   useEffect(() => {
     loadLanding();
@@ -258,7 +288,7 @@ export function ShowsPage() {
           const status = await getArtworkRefreshStatus();
           if (!status.refreshing) {
             artworkReloadTimer.current = null;
-            await loadLanding();
+            await loadLanding(true);
             setArtworkRefreshing(false);
             addNotification("Artwork refresh complete", "success");
           } else {
@@ -268,7 +298,7 @@ export function ShowsPage() {
           // If the status check fails, fall back to a single reload after a delay.
           artworkReloadTimer.current = setTimeout(() => {
             artworkReloadTimer.current = null;
-            loadLanding().then(() => setArtworkRefreshing(false));
+            loadLanding(true).then(() => setArtworkRefreshing(false));
           }, 8000);
         }
       };
@@ -379,12 +409,15 @@ export function ShowsPage() {
               icon={<RefreshCw size={16} className={artworkRefreshing ? "spin" : ""} />}
               onClick={handleRefreshAllArtwork}
               isDisabled={artworkRefreshing || loading}
+              data-cuelume-press
             />
             <Button
               label="Add anime"
               variant="primary"
               icon={<Plus size={16} />}
               onClick={openAddModal}
+              onMouseEnter={prefetchAddDialogChunk}
+              data-cuelume-press
             />
           </HStack>
         </HStack>
@@ -420,9 +453,17 @@ export function ShowsPage() {
 
         {/* Content */}
         {loading ? (
-          <VStack gap={3} hAlign="center" padding={6}>
-            <Spinner size="lg" label="Loading anime" />
-          </VStack>
+          <Grid columns={{ minWidth: 320 }} gap={4}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="mizu-card skeleton-card" style={{ overflow: "hidden" }}>
+                <div className="skeleton" style={{ width: "100%", height: 160, borderRadius: 0 }} />
+                <div style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
+                  <div className="skeleton-text-lg" style={{ width: "70%" }} />
+                  <div className="skeleton-text" style={{ width: "50%" }} />
+                </div>
+              </div>
+            ))}
+          </Grid>
         ) : filteredShows.length === 0 && (shows || []).length === 0 ? (
           <EmptyState
             title="No anime synced yet"
@@ -434,6 +475,8 @@ export function ShowsPage() {
                 variant="primary"
                 icon={<Plus size={16} />}
                 onClick={openAddModal}
+                onMouseEnter={prefetchAddDialogChunk}
+                data-cuelume-press
               />
             }
           />
@@ -443,7 +486,7 @@ export function ShowsPage() {
             description="Try another title, slug, or keyword."
             icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
             actions={
-              <Button label="Clear search" variant="secondary" onClick={() => setFilter("")} />
+              <Button label="Clear search" variant="secondary" onClick={() => setFilter("")} data-cuelume-press />
             }
           />
         ) : (
@@ -460,6 +503,7 @@ export function ShowsPage() {
                     onClick={() => openShow(show.id)}
                     padding={0}
                     className="mizu-card"
+                    onMouseEnter={() => { prefetchDetailChunk(); prefetchShow(show.id); prefetchEpisodes(show.id); }}
                   >
                     <div className={`mizu-card-img-wrap${img ? "" : " is-empty"}`}>
                       {img ? (
@@ -467,7 +511,9 @@ export function ShowsPage() {
                           src={img}
                           alt=""
                           loading="lazy"
-                          onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                          onLoad={(e) => {
+                            e.currentTarget.classList.add("is-loaded");
+                          }}
                           className="mizu-card-img"
                         />
                       ) : (
@@ -525,11 +571,14 @@ export function ShowsPage() {
       {/* Add anime dialog — extracted component */}
       <Dialog
         isOpen={w.showAddModal}
-        onOpenChange={(v) => dispatch({ type: "SET", payload: { showAddModal: v } })}
+        onOpenChange={(v) => {
+          dispatch({ type: "SET", payload: { showAddModal: v } });
+        }}
         width={640}
         maxHeight="85vh"
         purpose="form"
       >
+        <Suspense fallback={null}>
         <AddAnimeDialog
           w={w}
           dispatch={dispatch}
@@ -548,6 +597,7 @@ export function ShowsPage() {
           preferredAnimeQualityProfileId={preferredAnimeQualityProfileId}
           posterUrl={posterUrlForSeries}
         />
+        </Suspense>
       </Dialog>
     </Section>
   );

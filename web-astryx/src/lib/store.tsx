@@ -1,14 +1,20 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
-import type { Notification, Settings, Show } from "./types";
-import { getShows, getSettings } from "./api";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
+import { play as cuelumePlay } from "cuelume";
+import { applySoundsEnabled } from "./sounds";
+import type { ArtworkProvider, Notification, Settings, Show } from "./types";
+import { getShows, getSettings, getArtworkProviders } from "./api";
 
 interface AppStore {
   shows: Show[];
   setShows: (shows: Show[]) => void;
   settings: Settings | null;
   setSettings: (settings: Settings | null) => void;
-  notifications: Notification[];
+  artworkProviders: ArtworkProvider[];
   addNotification: (message: string, type?: string, duration?: number) => void;
+}
+
+interface NotificationStore {
+  notifications: Notification[];
   removeNotification: (id: number) => void;
 }
 
@@ -34,9 +40,11 @@ const defaultSettings: Settings = {
   tmdb_api_key_set: false,
   fanart_api_key: "",
   fanart_api_key_set: false,
+  ui_sounds_enabled: true,
 };
 
 const AppContext = createContext<AppStore | null>(null);
+const NotificationContext = createContext<NotificationStore | null>(null);
 
 let notifId = 0;
 let lastErrorAt = 0;
@@ -44,6 +52,7 @@ let lastErrorAt = 0;
 export function AppProvider({ children }: { children: ReactNode }) {
   const [shows, setShows] = useState<Show[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [artworkProviders, setArtworkProviders] = useState<ArtworkProvider[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const addNotification = useCallback(
@@ -66,6 +75,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return [...n, { id, message, type, duration }];
       });
+      // Play a cuelume cue matching the notification type.
+      if (type === "success") {
+        cuelumePlay("success", { volume: 0.4 });
+      } else if (type === "error") {
+        cuelumePlay("error", { volume: 0.4 });
+      }
       if (duration > 0) {
         setTimeout(() => {
           setNotifications((n) => n.filter((x) => x.id !== id));
@@ -79,32 +94,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications((n) => n.filter((x) => x.id !== id));
   }, []);
 
-  // Fetch shows + settings on mount so they're available app-wide.
-  // This lets ShowDetailPage show the hero image instantly on direct
-  // navigation/refresh (before getShow resolves) via the store fallback.
+  // Fetch shows + settings + artwork providers on mount so they're
+  // available app-wide. This lets ShowDetailPage show the hero image
+  // instantly on direct navigation/refresh (before getShow resolves)
+  // via the store fallback, and avoids re-fetching artwork providers
+  // on every ShowDetailPage / SettingsPage visit.
   useEffect(() => {
     const aborted = { current: false };
-    Promise.allSettled([getShows(), getSettings()]).then(([showsRes, settingsRes]) => {
-      if (aborted.current) return;
-      if (showsRes.status === "fulfilled") setShows(showsRes.value || []);
-      if (settingsRes.status === "fulfilled") setSettings(settingsRes.value ?? null);
-    });
+    Promise.allSettled([getShows(), getSettings(), getArtworkProviders()]).then(
+      ([showsRes, settingsRes, providersRes]) => {
+        if (aborted.current) return;
+        if (showsRes.status === "fulfilled") setShows(showsRes.value || []);
+        if (settingsRes.status === "fulfilled") {
+          const s = settingsRes.value ?? null;
+          setSettings(s);
+          // Apply the sounds preference from backend settings.
+          applySoundsEnabled(s?.ui_sounds_enabled !== false);
+        }
+        if (providersRes.status === "fulfilled") {
+          setArtworkProviders(providersRes.value?.providers || []);
+        }
+      },
+    );
     return () => { aborted.current = true; };
   }, []);
 
+  // AppStore value — does NOT include notifications array, so pages
+  // that only use addNotification (a stable callback) never re-render
+  // when toasts appear/disappear.
+  const appValue = useMemo<AppStore>(
+    () => ({
+      shows,
+      setShows,
+      settings: settings ?? defaultSettings,
+      setSettings,
+      artworkProviders,
+      addNotification,
+    }),
+    [shows, settings, artworkProviders, addNotification],
+  );
+
+  // Notification value — only consumed by ToastViewport, so notification
+  // changes don't trigger re-renders of page components.
+  const notifValue = useMemo<NotificationStore>(
+    () => ({ notifications, removeNotification }),
+    [notifications, removeNotification],
+  );
+
   return (
-    <AppContext.Provider
-      value={{
-        shows,
-        setShows,
-        settings: settings ?? defaultSettings,
-        setSettings,
-        notifications,
-        addNotification,
-        removeNotification,
-      }}
-    >
-      {children}
+    <AppContext.Provider value={appValue}>
+      <NotificationContext.Provider value={notifValue}>
+        {children}
+      </NotificationContext.Provider>
     </AppContext.Provider>
   );
 }
@@ -112,5 +153,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 export function useAppStore(): AppStore {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error("useAppStore must be used within AppProvider");
+  return ctx;
+}
+
+export function useNotifications(): NotificationStore {
+  const ctx = useContext(NotificationContext);
+  if (!ctx) throw new Error("useNotifications must be used within AppProvider");
   return ctx;
 }

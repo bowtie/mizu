@@ -5,7 +5,6 @@ import { Section } from "@astryxdesign/core/Section";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
-import { Spinner } from "@astryxdesign/core/Spinner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Card } from "@astryxdesign/core/Card";
@@ -183,12 +182,23 @@ export function ActivityPage() {
             icon={<RefreshCw size={16} />}
             onClick={handleSync}
             isLoading={syncing}
+            data-cuelume-press
           />
         </HStack>
 
         {loading ? (
-          <VStack gap={3} hAlign="center" padding={6}>
-            <Spinner size="lg" label="Loading activity" />
+          <VStack gap={3}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="activity-log-card skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
+                  <div className="skeleton" style={{ width: 28, height: 28, borderRadius: "50%" }} />
+                  <div className="skeleton-text" style={{ width: 140 }} />
+                  <div style={{ flex: 1 }} />
+                  <div className="skeleton-text" style={{ width: 80 }} />
+                </div>
+                <div className="skeleton-text" style={{ width: "60%", marginLeft: 40 }} />
+              </div>
+            ))}
           </VStack>
         ) : logs.length === 0 ? (
           <EmptyState
@@ -202,6 +212,7 @@ export function ActivityPage() {
                 icon={<RefreshCw size={16} />}
                 onClick={handleSync}
                 isLoading={syncing}
+                data-cuelume-press
               />
             }
           />
@@ -246,6 +257,7 @@ export function ActivityPage() {
                       setStatusFilter("all");
                       setSearchQuery("");
                     }}
+                    data-cuelume-press
                   />
                 }
               />
@@ -384,6 +396,7 @@ export function ActivityPage() {
                   variant="secondary"
                   onClick={() => loadActivity(false)}
                   isLoading={loadingMore}
+                  data-cuelume-press
                 />
               </HStack>
             )}

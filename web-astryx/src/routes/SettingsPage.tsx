@@ -15,12 +15,11 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
 import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAppStore } from "../lib/store";
+import { applySoundsEnabled } from "../lib/sounds";
 import { SettingsRow } from "../components/SettingsRow";
 import { TrackingRuleCard } from "../components/TrackingRuleCard";
 import {
-  getArtworkProviders,
   getSettings,
-  getStoredSonarrApiKey,
   refreshAflCache,
   refreshAllArtwork,
   testNtfyConnection,
@@ -28,7 +27,7 @@ import {
   updateSettings,
   errorMessage,
 } from "../lib/api";
-import type { ArtworkProvider, Settings as SettingsType, SelectOption } from "../lib/types";
+import type { Settings as SettingsType, SelectOption } from "../lib/types";
 
 const actionToTracked = (action: string | undefined, fallback = true): boolean =>
   (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
@@ -58,32 +57,39 @@ interface PristineSnapshot {
   ntfyServerUrl: string;
   ntfyTopic: string;
   ntfyTokenDirty: boolean;
+  uiSoundsEnabled: boolean;
 }
 
 export function SettingsPage() {
-  const { setSettings, addNotification } = useAppStore();
-  const [loading, setLoading] = useState(true);
+  const { settings: storeSettings, artworkProviders, setSettings, addNotification } = useAppStore();
+  const [loading, setLoading] = useState(!storeSettings);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
-  const [revealingKey, setRevealingKey] = useState(false);
+  const [soundsEnabled, setSoundsEnabledState] = useState(true);
   const [testPhase, setTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
-  const [testErrorMessage, setTestErrorMessage] = useState("");
 
   const [sonarrUrl, setSonarrUrl] = useState("");
   const [sonarrApiKey, setSonarrApiKey] = useState("");
   const [savedApiKeyMasked, setSavedApiKeyMasked] = useState("");
+  const [savedApiKeyFull, setSavedApiKeyFull] = useState("");
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
   const [syncInterval, setSyncInterval] = useState("6h");
   const [artworkDefaultSource, setArtworkDefaultSource] = useState("sonarr");
   const [tmdbApiKey, setTmdbApiKey] = useState("");
+  const [savedTmdbApiKeyMasked, setSavedTmdbApiKeyMasked] = useState("");
+  const [savedTmdbApiKeyFull, setSavedTmdbApiKeyFull] = useState("");
   const [tmdbApiKeySet, setTmdbApiKeySet] = useState(false);
+  const [tmdbApiKeyVisible, setTmdbApiKeyVisible] = useState(false);
   const [tmdbApiKeyDirty, setTmdbApiKeyDirty] = useState(false);
   const [fanartApiKey, setFanartApiKey] = useState("");
+  const [savedFanartApiKeyMasked, setSavedFanartApiKeyMasked] = useState("");
+  const [savedFanartApiKeyFull, setSavedFanartApiKeyFull] = useState("");
   const [fanartApiKeySet, setFanartApiKeySet] = useState(false);
+  const [fanartApiKeyVisible, setFanartApiKeyVisible] = useState(false);
   const [fanartApiKeyDirty, setFanartApiKeyDirty] = useState(false);
   const [trackFillerDefault, setTrackFillerDefault] = useState(false);
   const [trackMixedDefault, setTrackMixedDefault] = useState(true);
@@ -98,8 +104,6 @@ export function SettingsPage() {
   const [ntfyTokenSet, setNtfyTokenSet] = useState(false);
   const [ntfyTokenDirty, setNtfyTokenDirty] = useState(false);
   const [ntfyTestPhase, setNtfyTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
-  const [ntfyTestErrorMessage, setNtfyTestErrorMessage] = useState("");
-  const [artworkProviders, setArtworkProviders] = useState<ArtworkProvider[]>([]);
 
   const [pristine, setPristine] = useState<PristineSnapshot>({
     sonarrUrl: "",
@@ -115,6 +119,7 @@ export function SettingsPage() {
     ntfyServerUrl: "",
     ntfyTopic: "",
     ntfyTokenDirty: false,
+    uiSoundsEnabled: true,
   });
 
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -134,7 +139,8 @@ export function SettingsPage() {
       ntfyEnabled !== pristine.ntfyEnabled ||
       ntfyServerUrl !== pristine.ntfyServerUrl ||
       ntfyTopic !== pristine.ntfyTopic ||
-      ntfyTokenDirty);
+      ntfyTokenDirty ||
+      soundsEnabled !== pristine.uiSoundsEnabled);
 
   const urlValid = !sonarrUrl || /^https?:\/\/.+/.test(sonarrUrl);
 
@@ -142,7 +148,6 @@ export function SettingsPage() {
     if (resetTimer.current) clearTimeout(resetTimer.current);
     resetTimer.current = setTimeout(() => {
       setTestPhase("idle");
-      setTestErrorMessage("");
     }, delay);
   };
 
@@ -155,7 +160,6 @@ export function SettingsPage() {
     clearReset();
     if (testPhase === "success" || testPhase === "error") {
       setTestPhase("idle");
-      setTestErrorMessage("");
     }
   };
 
@@ -167,72 +171,84 @@ export function SettingsPage() {
     };
   }, []);
 
+  const applySettings = useCallback((data: Settings | null) => {
+    if (!data || (data as { error?: string }).error) return;
+    setSonarrUrl(data.sonarr_url || "");
+    setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
+    setSavedApiKeyFull(data.sonarr_api_key || "");
+    setHasSavedApiKey(!!data.sonarr_api_key_set);
+    setSonarrApiKey(data.sonarr_api_key_masked || "");
+    setApiKeyVisible(false);
+    setApiKeyDirty(false);
+    setSyncInterval(data.sync_interval || "6h");
+    setArtworkDefaultSource(data.artwork_default_source || "sonarr");
+    setSavedTmdbApiKeyMasked(data.tmdb_api_key_masked || "");
+    setSavedTmdbApiKeyFull(data.tmdb_api_key || "");
+    setTmdbApiKeySet(!!data.tmdb_api_key_set);
+    setTmdbApiKey(data.tmdb_api_key_masked || "");
+    setTmdbApiKeyVisible(false);
+    setTmdbApiKeyDirty(false);
+    setSavedFanartApiKeyMasked(data.fanart_api_key_masked || "");
+    setSavedFanartApiKeyFull(data.fanart_api_key || "");
+    setFanartApiKeySet(!!data.fanart_api_key_set);
+    setFanartApiKey(data.fanart_api_key_masked || "");
+    setFanartApiKeyVisible(false);
+    setFanartApiKeyDirty(false);
+    setTrackFillerDefault(actionToTracked(data.default_filler_action, false));
+    setTrackMixedDefault(actionToTracked(data.default_mixed_canon_action, true));
+    setTrackAnimeCanonDefault(actionToTracked(data.default_anime_canon_action, true));
+    setCacheRefreshedAt(data.afl_show_cache_refreshed_at || null);
+    setCacheCount(data.afl_show_cache_count || 0);
+    setNtfyEnabled(!!data.ntfy_enabled);
+    setNtfyServerUrl(data.ntfy_server_url || "");
+    setNtfyTopic(data.ntfy_topic || "");
+    setNtfyTokenSet(!!data.ntfy_token_set);
+    setNtfyToken("");
+    setNtfyTokenDirty(false);
+    setNtfyTestPhase("idle");
+    setSoundsEnabledState(data.ui_sounds_enabled !== false);
+    setSettings(data);
+    setPristine({
+      sonarrUrl: data.sonarr_url || "",
+      apiKeyDirty: false,
+      syncInterval: data.sync_interval || "6h",
+      artworkDefaultSource: data.artwork_default_source || "sonarr",
+      tmdbApiKeyDirty: false,
+      fanartApiKeyDirty: false,
+      trackFillerDefault: actionToTracked(data.default_filler_action, false),
+      trackMixedDefault: actionToTracked(data.default_mixed_canon_action, true),
+      trackAnimeCanonDefault: actionToTracked(data.default_anime_canon_action, true),
+      ntfyEnabled: !!data.ntfy_enabled,
+      ntfyServerUrl: data.ntfy_server_url || "",
+      ntfyTopic: data.ntfy_topic || "",
+      ntfyTokenDirty: false,
+      uiSoundsEnabled: data.ui_sounds_enabled !== false,
+    });
+  }, [setSettings]);
+
   const loadSettings = useCallback(async () => {
-    setLoading(true);
     try {
       const data = await getSettings();
-      if (data && !data.error) {
-        setSonarrUrl(data.sonarr_url || "");
-        setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
-        setHasSavedApiKey(!!data.sonarr_api_key_set);
-        setSonarrApiKey(data.sonarr_api_key_masked || "");
-        setApiKeyVisible(false);
-        setApiKeyDirty(false);
-        setSyncInterval(data.sync_interval || "6h");
-        setArtworkDefaultSource(data.artwork_default_source || "sonarr");
-        setTmdbApiKeySet(!!data.tmdb_api_key_set);
-        setTmdbApiKey("");
-        setTmdbApiKeyDirty(false);
-        setFanartApiKeySet(!!data.fanart_api_key_set);
-        setFanartApiKey("");
-        setFanartApiKeyDirty(false);
-        setTrackFillerDefault(actionToTracked(data.default_filler_action, false));
-        setTrackMixedDefault(actionToTracked(data.default_mixed_canon_action, true));
-        setTrackAnimeCanonDefault(actionToTracked(data.default_anime_canon_action, true));
-        setCacheRefreshedAt(data.afl_show_cache_refreshed_at || null);
-        setCacheCount(data.afl_show_cache_count || 0);
-        setNtfyEnabled(!!data.ntfy_enabled);
-        setNtfyServerUrl(data.ntfy_server_url || "");
-        setNtfyTopic(data.ntfy_topic || "");
-        setNtfyTokenSet(!!data.ntfy_token_set);
-        setNtfyToken("");
-        setNtfyTokenDirty(false);
-        setNtfyTestPhase("idle");
-        setNtfyTestErrorMessage("");
-        setSettings(data);
-        setPristine({
-          sonarrUrl: data.sonarr_url || "",
-          apiKeyDirty: false,
-          syncInterval: data.sync_interval || "6h",
-          artworkDefaultSource: data.artwork_default_source || "sonarr",
-          tmdbApiKeyDirty: false,
-          fanartApiKeyDirty: false,
-          trackFillerDefault: actionToTracked(data.default_filler_action, false),
-          trackMixedDefault: actionToTracked(data.default_mixed_canon_action, true),
-          trackAnimeCanonDefault: actionToTracked(data.default_anime_canon_action, true),
-          ntfyEnabled: !!data.ntfy_enabled,
-          ntfyServerUrl: data.ntfy_server_url || "",
-          ntfyTopic: data.ntfy_topic || "",
-          ntfyTokenDirty: false,
-        });
-      }
+      applySettings(data);
     } catch (err: unknown) {
       addNotification("Failed to load settings: " + errorMessage(err), "error");
     }
     setLoading(false);
-  }, [setSettings, addNotification]);
+  }, [applySettings, addNotification]);
+
+  // If the store already has settings (fetched on app mount), populate
+  // immediately and skip the loading spinner. Still do a background
+  // refresh to pick up any changes.
+  useEffect(() => {
+    if (storeSettings) {
+      applySettings(storeSettings);
+      setLoading(false);
+    }
+  }, [storeSettings, applySettings]);
 
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
-
-  // Fetch artwork providers from the API so the dropdown reflects the
-  // actual backend state (available providers, API key requirements).
-  useEffect(() => {
-    getArtworkProviders()
-      .then((res) => setArtworkProviders(res.providers || []))
-      .catch((err: unknown) => addNotification("Failed to load artwork providers: " + errorMessage(err), "error"));
-  }, [addNotification]);
 
   const artworkSourceOptions = useMemo<SelectOption[]>(() => {
     const opts: SelectOption[] = [{ value: "sonarr", label: "Sonarr (local)" }];
@@ -254,7 +270,7 @@ export function SettingsPage() {
     clearTestResult();
   };
 
-  const toggleApiKeyVisibility = async () => {
+  const toggleApiKeyVisibility = () => {
     if (apiKeyVisible) {
       setApiKeyVisible(false);
       if (!apiKeyDirty && hasSavedApiKey) {
@@ -263,26 +279,16 @@ export function SettingsPage() {
       return;
     }
     if (!apiKeyDirty && hasSavedApiKey) {
-      setRevealingKey(true);
-      try {
-        const data = await getStoredSonarrApiKey();
-        setSonarrApiKey(data.sonarr_api_key || "");
-      } catch (err: unknown) {
-        addNotification("Failed to reveal saved API key: " + errorMessage(err), "error");
-        setRevealingKey(false);
-        return;
-      }
-      setRevealingKey(false);
+      setSonarrApiKey(savedApiKeyFull);
     }
     setApiKeyVisible(true);
   };
 
-  const resolveApiKeyForTest = async (): Promise<string> => {
+  const resolveApiKeyForTest = (): string => {
     if (apiKeyDirty || apiKeyVisible || !hasSavedApiKey) {
       return sonarrApiKey;
     }
-    const data = await getStoredSonarrApiKey();
-    return data.sonarr_api_key || "";
+    return savedApiKeyFull;
   };
 
   const handleSave = async () => {
@@ -312,8 +318,10 @@ export function SettingsPage() {
       if (ntfyTokenDirty) {
         payload.ntfy_token = ntfyToken;
       }
+      payload.ui_sounds_enabled = soundsEnabled;
       await updateSettings(payload);
       addNotification("Settings saved", "success");
+      applySoundsEnabled(soundsEnabled);
       await loadSettings();
 
       // If the global artwork source changed, trigger a background refresh
@@ -340,22 +348,21 @@ export function SettingsPage() {
   const handleTestConnection = async () => {
     if (testPhase !== "idle") return;
     if (!sonarrUrl) {
-      setTestErrorMessage("Enter a Sonarr URL first");
+      addNotification("Enter a Sonarr URL first", "error");
       setTestPhase("error");
       return;
     }
     if (!urlValid) {
-      setTestErrorMessage("URL must start with http:// or https://");
+      addNotification("URL must start with http:// or https://", "error");
       setTestPhase("error");
       return;
     }
-    setTestErrorMessage("");
     clearReset();
     setTestPhase("connecting");
     const startTime = Date.now();
     const minDelay = 1100;
     try {
-      const apiKey = await resolveApiKeyForTest();
+      const apiKey = resolveApiKeyForTest();
       const result = await testSonarrConnection(sonarrUrl, apiKey);
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
@@ -363,11 +370,12 @@ export function SettingsPage() {
         throw new Error(result?.error || "Connection failed");
       }
       setTestPhase("success");
+      addNotification("Sonarr connection successful", "success");
       scheduleReset(2000);
     } catch (err: unknown) {
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
-      setTestErrorMessage(errorMessage(err));
+      addNotification("Connection test failed: " + errorMessage(err), "error");
       setTestPhase("error");
       scheduleReset(4000);
     }
@@ -388,17 +396,16 @@ export function SettingsPage() {
   const handleTestNtfy = async () => {
     if (ntfyTestPhase !== "idle") return;
     if (!ntfyServerUrl) {
-      setNtfyTestErrorMessage("Enter a server URL first");
+      addNotification("Enter a server URL first", "error");
       setNtfyTestPhase("error");
       return;
     }
     if (!ntfyTopic) {
-      setNtfyTestErrorMessage("Enter a topic first");
+      addNotification("Enter a topic first", "error");
       setNtfyTestPhase("error");
       return;
     }
     setNtfyTestPhase("connecting");
-    setNtfyTestErrorMessage("");
     const startTime = Date.now();
     const minDelay = 1100;
     try {
@@ -413,17 +420,17 @@ export function SettingsPage() {
         throw new Error(result?.error || "Test failed");
       }
       setNtfyTestPhase("success");
+      addNotification("ntfy notification sent successfully", "success");
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
       ntfyResetTimer.current = setTimeout(() => setNtfyTestPhase("idle"), 2000);
     } catch (err: unknown) {
       const elapsed = Date.now() - startTime;
       if (elapsed < minDelay) await sleep(minDelay - elapsed);
-      setNtfyTestErrorMessage(errorMessage(err));
+      addNotification("Notification test failed: " + errorMessage(err), "error");
       setNtfyTestPhase("error");
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
       ntfyResetTimer.current = setTimeout(() => {
         setNtfyTestPhase("idle");
-        setNtfyTestErrorMessage("");
       }, 4000);
     }
   };
@@ -436,8 +443,42 @@ export function SettingsPage() {
   if (loading) {
     return (
       <Section padding={4} maxWidth={900} className="section-centered">
-        <VStack gap={3} hAlign="center" padding={6}>
-          <Spinner size="lg" label="Loading settings" />
+        <VStack gap={6}>
+          {/* Skeleton header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-1)" }}>
+              <div className="skeleton-text-lg" style={{ width: 120 }} />
+              <div className="skeleton-text" style={{ width: 280 }} />
+            </div>
+            <div className="skeleton" style={{ width: 110, height: 36, borderRadius: "var(--radius-inner)" }} />
+          </div>
+          {/* Skeleton connection card */}
+          <div className="skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
+            <div className="skeleton-text-lg" style={{ width: 120 }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
+              <div className="skeleton-text" style={{ width: 80 }} />
+              <div className="skeleton" style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }} />
+              <div className="skeleton-text" style={{ width: 60 }} />
+              <div className="skeleton" style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }} />
+            </div>
+          </div>
+          {/* Skeleton sync card */}
+          <div className="skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
+            <div className="skeleton-text-lg" style={{ width: 80 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
+              <div className="skeleton-text" style={{ width: 100 }} />
+              <div className="skeleton" style={{ width: 160, height: 36, borderRadius: "var(--radius-inner)" }} />
+            </div>
+          </div>
+          {/* Skeleton notifications card */}
+          <div className="skeleton-card" style={{ padding: "var(--spacing-4)", display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
+            <div className="skeleton-text-lg" style={{ width: 110 }} />
+            <div className="skeleton" style={{ width: 44, height: 24, borderRadius: 12 }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
+              <div className="skeleton-text" style={{ width: 70 }} />
+              <div className="skeleton" style={{ width: "100%", height: 36, borderRadius: "var(--radius-inner)" }} />
+            </div>
+          </div>
         </VStack>
       </Section>
     );
@@ -464,6 +505,7 @@ export function SettingsPage() {
               isDisabled={saving || !settingsDirty}
               isLoading={saving}
               className={savedFlash ? "save-flash" : undefined}
+              data-cuelume-press
             />
           </HStack>
         </HStack>
@@ -512,14 +554,12 @@ export function SettingsPage() {
                   icon={
                     apiKeyVisible ? (
                       <EyeOff size={16} />
-                    ) : revealingKey ? (
-                      <Spinner size="sm" />
                     ) : (
                       <Eye size={16} />
                     )
                   }
                   onClick={toggleApiKeyVisibility}
-                  isDisabled={revealingKey}
+                  data-cuelume-toggle="whisper"
                 />
               )}
             </HStack>
@@ -529,7 +569,6 @@ export function SettingsPage() {
           <SettingsRow
             label="Test connection"
             description="Check that Mizu can reach Sonarr with the URL and API key above."
-            error={testPhase === "error" && testErrorMessage ? testErrorMessage : undefined}
           >
             <Button
               label={
@@ -550,7 +589,7 @@ export function SettingsPage() {
                 testPhase === "connecting" ? (
                   <Spinner size="sm" />
                 ) : testPhase === "success" ? (
-                  <Check size={16} color="var(--color-success)" />
+                  <Check size={16} color="var(--color-on-success, #fff)" />
                 ) : testPhase === "error" ? (
                   <AlertTriangle size={16} />
                 ) : (
@@ -560,6 +599,8 @@ export function SettingsPage() {
               onClick={handleTestConnection}
               isDisabled={!sonarrUrl || !urlValid}
               className={testPhase !== "idle" ? "test-status-btn" : undefined}
+              data-test-success={testPhase === "success" ? "true" : undefined}
+              data-cuelume-press
             />
           </SettingsRow>
         </VStack>
@@ -609,7 +650,7 @@ export function SettingsPage() {
             <HStack gap={2} align="center">
               <TextInput
                 label="TMDB API key"
-                type="password"
+                type={tmdbApiKeyVisible ? "text" : "password"}
                 value={tmdbApiKey}
                 onChange={(v) => {
                   setTmdbApiKey(v);
@@ -619,8 +660,23 @@ export function SettingsPage() {
                 isLabelHidden
                 width={260}
               />
-              {tmdbApiKeySet && !tmdbApiKeyDirty && (
-                <Badge variant="success" label="Key set" />
+              {(tmdbApiKeySet || tmdbApiKeyDirty) && (
+                <Button
+                  label={tmdbApiKeyVisible ? "Hide" : "Show"}
+                  variant="ghost"
+                  isIconOnly
+                  icon={tmdbApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                  onClick={() => {
+                    if (tmdbApiKeyVisible) {
+                      setTmdbApiKeyVisible(false);
+                      if (!tmdbApiKeyDirty && tmdbApiKeySet) setTmdbApiKey(savedTmdbApiKeyMasked);
+                    } else {
+                      if (!tmdbApiKeyDirty && tmdbApiKeySet) setTmdbApiKey(savedTmdbApiKeyFull);
+                      setTmdbApiKeyVisible(true);
+                    }
+                  }}
+                  data-cuelume-toggle="whisper"
+                />
               )}
             </HStack>
           </SettingsRow>
@@ -633,7 +689,7 @@ export function SettingsPage() {
             <HStack gap={2} align="center">
               <TextInput
                 label="Fanart.tv API key"
-                type="password"
+                type={fanartApiKeyVisible ? "text" : "password"}
                 value={fanartApiKey}
                 onChange={(v) => {
                   setFanartApiKey(v);
@@ -643,8 +699,23 @@ export function SettingsPage() {
                 isLabelHidden
                 width={260}
               />
-              {fanartApiKeySet && !fanartApiKeyDirty && (
-                <Badge variant="success" label="Key set" />
+              {(fanartApiKeySet || fanartApiKeyDirty) && (
+                <Button
+                  label={fanartApiKeyVisible ? "Hide" : "Show"}
+                  variant="ghost"
+                  isIconOnly
+                  icon={fanartApiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                  onClick={() => {
+                    if (fanartApiKeyVisible) {
+                      setFanartApiKeyVisible(false);
+                      if (!fanartApiKeyDirty && fanartApiKeySet) setFanartApiKey(savedFanartApiKeyMasked);
+                    } else {
+                      if (!fanartApiKeyDirty && fanartApiKeySet) setFanartApiKey(savedFanartApiKeyFull);
+                      setFanartApiKeyVisible(true);
+                    }
+                  }}
+                  data-cuelume-toggle="whisper"
+                />
               )}
             </HStack>
           </SettingsRow>
@@ -660,6 +731,7 @@ export function SettingsPage() {
               icon={<RefreshCw size={16} />}
               onClick={handleRefreshCache}
               isLoading={refreshingCache}
+              data-cuelume-press
             />
           </SettingsRow>
         </VStack>
@@ -680,6 +752,7 @@ export function SettingsPage() {
               value={ntfyEnabled}
               onChange={setNtfyEnabled}
               isLabelHidden
+              data-cuelume-toggle
             />
           </SettingsRow>
           <Divider />
@@ -741,7 +814,6 @@ export function SettingsPage() {
           <SettingsRow
             label="Test notification"
             description="Send a test notification to verify your configuration."
-            error={ntfyTestPhase === "error" && ntfyTestErrorMessage ? ntfyTestErrorMessage : undefined}
           >
             <Button
               label={
@@ -762,7 +834,7 @@ export function SettingsPage() {
                 ntfyTestPhase === "connecting" ? (
                   <Spinner size="sm" />
                 ) : ntfyTestPhase === "success" ? (
-                  <Check size={16} color="var(--color-success)" />
+                  <Check size={16} color="var(--color-on-success, #fff)" />
                 ) : ntfyTestPhase === "error" ? (
                   <AlertTriangle size={16} />
                 ) : (
@@ -772,6 +844,28 @@ export function SettingsPage() {
               onClick={handleTestNtfy}
               isDisabled={!ntfyServerUrl || !ntfyTopic}
               className={ntfyTestPhase !== "idle" ? "test-status-btn" : undefined}
+              data-test-success={ntfyTestPhase === "success" ? "true" : undefined}
+              data-cuelume-press
+            />
+          </SettingsRow>
+        </VStack>
+        </Card>
+
+        {/* Interface */}
+        <Card variant="muted" padding={4}>
+        <VStack gap={3}>
+          <Heading level={2}>Interface</Heading>
+          <Divider />
+          <SettingsRow
+            label="Interaction sounds"
+            description="Play subtle audio cues on hover, press, toggle, and notifications."
+          >
+            <Switch
+              label="Enable interaction sounds"
+              value={soundsEnabled}
+              onChange={setSoundsEnabledState}
+              isLabelHidden
+              data-cuelume-toggle
             />
           </SettingsRow>
         </VStack>

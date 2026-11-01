@@ -10,7 +10,6 @@ import type {
   SonarrAddOptions,
   SonarrAddPayload,
   SonarrSeries,
-  StoredApiKeyResponse,
   SyncLogResponse,
   TestConnectionResult,
 } from "./types";
@@ -83,8 +82,27 @@ export function getShows(): Promise<Show[]> {
   return request<Show[]>("GET", "/mappings");
 }
 
+// In-memory cache for show prefetches — when the user hovers a show
+// card, we fire getShow early and cache the promise. When they navigate
+// to the detail page, the promise is already resolving (or resolved).
+const showPrefetch = new Map<string, Promise<Show>>();
+
 export function getShow(id: string | number): Promise<Show> {
+  const key = String(id);
+  const cached = showPrefetch.get(key);
+  if (cached) {
+    showPrefetch.delete(key);
+    return cached;
+  }
   return request<Show>("GET", "/mappings/" + id);
+}
+
+/** Prefetch show data without consuming the result. The cached promise
+ *  is picked up by getShow() when the user navigates to the detail page. */
+export function prefetchShow(id: string | number): void {
+  const key = String(id);
+  if (showPrefetch.has(key)) return;
+  showPrefetch.set(key, request<Show>("GET", "/mappings/" + id));
 }
 
 export function createShow(data: MappingCreate): Promise<Show> {
@@ -121,8 +139,31 @@ export function searchAFL(
   return request<AFLMatch[]>("GET", "/afl/search?" + params.toString());
 }
 
+// In-memory cache for episode prefetches — when the user hovers a show
+// card on the library page, we fire getEpisodes early and cache the
+// promise. When they actually navigate to the detail page, the promise
+// is already resolving (or resolved), so the episode list appears
+// instantly. The cache entry is consumed once and then cleared, so it
+// doesn't go stale.
+const episodePrefetch = new Map<string, Promise<Episode[]>>();
+
 export function getEpisodes(showId: string | number): Promise<Episode[]> {
+  const key = String(showId);
+  const cached = episodePrefetch.get(key);
+  if (cached) {
+    episodePrefetch.delete(key);
+    return cached;
+  }
   return request<Episode[]>("GET", "/mappings/" + showId + "/episodes");
+}
+
+/** Prefetch episodes for a show without consuming the result. The cached
+ *  promise is picked up by getEpisodes() when the user navigates to the
+ *  detail page. Safe to call multiple times — only the first call fires. */
+export function prefetchEpisodes(showId: string | number): void {
+  const key = String(showId);
+  if (episodePrefetch.has(key)) return;
+  episodePrefetch.set(key, request<Episode[]>("GET", "/mappings/" + showId + "/episodes"));
 }
 
 // --- Artwork (multi-provider, locally stored) ---
@@ -198,10 +239,6 @@ export function getSettings(): Promise<Settings> {
   return request<Settings>("GET", "/settings");
 }
 
-export function getStoredSonarrApiKey(): Promise<StoredApiKeyResponse> {
-  return request<StoredApiKeyResponse>("GET", "/settings/sonarr-api-key");
-}
-
 export function updateSettings(data: Settings | Partial<Settings>): Promise<{ status: string }> {
   return request<{ status: string }>("PUT", "/settings", data);
 }
@@ -220,6 +257,21 @@ export function testNtfyConnection(data: {
 
 /** Safely extract a human-readable message from an unknown catch value. */
 export function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    return err.message
+      // Strip Go-style prefixes like 'Post "url": dial tcp: ...'
+      .replace(/^(?:Post|Get|Put|Delete)\s+"[^"]+":\s*/i, "")
+      // Trim 'dial tcp: lookup hostname: no such host' → 'hostname could not be reached'
+      .replace(/^dial tcp:\s*lookup\s+\S+:\s*no such host/i, (m, _g) => {
+        const host = m.match(/lookup\s+(\S+)/)?.[1] ?? "server";
+        return `${host} could not be reached`;
+      })
+      // 'connection refused' → friendlier
+      .replace(/^dial tcp.*: connection refused/i, "connection was refused by the server")
+      // 'i/o timeout' → friendlier
+      .replace(/^dial tcp.*: i\/o timeout/i, "connection timed out")
+      // Collapse 'context deadline exceeded (client timeout exceeded while awaiting headers)'
+      .replace(/^context deadline exceeded.*$/i, "request timed out");
+  }
   return String(err);
 }

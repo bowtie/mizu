@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { memo, useEffect, useState, useCallback, useMemo, useRef, useDeferredValue } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -8,7 +8,6 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Badge } from "@astryxdesign/core/Badge";
-import { Spinner } from "@astryxdesign/core/Spinner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
@@ -44,7 +43,6 @@ import { useAppStore } from "../lib/store";
 import {
   deleteShow,
   getArtworkBannerUrl,
-  getArtworkProviders,
   getArtworkPosterUrl,
   getEpisodes,
   getShow,
@@ -55,14 +53,11 @@ import {
   errorMessage,
 } from "../lib/api";
 import type {
-  ArtworkProvider,
   Episode,
   SelectOption,
   Show,
   ShowUpdate,
-  SonarrSeries,
 } from "../lib/types";
-import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { episodeTypeBadge } from "../lib/fox";
 import { TrackingRuleCard } from "../components/TrackingRuleCard";
 
@@ -143,6 +138,56 @@ interface EpisodeListSectionProps {
   onToggleMonitor: (groupSeason: number, ep: Episode) => void;
 }
 
+/** Single episode row — memoized so that toggling one episode's monitor
+ *  state doesn't re-render all 1200+ ListItems. Only re-renders when
+ *  the episode data or its sync state changes. */
+const EpisodeListItem = memo(function EpisodeListItem({
+  ep,
+  groupSeason,
+  isSyncing,
+  onToggleMonitor,
+}: {
+  ep: Episode;
+  groupSeason: number;
+  isSyncing: boolean;
+  onToggleMonitor: (groupSeason: number, ep: Episode) => void;
+}) {
+  const typeBadge = episodeTypeBadge(ep.type);
+  const monitored = episodeMonitored(ep);
+  const epNum = displayEpisodeNumber(ep);
+  return (
+    <ListItem
+      key={`${groupSeason}-${epNum}`}
+      label={ep.title || "—"}
+      description={`Episode ${epNum}`}
+      endContent={
+        <HStack gap={4} align="center">
+          {ep.air_date && (
+            <Timestamp value={ep.air_date} format="date" />
+          )}
+          <Badge
+            variant={badgeVariantForType(ep.type)}
+            label={typeBadge.label}
+          />
+          <Tooltip content={monitored ? "Unmonitor" : "Monitor"} placement="start">
+            <ToggleButton
+              label={monitored ? "Unmonitor episode" : "Monitor episode"}
+              isIconOnly
+              size="sm"
+              icon={<Eye size={14} />}
+              pressedIcon={<EyeOff size={14} />}
+              isPressed={monitored}
+              isDisabled={isSyncing || !ep.sonarr_episode_id}
+              isLoading={isSyncing}
+              onPressedChange={() => onToggleMonitor(groupSeason, ep)}
+            />
+          </Tooltip>
+        </HStack>
+      }
+    />
+  );
+});
+
 /** Episode list section — memoized so tracking-rule toggles don't re-render
  *  the (potentially 1200+) episode list. Only re-renders when episode data,
  *  filter, or syncing state actually changes. */
@@ -156,6 +201,30 @@ const EpisodeListSection = memo(function EpisodeListSection({
   onFilterChange,
   onToggleMonitor,
 }: EpisodeListSectionProps) {
+  // Track which seasons have been expanded at least once — collapsed
+  // seasons that were never opened skip rendering their (potentially
+  // 1000+) episode ListItems entirely, saving DOM nodes.
+  // Initialize with the default-open season (last one) so it renders
+  // its episodes on the first paint — no extra useEffect round-trip.
+  const [openedSeasons, setOpenedSeasons] = useState<Set<string>>(() => {
+    if (groupedBySeason.length === 0) return new Set();
+    const last = groupedBySeason[groupedBySeason.length - 1];
+    return new Set([String(last.season)]);
+  });
+
+  // When groupedBySeason changes (filter switch), auto-open the new
+  // last season so its episodes render without requiring a click.
+  useEffect(() => {
+    if (groupedBySeason.length === 0) return;
+    const lastKey = String(groupedBySeason[groupedBySeason.length - 1].season);
+    setOpenedSeasons((prev) => {
+      if (prev.has(lastKey)) return prev;
+      const next = new Set(prev);
+      next.add(lastKey);
+      return next;
+    });
+  }, [groupedBySeason]);
+
   const filterItems = (
     <>
       <SegmentedControlItem value="all" label={`All (${epStats.total})`} />
@@ -202,8 +271,25 @@ const EpisodeListSection = memo(function EpisodeListSection({
 
       {/* Episodes by season */}
       {episodesLoading ? (
-        <VStack gap={3} hAlign="center" padding={6}>
-          <Spinner size="md" label="Loading episodes" />
+        <VStack gap={4}>
+          {/* Skeleton filter bar */}
+          <div style={{ display: "flex", gap: "var(--spacing-2)" }}>
+            <div className="skeleton" style={{ width: 70, height: 36, borderRadius: "var(--radius-inner)" }} />
+            <div className="skeleton" style={{ width: 80, height: 36, borderRadius: "var(--radius-inner)" }} />
+            <div className="skeleton" style={{ width: 75, height: 36, borderRadius: "var(--radius-inner)" }} />
+            <div className="skeleton" style={{ width: 70, height: 36, borderRadius: "var(--radius-inner)" }} />
+            <div className="skeleton" style={{ width: 65, height: 36, borderRadius: "var(--radius-inner)" }} />
+          </div>
+          {/* Skeleton season cards */}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="skeleton-season-card">
+              <div className="skeleton" style={{ width: 20, height: 20, borderRadius: 4 }} />
+              <div className="skeleton-text" style={{ width: 90 }} />
+              <div className="skeleton" style={{ width: 80, height: 20, borderRadius: 10 }} />
+              <div style={{ flex: 1 }} />
+              <div className="skeleton" style={{ width: 24, height: 24, borderRadius: 4 }} />
+            </div>
+          ))}
         </VStack>
       ) : filteredEpisodes.length === 0 ? (
         <EmptyState
@@ -215,6 +301,7 @@ const EpisodeListSection = memo(function EpisodeListSection({
               label="Show all"
               variant="secondary"
               onClick={() => onFilterChange("all")}
+              data-cuelume-press
             />
           }
         />
@@ -231,48 +318,32 @@ const EpisodeListSection = memo(function EpisodeListSection({
                 }
                 value={String(group.season)}
                 defaultIsOpen={group.index === groupedBySeason.length - 1}
+                onOpenChange={(isOpen) => {
+                  if (isOpen) {
+                    setOpenedSeasons((prev) => {
+                      if (prev.has(String(group.season))) return prev;
+                      const next = new Set(prev);
+                      next.add(String(group.season));
+                      return next;
+                    });
+                  }
+                }}
               >
+                {openedSeasons.has(String(group.season)) ? (
                 <div className="episode-list-wrap">
                   <List density="balanced" hasDividers>
-                    {group.episodes.map((ep) => {
-                      const typeBadge = episodeTypeBadge(ep.type);
-                      const monitored = episodeMonitored(ep);
-                      const key = epSyncKey(group.season, ep);
-                      const isSyncing = syncingEps[key];
-                      return (
-                        <ListItem
-                          key={`${group.season}-${displayEpisodeNumber(ep)}`}
-                          label={ep.title || "—"}
-                          description={`Episode ${displayEpisodeNumber(ep)}`}
-                          endContent={
-                            <HStack gap={4} align="center">
-                              {ep.air_date && (
-                                <Timestamp value={ep.air_date} format="date" />
-                              )}
-                              <Badge
-                                variant={badgeVariantForType(ep.type)}
-                                label={typeBadge.label}
-                              />
-                              <Tooltip content={monitored ? "Unmonitor" : "Monitor"} placement="start">
-                                <ToggleButton
-                                  label={monitored ? "Unmonitor episode" : "Monitor episode"}
-                                  isIconOnly
-                                  size="sm"
-                                  icon={<Eye size={14} />}
-                                  pressedIcon={<EyeOff size={14} />}
-                                  isPressed={monitored}
-                                  isDisabled={isSyncing || !ep.sonarr_episode_id}
-                                  isLoading={isSyncing}
-                                  onPressedChange={() => onToggleMonitor(group.season, ep)}
-                                />
-                              </Tooltip>
-                            </HStack>
-                          }
-                        />
-                      );
-                    })}
+                    {group.episodes.map((ep) => (
+                      <EpisodeListItem
+                        key={`${group.season}-${displayEpisodeNumber(ep)}`}
+                        ep={ep}
+                        groupSeason={group.season}
+                        isSyncing={!!syncingEps[epSyncKey(group.season, ep)]}
+                        onToggleMonitor={onToggleMonitor}
+                      />
+                    ))}
                   </List>
                 </div>
+                ) : null}
               </Collapsible>
             </Card>
           ))}
@@ -285,37 +356,46 @@ const EpisodeListSection = memo(function EpisodeListSection({
 export function ShowDetailPage() {
   const { id: showId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { shows, settings, setSettings, addNotification, setShows } = useAppStore();
+  const { shows, artworkProviders, addNotification, setShows } = useAppStore();
 
-  const [loadingShow, setLoadingShow] = useState(true);
+  // If the store already has this show (fetched on app mount), use it as
+  // the initial state so the page renders instantly without waiting for
+  // getShow to resolve. The effect below still fetches fresh data to pick
+  // up any changes, but the user sees content immediately.
+  const storeShow = useMemo(
+    () => shows.find((s) => s.id === Number(showId)) ?? null,
+    [shows, showId],
+  );
+
+  const [loadingShow, setLoadingShow] = useState(!storeShow);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [show, setShow] = useState<Show | null>(null);
-  const [series, setSeries] = useState<SonarrSeries | null>(null);
-  const [artworkProviders, setArtworkProviders] = useState<ArtworkProvider[]>([]);
+  const [show, setShow] = useState<Show | null>(storeShow);
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const [artworkVersion, setArtworkVersion] = useState(0);
   const [heroImgError, setHeroImgError] = useState(false);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [episodesLoading, setEpisodesLoading] = useState(true);
   const [pageSettled, setPageSettled] = useState(false);
-  const [trackFiller, setTrackFiller] = useState(false);
-  const [trackMixed, setTrackMixed] = useState(true);
-  const [trackAnimeCanon, setTrackAnimeCanon] = useState(true);
-  const [watermarkAuto, setWatermarkAuto] = useState(true);
-  const [markerValue, setMarkerValue] = useState(0);
+  const [epStats, setEpStats] = useState({ total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 });
+  const [maxEpisode, setMaxEpisode] = useState(0);
+  const [trackFiller, setTrackFiller] = useState(() => actionToTracked(storeShow?.filler_action, false));
+  const [trackMixed, setTrackMixed] = useState(() => actionToTracked(storeShow?.mixed_action, true));
+  const [trackAnimeCanon, setTrackAnimeCanon] = useState(() => actionToTracked(storeShow?.anime_canon_action, true));
+  const [watermarkAuto, setWatermarkAuto] = useState(() => (storeShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+  const [markerValue, setMarkerValue] = useState(() => Math.max(0, storeShow?.sync_watermark || 0));
   const [activeTypeFilter, setActiveTypeFilter] = useState<string>("all");
   const [isMobile, setIsMobile] = useState(false);
   const [syncingEps, setSyncingEps] = useState<Record<string, boolean>>({});
 
-  const [pristineFiller, setPristineFiller] = useState(false);
-  const [pristineMixed, setPristineMixed] = useState(true);
-  const [pristineAnimeCanon, setPristineAnimeCanon] = useState(true);
-  const [pristineWatermarkAuto, setPristineWatermarkAuto] = useState(true);
-  const [pristineMarkerValue, setPristineMarkerValue] = useState(0);
+  const [pristineFiller, setPristineFiller] = useState(() => actionToTracked(storeShow?.filler_action, false));
+  const [pristineMixed, setPristineMixed] = useState(() => actionToTracked(storeShow?.mixed_action, true));
+  const [pristineAnimeCanon, setPristineAnimeCanon] = useState(() => actionToTracked(storeShow?.anime_canon_action, true));
+  const [pristineWatermarkAuto, setPristineWatermarkAuto] = useState(() => (storeShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+  const [pristineMarkerValue, setPristineMarkerValue] = useState(() => Math.max(0, storeShow?.sync_watermark || 0));
 
   const rulesDirty =
     !!show &&
@@ -325,29 +405,38 @@ export function ShowDetailPage() {
       watermarkAuto !== pristineWatermarkAuto ||
       (!watermarkAuto && markerValue !== pristineMarkerValue));
 
-  const filteredEpisodes = useMemo(
-    () =>
-      episodes.filter((ep) => {
-        if (activeTypeFilter === "all") return true;
-        if (activeTypeFilter === "canon" && isMobile) {
-          return ep.type === "canon" || ep.type === "anime_canon";
-        }
-        return ep.type === activeTypeFilter;
-      }),
-    [episodes, activeTypeFilter, isMobile],
-  );
+  const filteredEpisodes = useMemo(() => {
+    // Fast path: "all" filter returns the original array reference,
+    // avoiding a 1209-element .filter() allocation on every render.
+    if (activeTypeFilter === "all") return episodes;
+    return episodes.filter((ep) => {
+      if (activeTypeFilter === "canon" && isMobile) {
+        return ep.type === "canon" || ep.type === "anime_canon";
+      }
+      return ep.type === activeTypeFilter;
+    });
+  }, [episodes, activeTypeFilter, isMobile]);
+
+  // Defer filtered episode rendering on large lists so filter changes
+  // don't block the SegmentedControl interaction. React renders the
+  // urgent update (filter highlight) first, then commits the episode
+  // list in a separate, lower-priority pass.
+  const deferredFilteredEpisodes = useDeferredValue(filteredEpisodes);
 
   const groupedBySeason = useMemo(() => {
     const groups: Record<string, Episode[]> = {};
-    for (const ep of filteredEpisodes) {
+    for (const ep of deferredFilteredEpisodes) {
       const season = String(episodeSeason(ep));
       if (!groups[season]) groups[season] = [];
       groups[season].push(ep);
     }
+    // Episodes come from the DB sorted by episode_num ASC. Within each
+    // season, reverse to show newest first — avoids a full sort since
+    // the input is already ordered.
     return Object.entries(groups)
       .map(([seasonKey, eps], index) => ({
         season: Number.parseInt(seasonKey, 10),
-        episodes: eps.slice().sort((a, b) => displayEpisodeNumber(b) - displayEpisodeNumber(a)),
+        episodes: eps.reverse(),
         index,
       }))
       .sort((a, b) => {
@@ -355,39 +444,7 @@ export function ShowDetailPage() {
         if (b.season === -1) return -1;
         return b.season - a.season;
       });
-  }, [filteredEpisodes]);
-
-  const epStats = useMemo(() => {
-    let total = 0,
-      canon = 0,
-      anime = 0,
-      mixed = 0,
-      filler = 0;
-    for (const e of episodes) {
-      total++;
-      switch (e.type) {
-        case "canon":
-          canon++;
-          break;
-        case "anime_canon":
-          anime++;
-          break;
-        case "mixed_canon":
-          mixed++;
-          break;
-        case "filler":
-          filler++;
-          break;
-      }
-    }
-    return { total, canon, anime, mixed, filler };
-  }, [episodes]);
-
-  /** Highest episode number across all loaded episodes — computed once, reused everywhere. */
-  const maxEpisode = useMemo(() => {
-    if (!episodes.length) return 0;
-    return episodes.reduce((highest, ep) => Math.max(highest, displayEpisodeNumber(ep)), 0);
-  }, [episodes]);
+  }, [deferredFilteredEpisodes]);
 
   const clampMarkerValue = useCallback(
     (next: number): number => {
@@ -402,30 +459,37 @@ export function ShowDetailPage() {
    *  or store data — the backend serves the file if it exists. */
   const backdropUrl = useMemo((): string => {
     const cacheBust = artworkVersion > 0 ? `?v=${artworkVersion}` : "";
-    // 1. Try locally downloaded artwork immediately — we know the ID
     if (showId) return getArtworkBannerUrl(showId) + cacheBust;
-    // 2. Sonarr images (fallback when no local artwork)
-    if (!series?.images?.length) return "";
-    const preferred =
-      series.images.find((img) => img.coverType === "fanart") ||
-      series.images.find((img) => img.coverType === "banner") ||
-      series.images[0];
-    if (!preferred) return "";
-    return resolveSonarrImageUrl(preferred, settings?.sonarr_url || "");
-  }, [showId, series, settings?.sonarr_url, artworkVersion]);
+    return "";
+  }, [showId, artworkVersion]);
 
-  // Fetch show data + episodes in parallel — they're independent and
-  // both keyed off showId from the URL. Settings is no longer needed
-  // here since we removed the Sonarr series fallback fetch.
+  // Fetch show data + episodes. If the store already has show data,
+  // we skip the getShow call entirely — the store data is fresh enough
+  // (fetched on app mount). Episodes always need fetching since they're
+  // not in the store.
   useEffect(() => {
     if (!showId) return;
-    setLoadingShow(true);
+    const hasStoreData = !!storeShow;
+    setLoadingShow(!hasStoreData);
     setEpisodesLoading(true);
-    setPageSettled(false);
     setHeroImgError(false);
 
-    Promise.all([getShow(showId), getEpisodes(showId)] as const)
-      .then(([showRes, episodesRes]) => {
+    // If the store already has show data, the actions bar can settle
+    // immediately — don't wait for episodes to finish loading.
+    if (hasStoreData) {
+      requestAnimationFrame(() => {
+        setTimeout(() => setPageSettled(true), 80);
+      });
+    } else {
+      setPageSettled(false);
+    }
+
+    // Only fetch show data if the store doesn't have it. The store
+    // fetches all shows on app mount, so this is only needed on hard
+    // refresh or direct URL navigation before the store resolves.
+    if (!hasStoreData) {
+      getShow(showId)
+      .then((showRes) => {
         if (!showRes) {
           addNotification("Anime not found", "error");
           navigate("/shows");
@@ -433,7 +497,6 @@ export function ShowDetailPage() {
         }
 
         setShow(showRes);
-        setSeries(null);
         setTrackFiller(actionToTracked(showRes.filler_action, false));
         setTrackMixed(actionToTracked(showRes.mixed_action, true));
         setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
@@ -444,25 +507,73 @@ export function ShowDetailPage() {
         setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
         setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
         setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-
-        setEpisodes((episodesRes as Episode[]) || []);
-        setMarkerValue(clampMarkerValue(showRes.sync_watermark || 0));
-        setPristineMarkerValue(clampMarkerValue(showRes.sync_watermark || 0));
+        // Settle the actions bar as soon as show data is available —
+        // don't wait for the episode list to finish loading.
+        requestAnimationFrame(() => {
+          setTimeout(() => setPageSettled(true), 80);
+        });
       })
       .catch((err: unknown) => {
         addNotification("Failed to load anime: " + errorMessage(err), "error");
       })
       .finally(() => {
         setLoadingShow(false);
+      });
+    }
+
+    // Load episodes in parallel — don't block the hero.
+    getEpisodes(showId)
+      .then((episodesRes) => {
+        const eps = (episodesRes as Episode[]) || [];
+        setEpisodes(eps);
+        // Compute freshMax and epStats in a single pass over the array
+        // instead of separate .reduce() + useMemo iterations.
+        let freshMax = 0;
+        let total = 0, canon = 0, anime = 0, mixed = 0, filler = 0;
+        for (const ep of eps) {
+          freshMax = Math.max(freshMax, displayEpisodeNumber(ep));
+          total++;
+          switch (ep.type) {
+            case "canon": canon++; break;
+            case "anime_canon": anime++; break;
+            case "mixed_canon": mixed++; break;
+            case "filler": filler++; break;
+          }
+        }
+        setEpStats({ total, canon, anime, mixed, filler });
+        setMaxEpisode(freshMax);
+        setMarkerValue((prev) => Math.min(prev, freshMax));
+        setPristineMarkerValue((prev) => Math.min(prev, freshMax));
+      })
+      .catch((err: unknown) => {
+        addNotification("Failed to load episodes: " + errorMessage(err), "error");
+      })
+      .finally(() => {
         setEpisodesLoading(false);
-        // Defer enabling the hover-reveal collapse until React has committed
-        // the episode list to the DOM and the browser has painted it.
-        requestAnimationFrame(() => {
-          setTimeout(() => setPageSettled(true), 80);
-        });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showId]);
+
+  // If the store didn't have show data on first render (e.g. hard refresh
+  // where getShows() hasn't resolved yet), adopt it as soon as it arrives
+  // so the page content appears without waiting for getShow to finish.
+  useEffect(() => {
+    if (storeShow && !show) {
+      setShow(storeShow);
+      setLoadingShow(false);
+      setTrackFiller(actionToTracked(storeShow.filler_action, false));
+      setTrackMixed(actionToTracked(storeShow.mixed_action, true));
+      setTrackAnimeCanon(actionToTracked(storeShow.anime_canon_action, true));
+      setWatermarkAuto((storeShow.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+      setMarkerValue(Math.max(0, storeShow.sync_watermark || 0));
+      setPristineFiller(actionToTracked(storeShow.filler_action, false));
+      setPristineMixed(actionToTracked(storeShow.mixed_action, true));
+      setPristineAnimeCanon(actionToTracked(storeShow.anime_canon_action, true));
+      setPristineWatermarkAuto((storeShow.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+      setPristineMarkerValue(Math.max(0, storeShow.sync_watermark || 0));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeShow]);
 
   // Lightweight reload functions for post-action refreshes (artwork, save, etc.)
   const loadShowData = useCallback(async (): Promise<Show | null> => {
@@ -471,7 +582,6 @@ export function ShowDetailPage() {
       const showRes = await getShow(showId);
       if (!showRes) return null;
       setShow(showRes);
-      setSeries(null);
       setTrackFiller(actionToTracked(showRes.filler_action, false));
       setTrackMixed(actionToTracked(showRes.mixed_action, true));
       setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
@@ -495,7 +605,23 @@ export function ShowDetailPage() {
       setEpisodesLoading(true);
       try {
         const episodesRes = await getEpisodes(showId);
-        setEpisodes((episodesRes as Episode[]) || []);
+        const eps = (episodesRes as Episode[]) || [];
+        setEpisodes(eps);
+        // Recompute epStats in the same pass.
+        let total = 0, canon = 0, anime = 0, mixed = 0, filler = 0;
+        let freshMax = 0;
+        for (const ep of eps) {
+          freshMax = Math.max(freshMax, displayEpisodeNumber(ep));
+          total++;
+          switch (ep.type) {
+            case "canon": canon++; break;
+            case "anime_canon": anime++; break;
+            case "mixed_canon": mixed++; break;
+            case "filler": filler++; break;
+          }
+        }
+        setEpStats({ total, canon, anime, mixed, filler });
+        setMaxEpisode(freshMax);
         setMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
         setPristineMarkerValue(clampMarkerValue(currentShow.sync_watermark || 0));
       } catch (err: unknown) {
@@ -505,13 +631,6 @@ export function ShowDetailPage() {
     },
     [showId, addNotification, clampMarkerValue],
   );
-
-  // Load artwork providers list once
-  useEffect(() => {
-    getArtworkProviders()
-      .then((res) => setArtworkProviders(res.providers || []))
-      .catch((err: unknown) => addNotification("Failed to load artwork providers: " + errorMessage(err), "error"));
-  }, [addNotification]);
 
   /** Build Selector options for the artwork source dropdown. */
   const artworkSourceOptions = useMemo<SelectOption[]>(() => {
@@ -712,9 +831,13 @@ export function ShowDetailPage() {
             <div className="show-hero-content">
               <VStack gap={1} className="show-hero-titles">
                 <HStack gap={3} align="center" wrap="wrap">
-                  <Heading level={1} className="show-hero-title">
-                    {show?.sonarr_title || "\u00a0"}
-                  </Heading>
+                  {show ? (
+                    <Heading level={1} className="show-hero-title">
+                      {show.sonarr_title}
+                    </Heading>
+                  ) : (
+                    <div className="skeleton-text-lg" style={{ width: 220, height: "1.5em" }} />
+                  )}
                   {!episodesLoading && show && (
                     <Badge variant="neutral" label={`${episodes.length} episodes`} className="show-hero-badge" />
                   )}
@@ -756,6 +879,7 @@ export function ShowDetailPage() {
                         className="episode-step-btn"
                         isDisabled={watermarkAuto || markerValue <= 0}
                         onClick={() => setMarkerValue(clampMarkerValue(markerValue - 1))}
+                        data-cuelume-press
                       />
                     </InputGroupText>
                     <NumberInput
@@ -779,6 +903,7 @@ export function ShowDetailPage() {
                         className="episode-step-btn"
                         isDisabled={watermarkAuto}
                         onClick={() => setMarkerValue(clampMarkerValue(markerValue + 1))}
+                        data-cuelume-press
                       />
                     </InputGroupText>
                   </InputGroup>
@@ -793,6 +918,7 @@ export function ShowDetailPage() {
                       icon={<Bot size={16} />}
                       isIconOnly={isMobile}
                       onClick={() => setWatermarkAuto(!watermarkAuto)}
+                      data-cuelume-toggle
                     />
                   </Tooltip>
                 </HStack>
@@ -805,6 +931,7 @@ export function ShowDetailPage() {
                     isIconOnly={isMobile}
                     onClick={() => setShowDeleteDialog(true)}
                     isDisabled={deleting}
+                    data-cuelume-press
                   />
                   <Button
                     label={savedFlash ? "Saved" : saving ? "Saving..." : "Save"}
@@ -816,6 +943,7 @@ export function ShowDetailPage() {
                     isDisabled={saving || !rulesDirty}
                     isLoading={saving}
                     className={savedFlash ? "save-flash" : undefined}
+                    data-cuelume-press
                   />
                 </HStack>
               </div>
@@ -827,9 +955,54 @@ export function ShowDetailPage() {
         <Divider />
 
         {loadingShow || !show ? (
-          <VStack gap={3} hAlign="center" padding={6}>
-            <Spinner size="lg" label="Loading anime" />
-          </VStack>
+          <>
+            {/* Skeleton: Artwork card */}
+            <div className="skeleton-card" style={{ padding: "var(--spacing-4)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
+                  <div className="skeleton" style={{ width: 16, height: 16, borderRadius: 4 }} />
+                  <div className="skeleton-text" style={{ width: 80 }} />
+                  <div style={{ flex: 1 }} />
+                  <div className="skeleton" style={{ width: 90, height: 28, borderRadius: "var(--radius-inner)" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
+                  <div className="skeleton-text" style={{ width: 60 }} />
+                  <div className="skeleton" style={{ width: 220, height: 32, borderRadius: "var(--radius-inner)" }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Skeleton: Tracking rules */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-4)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
+                <div className="skeleton-text-lg" style={{ width: 130 }} />
+                <div style={{ flex: 1 }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "var(--spacing-4)" }}>
+                <div className="skeleton-rule-card">
+                  <div className="skeleton-text" style={{ width: 60 }} />
+                  <div className="skeleton-text-lg" style={{ width: 100 }} />
+                  <div className="skeleton-text" style={{ width: "80%" }} />
+                  <div style={{ flex: 1 }} />
+                  <div className="skeleton" style={{ width: 44, height: 24, borderRadius: 12 }} />
+                </div>
+                <div className="skeleton-rule-card">
+                  <div className="skeleton-text" style={{ width: 50 }} />
+                  <div className="skeleton-text-lg" style={{ width: 90 }} />
+                  <div className="skeleton-text" style={{ width: "70%" }} />
+                  <div style={{ flex: 1 }} />
+                  <div className="skeleton" style={{ width: 44, height: 24, borderRadius: 12 }} />
+                </div>
+                <div className="skeleton-rule-card">
+                  <div className="skeleton-text" style={{ width: 45 }} />
+                  <div className="skeleton-text-lg" style={{ width: 80 }} />
+                  <div className="skeleton-text" style={{ width: "75%" }} />
+                  <div style={{ flex: 1 }} />
+                  <div className="skeleton" style={{ width: 44, height: 24, borderRadius: 12 }} />
+                </div>
+              </div>
+            </div>
+          </>
         ) : (
         <>
           {/* Artwork controls */}
@@ -846,6 +1019,7 @@ export function ShowDetailPage() {
                   icon={<RefreshCw size={14} className={artworkRefreshing ? "spin" : ""} />}
                   onClick={() => handleRefreshArtwork()}
                   isDisabled={artworkRefreshing}
+                  data-cuelume-press
                 />
               </HStack>
               <HStack gap={3} align="center" wrap="wrap">
@@ -902,11 +1076,15 @@ export function ShowDetailPage() {
               />
             </Grid>
           </VStack>
+        </>
+        )}
 
-          {/* Episode list — memoized so tracking-rule toggles don't re-render it */}
+        {/* Episode list — memoized so tracking-rule toggles don't re-render it.
+            Rendered outside the show-gate since it has its own loading state. */}
+        {show && (
           <EpisodeListSection
             episodesLoading={episodesLoading}
-            filteredEpisodes={filteredEpisodes}
+            filteredEpisodes={deferredFilteredEpisodes}
             groupedBySeason={groupedBySeason}
             epStats={epStats}
             activeTypeFilter={activeTypeFilter}
@@ -914,7 +1092,6 @@ export function ShowDetailPage() {
             onFilterChange={setActiveTypeFilter}
             onToggleMonitor={toggleEpisodeMonitor}
           />
-        </>
         )}
         </VStack>
       </Section>

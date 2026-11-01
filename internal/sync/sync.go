@@ -459,6 +459,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 
 		if !isSpecialSeason(ep.SeasonNumber) {
 			airDate := ep.AirDateUTC
+			airDateOnly := models.DateOnly(airDate)
 			dbEpisodes = append(dbEpisodes, models.EpisodeInfo{
 				MappingID:             mapping.ID,
 				EpisodeNum:            aflNum,
@@ -468,7 +469,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 				SeasonNumber:          ep.SeasonNumber,
 				SonarrEpisodeNumber:   ep.EpisodeNumber,
 				AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
-				AirDate:               &airDate,
+				AirDate:               &airDateOnly,
 				Monitored:             ep.Monitored,
 			})
 		}

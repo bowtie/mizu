@@ -14,6 +14,23 @@ const (
 	EpisodeUnknown    EpisodeType = "unknown"
 )
 
+// DateOnly wraps a *time.Time and marshals to a "2006-01-02" date string
+// instead of a full RFC3339 timestamp. The frontend only displays the
+// date part, so this saves ~11 bytes per episode in the JSON payload.
+// Nil pointer marshals to null (and gets omitted by omitempty).
+type DateOnly time.Time
+
+func (d *DateOnly) MarshalJSON() ([]byte, error) {
+	if d == nil {
+		return []byte("null"), nil
+	}
+	t := time.Time(*d)
+	if t.IsZero() {
+		return []byte("null"), nil
+	}
+	return []byte(`"` + t.Format("2006-01-02") + `"`), nil
+}
+
 // FillerAction defines what to do with filler/mixed episodes.
 type FillerAction string
 
@@ -63,18 +80,18 @@ type ShowMapping struct {
 
 // EpisodeInfo holds filler data for a single episode.
 type EpisodeInfo struct {
-	ID                    int64       `json:"id"`
-	MappingID             int64       `json:"mapping_id"`
+	ID                    int64       `json:"-"`
+	MappingID             int64       `json:"-"`
 	EpisodeNum            int         `json:"episode_num"` // UI identity/display number
 	AFLEpisodeNumber      int         `json:"afl_episode_number,omitempty"`
 	Title                 string      `json:"title"`
 	Type                  EpisodeType `json:"type"`
-	LastScraped           time.Time   `json:"last_scraped"`
+	LastScraped           time.Time   `json:"-"`
 	SonarrEpisodeID       int         `json:"sonarr_episode_id,omitempty"`
 	SeasonNumber          int         `json:"season_number,omitempty"`
 	SonarrEpisodeNumber   int         `json:"sonarr_episode_number,omitempty"`
 	AbsoluteEpisodeNumber *int        `json:"absolute_episode_number,omitempty"`
-	AirDate               *time.Time  `json:"air_date,omitempty"`
+	AirDate               *DateOnly   `json:"air_date,omitempty"`
 	Monitored             bool        `json:"monitored,omitempty"`
 }
 

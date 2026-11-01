@@ -1665,3 +1665,523 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 **Why:** User reported "the bar buttons at the bottom and still no divider." The buttons were using `flex-end` alignment (bottom of bar) instead of centered. The divider (border-bottom on the actions bar) was visually disconnected from the content because the hero Section's 16px bottom padding created a gap.
 
 **Outcome:** Kept. tsc passes. Buttons now centered in bar, divider visible flush against content.
+
+## Iteration D165 — Skeleton placeholders + store fallback for instant page loading
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx`, `ShowsPage.tsx`, `ActivityPage.tsx`, `index.css`, `internal/database/database.go`
+
+**Problem:** All three main pages (Shows, ShowDetail, Activity) showed a centered spinner during loading, leaving the page visually empty. On the ShowDetailPage specifically, the hero image loaded instantly (URL built from `showId`) but the title, tracking rules, artwork controls, and episode list all waited on `getShow()` / `getEpisodes()` to resolve before rendering — creating a jarring "hero image with empty page below" state. The SQLite connection pool was also limited to 1 connection (`SetMaxOpenConns(1)`), meaning `getShow` and `getEpisodes` serialized behind a single connection even though they were fired concurrently from the frontend.
+
+**Baseline metrics (show 47 = Detective Conan, 1209 episodes / 34 seasons):**
+- `getShow`: 3ms, 705B
+- `getEpisodes`: 10ms, 360KB (1209 episodes)
+- `getArtworkProviders`: 3ms, 285B
+- `getShows` (all): 3ms, 5KB
+- `getSettings`: 3ms, 1KB
+- `getSonarrSeries`: 46ms, 36KB (slowest)
+- All 6 concurrent: 122ms total
+- Episode payload: 360KB for 1209 episodes across 34 seasons
+
+**What changed:**
+1. **SQLite connection pool (database.go):** `SetMaxOpenConns(1)` → `SetMaxOpenConns(4)`, `SetMaxIdleConns(1)` → `SetMaxIdleConns(4)`. WAL mode supports concurrent readers; `_busy_timeout=5000` handles write contention. Now `getShow` and `getEpisodes` truly run in parallel.
+2. **Store fallback (ShowDetailPage):** The app store already fetches all shows on mount. `ShowDetailPage` now initializes `show`, `loadingShow`, and all tracking rule state from `storeShow = shows.find(s => s.id === Number(showId))`. If the store has the show, the page renders with full content immediately — no spinner. A separate effect adopts store data when it arrives late (hard refresh where `getShows()` hasn't resolved yet). The main effect still silently refreshes from `getShow()` to pick up changes.
+3. **Skeleton placeholders (all 3 pages):** Replaced all `Spinner` components with skeleton UI that matches the final page structure:
+   - ShowDetailPage content: skeleton artwork card (icon + title + button + source dropdown) + skeleton tracking rule cards (3 cards matching the grid)
+   - ShowDetailPage episode list: skeleton filter bar (5 segments) + 4 skeleton season cards (chevron + label + badge)
+   - ShowDetailPage hero title: skeleton bar when show data not yet loaded
+   - ShowsPage: 6 skeleton library cards (image area + title + subtitle)
+   - ActivityPage: 5 skeleton log cards (icon + title + timestamp + description)
+4. **CSS (index.css):** Added reusable skeleton classes: `.skeleton`, `.skeleton-text`, `.skeleton-text-lg`, `.skeleton-card`, `.skeleton-rule-card`, `.skeleton-season-card` — all using the existing `skeleton-pulse` animation with `prefers-reduced-motion` support.
+5. **Cleanup:** Removed unused `Spinner` imports from all three page files.
+
+**Why:** The user reported "it loads the hero image in the anime page but it missed the rest of the data and waits until episode list completes that's lame." The root cause was twofold: (1) the single SQLite connection serialized `getShow` behind `getEpisodes`, and (2) even after fixing that, the page showed an empty spinner instead of using already-available store data or skeleton placeholders. Skeletons preserve page structure during loading, reducing perceived wait time and layout shift.
+
+**Outcome:** Kept. tsc + go build pass. Committed as `0a299fc`. ShowDetailPage now renders instantly on in-app navigation (store has data), shows skeleton placeholders on hard refresh, and the episode list loads independently with its own skeleton.
+
+## Iteration D166 — ShowsPage renders from store data, loads SonarrSeries in background
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx`
+
+**Problem:** ShowsPage used `Promise.allSettled([getShows(), getSonarrSeries(), getSettings()])` and waited for ALL three before `setLoading(false)`. The store already fetches `getShows()` and `getSettings()` on app mount, so this was redundant. `getSonarrSeries()` was the slowest call (46ms, 36KB) and only needed for poster/banner URLs on shows without local artwork — not needed to render the page structure.
+
+**What changed:**
+1. **Initial loading state from store:** `useState(() => !shows || shows.length === 0)` — if the store already has shows from the app-level fetch, the page renders immediately without a spinner.
+2. **Split loadLanding into two phases:** Fast phase (`getShows + getSettings`) unblocks the page render. Background phase (`getSonarrSeries`) populates `seriesById` for poster/banner URLs when ready — shows with local artwork get images immediately, shows relying on Sonarr images get them when the background call resolves.
+3. **No loading flash on refresh:** `loadLanding` no longer sets `loading=true` at the start, so re-fetching data on an already-populated page doesn't flash a spinner.
+
+**Why:** The library page is the app's landing page. Waiting 46ms+ for SonarrSeries data before showing any content was unnecessary — the show list, titles, and local artwork are available immediately from the store. SonarrSeries is only needed for image URL resolution, which can happen progressively.
+
+**Outcome:** Kept. tsc passes. Committed as `de58cf8`. Library page now renders instantly on in-app navigation, with Sonarr image URLs populating in the background.
+
+## Iteration D167 — Prefetch episode data on show card hover
+
+**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowsPage.tsx`
+
+**Problem:** When navigating from the library page to a show detail page, the episode list fetch only starts after the user clicks. For shows with 1000+ episodes (360KB payload), this means the episode skeleton shows for the full round-trip time even though the user was already hovering the card.
+
+**What changed:**
+1. **`prefetchEpisodes(showId)` in api.ts:** Fires `getEpisodes` early and caches the `Promise` in a `Map<string, Promise<Episode[]>>`. When `getEpisodes(showId)` is called later (on navigation), it picks up the cached promise and clears the entry — no stale data. Safe to call multiple times; only the first call fires the request.
+2. **`onMouseEnter` on ClickableCard:** When the user hovers a show card, `prefetchEpisodes(show.id)` fires immediately. By the time they click through to the detail page, the episode fetch is already in flight (or resolved), so the episode list appears instantly or near-instantly.
+
+**Why:** Hover-to-click time is typically 200-500ms. For a 360KB / 10ms backend response, that's enough time for the entire episode payload to arrive. The backend's in-memory `episodeCache` and ETag/304 support further ensure the prefetch is cheap — if the data hasn't changed, the response is a 0-byte 304.
+
+**Outcome:** Kept. tsc passes. Committed as `9c69938`. Episode list now loads near-instantly when navigating from the library page on desktop (hover-capable devices).
+
+## Iteration D168 — Strip unused fields from episode API payload
+
+**Target:** `internal/models/models.go`
+
+**Problem:** The episode API response included `mapping_id` (redundant — same value for all episodes in a response) and `last_scraped` (internal timestamp only used by the `EpisodeVersion` SQL query). Neither field is used by the frontend. The `monitored` field had `omitempty` but Go's `omitempty` for `bool` only skips `false`, so 1207/1209 episodes were serializing `"monitored":false` unnecessarily.
+
+**Before:** 359,623B uncompressed, 43,126B gzipped (1209 episodes)
+**After:** 278,620B uncompressed, 41,632B gzipped
+**Savings:** 81,003B uncompressed (22%), 1,494B gzipped (3%)
+
+**What changed:**
+- `MappingID`: `json:"mapping_id"` → `json:"-"` — excluded from API response entirely. Still scanned from DB rows via Go field name, so DB layer is unaffected.
+- `LastScraped`: `json:"last_scraped"` → `json:"-"` — excluded from API response. Only used in the `EpisodeVersion` SQL query, not via the struct.
+- `Monitored`: already had `omitempty` — confirmed it now only appears for the 2 episodes where `monitored=true`.
+
+**Why:** 81KB less data to serialize on the backend and parse on the frontend per request. For 1200+ episode shows, this reduces JSON parsing time and memory allocation. The gzip savings are smaller (3%) because the repeated field values compress well, but the uncompressed reduction speeds up `json.Marshal` and `JSON.parse`.
+
+**Outcome:** Kept. go build + tsc pass. Committed as `ae58465`. Episode payload is 22% smaller for long-running shows.
+
+## Iteration D169 — SettingsPage uses store settings, adds skeleton loading
+
+**Target:** `web-astryx/src/routes/SettingsPage.tsx`
+
+**Problem:** SettingsPage fetched `getSettings()` independently on mount and showed a centered spinner until it resolved, even though the store already fetches the same data on app mount. On in-app navigation, the settings data was already available in the store but the page still showed a spinner.
+
+**What changed:**
+1. **Store fallback:** Initialize `loading` from `!storeSettings` — if the store already has settings, the page renders immediately. Added a `storeSettings` effect that populates all fields when the store data arrives (hard refresh case).
+2. **Extracted `applySettings()`:** The field-setting logic (30+ setState calls) was extracted from `loadSettings()` into a reusable `applySettings(data)` function. Both the store-population effect and the background `loadSettings()` call use it, eliminating duplication.
+3. **Silent background refresh:** `loadSettings()` no longer sets `loading=true` at the start — the background refresh is invisible, no spinner flash.
+4. **Skeleton loading state:** Replaced the centered spinner with skeleton placeholders matching the settings page layout: header (title + subtitle + save button), connection card (URL + API key fields), sync card (interval selector), and notifications card (toggle + server URL).
+
+**Why:** The settings page is the simplest page data-wise (a single 1KB JSON response), yet it showed a full-screen spinner on every visit. Using the store data eliminates the wait entirely on in-app navigation, and the skeleton provides structure on hard refresh.
+
+**Outcome:** Kept. tsc passes. Committed as `2210edb`. Settings page now renders instantly on in-app navigation, with skeleton placeholders on hard refresh.
+
+## Iteration D170 — Move artwork providers fetch to store, eliminate duplicate requests
+
+**Target:** `web-astryx/src/lib/store.tsx`, `ShowDetailPage.tsx`, `SettingsPage.tsx`
+
+**Problem:** Both ShowDetailPage and SettingsPage independently fetched `getArtworkProviders()` on every mount. This is a tiny response (285B) but it's an unnecessary duplicate request on every page navigation — the artwork provider list rarely changes. On the ShowDetailPage, the artwork source dropdown was empty until this fetch resolved, even though the show data was already available from the store.
+
+**What changed:**
+1. **Store:** Added `artworkProviders: ArtworkProvider[]` to the app store. The mount effect now fetches `getArtworkProviders()` alongside `getShows()` and `getSettings()` in a single `Promise.allSettled` call.
+2. **ShowDetailPage:** Removed local `artworkProviders` state and the `useEffect` that fetched them. Now uses `artworkProviders` from `useAppStore()`. Removed unused `getArtworkProviders` and `ArtworkProvider` imports.
+3. **SettingsPage:** Same treatment — removed local state and fetch effect, uses store's `artworkProviders`. Removed unused imports.
+
+**Why:** Eliminates N duplicate `getArtworkProviders()` requests across page navigations (1 per ShowDetailPage visit + 1 per SettingsPage visit). The artwork source dropdown is now populated instantly from store data on both pages, with zero loading delay.
+
+**Outcome:** Kept. tsc passes. Committed as `b12feb4`. Artwork providers fetched once on app mount, available instantly on all pages.
+
+## Iteration D171–172 — Prefetch show data on hover + skip redundant getShow
+
+**Target:** `web-astryx/src/lib/api.ts`, `ShowsPage.tsx`, `ShowDetailPage.tsx`
+
+**Problem:** On in-app navigation from library to detail page, ShowDetailPage fired `getShow()` even though the store already had the show data from the app-level `getShows()` fetch. Combined with the episode prefetch, this was 2 API calls that were either redundant (getShow) or already in-flight (getEpisodes from hover prefetch).
+
+**What changed:**
+1. **D171 — `prefetchShow()` in api.ts:** Same pattern as `prefetchEpisodes` — fires `getShow` early on card hover and caches the promise. `getShow()` consumes the cached promise on navigation. Both `prefetchShow` and `prefetchEpisodes` are wired to `onMouseEnter` on show cards.
+2. **D172 — Skip `getShow` when store has data:** When `storeShow` is available (in-app navigation), the `getShow()` call is skipped entirely. The store data (fetched on app mount, seconds ago) is fresh enough for display. `getShow()` only fires on hard refresh or direct URL navigation when the store hasn't resolved yet.
+
+**Why:** On the common in-app navigation path, the store already has show data and the hover prefetch already has episodes in-flight. Firing `getShow()` again was a redundant 3ms call that triggered unnecessary state updates (14 `setState` calls in the `.then()` handler). Skipping it eliminates that work entirely.
+
+**Outcome:** Kept. tsc passes. Committed as `7fa5f8a` (D171) and `bf5f412` (D172). In-app navigation to detail page now makes 0–1 API calls (episodes only, and those are prefetched on hover).
+
+## Iteration D173 — Route-based code splitting with React.lazy
+
+**Target:** `web-astryx/src/App.tsx`
+
+**Problem:** The entire app was bundled into a single 641KB JS file with no code splitting. All pages (Shows, ShowDetail, Activity, Settings) and their dependencies (including the 1000+ episode rendering logic, AddAnimeDialog, all icons) loaded upfront on the initial page load, even though the user only sees the library page first.
+
+**What changed:**
+- `ShowDetailPage`, `ActivityPage`, and `SettingsPage` are now lazy-loaded with `React.lazy()` + `Suspense`. Each becomes a separate chunk loaded on demand when the user navigates to that route.
+- `ShowsPage` (the landing page) stays eagerly loaded — it's the first thing the user sees.
+- `PageFallback` returns `null` — the store already fetches data on mount, so pages render their own skeleton/loading states immediately after the chunk loads. No blank screen.
+
+**Why:** The ShowDetailPage alone imports lucide icons, the EpisodeListSection with its 1200+ episode rendering, Collapsible components, etc. Splitting it into a separate chunk means the library page loads faster (smaller initial JS), and the detail page chunk loads in parallel with the episode data prefetch triggered on card hover.
+
+**Outcome:** Kept. tsc passes. Committed as `1e00d47`. Initial bundle split into 4 chunks — library page loads first, other pages load on demand.
+
+## Iteration D174 — Prefetch lazy route chunks on hover for instant navigation
+
+**Target:** `web-astryx/src/lib/chunkPrefetch.ts` (new), `ShowsPage.tsx`, `main.tsx`
+
+**Problem:** With route-based code splitting (D173), navigating to a lazy-loaded route for the first time requires downloading the JS chunk before the page can render. On fast connections this is ~50-100ms, but on slower connections it's noticeable. The user hovers a card or nav item for 200-500ms before clicking — that time is wasted.
+
+**What changed:**
+1. **`chunkPrefetch.ts`:** New module with `prefetchDetailChunk()`, `prefetchActivityChunk()`, `prefetchSettingsChunk()`. Each triggers the dynamic `import()` without rendering, caching the JS chunk in the browser. Uses boolean flags to avoid duplicate imports.
+2. **ShowsPage:** `prefetchDetailChunk()` called on card `onMouseEnter` alongside `prefetchShow` and `prefetchEpisodes`. By the time the user clicks, the detail page JS chunk, show data, and episode data are all in-flight or resolved.
+3. **main.tsx:** `prefetchActivityChunk` and `prefetchSettingsChunk` called on nav item `onMouseEnter`, so those chunks load before the user clicks the nav.
+
+**Why:** Hover-to-click time is typically 200-500ms — enough to download a JS chunk (~50KB gzipped) and fire API prefetches. By the time the user clicks, everything is cached and the page renders instantly.
+
+**Outcome:** Kept. tsc passes. Committed as `4a4ed65`. All route chunks and API data are prefetched on hover, making in-app navigation effectively instant.
+
+---
+
+## Final Performance Summary
+
+### API Timings (show 47 = Detective Conan, 1209 episodes / 34 seasons)
+
+| Endpoint | Time | Size |
+|---|---|---|
+| getShow | 3ms | 705B |
+| getEpisodes (gzipped) | 8ms | 37KB |
+| getShows (all) | 3ms | 5KB |
+| getSettings | 3ms | 1KB |
+| getArtworkProviders | 2ms | 285B |
+| getSonarrSeries | 44ms | 36KB |
+
+### Critical Path Analysis
+
+**In-app navigation (library → detail page):**
+- getShow: **SKIPPED** (store has data, D172)
+- getEpisodes: **PREFETCHED** on hover (D167)
+- JS chunk: **PREFETCHED** on hover (D174)
+- **0 API calls on critical path** → instant render
+
+**Hard refresh (worst case):**
+- 5 concurrent requests: 90ms total
+- Skeleton placeholders show immediately (D165)
+- Store data populates as soon as getShows resolves (~3ms)
+
+### Bundle Size
+
+| Metric | Before | After | Reduction |
+|---|---|---|---|
+| Initial JS bundle | 641KB (single chunk) | 413KB (main) + lazy chunks | 35% smaller |
+| Initial JS gzipped | ~180KB | 121KB | 33% smaller |
+| Episode payload (1209 eps) | 360KB raw / 43KB gzipped | 252KB raw / 37KB gzipped | 30% raw, 14% gzipped |
+| CSS payload | 314KB raw / 50KB gzipped | unchanged | — |
+
+### Optimizations Applied
+
+| # | Iteration | Description | Impact |
+|---|---|---|---|
+| 1 | D165 | Skeleton placeholders + store fallback | No empty spinners, instant content from store |
+| 2 | D165 | SQLite connection pool 1→4 | Parallel DB reads, no serialization |
+| 3 | D166 | ShowsPage renders from store, SonarrSeries in background | Library page instant on in-app nav |
+| 4 | D167 | Prefetch episodes on card hover | Episode list ready before click |
+| 5 | D168 | Strip unused fields from episode payload | 360KB → 279KB (22% reduction) |
+| 6 | D169 | SettingsPage store fallback + skeleton | Settings page instant on in-app nav |
+| 7 | D170 | Move artwork providers to store | 1 fetch instead of N, instant dropdown |
+| 8 | D171 | Prefetch show data on card hover | Show data ready before click |
+| 9 | D172 | Skip redundant getShow when store has data | 0 API calls on in-app nav critical path |
+| 10 | D173 | Route-based code splitting (React.lazy) | 641KB → 4 chunks, library loads first |
+| 11 | D174 | Prefetch lazy chunks on hover | JS chunks cached before navigation |
+| 12 | D175 | groupedBySeason: .reverse() instead of .slice().sort() | O(n) vs O(n log n) per filter change |
+| 13 | D176 | filteredEpisodes fast path for "all" filter | No 1209-element .filter() allocation |
+| 14 | D177 | Pre-compute epStats during episode load | Eliminates separate useMemo iteration over all episodes; single-pass loop combines freshMax + type counts |
+| 15 | D178 | pageSettled on show data, not episode load | Actions bar hover-reveal available immediately when store data present; no 80ms+ delay waiting for 1200+ episodes to finish loading |
+| 16 | D179 | useDeferredValue for filteredEpisodes | Filter changes on 1200+ episodes don't block SegmentedControl interaction; React renders urgent UI first, episode list in lower-priority pass |
+| 17 | D180 | Pre-compute maxEpisode during load, eliminate memo | Single-pass loop now computes freshMax + epStats + maxEpisode; removes third O(n) iteration |
+| 18 | D181 | Memoize AppStore context value | Prevents unnecessary re-renders of all 5 store consumers when provider re-renders without value changes |
+| 19 | D182 | Split notifications into separate context | Toast add/remove no longer re-renders ShowDetailPage/ShowsPage/SettingsPage/ActivityPage; only ToastViewport subscribes to notification list |
+| 20 | D183 | Skip redundant getShows+getSettings in loadLanding | ShowsPage skips 2 API calls when store already has data; only fetches SonarrSeries (not in store). forceRefresh param for artwork/add-anime reloads |
+| 21 | D184 | Lazy-load AddAnimeDialog component | Initial bundle 563KB→413KB raw (163KB→121KB gzipped); 700-line wizard UI only loaded when dialog opens |
+| 22 | D185 | Prefetch AddAnimeDialog chunk on button hover | JS chunk cached before dialog opens; no loading delay when user clicks "Add anime" |
+| 23 | D186 | Trim episode DB query + remove id from JSON | DB query drops 3 unused columns (id, mapping_id, last_scraped); id field changed to json:"-"; fewer columns scanned + smaller JSON payload |
+| 24 | D187 | Date-only air_date serialization | Custom DateOnly type marshals *time.Time as "2006-01-02" instead of RFC3339; saves ~12KB raw on 1209-episode payload |
+| 25 | D188 | Initialize openedSeasons in useState, skip useEffect round-trip | Last season renders episodes on first paint instead of after useEffect→setState→re-render cycle |
+| 26 | D189 | Memoized EpisodeListItem component | Toggling one episode's monitor state no longer re-renders all 1200+ ListItems; only the affected item re-renders |
+
+---
+
+## D177 — Pre-compute epStats during episode load, eliminate memo
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — epStats computation (~line 418)
+
+**Problem:** `epStats` was a `useMemo` that iterated all episodes (1200+) to count types (canon, anime_canon, mixed_canon, filler). The episode load handler also called `.reduce()` to compute `freshMax`. That's two separate O(n) passes over the same array — the memo re-ran on every `episodes` state change, and the `.reduce()` ran in the load callback.
+
+**What changed:**
+- Removed the `epStats` `useMemo` entirely
+- Added `epStats` as `useState` initialized to `{ total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 }`
+- In the episode load `.then()` handler, combined `freshMax` computation and type counting into a single `for` loop
+- In `loadEpisodeData` (post-save reload), same single-pass computation
+- `epStats` state is set once during load, no memo re-computation on filter changes or re-renders
+
+**Metrics:**
+- Before: 2 × O(n) passes (`.reduce()` + `useMemo` iteration) = ~2 × 1209 iterations
+- After: 1 × O(n) pass = 1209 iterations, no memo dependency tracking
+- Eliminated 1 `useMemo` from the render path (less work on every render)
+- tsc clean, Go build clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D178 — Settle pageSettled on show data, not episode load
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `pageSettled` state + actions bar reveal
+
+**Problem:** `pageSettled` controlled the hover-reveal CSS animation for the actions bar (save/remove/episode controls). It was set in the episodes `.finally()` handler, meaning the actions bar stayed in "pre-settle" state (no transitions, no hover-reveal) until all 1200+ episodes finished loading. On in-app navigation with store data, the hero and tracking rules rendered instantly, but the actions bar was frozen until episodes completed.
+
+**What changed:**
+- When `storeShow` is available (in-app navigation): `pageSettled` is set via `requestAnimationFrame(() => setTimeout(..., 80))` immediately in the main effect — doesn't wait for episodes
+- When `getShow()` is needed (hard refresh): `pageSettled` is set in the `getShow().then()` handler — settles as soon as show data arrives, not after episodes
+- Removed `pageSettled` setting from the episodes `.finally()` handler entirely
+
+**Metrics:**
+- Before: actions bar settled after episode load completed (network + parse + render of 1200+ items)
+- After: actions bar settles when show data is available (instant for in-app nav, ~90ms for hard refresh)
+- User can interact with save/remove/episode controls while episodes are still loading in the skeleton state below
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D179 — useDeferredValue for filteredEpisodes on large lists
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `filteredEpisodes` → `groupedBySeason` → `EpisodeListSection`
+
+**Problem:** When a user clicks a filter button (e.g., "Filler (123)"), `filteredEpisodes` recomputes via `.filter()` over 1200+ episodes, then `groupedBySeason` regroups all results, then `EpisodeListSection` re-renders all season cards and episode ListItems. This all happens synchronously in one render pass, blocking the SegmentedControl's own visual update (the active highlight).
+
+**What changed:**
+- Added `const deferredFilteredEpisodes = useDeferredValue(filteredEpisodes)` after the `filteredEpisodes` memo
+- `groupedBySeason` memo now depends on `deferredFilteredEpisodes` instead of `filteredEpisodes`
+- `EpisodeListSection` receives `deferredFilteredEpisodes` as its `filteredEpisodes` prop
+- The `filteredEpisodes` memo itself still computes synchronously (it's cheap — just a `.filter()`), but the expensive downstream work (grouping + rendering 1200+ items) is deferred
+
+**How it works:**
+- When `activeTypeFilter` changes, React processes the urgent update first: `filteredEpisodes` recomputes, the SegmentedControl shows the new active state, `epStats` labels update
+- The `deferredFilteredEpisodes` still holds the old value, so `groupedBySeason` and `EpisodeListSection` don't re-render yet
+- React then schedules a lower-priority render with the new `deferredFilteredEpisodes`, committing the episode list changes without blocking input
+
+**Metrics:**
+- Before: filter click → synchronous re-render of SegmentedControl + 1200+ episode items in one frame → potential jank on slower devices
+- After: filter click → SegmentedControl updates immediately, episode list updates in a deferred pass → no input blocking
+- No visual regression — the deferred update typically completes within the same frame on fast devices, but degrades gracefully on slower ones
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D180 — Pre-compute maxEpisode during load, eliminate memo
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — maxEpisode computation (~line 426)
+
+**Problem:** `maxEpisode` was a `useMemo` that called `.reduce()` over all episodes to find the highest episode number. This was a third O(n) pass over the same 1200+ element array — the load handler already computed `freshMax` in its single-pass loop, and `epStats` was also computed there (D177). The memo re-ran on every `episodes` state change.
+
+**What changed:**
+- Removed the `maxEpisode` `useMemo` entirely
+- Added `maxEpisode` as `useState` initialized to `0`
+- In the episode load `.then()` handler, `setMaxEpisode(freshMax)` is called alongside `setEpStats` — no extra iteration needed since `freshMax` is already computed in the same loop
+- In `loadEpisodeData` (post-save reload), same pattern — `freshMax` computed in the single-pass loop, `setMaxEpisode(freshMax)` called once
+
+**Metrics:**
+- Before: 3 × O(n) passes on episode load (`.reduce()` for freshMax + `useMemo` for epStats + `useMemo` for maxEpisode) = ~3 × 1209 iterations
+- After: 1 × O(n) pass = 1209 iterations, all three values computed together
+- Eliminated 2 `useMemo` hooks from the render path (D177 + D180)
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D181 — Memoize AppStore context value
+
+**Target:** `web-astryx/src/lib/store.tsx` — AppProvider context value
+
+**Problem:** The `AppContext.Provider` value was a plain object literal created on every render. Since React uses referential equality to decide whether context consumers should re-render, every provider render — even ones where no store values actually changed — would trigger re-renders of all 5 consumers (ShowDetailPage, ShowsPage, SettingsPage, ActivityPage, ToastViewport). This is especially costly for ShowDetailPage which manages a 1200+ episode list.
+
+**What changed:**
+- Wrapped the context value in `useMemo` with deps `[shows, settings, artworkProviders, notifications, addNotification, removeNotification]`
+- `addNotification` and `removeNotification` are already `useCallback` with `[]` deps — stable references
+- `setShows` and `setSettings` are stable `useState` setters
+- The value object identity now only changes when actual store data changes
+
+**Metrics:**
+- 5 consumers: ShowDetailPage, ShowsPage, SettingsPage, ActivityPage, ToastViewport
+- Before: every provider render re-renders all 5 consumers (object identity always changes)
+- After: consumers only re-render when `shows`, `settings`, `artworkProviders`, or `notifications` actually change
+- Note: `notifications` still changes on every toast add/remove, so toast lifecycle still triggers consumer re-renders. Splitting notifications into a separate context would be a future optimization.
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D182 — Split notifications into separate context
+
+**Target:** `web-astryx/src/lib/store.tsx`, `web-astryx/src/components/ToastViewport.tsx`
+
+**Problem:** D181 memoized the context value, but `notifications` was still in the dependency array. Every toast appearance (4s auto-dismiss, error debounce, success sounds) changed `notifications`, which changed the memoized value, which re-rendered all 5 store consumers — including ShowDetailPage with its 1200+ episode list. This happened frequently: every save, every error, every artwork refresh triggered a toast.
+
+**What changed:**
+- Created a separate `NotificationContext` that holds `notifications` and `removeNotification`
+- `AppStore` interface no longer includes `notifications` or `removeNotification` — only `addNotification` (a stable `useCallback` with `[]` deps)
+- `AppProvider` now wraps children in both `AppContext.Provider` and `NotificationContext.Provider`
+- `ToastViewport` uses `useNotifications()` (new hook) instead of `useAppStore()`
+- Pages (ShowDetailPage, ShowsPage, SettingsPage, ActivityPage) still use `useAppStore()` for `addNotification` — but since `addNotification` is a stable callback, they never re-render when toasts appear/disappear
+
+**Metrics:**
+- Before: every toast add/remove → `notifications` changes → memoized value changes → all 5 consumers re-render
+- After: every toast add/remove → only `NotificationContext` value changes → only `ToastViewport` re-renders
+- ShowDetailPage with 1200+ episodes is no longer re-rendered on toast lifecycle
+- `addNotification` is used by all pages but is a stable callback (never changes)
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D183 — Skip redundant getShows+getSettings in ShowsPage loadLanding
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx` — `loadLanding` callback
+
+**Problem:** The store (`AppProvider`) already fetches `getShows()` + `getSettings()` + `getArtworkProviders()` on mount via `Promise.allSettled`. But `loadLanding` in ShowsPage also called `getShows()` + `getSettings()` on every mount — duplicating the store's work. On in-app navigation back to ShowsPage, this fired 2 unnecessary API calls that the store had already resolved.
+
+**What changed:**
+- Added `forceRefresh: boolean = false` parameter to `loadLanding`
+- When `!forceRefresh && shows.length > 0`: skip `getShows()` + `getSettings()`, only fetch `getSonarrSeries()` (not in store), set `loading=false` immediately
+- When `forceRefresh === true` (artwork refresh, add anime): full re-fetch as before
+- Updated `AddAnimeDialog` type signature and call site to pass `true`
+- Updated artwork refresh poll calls to pass `true`
+
+**Metrics:**
+- Before: every ShowsPage mount → 2 API calls (getShows + getSettings) + 1 background call (getSonarrSeries) = 3 requests
+- After: in-app navigation with store data → 0 blocking API calls, 1 background call (getSonarrSeries) = 1 request
+- First load (no store data): same as before (store + loadLanding both fetch, but store wins race and loadLanding falls through to SonarrSeries)
+- Artwork refresh / add anime: unchanged (forceRefresh=true)
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D184 — Lazy-load AddAnimeDialog to reduce initial bundle
+
+**Target:** `web-astryx/src/routes/ShowsPage.tsx` — AddAnimeDialog import
+
+**Problem:** `ShowsPage` is the eager landing page (loaded on first visit). It imports `AddAnimeDialog` — a 700+ line wizard UI component — eagerly. The entire add-anime wizard (series search, AFL matching, manual match, confirmation flow) was bundled into the main chunk even though it's only needed when the user clicks "Add anime".
+
+**What changed:**
+- Changed `AddAnimeDialog` import to `React.lazy()` — only the component is lazy-loaded
+- The reducer (`addWizardReducer`), `INITIAL_WIZARD`, `actionToTracked`, `getWizardSteps`, `START_FROM_CURRENT` stay eager (tiny, used for wizard state management in ShowsPage)
+- Wrapped `<AddAnimeDialog>` in `<Suspense fallback={null}>` inside the `Dialog`
+
+**Metrics:**
+- Before: main bundle = 563KB raw / 163KB gzipped (includes AddAnimeDialog)
+- After: main bundle = 413KB raw / 121KB gzipped (AddAnimeDialog split out)
+- New chunk: 152KB raw / 44KB gzipped (AddAnimeDialog + Card dependencies)
+- **Initial load saving: 150KB raw / 42KB gzipped (27% reduction)**
+- The AddAnimeDialog chunk loads on-demand when the user opens the dialog
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D185 — Prefetch AddAnimeDialog chunk on button hover
+
+**Target:** `web-astryx/src/lib/chunkPrefetch.ts`, `web-astryx/src/routes/ShowsPage.tsx`
+
+**Problem:** After D184, the AddAnimeDialog chunk (152KB raw / 44KB gzipped) loads on-demand when the user clicks "Add anime". On slow connections, this causes a visible delay between clicking the button and seeing the dialog content.
+
+**What changed:**
+- Added `prefetchAddDialogChunk()` to `chunkPrefetch.ts` — same pattern as the route chunk prefetchers
+- Wired to `onMouseEnter` on both "Add anime" buttons (header + empty state)
+- The dynamic import fires on hover, caching the chunk in the browser before the click
+
+**Metrics:**
+- Before: click "Add anime" → fetch 44KB gzipped chunk → render dialog (network latency delay)
+- After: hover "Add anime" → prefetch 44KB chunk → click → instant render from cache
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D186 — Trim episode DB query + remove id from JSON payload
+
+**Target:** `internal/database/database.go` — `GetEpisodes` query; `internal/models/models.go` — `EpisodeInfo.ID` json tag
+
+**Problem:** The `GetEpisodes` DB query selected 12 columns including `id`, `mapping_id`, and `last_scraped`. Of these, `mapping_id` and `last_scraped` were already `json:"-"` (D168) so they were stripped from the API response — but the DB still read and transferred them for every row. The `id` field was `json:"id"` and included in the JSON output, but the frontend never uses it (episode keys are `${season}-${episodeNumber}`, not DB row IDs).
+
+**What changed:**
+- Changed `EpisodeInfo.ID` from `json:"id"` to `json:"-"` — no longer serialized
+- Trimmed the `GetEpisodes` SQL query from 12 columns to 9 (removed `id`, `mapping_id`, `last_scraped`)
+- Updated `rows.Scan()` to match the reduced column list
+- The `EpisodeInfo` struct still has `ID`, `MappingID`, `LastScraped` fields (needed for `ReplaceEpisodesForMapping` insert path), they're just not populated by `GetEpisodes` anymore
+
+**Metrics:**
+- Before: 12 columns per row × 1209 rows, JSON included `"id":12345,` per episode
+- After: 9 columns per row × 1209 rows, no `id` in JSON
+- DB reads 25% fewer columns per row
+- JSON payload smaller by ~12KB raw (1209 × ~10 bytes per `"id":NNNN,`)
+- Go build clean, `go test ./internal/database/` passes, tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D187 — Date-only air_date serialization
+
+**Target:** `internal/models/models.go` — new `DateOnly` type; `internal/database/database.go`, `internal/sync/sync.go`, `cmd/server/router.go` — AirDate field type change
+
+**Problem:** The `air_date` field in the episode JSON used full RFC3339 timestamps (`"1996-01-08T09:00:00Z"` — 21 chars). The frontend only displays the date part (`format="date"`), so the time portion was wasted payload. For Detective Conan (1209 episodes), this was ~13KB of unnecessary data.
+
+**What changed:**
+- Added `DateOnly` type in `models.go` — wraps `time.Time` with a `MarshalJSON` method that outputs `"2006-01-02"` format
+- Changed `EpisodeInfo.AirDate` from `*time.Time` to `*DateOnly`
+- Updated DB scan in `database.go` to construct `DateOnly` from `sql.NullTime`
+- Updated `ReplaceEpisodesForMapping` to convert `*DateOnly` back to `time.Time` for SQL insert
+- Updated live fetch paths in `router.go` and `sync.go` to wrap `time.Time` in `DateOnly`
+
+**Metrics:**
+- Before: `"air_date":"1996-01-08T09:00:00Z"` (21 chars) × 1209 = 264KB raw / 38KB gzipped
+- After: `"air_date":"1996-01-08"` (10 chars) × 1209 = 252KB raw / 37KB gzipped
+- **12KB raw reduction (4.5%), 1KB gzipped reduction**
+- Go build clean, `go test ./internal/database/ ./internal/sync/` passes, tsc clean
+- Frontend `Timestamp` component handles date-only strings correctly
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D188 — Initialize openedSeasons in useState, skip useEffect round-trip
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — `EpisodeListSection` openedSeasons initialization
+
+**Problem:** `openedSeasons` was initialized as an empty `Set`, then a `useEffect` ran after the first render to add the default-open season (the last one). This caused an extra render cycle: first render shows the last season collapsed (no episodes), then `useEffect` fires → `setOpenedSeasons` → second render shows the episodes. For 1200+ episodes, this meant the episode list appeared a frame later than necessary.
+
+**What changed:**
+- `useState` initializer now computes the last season from `groupedBySeason` and pre-populates `openedSeasons` with it
+- The `useEffect` is simplified — it only runs when `groupedBySeason` changes (filter switch) to auto-open the new last season, not on initial mount
+- The initial render now shows the last season's episodes immediately, no extra render cycle
+
+**Metrics:**
+- Before: render 1 (empty openedSeasons, last season collapsed) → useEffect → setState → render 2 (last season open with episodes)
+- After: render 1 (openedSeasons pre-populated, last season open with episodes) — one render cycle saved
+- tsc clean
+
+**Outcome:** Kept. Committed.
+
+---
+
+## D189 — Memoized EpisodeListItem component
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list rendering inside `EpisodeListSection`
+
+**Problem:** When a user toggled an episode's monitor state, `syncingEps` changed (new object), which triggered `EpisodeListSection` to re-render. Since all `ListItem` elements were created inline in a `.map()`, every visible episode (potentially 80+ in an expanded season) re-rendered — even though only one episode's `isSyncing` state actually changed. Each `ListItem` creates `HStack`, `Timestamp`, `Badge`, `Tooltip`, and `ToggleButton` components, making this expensive.
+
+**What changed:**
+- Extracted `EpisodeListItem` as a `memo`'d component with props: `ep`, `groupSeason`, `isSyncing`, `onToggleMonitor`
+- Replaced the inline `ListItem` JSX in the `.map()` with `<EpisodeListItem>` elements
+- `onToggleMonitor` is a stable `useCallback` from the parent — doesn't break memo
+- `ep` is a stable reference from the `episodes` array (only changes when episodes are reloaded)
+- `isSyncing` is a boolean derived from `syncingEps[key]` — only the toggled episode's value changes
+- When `syncingEps` changes, `EpisodeListSection` re-renders (it receives `syncingEps` as a prop), but only the `EpisodeListItem` whose `isSyncing` changed actually re-renders its subtree — the rest are skipped by `memo`
+
+**Metrics:**
+- Before: 1 episode toggle → `EpisodeListSection` re-renders → all visible `ListItem`s re-render (80+ items × 5 child components each = 400+ component re-renders)
+- After: 1 episode toggle → `EpisodeListSection` re-renders → only 1 `EpisodeListItem` re-renders (the one whose `isSyncing` changed)
+- tsc clean
+
+**Outcome:** Kept. Committed.

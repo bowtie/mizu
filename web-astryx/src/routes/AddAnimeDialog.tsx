@@ -237,7 +237,7 @@ export interface AddAnimeDialogProps {
   filteredSeriesLibrary: SonarrSeries[];
   activeWizardSteps: { key: string; label: string }[];
   currentStepIndex: number;
-  loadLanding: () => Promise<void>;
+  loadLanding: (forceRefresh?: boolean) => Promise<void>;
   openShow: (id: string | number) => void;
   openExistingMapping: (seriesId: string | number) => void;
   addNotification: (message: string, type?: string) => void;
@@ -368,7 +368,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           addStep: ADD_STEP_POST_ADD,
         },
       });
-      await loadLanding();
+      await loadLanding(true);
     } catch (err: unknown) {
       addNotification("Failed to sync anime: " + errorMessage(err), "error");
     } finally {
@@ -587,6 +587,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           isIconOnly
           icon={<X size={16} />}
           onClick={() => dispatch({ type: "SET", payload: { showAddModal: false } })}
+          data-cuelume-press
         />
       </HStack>
 
@@ -653,6 +654,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                     variant="secondary"
                     icon={<Search size={16} />}
                     onClick={() => goToFallbackAflStep(w.seriesQuery.trim())}
+                    data-cuelume-press
                   />
                 }
               />
@@ -709,7 +711,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
               </List>
             )}
             {w.selectedSonarr && !mappedSeriesIds.has(w.selectedSonarr.id) && (
-              <Button label="Continue" variant="primary" onClick={goToMatchStep} />
+              <Button label="Continue" variant="primary" onClick={goToMatchStep} data-cuelume-press />
             )}
           </VStack>
         ))}
@@ -759,6 +761,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
               label="Continue to Sonarr lookup"
               variant="primary"
               onClick={goToFallbackSonarrStep}
+              data-cuelume-press
             />
           )}
         </VStack>
@@ -778,6 +781,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
             variant="secondary"
             onClick={() => loadSonarrLookupResults()}
             isLoading={w.sonarrLookupLoading}
+            data-cuelume-press
           />
           {w.sonarrLookupResults.length > 0 && (
             <List hasDividers className="wizard-list">
@@ -805,6 +809,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
               variant="primary"
               onClick={handleAddSelectedSonarrLookup}
               isLoading={w.sonarrAdding}
+              data-cuelume-press
             />
           )}
         </VStack>
@@ -832,6 +837,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                     variant="secondary"
                     onClick={handleManualSearch}
                     isLoading={w.manualSearching}
+                    data-cuelume-press
                   />
                 </VStack>
               )}
@@ -916,6 +922,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                   variant="primary"
                   onClick={handleConfirmMatch}
                   isLoading={w.confirming}
+                  data-cuelume-press
                 />
               ) : (
                 <HStack gap={2}>
@@ -923,12 +930,14 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                     label="Keep Sonarr only"
                     variant="secondary"
                     onClick={handleKeepSonarrOnly}
+                    data-cuelume-press
                   />
                   <Button
                     label="Confirm match"
                     variant="primary"
                     onClick={handlePrimaryMatchAction}
                     isLoading={w.confirming}
+                    data-cuelume-press
                   />
                 </HStack>
               )}
@@ -957,9 +966,10 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                   dispatch({ type: "SET", payload: { showAddModal: false } });
                   openShow(w.addOutcome!.mappingId!);
                 }}
+                data-cuelume-press
               />
             )}
-            <Button label="Add another" variant="secondary" onClick={() => returnToSeriesStep()} />
+            <Button label="Add another" variant="secondary" onClick={() => returnToSeriesStep()} data-cuelume-press />
           </HStack>
         </VStack>
       )}

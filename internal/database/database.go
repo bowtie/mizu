@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,8 +34,12 @@ func New(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("enabling foreign keys: %w", err)
 	}
 
-	conn.SetMaxOpenConns(1)
-	conn.SetMaxIdleConns(1)
+	// WAL mode supports concurrent readers. Allow a small pool so that
+	// parallel requests (e.g. getShow + getEpisodes on the detail page)
+	// don't serialize behind a single connection. The _busy_timeout=5000
+	// in the DSN handles write contention gracefully.
+	conn.SetMaxOpenConns(4)
+	conn.SetMaxIdleConns(4)
 	conn.SetConnMaxLifetime(0)
 
 	db := &DB{conn: conn}
@@ -377,7 +382,7 @@ func (db *DB) DeleteMapping(ctx context.Context, id int64) error {
 
 func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.EpisodeInfo, error) {
 	rows, err := db.conn.QueryContext(ctx, `
-		SELECT id, mapping_id, episode_num, title, type, last_scraped,
+		SELECT episode_num, title, type,
 		       sonarr_episode_id, season_number, sonarr_episode_number,
 		       absolute_episode_number, monitored, air_date
 		FROM episode_info WHERE mapping_id = ? ORDER BY episode_num ASC`, mappingID)
@@ -391,7 +396,7 @@ func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.Episod
 		var e models.EpisodeInfo
 		var absNum sql.NullInt64
 		var airDate sql.NullTime
-		err := rows.Scan(&e.ID, &e.MappingID, &e.EpisodeNum, &e.Title, &e.Type, &e.LastScraped,
+		err := rows.Scan(&e.EpisodeNum, &e.Title, &e.Type,
 			&e.SonarrEpisodeID, &e.SeasonNumber, &e.SonarrEpisodeNumber,
 			&absNum, &e.Monitored, &airDate)
 		if err != nil {
@@ -402,12 +407,27 @@ func (db *DB) GetEpisodes(ctx context.Context, mappingID int64) ([]models.Episod
 			e.AbsoluteEpisodeNumber = &val
 		}
 		if airDate.Valid {
-			t := airDate.Time
-			e.AirDate = &t
+			d := models.DateOnly(airDate.Time)
+			e.AirDate = &d
 		}
 		episodes = append(episodes, e)
 	}
 	return episodes, rows.Err()
+}
+
+// EpisodeVersion returns a cheap version tag for a mapping's episodes.
+// It changes when episodes are added/removed, re-scraped, or monitored
+// status changes — everything needed for ETag-based caching.
+func (db *DB) EpisodeVersion(ctx context.Context, mappingID int64) (string, error) {
+	var count, monitoredSum int
+	var maxScraped string
+	err := db.conn.QueryRowContext(ctx,
+		`SELECT COUNT(*), COALESCE(SUM(monitored), 0), COALESCE(MAX(last_scraped), '')
+		 FROM episode_info WHERE mapping_id = ?`, mappingID).Scan(&count, &monitoredSum, &maxScraped)
+	if err != nil {
+		return "", err
+	}
+	return strconv.Itoa(count) + "-" + strconv.Itoa(monitoredSum) + "-" + maxScraped, nil
 }
 
 func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, episodes []models.EpisodeInfo) error {
@@ -442,7 +462,7 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 		}
 		var airDate any
 		if e.AirDate != nil {
-			airDate = *e.AirDate
+			airDate = time.Time(*e.AirDate)
 		}
 		_, err := stmt.ExecContext(ctx, mappingID, e.EpisodeNum, e.Title, e.Type, now,
 			e.SonarrEpisodeID, e.SeasonNumber, e.SonarrEpisodeNumber, absNum, e.Monitored, airDate)
