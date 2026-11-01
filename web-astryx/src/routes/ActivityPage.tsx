@@ -146,7 +146,7 @@ export function ActivityPage() {
   };
 
   return (
-    <Section padding={4} maxWidth={900} style={{ marginInline: "auto" }}>
+    <Section padding={4} maxWidth={900} className="section-centered">
       <VStack gap={6}>
         {/* Header */}
         <HStack justify="between" align="center" wrap="wrap" gap={3}>
@@ -186,7 +186,7 @@ export function ActivityPage() {
         ) : (
           <>
             {/* Filters */}
-            <VStack gap={3} style={{ width: "100%" }}>
+            <VStack gap={3} width="100%">
               <SegmentedControl
                 value={statusFilter}
                 onChange={setStatusFilter}
@@ -236,7 +236,7 @@ export function ActivityPage() {
                     <Card key={String(log.id)} padding={3} variant="muted">
                       <VStack gap={2}>
                         <HStack justify="between" align="center" wrap="wrap" gap={2}>
-                          <VStack gap={1} style={{ minWidth: 0, flex: 1 }}>
+                          <VStack gap={1} className="activity-log-summary">
                             <HStack gap={2} align="center" wrap="wrap">
                               <Badge
                                 variant={runStatusBadgeVariant(log.status)}
@@ -249,7 +249,7 @@ export function ActivityPage() {
                             <Text
                               type="supporting"
                               hasTabularNumbers
-                              style={{ fontSize: "var(--font-size-sm)" }}
+                              size="sm"
                             >
                               {formatTrigger(log.trigger)}{" "}
                               {formatDuration(log.started_at, log.completed_at)}{" "}
@@ -269,10 +269,7 @@ export function ActivityPage() {
                               icon={
                                 <ChevronDown
                                   size={12}
-                                  style={{
-                                    transform: isExpanded ? "rotate(180deg)" : "none",
-                                    transition: "transform 0.2s",
-                                  }}
+                                  className={`button-icon-chevron${isExpanded ? " chevron-expanded" : ""}`}
                                 />
                               }
                               onClick={() => toggleExpand(log.id)}
@@ -282,7 +279,7 @@ export function ActivityPage() {
 
                         {/* Run-level errors shown only when not expanded (expanded view shows them below) */}
                         {log.errors && !isExpanded && (
-                          <HStack gap={2} align="start" style={{ color: "var(--color-error)" }}>
+                          <HStack gap={2} align="start" className="activity-error-row">
                             <TriangleAlert size={14} />
                             <Text type="supporting">
                               This run completed with errors that need attention.
@@ -299,7 +296,7 @@ export function ActivityPage() {
                                   return (
                                     <Card key={idx} padding={2} variant="default">
                                       <HStack justify="between" align="center" wrap="wrap" gap={2}>
-                                        <VStack gap={0} style={{ minWidth: 0, flex: 1 }}>
+                                        <VStack gap={0} className="activity-item-detail">
                                           <Text type="body" weight="semibold">
                                             {item.sonarr_title}
                                           </Text>
@@ -314,7 +311,7 @@ export function ActivityPage() {
                                         <HStack
                                           gap={2}
                                           align="start"
-                                          style={{ color: "var(--color-error)" }}
+                                          className="activity-error-row"
                                         >
                                           <TriangleAlert size={14} />
                                           <Text type="supporting">{item.error}</Text>

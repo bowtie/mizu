@@ -10,13 +10,7 @@ export function ToastViewport() {
   return (
     <VStack
       gap={2}
-      style={{
-        position: "fixed",
-        bottom: "var(--spacing-6)",
-        right: "var(--spacing-6)",
-        zIndex: 9999,
-        maxWidth: "400px",
-      }}
+      className="toast-viewport"
     >
       {notifications.map((n) => (
         <Toast

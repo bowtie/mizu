@@ -589,24 +589,25 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       </HStack>
 
       {/* Step progress */}
-      <HStack gap={2} align="center" wrap="wrap">
+      <ol className="wizard-steps" aria-label="Wizard progress">
         {activeWizardSteps.map((step, i) => {
           const isCurrent = step.key === w.addStep;
           const isPast = currentStepIndex > i;
           return (
-            <HStack key={step.key} gap={1} align="center">
-              {i > 0 && <Divider />}
-              {isPast && <Check size={10} color="var(--color-accent)" />}
-              <Text
-                type="supporting"
-                color={isCurrent ? "primary" : isPast ? "secondary" : "placeholder"}
-              >
-                {step.label}
-              </Text>
-            </HStack>
+            <li
+              key={step.key}
+              className="wizard-step"
+              data-state={isCurrent ? "current" : isPast ? "past" : "future"}
+              aria-current={isCurrent ? "step" : undefined}
+            >
+              <span className="wizard-step-dot">
+                {isPast ? <Check size={12} /> : i + 1}
+              </span>
+              <span className="wizard-step-label">{step.label}</span>
+            </li>
           );
         })}
-      </HStack>
+      </ol>
 
       <Text type="supporting">{stepDescription()}</Text>
 
@@ -648,7 +649,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                 }
               />
             ) : (
-              <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
+              <List hasDividers className="wizard-list">
                 {filteredSeriesLibrary.map((series) => {
                   const seriesMapped = mappedSeriesIds.has(series.id);
                   const manualPending = !!series.manualMatchPending;
@@ -671,23 +672,10 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                             src={posterUrl(series)}
                             alt=""
                             loading="lazy"
-                            style={{
-                              width: 32,
-                              height: 44,
-                              objectFit: "cover",
-                              borderRadius: "var(--radius-1)",
-                            }}
+                            className="wizard-poster-thumb"
                           />
                         ) : (
-                          <div
-                            style={{
-                              width: 32,
-                              height: 44,
-                              borderRadius: "var(--radius-1)",
-                              background: "var(--color-background-muted)",
-                              flexShrink: 0,
-                            }}
-                          />
+                          <div className="wizard-poster-placeholder" />
                         )
                       }
                       endContent={
@@ -734,7 +722,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
               icon={<Icon icon={Search} size="lg" color="secondary" />}
             />
           ) : (
-            <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
+            <List hasDividers className="wizard-list">
               {w.fallbackAflResults.map((result) => {
                 const isSelected = w.selectedFallbackAfl?.slug === result.slug;
                 return (
@@ -778,7 +766,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
             isLoading={w.sonarrLookupLoading}
           />
           {w.sonarrLookupResults.length > 0 && (
-            <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
+            <List hasDividers className="wizard-list">
               {w.sonarrLookupResults.map((series) => {
                 const isSelected = w.selectedSonarrLookup?.id === series.id;
                 return (
@@ -834,7 +822,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
                 </VStack>
               )}
               {w.displayedMatches.length > 0 ? (
-                <List hasDividers style={{ maxHeight: "var(--spacing-80)", overflow: "auto" }}>
+                <List hasDividers className="wizard-list">
                   {w.displayedMatches.map((match) => {
                     const isSelected = matchSlug(w.selectedAfl) === matchSlug(match);
                     const unsafe = isUnsafeMatch(match);

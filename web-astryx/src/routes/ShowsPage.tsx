@@ -366,7 +366,7 @@ export function ShowsPage() {
   // ── Render ──
 
   return (
-    <Section padding={4} maxWidth={900} style={{ marginInline: "auto" }}>
+    <Section padding={4} maxWidth={900} className="section-centered">
       <VStack gap={6}>
         {/* Row 1: title + supporting text left, add right */}
         <HStack justify="between" align="center" wrap="wrap" gap={4}>
@@ -471,24 +471,11 @@ export function ShowsPage() {
                           src={img}
                           alt=""
                           loading="lazy"
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
+                          onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                          className="mizu-card-img"
                         />
                       ) : (
-                        <div
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
+                        <div className="mizu-card-img-placeholder">
                           <Waves size={24} color="var(--color-icon-secondary)" />
                         </div>
                       )}
@@ -498,12 +485,7 @@ export function ShowsPage() {
                             <img
                               src={logo}
                               alt={show.sonarr_title}
-                              style={{
-                                maxHeight: 56,
-                                width: "auto",
-                                maxWidth: "85%",
-                                objectFit: "contain",
-                              }}
+                              className="mizu-card-logo"
                             />
                           ) : (
                             <span className="mizu-card-overlay-title">{show.sonarr_title}</span>
@@ -520,11 +502,7 @@ export function ShowsPage() {
                         <VStack gap={1}>
                           <Heading
                             level={3}
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
+                            className="mizu-card-title"
                           >
                             {show.sonarr_title}
                           </Heading>

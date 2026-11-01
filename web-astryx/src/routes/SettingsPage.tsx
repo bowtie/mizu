@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Section } from "@astryxdesign/core/Section";
@@ -12,9 +12,10 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Divider } from "@astryxdesign/core/Divider";
-import { Card } from "@astryxdesign/core/Card";
 import { Save, Check, Plug, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAppStore } from "../lib/store";
+import { SettingsRow } from "../components/SettingsRow";
+import { TrackingRuleCard } from "../components/TrackingRuleCard";
 import {
   getArtworkProviders,
   getSettings,
@@ -41,10 +42,6 @@ const syncIntervalOptions: SelectOption[] = [
 ];
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-const rowPadding: CSSProperties = {
-  paddingBlock: "var(--spacing-4)",
-};
 
 interface PristineSnapshot {
   sonarrUrl: string;
@@ -431,7 +428,7 @@ export function SettingsPage() {
 
   if (loading) {
     return (
-      <Section padding={4} maxWidth={900} style={{ marginInline: "auto" }}>
+      <Section padding={4} maxWidth={900} className="section-centered">
         <VStack gap={3} hAlign="center" padding={6}>
           <Spinner size="lg" label="Loading settings" />
         </VStack>
@@ -440,7 +437,7 @@ export function SettingsPage() {
   }
 
   return (
-    <Section padding={4} maxWidth={900} style={{ marginInline: "auto" }}>
+    <Section padding={4} maxWidth={900} className="section-centered">
       <VStack gap={8}>
         {/* Header */}
         <HStack justify="between" align="center" wrap="wrap" gap={4}>
@@ -468,20 +465,11 @@ export function SettingsPage() {
           <Heading level={2}>Connection</Heading>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Sonarr URL
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Base URL of your Sonarr instance.
-              </Text>
-              {sonarrUrl && !urlValid && (
-                <Text type="supporting" display="block" style={{ color: "var(--color-error)" }}>
-                  URL must start with http:// or https://
-                </Text>
-              )}
-            </VStack>
+          <SettingsRow
+            label="Sonarr URL"
+            description="Base URL of your Sonarr instance."
+            error={sonarrUrl && !urlValid ? "URL must start with http:// or https://" : undefined}
+          >
             <TextInput
               label="Sonarr URL"
               value={sonarrUrl}
@@ -490,18 +478,13 @@ export function SettingsPage() {
               isLabelHidden
               width={320}
             />
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                API key
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Found in Sonarr under Settings, General.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="API key"
+            description="Found in Sonarr under Settings, General."
+          >
             <HStack gap={2} align="center">
               <TextInput
                 label="API key"
@@ -531,23 +514,14 @@ export function SettingsPage() {
                 />
               )}
             </HStack>
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Test connection
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Check that Mizu can reach Sonarr with the URL and API key above.
-              </Text>
-              {testPhase === "error" && testErrorMessage && (
-                <Text type="supporting" display="block" style={{ color: "var(--color-error)" }}>
-                  {testErrorMessage}
-                </Text>
-              )}
-            </VStack>
+          <SettingsRow
+            label="Test connection"
+            description="Check that Mizu can reach Sonarr with the URL and API key above."
+            error={testPhase === "error" && testErrorMessage ? testErrorMessage : undefined}
+          >
             <Button
               label={
                 testPhase === "connecting"
@@ -580,7 +554,7 @@ export function SettingsPage() {
               isDisabled={!sonarrUrl || !urlValid}
               className={testPhase !== "idle" ? "test-status-btn" : undefined}
             />
-          </HStack>
+          </SettingsRow>
         </VStack>
 
         {/* Sync */}
@@ -588,15 +562,10 @@ export function SettingsPage() {
           <Heading level={2}>Sync</Heading>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Sync interval
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                How often Mizu checks for episode changes and updates Sonarr.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="Sync interval"
+            description="How often Mizu checks for episode changes and updates Sonarr."
+          >
             <Selector
               label="Sync interval"
               value={syncInterval}
@@ -605,20 +574,14 @@ export function SettingsPage() {
               isLabelHidden
               width={180}
             />
-          </HStack>
+          </SettingsRow>
           <Divider />
 
           {/* Multi-source artwork system */}
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Artwork source
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Default provider for fetching show artwork. Images are
-                downloaded and stored locally so browsing works offline.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="Artwork source"
+            description="Default provider for fetching show artwork. Images are downloaded and stored locally so browsing works offline."
+          >
             <Selector
               label="Artwork source"
               value={artworkDefaultSource}
@@ -627,18 +590,13 @@ export function SettingsPage() {
               isLabelHidden
               width={220}
             />
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                TMDB API key
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Required for TMDB artwork. Get a free key at themoviedb.org.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="TMDB API key"
+            description="Required for TMDB artwork. Get a free key at themoviedb.org."
+          >
             <HStack gap={2} align="center">
               <TextInput
                 label="TMDB API key"
@@ -656,18 +614,13 @@ export function SettingsPage() {
                 <Badge variant="success" label="Key set" />
               )}
             </HStack>
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Fanart.tv API key
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Required for Fanart.tv artwork. Get a free key at fanart.tv.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="Fanart.tv API key"
+            description="Required for Fanart.tv artwork. Get a free key at fanart.tv."
+          >
             <HStack gap={2} align="center">
               <TextInput
                 label="Fanart.tv API key"
@@ -685,18 +638,13 @@ export function SettingsPage() {
                 <Badge variant="success" label="Key set" />
               )}
             </HStack>
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                AFL cache
-              </Text>
-              <Text type="supporting" color="secondary" hasTabularNumbers display="block">
-                {cacheCount} shows cached, refreshed {formatCacheTime(cacheRefreshedAt)}.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="AFL cache"
+            description={`${cacheCount} shows cached, refreshed ${formatCacheTime(cacheRefreshedAt)}.`}
+          >
             <Button
               label={refreshingCache ? "Refreshing..." : "Refresh"}
               variant="secondary"
@@ -704,7 +652,7 @@ export function SettingsPage() {
               onClick={handleRefreshCache}
               isLoading={refreshingCache}
             />
-          </HStack>
+          </SettingsRow>
         </VStack>
 
         {/* Notifications */}
@@ -712,33 +660,23 @@ export function SettingsPage() {
           <Heading level={2}>Notifications</Heading>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Enable notifications
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Get a push notification after each sync via ntfy.sh.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="Enable notifications"
+            description="Get a push notification after each sync via ntfy.sh."
+          >
             <Switch
               label="Enable notifications"
               value={ntfyEnabled}
               onChange={setNtfyEnabled}
               isLabelHidden
             />
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Server URL
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                ntfy server URL (self-hosted or public ntfy.sh).
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="Server URL"
+            description="ntfy server URL (self-hosted or public ntfy.sh)."
+          >
             <TextInput
               label="Server URL"
               value={ntfyServerUrl}
@@ -747,18 +685,13 @@ export function SettingsPage() {
               isLabelHidden
               width={320}
             />
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Topic
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                ntfy topic name to publish to.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="Topic"
+            description="ntfy topic name to publish to."
+          >
             <TextInput
               label="Topic"
               value={ntfyTopic}
@@ -767,18 +700,13 @@ export function SettingsPage() {
               isLabelHidden
               width={320}
             />
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Access token
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Optional — only needed if your ntfy server requires authentication.
-              </Text>
-            </VStack>
+          <SettingsRow
+            label="Access token"
+            description="Optional — only needed if your ntfy server requires authentication."
+          >
             <HStack gap={2} align="center">
               <TextInput
                 label="Access token"
@@ -796,23 +724,14 @@ export function SettingsPage() {
                 <Badge variant="success" label="Token set" />
               )}
             </HStack>
-          </HStack>
+          </SettingsRow>
           <Divider />
 
-          <HStack hAlign="between" vAlign="center" style={rowPadding} wrap="wrap">
-            <VStack gap={0}>
-              <Text type="body" weight="semibold" display="block">
-                Test notification
-              </Text>
-              <Text type="supporting" color="secondary" display="block">
-                Send a test notification to verify your configuration.
-              </Text>
-              {ntfyTestPhase === "error" && ntfyTestErrorMessage && (
-                <Text type="supporting" display="block" style={{ color: "var(--color-error)" }}>
-                  {ntfyTestErrorMessage}
-                </Text>
-              )}
-            </VStack>
+          <SettingsRow
+            label="Test notification"
+            description="Send a test notification to verify your configuration."
+            error={ntfyTestPhase === "error" && ntfyTestErrorMessage ? ntfyTestErrorMessage : undefined}
+          >
             <Button
               label={
                 ntfyTestPhase === "connecting"
@@ -845,7 +764,7 @@ export function SettingsPage() {
               isDisabled={!ntfyServerUrl || !ntfyTopic}
               className={ntfyTestPhase !== "idle" ? "test-status-btn" : undefined}
             />
-          </HStack>
+          </SettingsRow>
         </VStack>
 
         {/* Defaults */}
@@ -859,80 +778,30 @@ export function SettingsPage() {
           </VStack>
 
           <Grid columns={3} gap={4} align="start">
-            <Card padding={4} variant="green">
-              <HStack hAlign="between" vAlign="center" wrap="nowrap">
-                <VStack gap={0} style={{ minWidth: 120 }}>
-                  <Text type="body" weight="semibold" display="block">
-                    Canon
-                  </Text>
-                  <Text type="supporting" color="secondary" display="block">
-                    Main plot episodes
-                  </Text>
-                </VStack>
-                <Switch
-                  label="Track canon"
-                  value={trackAnimeCanonDefault}
-                  onChange={setTrackAnimeCanonDefault}
-                  isLabelHidden
-                  style={
-                    {
-                      "--color-accent": "var(--color-border-green)",
-                      "--color-background-gray": "var(--color-background-green)",
-                    } as React.CSSProperties
-                  }
-                />
-              </HStack>
-            </Card>
-
-            <Card padding={4} variant="yellow">
-              <HStack hAlign="between" vAlign="center" wrap="nowrap">
-                <VStack gap={0} style={{ minWidth: 120 }}>
-                  <Text type="body" weight="semibold" display="block">
-                    Mixed
-                  </Text>
-                  <Text type="supporting" color="secondary" display="block">
-                    Mix of canon and filler
-                  </Text>
-                </VStack>
-                <Switch
-                  label="Track mixed"
-                  value={trackMixedDefault}
-                  onChange={setTrackMixedDefault}
-                  isLabelHidden
-                  style={
-                    {
-                      "--color-accent": "var(--color-border-yellow)",
-                      "--color-background-gray": "var(--color-background-yellow)",
-                    } as React.CSSProperties
-                  }
-                />
-              </HStack>
-            </Card>
-
-            <Card padding={4} variant="red">
-              <HStack hAlign="between" vAlign="center" wrap="nowrap">
-                <VStack gap={0} style={{ minWidth: 120 }}>
-                  <Text type="body" weight="semibold" display="block">
-                    Filler
-                  </Text>
-                  <Text type="supporting" color="secondary" display="block">
-                    Skippable, no plot impact
-                  </Text>
-                </VStack>
-                <Switch
-                  label="Track filler"
-                  value={trackFillerDefault}
-                  onChange={setTrackFillerDefault}
-                  isLabelHidden
-                  style={
-                    {
-                      "--color-accent": "var(--color-border-red)",
-                      "--color-background-gray": "var(--color-background-red)",
-                    } as React.CSSProperties
-                  }
-                />
-              </HStack>
-            </Card>
+            <TrackingRuleCard
+              variant="green"
+              label="Canon"
+              description="Main plot episodes"
+              switchLabel="Track canon"
+              value={trackAnimeCanonDefault}
+              onChange={setTrackAnimeCanonDefault}
+            />
+            <TrackingRuleCard
+              variant="yellow"
+              label="Mixed"
+              description="Mix of canon and filler"
+              switchLabel="Track mixed"
+              value={trackMixedDefault}
+              onChange={setTrackMixedDefault}
+            />
+            <TrackingRuleCard
+              variant="red"
+              label="Filler"
+              description="Skippable, no plot impact"
+              switchLabel="Track filler"
+              value={trackFillerDefault}
+              onChange={setTrackFillerDefault}
+            />
           </Grid>
         </VStack>
       </VStack>

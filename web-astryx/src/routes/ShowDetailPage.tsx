@@ -13,7 +13,6 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { Switch } from "@astryxdesign/core/Switch";
 import { Card } from "@astryxdesign/core/Card";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
@@ -67,6 +66,7 @@ import type {
 } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { episodeTypeBadge } from "../lib/fox";
+import { TrackingRuleCard } from "../components/TrackingRuleCard";
 
 const WATERMARK_AUTO = "auto";
 const WATERMARK_MANUAL = "manual";
@@ -531,7 +531,7 @@ export function ShowDetailPage() {
 
   if (loadingShow) {
     return (
-      <Section padding={4} maxWidth={900} style={{ marginInline: "auto" }}>
+      <Section padding={4} maxWidth={900} className="section-centered">
         <VStack gap={3} hAlign="center" padding={6}>
           <Spinner size="lg" label="Loading anime" />
         </VStack>
@@ -543,216 +543,145 @@ export function ShowDetailPage() {
 
   return (
     <>
-      <div
-        className="show-shell"
-        style={{
-          position: "relative",
-          width: "calc(100% - clamp(24px, 8vw, 64px))",
-          maxWidth: "calc(900px - 64px)",
-          marginInline: "auto",
-          marginTop: "var(--spacing-4)",
-          borderRadius: "var(--radius-container)",
-          overflow: "visible",
-          backgroundColor: "transparent",
-        }}
+      <Section
+        variant="transparent"
+        padding={0}
+        maxWidth={900}
+        className="section-centered show-hero-section"
       >
-        {/* Hero header with backdrop — matches content width */}
-        <div
-          className="show-hero"
-          style={{
-            position: "relative",
-            zIndex: 2,
-            isolation: "isolate",
-            minHeight: "clamp(160px, 30vw, 220px)",
-            overflow: "hidden",
-            boxSizing: "border-box",
-            backgroundColor: "var(--color-background-muted)",
-            border: "none",
-            borderRadius: "var(--radius-container)",
-            width: "100%",
-            margin: 0,
-          }}
-        >
-          {backdropUrl && (
-            <>
-              <img
-                src={backdropUrl}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  borderRadius: "var(--radius-container)",
-                  opacity: 0.65,
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  borderRadius: "var(--radius-container)",
-                  background:
-                    "linear-gradient(to top, color-mix(in srgb, var(--color-background-body) 92%, transparent) 0%, color-mix(in srgb, var(--color-background-body) 45%, transparent) 58%, color-mix(in srgb, var(--color-background-body) 8%, transparent) 100%)",
-                }}
-              />
-            </>
-          )}
-          <div
-            style={{
-              position: "relative",
-              zIndex: 1,
-              minHeight: "clamp(160px, 30vw, 220px)",
-              boxSizing: "border-box",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-              padding: "clamp(20px, 5vw, 32px) clamp(12px, 4vw, 32px)",
-            }}
-          >
-            <VStack gap={4}>
-              <VStack gap={1} style={{ minWidth: 0 }}>
-                <Heading level={1} style={{ color: "var(--color-text-primary)" }}>
-                  {show.sonarr_title}
-                </Heading>
-                <Text type="supporting" color="secondary" hasTabularNumbers display="block">
-                  {episodesLoading
-                    ? "Loading episodes..."
-                    : `${episodes.length} episodes · from ep ${show.sync_watermark > 0 ? show.sync_watermark : 0}`}
-                </Text>
-                {series?.overview && (
-                  <Text
-                    type="supporting"
-                    color="secondary"
-                    display="block"
-                    style={{
-                      marginTop: 8,
-                      maxWidth: 640,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {series.overview}
+        <div className="show-shell">
+          {/* Hero header with backdrop */}
+          <div className="show-hero">
+            {backdropUrl && (
+              <>
+                <img
+                  src={backdropUrl}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="show-hero-img"
+                  onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                />
+                <div className="show-hero-gradient" />
+              </>
+            )}
+            <div className="show-hero-content">
+              <VStack gap={4}>
+                <VStack gap={1} className="show-hero-titles">
+                  <Heading level={1}>
+                    {show.sonarr_title}
+                  </Heading>
+                  <Text type="supporting" color="secondary" hasTabularNumbers display="block">
+                    {episodesLoading
+                      ? "Loading episodes..."
+                      : `${episodes.length} episodes · from ep ${show.sync_watermark > 0 ? show.sync_watermark : 0}`}
                   </Text>
-                )}
+                  {series?.overview && (
+                    <Text
+                      type="supporting"
+                      color="secondary"
+                      display="block"
+                      className="show-hero-overview"
+                    >
+                      {series.overview}
+                    </Text>
+                  )}
+                </VStack>
               </VStack>
-            </VStack>
+            </div>
           </div>
-        </div>
 
-        <div className="controls-reveal">
-          <div className="controls-reveal-inner">
-            <div
-              className="show-actions-bar"
-              style={{
-                position: "relative",
-                zIndex: 1,
-                width: "100%",
-                marginBottom: 0,
-                padding:
-                  "calc(var(--radius-container) + var(--spacing-2)) var(--spacing-3) var(--spacing-2)",
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "space-between",
-                gap: "var(--spacing-6)",
-                flexWrap: "nowrap",
-                boxSizing: "border-box",
-                backgroundColor: "var(--color-background-muted)",
-                borderRadius: "0 0 var(--radius-container) var(--radius-container)",
-              }}
-            >
-              <HStack gap={3} align="center" wrap="nowrap">
-                <InputGroup
-                  label="Episode"
-                  isLabelHidden
-                  size="md"
-                  isDisabled={watermarkAuto}
-                  className="show-actions-bar-center"
-                >
-                  <InputGroupText style={{ padding: 0 }}>
-                    <Button
-                      label="Decrease episode"
-                      variant="ghost"
-                      size="md"
-                      isIconOnly
-                      icon={<Minus size={16} />}
-                      style={{ width: 36, height: 36, minWidth: 36, padding: 0 }}
-                      isDisabled={watermarkAuto || markerValue <= 0}
-                      onClick={() => setMarkerValue(clampMarkerValue(markerValue - 1))}
-                    />
-                  </InputGroupText>
-                  <NumberInput
+          <div className="controls-reveal">
+            <div className="controls-reveal-inner">
+              <div className="show-actions-bar">
+                <HStack gap={3} align="center" wrap="nowrap">
+                  <InputGroup
                     label="Episode"
                     isLabelHidden
-                    value={markerValue}
-                    onChange={(value) => setMarkerValue(clampMarkerValue(value))}
-                    min={0}
-                    max={maxEpisode || null}
-                    step={1}
-                    isIntegerOnly
-                    isDisabled={watermarkAuto}
-                  />
-                  <InputGroupText style={{ padding: 0 }}>
-                    <Button
-                      label="Increase episode"
-                      variant="ghost"
-                      size="md"
-                      isIconOnly
-                      icon={<Plus size={16} />}
-                      style={{ width: 36, height: 36, minWidth: 36, padding: 0 }}
-                      isDisabled={watermarkAuto}
-                      onClick={() => setMarkerValue(clampMarkerValue(markerValue + 1))}
-                    />
-                  </InputGroupText>
-                </InputGroup>
-                <Tooltip
-                  content={watermarkAuto ? "Using Sonarr progress" : "Using manual episode"}
-                  placement="end"
-                >
-                  <Button
-                    label={watermarkAuto ? "Auto" : "Manual"}
-                    variant="secondary"
                     size="md"
-                    icon={<Bot size={16} />}
+                    isDisabled={watermarkAuto}
+                    className="show-actions-bar-center"
+                  >
+                    <InputGroupText className="episode-step-btn-wrap">
+                      <Button
+                        label="Decrease episode"
+                        variant="ghost"
+                        size="md"
+                        isIconOnly
+                        icon={<Minus size={16} />}
+                        className="episode-step-btn"
+                        isDisabled={watermarkAuto || markerValue <= 0}
+                        onClick={() => setMarkerValue(clampMarkerValue(markerValue - 1))}
+                      />
+                    </InputGroupText>
+                    <NumberInput
+                      label="Episode"
+                      isLabelHidden
+                      value={markerValue}
+                      onChange={(value) => setMarkerValue(clampMarkerValue(value))}
+                      min={0}
+                      max={maxEpisode || null}
+                      step={1}
+                      isIntegerOnly
+                      isDisabled={watermarkAuto}
+                    />
+                    <InputGroupText className="episode-step-btn-wrap">
+                      <Button
+                        label="Increase episode"
+                        variant="ghost"
+                        size="md"
+                        isIconOnly
+                        icon={<Plus size={16} />}
+                        className="episode-step-btn"
+                        isDisabled={watermarkAuto}
+                        onClick={() => setMarkerValue(clampMarkerValue(markerValue + 1))}
+                      />
+                    </InputGroupText>
+                  </InputGroup>
+                  <Tooltip
+                    content={watermarkAuto ? "Using Sonarr progress" : "Using manual episode"}
+                    placement="end"
+                  >
+                    <Button
+                      label={watermarkAuto ? "Auto" : "Manual"}
+                      variant="secondary"
+                      size="md"
+                      icon={<Bot size={16} />}
+                      isIconOnly={isMobile}
+                      onClick={() => setWatermarkAuto(!watermarkAuto)}
+                    />
+                  </Tooltip>
+                </HStack>
+                <HStack gap={2} align="center" wrap="nowrap" className="show-actions-bar-end">
+                  <Button
+                    label="Remove"
+                    variant="destructive"
+                    size="md"
+                    icon={<Trash2 size={16} />}
                     isIconOnly={isMobile}
-                    onClick={() => setWatermarkAuto(!watermarkAuto)}
+                    onClick={() => setShowDeleteDialog(true)}
+                    isDisabled={deleting}
                   />
-                </Tooltip>
-              </HStack>
-              <HStack gap={2} align="center" wrap="nowrap" className="show-actions-bar-end">
-                <Button
-                  label="Remove"
-                  variant="destructive"
-                  size="md"
-                  icon={<Trash2 size={16} />}
-                  isIconOnly={isMobile}
-                  onClick={() => setShowDeleteDialog(true)}
-                  isDisabled={deleting}
-                />
-                <Button
-                  label={savedFlash ? "Saved" : saving ? "Saving..." : "Save"}
-                  variant="primary"
-                  size="md"
-                  icon={savedFlash ? <Check size={14} /> : <Save size={14} />}
-                  isIconOnly={isMobile}
-                  onClick={handleSave}
-                  isDisabled={saving || !rulesDirty}
-                  isLoading={saving}
-                />
-              </HStack>
+                  <Button
+                    label={savedFlash ? "Saved" : saving ? "Saving..." : "Save"}
+                    variant="primary"
+                    size="md"
+                    icon={savedFlash ? <Check size={14} /> : <Save size={14} />}
+                    isIconOnly={isMobile}
+                    onClick={handleSave}
+                    isDisabled={saving || !rulesDirty}
+                    isLoading={saving}
+                  />
+                </HStack>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Section>
 
       {/* Page content — constrained width */}
-      <Section padding={0} maxWidth={900} style={{ marginInline: "auto" }}>
-        <VStack gap={6} padding={4} style={{ paddingInline: "clamp(12px, 4vw, 32px)" }}>
+      <Section padding={0} maxWidth={900} className="section-centered">
+        <VStack gap={6} padding={4} className="show-content-padded">
           {/* Artwork controls */}
           <Card padding={4}>
             <VStack gap={3}>
@@ -798,67 +727,30 @@ export function ShowDetailPage() {
             </HStack>
 
             <Grid columns={{ minWidth: 240 }} gap={4} align="start">
-              <Card padding={4} variant="green">
-                <HStack hAlign="between" vAlign="center" wrap="nowrap">
-                  <VStack gap={0} style={{ minWidth: 100 }}>
-                    <Text type="body" weight="semibold" display="block">
-                      Canon
-                    </Text>
-                    <Text type="supporting" color="secondary" display="block">
-                      Main plot episodes
-                    </Text>
-                  </VStack>
-                  <Switch
-                    label="Track canon"
-                    value={trackAnimeCanon}
-                    onChange={setTrackAnimeCanon}
-                    isLabelHidden
-                    style={{ "--color-accent": "var(--color-border-green)" } as React.CSSProperties}
-                  />
-                </HStack>
-              </Card>
-
-              <Card padding={4} variant="yellow">
-                <HStack hAlign="between" vAlign="center" wrap="nowrap">
-                  <VStack gap={0} style={{ minWidth: 100 }}>
-                    <Text type="body" weight="semibold" display="block">
-                      Mixed
-                    </Text>
-                    <Text type="supporting" color="secondary" display="block">
-                      Mix of canon and filler
-                    </Text>
-                  </VStack>
-                  <Switch
-                    label="Track mixed"
-                    value={trackMixed}
-                    onChange={setTrackMixed}
-                    isLabelHidden
-                    style={
-                      { "--color-accent": "var(--color-border-yellow)" } as React.CSSProperties
-                    }
-                  />
-                </HStack>
-              </Card>
-
-              <Card padding={4} variant="red">
-                <HStack hAlign="between" vAlign="center" wrap="nowrap">
-                  <VStack gap={0} style={{ minWidth: 100 }}>
-                    <Text type="body" weight="semibold" display="block">
-                      Filler
-                    </Text>
-                    <Text type="supporting" color="secondary" display="block">
-                      Skippable, no plot impact
-                    </Text>
-                  </VStack>
-                  <Switch
-                    label="Track filler"
-                    value={trackFiller}
-                    onChange={setTrackFiller}
-                    isLabelHidden
-                    style={{ "--color-accent": "var(--color-border-red)" } as React.CSSProperties}
-                  />
-                </HStack>
-              </Card>
+              <TrackingRuleCard
+                variant="green"
+                label="Canon"
+                description="Main plot episodes"
+                switchLabel="Track canon"
+                value={trackAnimeCanon}
+                onChange={setTrackAnimeCanon}
+              />
+              <TrackingRuleCard
+                variant="yellow"
+                label="Mixed"
+                description="Mix of canon and filler"
+                switchLabel="Track mixed"
+                value={trackMixed}
+                onChange={setTrackMixed}
+              />
+              <TrackingRuleCard
+                variant="red"
+                label="Filler"
+                description="Skippable, no plot impact"
+                switchLabel="Track filler"
+                value={trackFiller}
+                onChange={setTrackFiller}
+              />
             </Grid>
           </VStack>
 
@@ -950,12 +842,7 @@ export function ShowDetailPage() {
                       trigger={
                         <>
                           <span>{seasonLabel(group.season)}</span>
-                          <span
-                            style={{
-                              color: "var(--color-text-secondary)",
-                              fontSize: "var(--font-size-sm)",
-                            }}
-                          >
+                          <span className="season-episode-count">
                             {group.episodes.length} episodes
                           </span>
                         </>
@@ -963,7 +850,7 @@ export function ShowDetailPage() {
                       value={String(group.season)}
                       defaultIsOpen={group.index === groupedBySeason.length - 1}
                     >
-                      <div style={{ paddingBlockStart: "var(--spacing-4)" }}>
+                      <div className="episode-list-wrap">
                         <List density="balanced" hasDividers>
                           {group.episodes.map((ep) => {
                             const typeBadge = episodeTypeBadge(ep.type);

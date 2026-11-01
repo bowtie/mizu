@@ -89,19 +89,9 @@ function Root() {
     <StrictMode>
       <Theme theme={selected.theme} mode={selected.mode ?? "system"}>
         <BrowserRouter>
-          <div style={{ minHeight: "100vh", background: "var(--color-background-surface)" }}>
-            <div
-              style={{
-                position: "sticky",
-                top: 0,
-                zIndex: 1000,
-                background: "color-mix(in srgb, var(--color-background-surface) 70%, transparent)",
-                backdropFilter: "blur(14px) saturate(140%)",
-                WebkitBackdropFilter: "blur(14px) saturate(140%)",
-                borderBottom: "1px solid var(--color-border)",
-              }}
-            >
-              <div style={{ maxWidth: 900, marginInline: "auto" }}>
+          <div className="app-root">
+            <div className="app-nav-sticky">
+              <div className="app-nav-inner">
                 <Nav themeMenu={menu} />
               </div>
             </div>
