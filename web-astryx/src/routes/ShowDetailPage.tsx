@@ -178,7 +178,8 @@ const EpisodeListSection = memo(function EpisodeListSection({
         value="filler"
         label={`Filler (${epStats.filler})`}
         icon={<SkipForward size={16} />}
-      </>
+      />
+    </>
   );
 
   return (
@@ -188,29 +189,16 @@ const EpisodeListSection = memo(function EpisodeListSection({
         <Divider xstyle={{ flex: 1 }} />
       </HStack>
 
-      {/* Episode filters — desktop/mobile visibility via CSS media queries */}
-      <div className="episode-filters-desktop">
-        <SegmentedControl
-          value={activeTypeFilter}
-          onChange={onFilterChange}
-          label="Episode type filter"
-          layout="fill"
-          size="lg"
-        >
-          {filterItems}
-        </SegmentedControl>
-      </div>
-      <div className="episode-filters-mobile">
-        <SegmentedControl
-          value={activeTypeFilter}
-          onChange={onFilterChange}
-          label="Episode type filter"
-          layout="fill"
-          size="lg"
-        >
-          {filterItems}
-        </SegmentedControl>
-      </div>
+      {/* Episode filters */}
+      <SegmentedControl
+        value={activeTypeFilter}
+        onChange={onFilterChange}
+        label="Episode type filter"
+        layout="fill"
+        size="lg"
+      >
+        {filterItems}
+      </SegmentedControl>
 
       {/* Episodes by season */}
       {episodesLoading ? (
@@ -238,9 +226,7 @@ const EpisodeListSection = memo(function EpisodeListSection({
                 trigger={
                   <>
                     <span>{seasonLabel(group.season)}</span>
-                    <span className="season-episode-count">
-                      {group.episodes.length} episodes
-                    </span>
+                    <Badge variant="neutral" label={`${group.episodes.length} episodes`} />
                   </>
                 }
                 value={String(group.season)}
@@ -693,18 +679,6 @@ export function ShowDetailPage() {
     });
   }, [showId, addNotification]);
 
-  if (loadingShow) {
-    return (
-      <Section padding={4} maxWidth={900} className="section-centered">
-        <VStack gap={3} hAlign="center" padding={6}>
-          <Spinner size="lg" label="Loading anime" />
-        </VStack>
-      </Section>
-    );
-  }
-
-  if (!show) return null;
-
   return (
     <>
       <Section
@@ -714,17 +688,20 @@ export function ShowDetailPage() {
         className="section-centered"
       >
         <div className={`show-shell${pageSettled ? " is-settled" : ""}`}>
-          {/* Hero header with backdrop */}
+          {/* Hero header with backdrop — renders immediately using showId
+              from the URL. The image starts loading before getShow() resolves. */}
           <div className="show-hero">
             {backdropUrl && !heroImgError ? (
               <>
                 <img
+                  key={`${showId}-${artworkVersion}`}
                   src={backdropUrl}
                   alt=""
                   loading="eager"
                   decoding="async"
                   fetchPriority="high"
                   className="show-hero-img"
+                  onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
                   onError={() => setHeroImgError(true)}
                 />
                 <div className="show-hero-gradient" />
@@ -733,31 +710,31 @@ export function ShowDetailPage() {
               <div className="show-hero-placeholder" />
             )}
             <div className="show-hero-content">
-              <VStack gap={4}>
-                <VStack gap={1} className="show-hero-titles">
-                  <HStack gap={3} align="center" wrap="wrap">
-                    <Heading level={1}>
-                      {show.sonarr_title}
-                    </Heading>
-                    {!episodesLoading && (
-                      <Badge variant="gray" label={`${episodes.length} episodes`} />
-                    )}
-                  </HStack>
-                  {show.overview && (
-                    <Text
-                      type="supporting"
-                      color="secondary"
-                      display="block"
-                      className="show-hero-overview"
-                    >
-                      {show.overview}
-                    </Text>
+              <VStack gap={1} className="show-hero-titles">
+                <HStack gap={3} align="baseline" wrap="wrap">
+                  <Heading level={1} className="show-hero-title">
+                    {show?.sonarr_title || "\u00a0"}
+                  </Heading>
+                  {!episodesLoading && show && (
+                    <Badge variant="neutral" label={`${episodes.length} episodes`} className="show-hero-badge" />
                   )}
-                </VStack>
+                </HStack>
+                {show?.overview && (
+                  <Text
+                    type="supporting"
+                    color="secondary"
+                    display="block"
+                    className="show-hero-overview"
+                  >
+                    {show.overview}
+                  </Text>
+                )}
               </VStack>
             </div>
           </div>
 
+          {/* Actions bar — only render when show data is available */}
+          {show && (
           <div className="controls-reveal">
             <div className="controls-reveal-inner">
               <div className="show-actions-bar">
@@ -844,11 +821,17 @@ export function ShowDetailPage() {
               </div>
             </div>
           </div>
+          )}
         </div>
       </Section>
 
       {/* Page content — constrained width */}
       <Section variant="transparent" padding={4} maxWidth={900} className="section-centered page-enter">
+        {loadingShow || !show ? (
+          <VStack gap={3} hAlign="center" padding={6}>
+            <Spinner size="lg" label="Loading anime" />
+          </VStack>
+        ) : (
         <VStack gap={6}>
           {/* Artwork controls */}
           <Card padding={4} variant="muted" className="artwork-card">
@@ -933,8 +916,10 @@ export function ShowDetailPage() {
             onToggleMonitor={toggleEpisodeMonitor}
           />
         </VStack>
+        )}
       </Section>
 
+      {show && (
       <AlertDialog
         isOpen={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
@@ -944,6 +929,7 @@ export function ShowDetailPage() {
         isActionLoading={deleting}
         onAction={handleDelete}
       />
+      )}
     </>
   );
 }

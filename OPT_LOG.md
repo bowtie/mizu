@@ -1287,3 +1287,318 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 **Why:** Micro-interaction polish. Clickable elements should give immediate tactile feedback on press, not just on hover. The tracking rule cards have hover states but no press state — adding a subtle scale-down on press makes them feel more responsive and physical. The activity log summary rows similarly had hover/focus states but no press state. Using `--color-overlay-pressed` matches Astryx's own pressed-state pattern.
 
 **Outcome:** Kept. tsc passes. Tracking rule cards now scale down slightly on press, activity log summary rows get pressed overlay color on press.
+
+## Iteration D135 — Add hover/press feedback to Collapsible triggers and SegmentedControl items
+
+**Target:** `index.css` — `.astryx-collapsible > button`, `.astryx-segmented-control-item:not(.selected):not([disabled]):active`
+
+**What changed:**
+- `.astryx-collapsible > button`: Added `transition: background-color var(--duration-fast) var(--ease-standard)` and `border-radius: var(--radius-inner)`. Added `:hover` state with `background-color: var(--color-overlay-hover)` (guarded by `@media (hover: hover)` to avoid sticky hover on touch devices). Added `:active` state with `background-color: var(--color-overlay-pressed)`. The Astryx Collapsible trigger button has `all: unset` which strips all native button styling — it has a focus-visible outline (we already added that in an earlier iteration) but no hover or press feedback at all.
+- `.astryx-segmented-control-item:not(.selected):not([disabled]):active`: Added `background-color: var(--color-overlay-pressed)`. The Astryx SegmentedControlItem has a hover state (overlay-hover) but no active/press state. Only applies to unselected, non-disabled items — selected items have their own background from the colored filter overrides.
+
+**Why:** Micro-interaction consistency. The Collapsible trigger is used for season rows in the episode list — clicking them to expand/collapse should feel responsive. Without any hover or press feedback, the trigger feels dead/static. The SegmentedControl items (episode type filter, activity status filter) similarly feel unresponsive on press without an active state. Using `--color-overlay-hover` and `--color-overlay-pressed` matches Astryx's own interaction state tokens.
+
+**Outcome:** Kept. tsc passes. Collapsible triggers now have hover background + press feedback, SegmentedControl items have press feedback. Both use Astryx's standard overlay tokens for visual consistency.
+
+## Iteration D136 — Add reduced-motion overrides for new transitions + improve hero placeholder
+
+**Target:** `index.css` — `@media (prefers-reduced-motion: reduce)`, `.show-hero-placeholder`
+
+**What changed:**
+- Added `.astryx-collapsible > button` and `.tracking-rule-card` to the `prefers-reduced-motion: reduce` transition-none list. These elements got new transitions in D134/D135 (background-color transition on Collapsible, transform transition on tracking rule cards) but were missing from the reduced-motion override. Users with reduced motion preference will now see instant state changes instead of animated transitions on these elements.
+- Improved `.show-hero-placeholder`: Added `display: flex; align-items: center; justify-content: center` and a `::after` pseudo-element showing a large faint tilde (`~`) — the app's logo character. The placeholder was previously just a flat gradient; now it has a subtle centered brand mark that makes the no-backdrop state feel intentional rather than broken/empty. The tilde uses `--color-icon-secondary` at 40% opacity so it's subtle.
+
+**Why:** Accessibility compliance — all transitions we add must be disabled under reduced motion. The hero placeholder improvement makes the no-backdrop-image fallback state look more polished and on-brand, matching the tilde logo used in the TopNav heading.
+
+**Outcome:** Kept. tsc passes. Reduced-motion users get instant state changes on Collapsible triggers and tracking rule cards. Hero placeholder now shows a subtle centered tilde brand mark.
+
+## Iteration D137 — Simplify hero content nesting + fix overview text color on dark image
+
+**Target:** `ShowDetailPage.tsx` — hero content JSX, `index.css` — `.show-hero-overview`
+
+**What changed:**
+- Removed redundant outer `VStack gap={4}` wrapper in `.show-hero-content` that contained only one child (the inner `VStack gap={1} className="show-hero-titles"`). The outer VStack added an unnecessary DOM wrapper with no layout effect since it had only one child.
+- Added `color: color-mix(in srgb, var(--color-on-dark) 75%, transparent)` to `.show-hero-overview`. The Text component uses `color="secondary"` which maps to `--color-text-secondary` — in light mode this is a medium-dark gray that's hard to read on a darkened image. The overview text should be a slightly dimmed version of the hero's light text (`--color-on-dark` at 75% opacity) to maintain hierarchy while staying readable on the gradient-overlaid image.
+
+**Why:** Code cleanliness (removing dead wrapper) and readability fix. The overview text sits on the same darkened image area as the title, so it should use a light color derived from `--color-on-dark` rather than `--color-text-secondary` which is designed for regular page backgrounds, not image overlays.
+
+**Outcome:** Kept. tsc passes. Hero content has one less unnecessary wrapper. Overview text is now a readable light color at 75% opacity on the dark image gradient.
+
+## Iteration D138 — Fix hero heading color override for light mode readability
+
+**Target:** `index.css` — `.show-hero-content h1`
+
+**What changed:**
+- Added `.show-hero-content h1 { color: var(--color-on-dark) !important; }` to override the Astryx Heading component's StyleX `color="primary"` (which maps to `--color-text-primary`). In light mode, `--color-text-primary` is dark (e.g., `#100F0F` in Flexoki) — dark text on a darkened image gradient is unreadable. The `!important` is needed because StyleX compiles the Heading's color with high specificity via hashed CSS variables.
+
+**Why:** The `.show-hero-content` container sets `color: var(--color-on-dark)` (always light), but the Heading component overrides this with its own `colorStyles['primary']` which resolves to `--color-text-primary` (dark in light mode). Without this override, the hero title would be dark text on a dark image in light mode — a critical readability bug. This is the same pattern as the `.show-hero-overview` color fix from D137, but for the heading element which has a stronger StyleX override.
+
+**Outcome:** Kept. tsc passes. Hero title is now always light text (`--color-on-dark`) on the darkened image, regardless of theme mode.
+
+## Iteration D139 — Fix light-mode readability of text on image overlays
+
+**Target:** `index.css` — `.show-hero-gradient`, `.show-hero-content h1/.show-hero-overview` text-shadow, `.mizu-card-img-wrap::after`, `.mizu-card-overlay-title` text-shadow
+
+**What changed:**
+- `.show-hero-gradient`: Changed gradient from `color-mix(in srgb, var(--color-background-body) ...%)` to `color-mix(in srgb, #000 ...%)`. The gradient overlays the hero backdrop image, fading from 75% black at the bottom to 8% black at the top. Previously used `--color-background-body` which is light in light mode (e.g., `#F2F0E5` in Flexoki) — a light gradient at the bottom made white hero text (`--color-on-dark`) unreadable in light mode.
+- `.show-hero-content h1, .show-hero-overview` text-shadow: Changed from `color-mix(in srgb, var(--color-background-body) 60%, transparent)` to `color-mix(in srgb, #000 60%, transparent)`. Dark text-shadow ensures readability on the image regardless of theme mode.
+- `.mizu-card-img-wrap::after`: Same fix — gradient changed from `--color-background-body` to `#000`. The card overlay title is white (`--color-on-dark`), so the gradient at the bottom of card images must be dark in both theme modes.
+- `.mizu-card-overlay-title` text-shadow: Changed from `color-mix(in srgb, var(--color-background-body) 70%, transparent)` to `color-mix(in srgb, #000 70%, transparent)`.
+
+**Why:** Critical light-mode readability bug. All text on image overlays (hero title, hero overview, card overlay titles) uses `--color-on-dark` (always white/light). The gradient overlays and text-shadows were using `--color-background-body` which is light in light mode — making white text on a light gradient unreadable. Using `#000` instead ensures the gradient always darkens the image at the bottom where text sits, and the text-shadow always provides a dark halo around white text, in both light and dark modes.
+
+**Outcome:** Kept. tsc passes. Hero and card text on image overlays is now readable in both light and dark mode. Gradients use black-based overlays instead of theme-dependent background color.
+
+## Iteration D140 — Fix hero placeholder text readability in light mode
+
+**Target:** `index.css` — `.show-hero-placeholder`
+
+**What changed:**
+- Added a black-based darkening gradient as the first layer in the `background` shorthand: `linear-gradient(to top, color-mix(in srgb, #000 60%, transparent) 0%, color-mix(in srgb, #000 20%, transparent) 50%, transparent 100%)`. This sits on top of the existing decorative gradient (accent-tinted muted → surface) and darkens the bottom area where the hero title/overview text sits.
+- The decorative gradient is preserved as the second background layer — it shows through where the darkening gradient is transparent (upper area).
+- The tilde `::after` brand mark remains visible in the upper-center area where the darkening gradient fades to transparent.
+
+**Why:** Same readability bug as D139 but for the no-backdrop-image fallback state. The hero text (`--color-on-dark`, always white) sits at the bottom of the placeholder. In light mode, the placeholder's decorative gradient uses light theme colors (`--color-background-muted`, `--color-background-surface`) — white text on a light gradient is unreadable. Adding a black-based darkening gradient at the bottom ensures the text area is always dark enough for white text, matching the pattern used for the hero image gradient in D139.
+
+**Outcome:** Kept. tsc passes. Hero placeholder now has a dark bottom gradient for text readability in both light and dark mode, with the decorative accent gradient and tilde brand mark visible in the upper area.
+
+## Iteration D141 — Fix missing SegmentedControlItem closing tag + add drop-shadow to card logos
+
+**Target:** `ShowDetailPage.tsx` — `filterItems` JSX, `index.css` — `.mizu-card-logo`
+
+**What changed:**
+- Fixed a JSX syntax bug in `filterItems`: the last `<SegmentedControlItem>` was missing its `/>` self-closing tag. The `icon={<SkipForward size={16} />}` prop's `/>` was being misread as closing the parent element. Added the missing `/>` before `</>`. This was caught by the Vite oxc parser (which is stricter than tsc) and caused a parse error that broke the dev server.
+- Added `filter: drop-shadow(0 1px 4px color-mix(in srgb, #000 60%, transparent))` to `.mizu-card-logo`. Anime logo images are often light-colored and can blend into light areas of the card image. A subtle dark drop-shadow ensures the logo is visible regardless of the underlying image content, matching the text-shadow pattern used for `.mizu-card-overlay-title`.
+
+**Why:** The JSX bug was a real syntax error that broke the dev server. The drop-shadow improves logo readability on card images — logos sit in the same overlay area as the title text (which already has a text-shadow), so they should have equivalent visual treatment.
+
+**Outcome:** Kept. tsc passes. Vite parse error resolved. Card logos now have a subtle drop-shadow for readability on any image background.
+
+## Iteration D142 — Guard card hover states with @media (hover: hover) for touch devices
+
+**Target:** `index.css` — `.mizu-card:hover`, `.mizu-card:hover .mizu-card-img`, `.mizu-card:hover .mizu-card-img-wrap::after`
+
+**What changed:**
+- Wrapped `.mizu-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-med); }` in `@media (hover: hover)` block. Previously unguarded — on touch devices, tapping a card could leave it stuck in the hover state (elevated with medium shadow) after the tap ends.
+- Wrapped `.mizu-card:hover .mizu-card-img { transform: scale(1.04); }` in `@media (hover: hover)` block. Same issue — image zoom could get stuck on touch devices.
+- Wrapped `.mizu-card:hover .mizu-card-img-wrap::after { opacity: 0.7; }` in `@media (hover: hover)` block. Same issue — gradient overlay opacity could get stuck.
+- The `:active` states (press feedback) remain unguarded since they work correctly on touch devices.
+- The `prefers-reduced-motion` block's `.mizu-card:hover .mizu-card-img { transform: none }` still works correctly — it appears later in the file so it overrides the hover transform when both media queries match.
+
+**Why:** Touch device compatibility. On touch devices, `:hover` states can get "stuck" after a tap — the browser applies hover on touchstart and doesn't always clear it on touchend. Guarding hover-only visual effects with `@media (hover: hover)` ensures they only apply on devices with a real hover capability (mouse/trackpad). This matches the pattern already used for Collapsible triggers, list items, activity log cards, and tracking rule cards.
+
+**Outcome:** Kept. tsc passes. Card hover effects (lift, image zoom, gradient opacity) are now properly guarded for touch devices.
+
+## Iteration D143 — Fix invalid Badge variant="gray" → use variant="neutral"
+
+**Target:** `ShowDetailPage.tsx` — episode count Badge in hero header
+
+**What changed:**
+- Changed `<Badge variant="gray" label={`${episodes.length} episodes`} />` to `<Badge variant="neutral" label={`${episodes.length} episodes`} />`. The Astryx Badge component does not have a `gray` variant — its variant map includes `neutral`, `info`, `success`, `warning`, `error`, `blue`, `cyan`, `green`, `orange`, `pink`, `purple`, `red`, `teal`, `yellow` but no `gray`. When `variant="gray"` was passed, `variants['gray']` resolved to `undefined`, so the badge got no background color and no explicit text color — it rendered as unstyled text with just padding/border-radius from the base styles. Using `variant="neutral"` gives it `--color-neutral` background and `--color-text-primary` text color, which is the intended subtle pill appearance.
+
+**Why:** Bug fix. The `gray` variant doesn't exist in Astryx's Badge component. The badge was silently rendering without any variant styles — no background pill, just floating text. `neutral` is the correct variant for a subtle, non-semantic badge.
+
+**Outcome:** Kept. tsc passes. Episode count badge in hero now has a proper neutral background pill instead of unstyled text.
+
+## Iteration D144 — Style hero episode badge for visibility on dark gradient
+
+**Target:** `index.css` — `.show-hero-content .astryx-badge`
+
+**What changed:**
+- Added CSS override for `.show-hero-content .astryx-badge`: `background-color: color-mix(in srgb, #fff 15%, transparent)`, `color: var(--color-on-dark)`, `backdrop-filter: blur(4px)`. The Badge `variant="neutral"` uses `--color-neutral` which is a very subtle overlay (e.g., `#100F0F0F` in Flexoki light mode) — nearly invisible on the dark hero gradient. This override gives the badge a semi-transparent white frosted-glass pill that's visible on any image background, while keeping the text color consistent with the hero text (`--color-on-dark`).
+
+**Why:** The neutral badge variant is designed for regular page backgrounds where its subtle overlay is sufficient. On the dark hero gradient, it disappears. A frosted glass effect (semi-transparent white + backdrop blur) is a common pattern for badges on images — it adapts to the underlying content while remaining visible.
+
+**Outcome:** Kept. tsc passes. Hero episode count badge now has a visible frosted glass pill on the dark gradient overlay.
+
+## Iteration D145 — Style neutral card overlay badge with frosted glass for image visibility
+
+**Target:** `index.css` — `.mizu-card-overlay .astryx-badge[data-variant="neutral"]`
+
+**What changed:**
+- Added CSS override for neutral badges in card overlays: `background-color: color-mix(in srgb, #fff 15%, transparent)`, `color: var(--color-on-dark)`, `backdrop-filter: blur(4px)`. When a show is paused, its card badge uses `variant="neutral"` which has a very subtle `--color-neutral` background — nearly invisible on card images. This override gives it the same frosted glass treatment as the hero badge (D144). Only targets `data-variant="neutral"` so success badges (solid green) are unaffected.
+
+**Why:** Consistency with D144. The neutral badge variant is too subtle on image backgrounds. Shows that are "Paused" need a visible badge on their card image, just like the episode count badge on the hero. The frosted glass pattern (semi-transparent white + backdrop blur) works on any image content.
+
+**Outcome:** Kept. tsc passes. Paused-show badges on card images now have a visible frosted glass pill, matching the hero badge style.
+
+## Iteration D146 — Add keyboard accessibility to TrackingRuleCard
+
+**Target:** `TrackingRuleCard.tsx`, `index.css`
+
+**What changed:**
+- Added `role="button"`, `tabIndex={0}`, `aria-pressed={value}`, and `aria-label` to the TrackingRuleCard's root Card element so it's keyboard-focusable and announced as a toggle button by screen readers.
+- Added `onKeyDown` handler: Enter and Space toggle the switch value. The handler checks if the event originated from the switch's internal input (via `event.target` check) to avoid double-firing when the switch itself handles the keypress.
+- Added `.tracking-rule-card:focus-visible` to the shared focus-visible outline CSS rule (alongside `.astryx-list-item`, `.astryx-clickable-card`, `.astryx-collapsible > button`) so the card shows a consistent focus ring when navigated via keyboard.
+
+**Why:** The TrackingRuleCard is fully clickable (clicking anywhere on the card toggles the switch), but it was only accessible via mouse. Keyboard users couldn't tab to it or toggle it. Adding `role="button"` + `tabIndex` + `onKeyDown` brings it to parity with other interactive Astryx elements. The `aria-pressed` attribute communicates the on/off state to assistive technology.
+
+**Outcome:** Kept. tsc passes. TrackingRuleCard is now keyboard-accessible with a visible focus ring.
+
+## Iteration D147 — Replace custom season-episode-count pill with Astryx Badge
+
+**Target:** `ShowDetailPage.tsx`, `index.css`
+
+**What changed:**
+- Replaced the hand-styled `<span className="season-episode-count">` in the Collapsible trigger with an Astryx `<Badge variant="neutral" label="N episodes" />`. The custom CSS class `.season-episode-count` (8 lines: color, font-size, font-variant-numeric, padding, border-radius, background) was removed since Badge already provides all of these with consistent design tokens.
+
+**Why:** The season episode count was the only pill/badge in the app using a hand-rolled CSS class instead of the Astryx Badge component. Every other count pill (hero episode count, card status badge, settings "Key set" badge) uses Badge. Using Badge here ensures consistent spacing, typography, border-radius, and color tokens across all pills in the app.
+
+**Outcome:** Kept. tsc passes. Season collapsible triggers now use the same Badge component as the rest of the app.
+
+## Iteration D148 — Replace wizard-step-description with Astryx Card + HStack
+
+**Target:** `AddAnimeDialog.tsx`, `index.css`
+
+**What changed:**
+- Replaced the hand-styled `<div className="wizard-step-description">` (custom flex layout with muted background, border-radius, padding) with an Astryx `<Card variant="muted" padding={3}>` containing an `<HStack gap={2} align="start">` for the icon + text layout. This is exactly what Card `variant="muted"` is designed for — a muted background container with consistent padding and radius.
+- Removed the `.wizard-step-description` CSS rule (8 lines: display, align-items, gap, padding, background-color, border-radius, color). Kept a minimal `.wizard-step-description-icon` rule for `flex-shrink: 0` and color since the icon still needs those overrides inside the HStack.
+
+**Why:** The wizard step description was a hand-rolled muted container duplicating what Card `variant="muted"` already provides with design system tokens. Using Card ensures consistent background color, border-radius, and padding with other muted containers in the app (e.g., season cards, artwork card, activity log cards).
+
+**Outcome:** Kept. tsc passes. Wizard step description now uses Astryx Card variant="muted" instead of custom CSS.
+
+## Iteration D149 — Add fade-in transition to hero backdrop image
+
+**Target:** `ShowDetailPage.tsx`, `index.css`
+
+**What changed:**
+- Added `opacity: 0` initial state + `transition: opacity var(--duration-medium) var(--ease-standard)` to `.show-hero-img`, with `.show-hero-img.is-loaded { opacity: 1 }` for the loaded state.
+- Added `onLoad` handler to the hero `<img>` element that adds the `is-loaded` class — same pattern already used for card images (`.mizu-card-img`).
+
+**Why:** The hero backdrop image appeared instantly with no transition, which felt jarring compared to the card images which fade in smoothly. Adding the same fade-in pattern creates a consistent loading experience across all images in the app. The `--duration-medium` (410ms) gives a gentle reveal that matches the hero's cinematic feel.
+
+**Outcome:** Kept. tsc passes. Hero backdrop now fades in smoothly on load, matching the card image pattern.
+
+## Iteration D150 — Fix tracking-rule-card press animation transition
+
+**Target:** `index.css`
+
+**What changed:**
+- Moved the `transform` transition from the `:active` pseudo-state to the base `.tracking-rule-card` rule. Previously, `transition: transform` was only declared inside `.tracking-rule-card:active`, meaning the scale-down animated but the scale-up (when released) snapped back instantly with no transition. Now the base rule has `transition: border-color ..., transform ...` so both press and release animate smoothly.
+
+**Why:** The press feedback felt broken — the card scaled down smoothly on press but snapped back instantly on release. A transition on the base element ensures both directions animate. This is the same pattern used by `.mizu-card` (transition on base, transform on `:active`).
+
+**Outcome:** Kept. tsc passes. Tracking rule card press feedback now animates smoothly in both directions.
+
+## Iteration D151 — Add touch fallback for show-actions-bar
+
+**Target:** `index.css`
+
+**What changed:**
+- Added `@media (hover: none)` block that sets `grid-template-rows: 1fr` on `.controls-reveal` and `transform: translateY(0)` on `.show-actions-bar`. This makes the actions bar always visible on touch devices where the hover-reveal pattern doesn't work.
+
+**Why:** The show detail page's action bar (Save, Remove, episode marker controls) uses a hover-reveal pattern: the bar is hidden by default and slides down when the user hovers over the hero area. On touch devices (phones, tablets), `:hover` doesn't apply, so the `@media (hover: hover)` block that controls the reveal never activates. This means the actions bar is permanently hidden on touch devices, making it impossible to save tracking rules, remove an anime, or adjust the episode marker. The `@media (hover: none)` fallback ensures the bar is always visible on these devices.
+
+**Outcome:** Kept. tsc passes. Touch device users can now access the action bar on the show detail page.
+
+## Iteration D152 — Eliminate duplicate episode-filters SegmentedControl
+
+**Target:** `ShowDetailPage.tsx`, `index.css`
+
+**What changed:**
+- Removed the duplicate `episode-filters-desktop` and `episode-filters-mobile` wrapper divs that rendered two identical SegmentedControl instances (same props, same children). Replaced with a single SegmentedControl.
+- Removed the `.episode-filters-desktop` and `.episode-filters-mobile` CSS rules (show/hide via media query) since they're no longer needed.
+
+**Why:** The two SegmentedControl instances were completely identical — same value, onChange, label, layout, size, and children. The CSS just showed one and hid the other based on viewport width. This wasted DOM nodes and made the episode filter logic harder to maintain (any change had to be applied in two places). A single SegmentedControl with `layout="fill"` already adapts to container width, so the duplication was unnecessary.
+
+**Outcome:** Kept. tsc passes. Episode filter is now a single component — cleaner DOM, no visual change.
+
+## Iteration D153 — Fix hero image fade-in on show navigation (key prop)
+
+**Target:** `ShowDetailPage.tsx`
+
+**What changed:**
+- Added `key={showId}` to the hero `<img>` element. When navigating between shows, React reuses the same `<img>` DOM node (just updates `src`), so the `is-loaded` class from the previous image persists. This means the new image appears at `opacity: 1` immediately, skipping the fade-in transition added in D149. The `key` prop forces React to re-mount the `<img>` when `showId` changes, resetting the class list so the new image starts at `opacity: 0` and fades in properly.
+
+**Why:** Without the key, the fade-in transition only played on the first page load. Subsequent navigations between shows showed the new backdrop instantly with no transition, which was inconsistent with the card images (which always fade in). The key ensures the fade-in plays every time the show changes.
+
+**Outcome:** Kept. tsc passes. Hero backdrop now fades in on every show navigation, not just the first load.
+
+## Iteration D153b — Fix hero image key to include artwork version
+
+**Target:** `ShowDetailPage.tsx`
+
+**What changed:**
+- Updated the hero `<img>` key from `key={showId}` to `key={\`${showId}-${artworkVersion}\`}`. When artwork is refreshed, `artworkVersion` increments and `backdropUrl` gets a new cache-bust query param. Without the version in the key, React wouldn't re-mount the image, so the `is-loaded` class persisted and the new artwork appeared instantly with no fade-in. Including the version in the key ensures the image re-mounts and fades in whenever artwork is refreshed.
+
+**Why:** Follow-up to D153. The key needed both `showId` (for navigation) and `artworkVersion` (for artwork refresh) to cover all cases where the image source changes.
+
+**Outcome:** Kept. tsc passes. Hero backdrop now fades in on both show navigation and artwork refresh.
+
+## Iteration D154 — Align hero content + actions bar horizontal padding with Section padding
+
+**Target:** `index.css`
+
+**What changed:**
+- Changed `.show-hero-content` horizontal padding from `clamp(12px, 4vw, 32px)` to `var(--spacing-4)` (16px).
+- Changed `.show-actions-bar` horizontal padding from `clamp(12px, 4vw, 32px)` to `var(--spacing-4)` (16px).
+
+**Why:** The hero content and actions bar used a responsive `clamp(12px, 4vw, 32px)` for horizontal padding, which at 900px viewport width resolved to 32px. But the page content below (artwork card, tracking rules, episode list) uses `Section padding={4}` which maps to `--spacing-4` = 16px. This 16px mismatch meant the hero title and action bar content were pushed further inward than the page content below, creating visual misalignment. Using `var(--spacing-4)` ensures the hero text, action bar controls, and page content all share the same horizontal alignment.
+
+**Outcome:** Kept. tsc passes. Hero content, actions bar, and page content now share consistent horizontal padding (16px).
+
+## Iteration D155 — Fix show-shell top margin to match Section padding
+
+**Target:** `index.css`
+
+**What changed:**
+- Changed `.show-shell` `margin-top` from `var(--spacing-2)` (8px) to `var(--spacing-4)` (16px).
+
+**Why:** The show detail page's hero shell had 8px top margin, but all other pages use `Section padding={4}` which gives 16px top padding. This 8px difference meant the hero header sat closer to the navbar than content on other pages (Library, Activity, Settings), creating an inconsistent vertical rhythm. Using `var(--spacing-4)` aligns the hero's top spacing with the Section padding used everywhere else.
+
+**Outcome:** Kept. tsc passes. Show detail hero now has consistent top spacing with other pages.
+
+## Iteration D155b — Remove redundant show-shell margin-top (Section padding already provides it)
+
+**Target:** `index.css`
+
+**What changed:**
+- Removed `margin-top: var(--spacing-4)` from `.show-shell`. The hero Section already has `padding={4}` (16px) which provides the top spacing. The margin-top was doubling up, giving the hero 32px top spacing instead of 16px like other pages.
+
+**Why:** In D155 I added `margin-top: var(--spacing-4)` to match other pages' top spacing, but I overlooked that the hero is already wrapped in a `<Section padding={4}>` which provides 16px top padding. The margin-top stacked on top of the Section padding, giving 32px — double what other pages get. Removing the margin-top lets the Section padding handle it alone, matching other pages exactly.
+
+**Outcome:** Kept. tsc passes. Hero top spacing now matches other pages (16px from Section padding only).
+
+## Iteration D156 — Fix hero image loading late on navigation/refresh
+
+**Target:** `ShowDetailPage.tsx`
+
+**What changed:**
+- Removed the early-return spinner that blocked the entire page (including the hero image) while `getShow()` was loading.
+- The hero shell now renders immediately using `showId` from the URL — `backdropUrl` is memoized from `showId` alone (`getArtworkBannerUrl(showId)`), so the `<img>` starts loading the instant the route matches, before any API calls complete.
+- The hero title shows a non-breaking space (`\u00a0`) as placeholder while `show` is null, preserving the hero's height so there's no layout shift when the title arrives.
+- The actions bar (Save/Remove/episode controls) is now conditionally rendered only when `show` is available, since it needs show data for the watermark and save logic.
+- The content section below (artwork card, tracking rules, episode list) shows a spinner while `loadingShow || !show`, replacing the old full-page spinner.
+- The AlertDialog is also conditionally rendered only when `show` is available.
+
+**Why:** The hero image was the last thing to load because the entire page was blocked behind a spinner while `getShow()` completed (typically 200-500ms). But the hero image URL only needs `showId` from the URL — it doesn't depend on show data at all. The backend artwork endpoint serves the file if it exists. By rendering the hero shell immediately, the image starts loading in parallel with the API calls, cutting perceived load time significantly.
+
+**Outcome:** Kept. tsc passes. Hero image now starts loading immediately on navigation/refresh instead of waiting for getShow().
+
+## Iteration D157 — Fix episode badge vertical alignment with hero title
+
+**Target:** `ShowDetailPage.tsx`, `index.css`
+
+**What changed:**
+- Changed the HStack wrapping the hero title + badge from `align="center"` to `align="baseline"`. Center alignment aligns based on box height, but the Heading h1 has a large line-height that makes the box taller than the visible text. Baseline alignment aligns the badge to the text baseline, which is visually closer to the text center.
+- Added `.show-hero-title` class with `line-height: 1.2` to tighten the heading's line-height, reducing the gap between the text and the badge.
+- Added `.show-hero-badge` class with `vertical-align: middle` and `transform: translateY(-1px)` to fine-tune the badge position so it sits visually centered with the title text.
+
+**Why:** The episode count badge appeared slightly higher than the title text because `align="center"` centered based on the heading's full box height (including line-height padding above and below the text), not the visible text. Baseline alignment + tightened line-height + a 1px nudge brings the badge into visual alignment with the title.
+
+**Outcome:** Kept. tsc passes. Episode badge now visually aligns with the hero title text.
+
+## Iteration D158 — Backend artwork caching + actions bar padding/divider fixes
+
+**Target:** `internal/artwork/manager.go`, `web-astryx/src/index.css`
+
+**What changed:**
+- **Backend caching:** Changed `Cache-Control: no-cache` to `max-age=300, must-revalidate` in `ServeImage()` (line 375). The ETag (from file modtime + size) and 304 Not Modified handling were already in place, but `no-cache` forced the browser to revalidate on every single request — even for cached images, a network round-trip was required. With `max-age=300`, the browser serves cached images instantly for 5 minutes without any network request, then revalidates via ETag after. The `?v=` cache-bust param on `backdropUrl` (incremented on artwork refresh) still bypasses cache when artwork is explicitly refreshed.
+- **Actions bar bottom padding:** Set `.show-actions-bar` bottom padding from `var(--spacing-2)` (8px) to `0`. When the actions bar slid down on hover, its 8px bottom padding added to the hero Section's 16px bottom padding + content Section's 16px top padding, creating a visible gap increase. With 0 bottom padding, the gap stays consistent whether the bar is hidden or revealed.
+- **Actions bar divider:** Added `border-bottom` to `.show-actions-bar` matching the existing `border-top` style (`1px solid color-mix(in srgb, var(--color-border) 50%, transparent)`). This provides a visual separator between the actions bar and the content section below when the bar is revealed.
+- **Restored `.show-shell` margin-top:** D155b had removed `margin-top: var(--spacing-4)` from `.show-shell`. User confirmed the top padding makes the hero look better, so it was restored.
+
+**Why:** Three issues reported by user: (1) hero image loads late on navigation/refresh — the `no-cache` header was forcing a network round-trip even for cached images; (2) bottom padding increases when the actions bar slides down — the bar's own bottom padding was adding to the Section gaps; (3) no divider between the actions bar and content below.
+
+**Outcome:** Kept. tsc + go build pass. Backend now caches artwork for 5 min, actions bar no longer adds extra bottom padding, divider separates bar from content.

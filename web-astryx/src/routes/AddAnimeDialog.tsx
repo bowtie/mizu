@@ -611,10 +611,12 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         })}
       </ol>
 
-      <div className="wizard-step-description">
-        <Info size={14} className="wizard-step-description-icon" />
-        <Text type="supporting">{stepDescription()}</Text>
-      </div>
+      <Card variant="muted" padding={3}>
+        <HStack gap={2} align="start">
+          <Info size={14} className="wizard-step-description-icon" />
+          <Text type="supporting">{stepDescription()}</Text>
+        </HStack>
+      </Card>
 
       <Divider />
 

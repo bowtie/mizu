@@ -3,7 +3,7 @@ import { VStack } from "@astryxdesign/core/VStack";
 import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
 import { Switch } from "@astryxdesign/core/Switch";
-import type { MouseEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 
 type RuleVariant = "green" | "yellow" | "red";
 
@@ -38,11 +38,28 @@ export function TrackingRuleCard({
     onChange(!value);
   };
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // Don't intercept keyboard events from the switch — it handles its own.
+    const target = e.target as HTMLElement;
+    if (target.tagName === "INPUT" || target.closest("input")) {
+      return;
+    }
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onChange(!value);
+    }
+  };
+
   return (
     <Card
       padding={4}
       variant={variant}
       onClick={handleCardClick}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-pressed={value}
+      aria-label={`${label}: ${value ? "enabled" : "disabled"}`}
       className="tracking-rule-card"
       style={{ cursor: "pointer" }}
     >

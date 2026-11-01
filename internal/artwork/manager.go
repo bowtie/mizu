@@ -372,7 +372,7 @@ func ServeImage(w http.ResponseWriter, r *http.Request, path string) {
 	// replaces the file on disk with a new provider's image.
 	etag := fmt.Sprintf(`"%x-%x"`, info.ModTime().Unix(), info.Size())
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "max-age=300, must-revalidate")
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

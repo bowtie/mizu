@@ -147,9 +147,11 @@ body {
   box-shadow: var(--shadow-low);
 }
 
-.mizu-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-med);
+@media (hover: hover) {
+  .mizu-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-med);
+  }
 }
 
 .mizu-card:active {
@@ -183,8 +185,10 @@ body {
   opacity: 1;
 }
 
-.mizu-card:hover .mizu-card-img {
-  transform: scale(1.04);
+@media (hover: hover) {
+  .mizu-card:hover .mizu-card-img {
+    transform: scale(1.04);
+  }
 }
 
 .mizu-card-img-placeholder {
@@ -211,6 +215,7 @@ body {
   width: auto;
   max-width: 85%;
   object-fit: contain;
+  filter: drop-shadow(0 1px 4px color-mix(in srgb, #000 60%, transparent));
 }
 
 .mizu-card-title {
@@ -225,16 +230,18 @@ body {
   inset: 0;
   background: linear-gradient(
     to top,
-    color-mix(in srgb, var(--color-background-body) 50%, transparent) 0%,
-    color-mix(in srgb, var(--color-background-body) 20%, transparent) 30%,
+    color-mix(in srgb, #000 50%, transparent) 0%,
+    color-mix(in srgb, #000 20%, transparent) 30%,
     transparent 55%
   );
   pointer-events: none;
   transition: opacity var(--duration-medium) var(--ease-standard);
 }
 
-.mizu-card:hover .mizu-card-img-wrap::after {
-  opacity: 0.7;
+@media (hover: hover) {
+  .mizu-card:hover .mizu-card-img-wrap::after {
+    opacity: 0.7;
+  }
 }
 
 .mizu-card-img-wrap.is-empty::after {
@@ -264,18 +271,46 @@ body {
   color: var(--color-on-dark);
   font-size: 14px;
   font-weight: 600;
-  text-shadow: 0 1px 4px color-mix(in srgb, var(--color-background-body) 70%, transparent);
+  text-shadow: 0 1px 4px color-mix(in srgb, #000 70%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Neutral badge on card image overlay — frosted glass for visibility (same
+   pattern as hero badge). Success/error variants have solid backgrounds. */
+.mizu-card-overlay .astryx-badge[data-variant="neutral"] {
+  background-color: color-mix(in srgb, #fff 15%, transparent);
+  color: var(--color-on-dark);
+  backdrop-filter: blur(4px);
+}
+
 /* Keyboard focus visibility for list items and clickable elements */
 .astryx-list-item:focus-visible,
 .astryx-clickable-card:focus-visible,
-.astryx-collapsible > button:focus-visible {
+.astryx-collapsible > button:focus-visible,
+.tracking-rule-card:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+}
+
+/* Collapsible trigger — hover and press feedback (Astryx Collapsible has none built in) */
+.astryx-collapsible > button {
+  transition: background-color var(--duration-fast) var(--ease-standard);
+  border-radius: var(--radius-inner);
+}
+@media (hover: hover) {
+  .astryx-collapsible > button:hover {
+    background-color: var(--color-overlay-hover);
+  }
+}
+.astryx-collapsible > button:active {
+  background-color: var(--color-overlay-pressed);
+}
+
+/* SegmentedControl items — press feedback (Astryx has hover but no active state) */
+.astryx-segmented-control-item:not(.selected):not([disabled]):active {
+  background-color: var(--color-overlay-pressed);
 }
 
 /* Episode type filter — colored selected states for SegmentedControl */
@@ -393,8 +428,7 @@ body {
   overflow: visible;
   background-color: transparent;
   box-sizing: border-box;
-  /* Match the visual top spacing other pages get from their headings */
-  margin-top: var(--spacing-2);
+  margin-top: var(--spacing-4);
 }
 
 .show-hero {
@@ -418,6 +452,11 @@ body {
   height: 100%;
   object-fit: cover;
   border-radius: var(--radius-container);
+  opacity: 0;
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+.show-hero-img.is-loaded {
+  opacity: 1;
 }
 
 .show-hero-gradient {
@@ -426,24 +465,40 @@ body {
   border-radius: var(--radius-container);
   background: linear-gradient(
     to top,
-    color-mix(in srgb, var(--color-background-body) 92%, transparent) 0%,
-    color-mix(in srgb, var(--color-background-body) 45%, transparent) 58%,
-    color-mix(in srgb, var(--color-background-body) 8%, transparent) 100%
+    color-mix(in srgb, #000 75%, transparent) 0%,
+    color-mix(in srgb, #000 35%, transparent) 50%,
+    color-mix(in srgb, #000 8%, transparent) 100%
   );
 }
 
-/* No-backdrop fallback — subtle gradient instead of flat muted background */
+/* No-backdrop fallback — subtle gradient with centered wave icon + dark bottom for text readability */
 .show-hero-placeholder {
   position: absolute;
   inset: 0;
   border-radius: var(--radius-container);
   background:
     linear-gradient(
+      to top,
+      color-mix(in srgb, #000 60%, transparent) 0%,
+      color-mix(in srgb, #000 20%, transparent) 50%,
+      transparent 100%
+    ),
+    linear-gradient(
       135deg,
       color-mix(in srgb, var(--color-accent) 8%, var(--color-background-muted)) 0%,
       var(--color-background-muted) 50%,
       color-mix(in srgb, var(--color-background-surface) 60%, var(--color-background-muted)) 100%
     );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.show-hero-placeholder::after {
+  content: "~";
+  font-size: 48px;
+  font-weight: 300;
+  color: color-mix(in srgb, var(--color-icon-secondary) 40%, transparent);
+  line-height: 1;
 }
 
 .show-hero-content {
@@ -454,13 +509,27 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: clamp(20px, 5vw, 32px) clamp(12px, 4vw, 32px);
+  padding: clamp(20px, 5vw, 32px) var(--spacing-4);
   color: var(--color-on-dark);
 }
 
 .show-hero-content h1,
 .show-hero-content .show-hero-overview {
-  text-shadow: 0 1px 6px color-mix(in srgb, var(--color-background-body) 60%, transparent);
+  text-shadow: 0 1px 6px color-mix(in srgb, #000 60%, transparent);
+}
+
+/* Episode count badge on hero — use semi-transparent white background for
+   visibility on the dark gradient overlay (neutral variant is too subtle). */
+.show-hero-content .astryx-badge {
+  background-color: color-mix(in srgb, #fff 15%, transparent);
+  color: var(--color-on-dark);
+  backdrop-filter: blur(4px);
+}
+
+/* Override Heading's StyleX color="primary" (maps to --color-text-primary, which
+   is dark in light mode) — hero text must always be light on the darkened image. */
+.show-hero-content h1 {
+  color: var(--color-on-dark) !important;
 }
 
 .show-hero-overview {
@@ -471,6 +540,7 @@ body {
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  color: color-mix(in srgb, var(--color-on-dark) 75%, transparent);
 }
 
 /* Controls reveal — bar slides from behind hero (N900), grid pushes content down */
@@ -478,7 +548,7 @@ body {
   position: relative;
   width: 100%;
   margin-bottom: 0;
-  padding: calc(var(--radius-container) + var(--spacing-2)) clamp(12px, 4vw, 32px) var(--spacing-2);
+  padding: calc(var(--radius-container) + var(--spacing-2)) var(--spacing-4) 0;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -488,6 +558,7 @@ body {
   background-color: var(--color-background-muted);
   border-radius: 0 0 var(--radius-container) var(--radius-container);
   border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
 }
 
 .controls-reveal {
@@ -548,6 +619,17 @@ body {
   }
 }
 
+/* Touch devices (no hover) — always show the actions bar since hover-reveal doesn't work */
+@media (hover: none) {
+  .show-shell .controls-reveal {
+    grid-template-rows: 1fr;
+  }
+
+  .show-shell .show-actions-bar {
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .astryx-top-nav-item::before {
     transition: none;
@@ -567,7 +649,9 @@ body {
   .season-card,
   .artwork-card,
   .activity-log-summary[role="button"],
-  .save-flash[data-variant="primary"] {
+  .save-flash[data-variant="primary"],
+  .astryx-collapsible > button,
+  .tracking-rule-card {
     transition: none;
   }
   .mizu-card-overlay {
@@ -613,10 +697,6 @@ body {
   }
 }
 
-.episode-filters-mobile {
-  display: none;
-}
-
 @media (max-width: 600px) {
   .show-actions-bar {
     width: 100% !important;
@@ -643,13 +723,6 @@ body {
     margin-left: 0;
   }
 
-  .episode-filters-desktop {
-    display: none;
-  }
-
-  .episode-filters-mobile {
-    display: block;
-  }
 }
 
 /* Episode list — fixed-width type badges for alignment */
@@ -704,16 +777,6 @@ body {
   max-width: 480px;
 }
 
-/* Season collapsible — episode count pill in trigger */
-.season-episode-count {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-inner);
-  background: var(--color-background-muted);
-}
-
 /* Episode list — padding inside collapsible */
 .episode-list-wrap {
   padding-block-start: var(--spacing-4);
@@ -725,6 +788,15 @@ body {
 .artwork-card,
 .tracking-rule-card {
   transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+/* Tracking rule card — press feedback for whole-card click */
+.tracking-rule-card {
+  transition: border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+.tracking-rule-card:active {
+  transform: scale(0.99);
 }
 
 /* Tracking rule card — tint the Switch track with the variant color
@@ -758,9 +830,25 @@ body {
 }
 
 /* Tracking rule card — press feedback for whole-card click */
+.tracking-rule-card {
+  transition: border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
 .tracking-rule-card:active {
   transform: scale(0.99);
-  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+/* Show hero title + badge — baseline-align the badge with the title text.
+   Heading h1 has large line-height; baseline aligns the badge to the text
+   baseline. A small vertical offset compensates for the badge's internal
+   padding so it sits visually centered with the title. */
+.show-hero-title {
+  margin: 0;
+  line-height: 1.2;
+}
+.show-hero-badge {
+  vertical-align: middle;
+  transform: translateY(-1px);
 }
 
 /* Show hero title overflow */
@@ -828,21 +916,11 @@ body {
   animation: skeleton-pulse var(--duration-medium) var(--ease-standard) alternate infinite;
 }
 
-/* AddAnimeDialog — step description */
-.wizard-step-description {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-3);
-  background-color: var(--color-background-muted);
-  border-radius: var(--radius-element);
-  color: var(--color-text-secondary);
-}
-
+/* AddAnimeDialog — step description icon alignment */
 .wizard-step-description-icon {
   color: var(--color-text-secondary);
   flex-shrink: 0;
-  margin-top: var(--spacing-0-5);
+  margin-top: 2px;
 }
 
 /* AddAnimeDialog — success screen */
