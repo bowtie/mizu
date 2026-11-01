@@ -2,6 +2,7 @@ import { StrictMode, useState, useEffect, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { initSounds } from "./lib/sounds";
 import { prefetchActivityChunk, prefetchSettingsChunk } from "./lib/chunkPrefetch";
+import { prefetchEpisodes, prefetchShow, prefetchShowDetail } from "./lib/api";
 import { Theme } from "@astryxdesign/core/theme";
 import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";
@@ -16,33 +17,54 @@ import { BrowserRouter, useLocation, Link } from "react-router-dom";
 import "@astryxdesign/core/reset.css";
 import "@astryxdesign/core/astryx.css";
 import "@astryxdesign/theme-neutral/theme.css";
-import "@astryxdesign/theme-y2k/theme.css";
 
 import "./fonts.css";
 import "./index.css";
 import { App } from "./App";
-import { themeOptions, defaultTheme, loadThemeCSS } from "./lib/themes";
-import type { ThemeOption } from "./lib/themes";
+import { themeMetas, defaultTheme, loadThemeCSS, loadThemeDef } from "./lib/themes";
+import type { DefinedTheme } from "@astryxdesign/core/theme";
+
+// Fire ShowsPage import immediately — it's the landing page and will
+// be needed on first render. Starting the download in parallel with
+// the main bundle parse avoids a waterfall.
+void import("./routes/ShowsPage");
+
+// If the user navigated directly to a show detail page (e.g. hard
+// refresh on /shows/123), start downloading the ShowDetailPage chunk
+// immediately instead of waiting for the idle prefetch. This avoids a
+// sequential waterfall: main bundle → parse → idle → prefetch → download.
+// Also prefetch the show's episodes + show data so they load instantly
+// once the detail page mounts — the promises are cached and picked up
+// by getEpisodes/getShow.
+const detailMatch = location.pathname.match(/^\/shows\/(\d+)/);
+if (detailMatch) {
+  void import("./routes/ShowDetailPage");
+  // Use the combined detail endpoint — fetches show + episodes in one
+  // request instead of two separate round-trips.
+  prefetchShowDetail(detailMatch[1]);
+}
 
 const STORAGE_KEY = "mizu-theme";
 
 function ThemeMenu({
-  selected,
+  selectedId,
   onSelect,
 }: {
-  selected: ThemeOption;
-  onSelect: (t: ThemeOption) => void;
+  selectedId: string;
+  onSelect: (id: string) => void;
 }) {
-  const items = themeOptions.map((opt) => ({
+  const items = themeMetas.map((opt) => ({
     label: opt.label,
-    icon: selected.id === opt.id ? <Check size={14} /> : undefined,
-    onClick: () => onSelect(opt),
+    icon: selectedId === opt.id ? <Check size={14} /> : undefined,
+    onClick: () => onSelect(opt.id),
   }));
+
+  const selectedMeta = themeMetas.find((t) => t.id === selectedId) ?? themeMetas[0];
 
   return (
     <DropdownMenu
       button={{
-        label: selected.label,
+        label: selectedMeta.label,
         variant: "secondary",
         size: "sm",
         isIconOnly: true,
@@ -105,26 +127,38 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
 }
 
 function Root() {
-  const [selected, setSelected] = useState<ThemeOption>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return themeOptions.find((t) => t.id === saved) ?? defaultTheme;
+  // Store only the theme ID — the actual theme definition is loaded
+  // lazily. This keeps ~32KB of custom theme tokens out of the initial
+  // bundle for users who stick with the default (neutral) theme.
+  const [themeId, setThemeId] = useState<string>(() => {
+    return localStorage.getItem(STORAGE_KEY) ?? defaultTheme.id;
   });
+  const [theme, setTheme] = useState<DefinedTheme>(defaultTheme.theme);
+  const [themeMode, setThemeMode] = useState<"dark" | "light" | "system">("system");
 
-  // Load CSS for the saved theme on mount (if it's a custom theme
-  // whose CSS isn't bundled eagerly).
+  // On mount, load the saved theme's definition + CSS if it's a custom
+  // theme. Eager themes (neutral, y2k) are available immediately.
   useEffect(() => {
-    loadThemeCSS(selected.id);
-  }, []);
+    const meta = themeMetas.find((t) => t.id === themeId);
+    if (meta?.mode) setThemeMode(meta.mode);
 
-  // Persist theme choice and load CSS when the user switches themes.
-  const handleSelect = useCallback((t: ThemeOption) => {
-    loadThemeCSS(t.id);
-    setSelected(t);
-  }, []);
+    let cancelled = false;
+    Promise.all([loadThemeDef(themeId), loadThemeCSS(themeId)]).then(([def]) => {
+      if (cancelled) return;
+      setTheme(def);
+    });
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, selected.id);
-  }, [selected.id]);
+  const handleSelect = useCallback((id: string) => {
+    const meta = themeMetas.find((t) => t.id === id);
+    setThemeId(id);
+    localStorage.setItem(STORAGE_KEY, id);
+    if (meta?.mode) setThemeMode(meta.mode);
+    Promise.all([loadThemeDef(id), loadThemeCSS(id)]).then(([def]) => {
+      setTheme(def);
+    });
+  }, []);
 
   // Wire cuelume interaction sounds once on mount — deferred to idle
   // time so it doesn't compete with first paint.
@@ -135,11 +169,11 @@ function Root() {
     ric(() => initSounds());
   }, []);
 
-  const menu = <ThemeMenu selected={selected} onSelect={handleSelect} />;
+  const menu = <ThemeMenu selectedId={themeId} onSelect={handleSelect} />;
 
   return (
     <StrictMode>
-      <Theme theme={selected.theme} mode={selected.mode ?? "system"}>
+      <Theme theme={theme} mode={themeMode}>
         <BrowserRouter>
           <AppShell
             variant="surface"

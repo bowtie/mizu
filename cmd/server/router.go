@@ -143,7 +143,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type", "If-None-Match"},
-		ExposedHeaders:   []string{"ETag"},
+		ExposedHeaders:   []string{"ETag", "Cache-Control"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
@@ -188,6 +188,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]interface{}{"version": version, "commit": commit, "build_date": buildDate})
 		})
+		r.Get("/bootstrap", handleBootstrap(cfg, db, artworkMgr))
 
 		r.Get("/stats", handleGetStats(db))
 
@@ -204,6 +205,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			r.Post("/", handleCreateMapping(cfg, db, syncEngine))
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", handleGetMapping(db))
+				r.Get("/detail", handleGetMappingDetail(db, syncEngine, epCache))
 				r.Put("/", handleUpdateMapping(syncEngine, db))
 				r.Delete("/", handleDeleteMapping(db, artworkMgr, epCache))
 				r.Post("/artwork/refresh", handleRefreshArtwork(cfg, db, artworkMgr, syncEngine))
@@ -256,6 +258,7 @@ func handleGetMappings(db *database.DB) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
 		writeJSON(w, http.StatusOK, mappings)
 	}
 }
@@ -276,7 +279,69 @@ func handleGetMapping(db *database.DB) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
+		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
 		writeJSON(w, http.StatusOK, mapping)
+	}
+}
+
+// handleGetMappingDetail returns the show mapping + episodes in a single
+// response, saving 1 HTTP round-trip on hard refresh of the detail page.
+// The episodes portion includes the same ETag + in-memory cache logic
+// as the standalone episodes endpoint.
+func handleGetMappingDetail(db *database.DB, syncEngine *sync.Engine, epCache *episodeCache) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid mapping ID")
+			return
+		}
+
+		// Mapping
+		mapping, err := db.GetMappingByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
+			writeError(w, http.StatusNotFound, "mapping not found")
+			return
+		}
+
+		// Episodes — same logic as handleGetEpisodes but inlined to
+		// avoid a second request. ETag is not set on the combined
+		// response since the mapping portion doesn't have a version tag.
+		var episodes []models.EpisodeInfo
+		if cached, ok := epCache.get(id); ok {
+			episodes = cached
+		} else {
+			dbEpisodes, err := db.GetEpisodes(r.Context(), id)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to load episodes: "+err.Error())
+				return
+			}
+			if len(dbEpisodes) > 0 && hasSonarrEpisodeIDs(dbEpisodes) {
+				epCache.set(id, dbEpisodes)
+				episodes = dbEpisodes
+			} else if syncEngine != nil {
+				// DB is empty — fetch live from Sonarr + AFL
+				enriched, herr := fetchEpisodesLive(r.Context(), syncEngine, id, mapping.SonarrSeriesID, mapping.AFLSlug)
+				if herr != nil {
+					writeError(w, herr.code, herr.message)
+					return
+				}
+				if err := db.ReplaceEpisodesForMapping(r.Context(), id, enriched); err != nil {
+					log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to persist live-fetched episodes")
+				}
+				epCache.set(id, enriched)
+				episodes = enriched
+			}
+		}
+
+		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"show":     mapping,
+			"episodes": episodes,
+		})
 	}
 }
 
@@ -636,6 +701,11 @@ func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine, epCache *episod
 		if verr == nil && version != "" {
 			etag := `"` + version + `"`
 			w.Header().Set("ETag", etag)
+			// stale-while-revalidate lets the browser serve the cached
+			// response instantly on repeat visits while revalidating
+			// in the background. Combined with ETag, this makes repeat
+			// visits to the same anime page effectively zero-latency.
+			w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=86400")
 			if match := r.Header.Get("If-None-Match"); match == etag {
 				w.WriteHeader(http.StatusNotModified)
 				return
@@ -875,6 +945,70 @@ func handleGetLogs(db *database.DB) http.HandlerFunc {
 	}
 }
 
+// handleBootstrap returns shows + settings + artwork providers in a
+// single response, eliminating 2 extra round-trips on app mount.
+func handleBootstrap(cfg *config.Config, db *database.DB, mgr *artwork.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Settings
+		cfg.RLock()
+		maskedSonarrKey := maskKey(cfg.SonarrAPIKey)
+		maskedTmdbKey := maskKey(cfg.TMDBAPIKey)
+		maskedFanartKey := maskKey(cfg.FanartAPIKey)
+		settings := map[string]interface{}{
+			"sonarr_url":                    cfg.SonarrURL,
+			"sonarr_api_key_masked":         maskedSonarrKey,
+			"sonarr_api_key":                cfg.SonarrAPIKey,
+			"sonarr_api_key_set":            cfg.SonarrAPIKey != "",
+			"default_filler_action":         string(cfg.DefaultFillerAction),
+			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
+			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
+			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
+			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
+			"sonarr_add_quality_profile_id": cfg.SonarrAddQualityProfileID,
+			"sonarr_add_monitor_mode":       cfg.SonarrAddMonitorMode,
+			"sonarr_add_season_folder":      cfg.SonarrAddSeasonFolder,
+			"ntfy_enabled":                  cfg.NtfyEnabled,
+			"ntfy_server_url":               cfg.NtfyServerURL,
+			"ntfy_topic":                    cfg.NtfyTopic,
+			"ntfy_token_set":                cfg.NtfyToken != "",
+			"artwork_default_source":        cfg.ArtworkDefaultSource,
+			"tmdb_api_key":                  cfg.TMDBAPIKey,
+			"tmdb_api_key_masked":           maskedTmdbKey,
+			"tmdb_api_key_set":              cfg.TMDBAPIKey != "",
+			"fanart_api_key":                cfg.FanartAPIKey,
+			"fanart_api_key_masked":         maskedFanartKey,
+			"fanart_api_key_set":            cfg.FanartAPIKey != "",
+			"ui_sounds_enabled":             cfg.UISoundsEnabled,
+		}
+		cfg.RUnlock()
+
+		cacheCount, cacheRefreshedAt, err := db.GetAFLShowCacheStatus(r.Context())
+		if err == nil {
+			settings["afl_show_cache_refreshed_at"] = cacheRefreshedAt
+			settings["afl_show_cache_count"] = cacheCount
+		}
+
+		// Mappings
+		mappings, err := db.GetAllMappings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		// stale-while-revalidate lets the browser serve the cached
+		// bootstrap response instantly on repeat visits while
+		// revalidating in the background. This makes repeat page loads
+		// nearly instant — the store gets data from the browser cache
+		// before the server even responds.
+		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"shows":     mappings,
+			"settings":  settings,
+			"providers": mgr.Providers(),
+		})
+	}
+}
+
 func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cfg.RLock()
@@ -916,6 +1050,7 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 		}
 		settings["afl_show_cache_refreshed_at"] = cacheRefreshedAt
 		settings["afl_show_cache_count"] = cacheCount
+		w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=300")
 		writeJSON(w, http.StatusOK, settings)
 	}
 }
@@ -1664,6 +1799,7 @@ func handleGetSonarrSeries(db *database.DB, engine *sync.Engine, cache *seriesLi
 		matchableOnly := r.URL.Query().Get("matchable_only") == "true"
 		if !matchableOnly {
 			if cached, ok := cache.get(); ok {
+				w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=120")
 				writeJSON(w, http.StatusOK, cached)
 				return
 			}
@@ -1706,6 +1842,7 @@ func handleGetSonarrSeries(db *database.DB, engine *sync.Engine, cache *seriesLi
 		if !matchableOnly {
 			// Cache the unfiltered public series list for 2 minutes.
 			cache.set(public)
+			w.Header().Set("Cache-Control", "max-age=0, stale-while-revalidate=120")
 		}
 
 		writeJSON(w, http.StatusOK, public)

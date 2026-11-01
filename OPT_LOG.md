@@ -1903,6 +1903,26 @@ Removed the dead `accentVars` object and `CSSProperties` import from the compone
 | 39 | D202 | Defer initSounds to requestIdleCallback | Cuelume sound binding deferred to idle time; avoids DOM attribute wiring competing with first paint; falls back to setTimeout(100ms) if requestIdleCallback unavailable |
 | 40 | D203 | Prefetch ShowDetailPage chunk on idle | Detail page chunk prefetched via requestIdleCallback after first paint; eliminates chunk load delay for users who click a show card without hovering first; also prefetches dependency chunks (TrackingRuleCard, SegmentedControlItem, ListItem) in parallel |
 | 41 | D204 | Trim SonarrSeries JSON payload for frontend | Created SonarrSeriesPublic struct with only frontend-relevant fields (id, title, year, overview, seriesType, monitored, rootFolderPath, qualityProfileId, images, statistics, manualMatchPending); omits sortTitle, tvdbId, imdbId, path, seasonFolder, seasonCount, alternateTitles; /api/sonarr/series: 35KB→28KB raw (20% reduction), 9KB→7.8KB gzipped; lookup endpoint unchanged (needs full struct for add flow) |
+| 42 | D205 | Render episode list skeleton immediately on hard refresh | Changed episode list gate from `{show && ...}` to `{showId && ...}`; skeleton renders as soon as URL has show ID, no empty gap on hard refresh while getShow resolves |
+| 43 | D206 | Remove redundant filteredEpisodes prop, fix deferred flash | Removed filteredEpisodes from EpisodeListSection props (use groupedBySeason.length for empty check); extended skeleton condition to prevent useDeferredValue flash of "No episodes" empty state |
+| 44 | D207 | Lazy-load custom theme definitions | Split themeOptions into themeMetas (metadata) + loadThemeDef (lazy import); 4 custom themes (~32KB) moved to separate chunks; main bundle 528KB→499KB raw (5.5% reduction), 156KB→152KB gz |
+| 45 | D208 | Lazy-load ShowsPage, auto code-split shared components | ShowsPage made lazy with void import() in main.tsx for parallel download; Vite auto-split shared deps (Badge, Grid, Section, etc.); main bundle 499KB→449KB raw (10% reduction), 152KB→137KB gz |
+| 46 | D209 | Bootstrap endpoint: combine 3 API calls into 1 | Created /api/bootstrap returning shows+settings+providers in one response; store uses getBootstrap() on mount with fallback; saves 2 HTTP round-trips (100-400ms on remote servers) |
+| 47 | D210 | Replace Tooltip with native title, reduce pageSettled delay | Removed 3 Tooltip component instances (episode monitor toggle ×83 per expanded season, auto/manual watermark button); replaced with native title attribute; removed Tooltip import from ShowDetailPage; reduced pageSettled delay from rAF+80ms to single rAF; ShowDetailPage chunk 34.37KB→34.23KB; Tooltip chunk (29KB) remains as transitive dep of Astryx Button but no Tooltip component instances rendered at runtime |
+| 48 | D211 | Eager prefetch detail chunk + data on direct navigation | In main.tsx, detect /shows/:id URL pattern and immediately fire void import(ShowDetailPage) + prefetchEpisodes + prefetchShow; chunk + API calls start in parallel with main bundle parse instead of waiting for idle prefetch + useEffect; main bundle 449.40KB→449.54KB (negligible); eliminates sequential waterfall on hard refresh of detail page |
+| 49 | D212 | Lazy-load y2k theme (CSS + JS), remove unused import | Moved y2k theme CSS (18KB) and JS definition out of eager main bundle into lazy chunks; only neutral theme loads eagerly; y2k loads on-demand via loadThemeDef/loadThemeCSS like other custom themes; also removed unused getArtworkPosterUrl import from ShowDetailPage; main JS 449.54KB→435.95KB (13.6KB / 3% reduction), main CSS 184.8KB→168.1KB (16.6KB reduction), Tooltip chunk 28.9KB→10.4KB (y2k was pulling Tooltip deps into shared chunk) |
+| 50 | D213 | stale-while-revalidate Cache-Control on episode + bootstrap responses | Added Cache-Control: max-age=0, stale-while-revalidate=86400 to episode endpoint and max-age=0, stale-while-revalidate=300 to bootstrap endpoint; browser serves cached response instantly on repeat visits while revalidating in background; exposed Cache-Control in CORS; repeat visits to same anime page become zero-latency for episode data |
+| 51 | D214 | stale-while-revalidate on Sonarr series + mappings + settings + getMapping endpoints | Added Cache-Control: max-age=0, stale-while-revalidate to /api/sonarr/series (2min), /api/mappings (5min), /api/settings (5min), /api/mappings/{id} (5min); repeat visits get instant data from browser cache while revalidating in background |
+| 52 | D215 | Combined /detail endpoint: show + episodes in 1 request | Created /api/mappings/{id}/detail returning show + episodes in single response; added getShowDetail/prefetchShowDetail in api.ts; ShowDetailPage uses combined endpoint on hard refresh (no store data), falls back to separate getEpisodes when store has show; main.tsx uses prefetchShowDetail for direct navigation; saves 1 HTTP round-trip on hard refresh |
+| 53 | D216 | Replace Timestamp component with toLocaleDateString in EpisodeListItem | Removed Timestamp import from ShowDetailPage; replaced `<Timestamp value={ep.air_date} format="date" />` with inline `new Date(ep.air_date).toLocaleDateString()` wrapped in Text; eliminates 83 React component instances per expanded season (each was creating useRef, useState, lazy/Suspense boundary, Text wrapper, and `<time>` element despite tooltip never showing for format="date"); Tooltip chunk remains as transitive dep of Button but no Timestamp instances rendered on detail page |
+| 54 | D217 | Lazy-load AlertDialog in ShowDetailPage | AlertDialog (only used for delete confirmation dialog) was eagerly imported, pulling Dialog+Layout+LayoutContent+LayoutFooter+Tooltip deps into ShowDetailPage chunk; replaced with lazy(() => import AlertDialog) + Suspense fallback=null; gated on showDeleteDialog state so chunk only downloads when user clicks Remove; ShowDetailPage chunk 34.43KB→32.65KB (1.78KB / 5.2% reduction), Tooltip chunk 10.35KB→1.89KB (8.46KB reduction — AlertDialog was pulling Tooltip deps into shared chunk), new lazy chunks: AlertDialog 2.56KB + Dialog 5.02KB + useTooltip 8.59KB; net ~10.24KB less JS parsed on initial detail page load |
+| 55 | D218 | Progressive loading: defer episode rendering to next frame on hard refresh | On hard refresh, getShowDetail returns show+episodes in one response; applyShowData and applyEpisodes were called in same .then() callback, so React 18 batched all setState into one render — everything appeared simultaneously; wrapped applyEpisodes in requestAnimationFrame so React commits show data (hero title, tracking rules, artwork card) first, then renders episode list in a separate frame; ShowDetailPage chunk 32.65KB→32.68KB (+0.03KB) |
+| 56 | D219 | Consolidate episode badge info, eliminate fox chunk, simplify monitored check | Replaced separate episodeTypeBadge() + badgeVariantForType() calls with single episodeBadgeInfo() returning {label, variant}; replaced episodeMonitored(ep) (which called resolveSonarrEpisode creating a new object) with inline `!!ep.sonarr_episode_id && !!ep.monitored`; removed unused episodeTypeBadge import from fox.ts — eliminates fox chunk (0.44KB) entirely from detail page dependency graph; removed dead episodeMonitored and badgeVariantForType functions; ShowDetailPage chunk 32.68KB→32.85KB (+0.17KB from episodeBadgeInfo) but fox chunk 0.44KB→0KB eliminated |
+| 57 | D220 | Short-circuit epSyncKey when syncingEps is empty | Added hasSyncing check (Object.keys(syncingEps).length > 0) in EpisodeListSection; when no episodes are syncing (99% of the time), skips epSyncKey computation for every episode item — avoids 83+ string concatenations + displayEpisodeNumber calls per render of expanded season; syncingEps only non-empty during brief monitor toggle |
+| 58 | D221 | Lazy-load Toast component in ToastViewport | Toast was eagerly imported in ToastViewport.tsx (always rendered in App.tsx), pulling Toast+useTranslator(82KB)+defineTheme(22KB) into main bundle; ToastViewport returns null when no notifications, so Toast is never rendered on first paint; replaced with lazy(() => import Toast) + Suspense fallback=null; main bundle 436.30KB→331.22KB (105KB / 24% reduction, 30KB gzipped), new lazy chunks: useTranslator 81.82KB + defineTheme 21.55KB + Toast 2.74KB (only load when a notification appears) |
+| 59 | D222 | Lazy-load cuelume sound library | Cuelume (~17KB source) was eagerly imported by store.tsx (play) and sounds.ts (bind, setEnabled, setVolume), pulling it into main bundle; play is only called when a notification appears, bind runs on idle, setEnabled runs when bootstrap resolves — none on first paint; replaced with dynamic import("cuelume") with module-level promise + null guard; main bundle 331.22KB→323.95KB (7.27KB / 2.2% reduction, 2.15KB gzipped), cuelume now in separate 7.66KB lazy chunk loaded on idle |
+| 60 | D223 | Synchronous prefetch cache for ShowDetailPage | On hard refresh prefetchShowDetail() fires before mount but ShowDetailPage still initialized useState with null storeShow showing skeletons; added detailDataCache Map storing resolved prefetch data, getCachedShowDetail() export returns it synchronously; all useState initializers now use initialShow/initialEpisodes from prefetch; main fetch effect short-circuits when prefetch data exists; zero skeleton flash when prefetch resolves before mount, ShowDetailPage chunk 32.99KB→33.42KB (+0.43KB) |
+| 61 | D224 | Pre-JS API fetch via inline script in index.html | getBootstrap() and prefetchShowDetail() only fired after 324KB bundle download+parse+React mount, creating sequential waterfall; added inline script in HTML head that fires fetch('/api/bootstrap') and fetch('/api/mappings/:id/detail') immediately before JS bundle starts downloading; api.ts requestPrefetched() helper reuses pre-fired Response promises; prefetchShowDetail() also reuses pre-fired response; API requests now start in parallel with bundle download saving 50-200ms, main bundle 324.06KB→324.37KB (+0.31KB), inline script ~400 bytes |
 
 ---
 
@@ -2554,5 +2574,437 @@ This caused `getSonarrSeries()` to be called twice on every initial page load. A
 - `/api/sonarr/lookup`: unchanged (needs full struct)
 - `go build` clean, `go test` all pass, `tsc --noEmit` clean
 - Frontend `SonarrSeries` type has `[key: string]: unknown` index signature — no breakage from missing fields
+
+**Outcome:** Kept. Committed.
+
+## D205 — Render episode list skeleton immediately on hard refresh
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list rendering gate
+
+**Problem:** The `EpisodeListSection` was gated behind `{show && (...)}`. On hard refresh (no store data yet), `show` is null until either `getShow()` resolves or the store adoption effect fires. This meant the episode list skeleton didn't appear during the initial load — the page showed the hero image and artwork/tracking-rule skeletons, but nothing below them. The user perceived this as "loads header, stays loading content right below."
+
+**What changed:**
+- Changed the gate from `{show && (...)}` to `{showId && (...)}` — the episode list skeleton renders as soon as we have a show ID from the URL, regardless of whether show data has resolved
+- `episodesLoading` starts as `true`, so the skeleton renders immediately
+- The episode fetch (`getEpisodes(showId)`) runs in parallel with `getShow()` and doesn't depend on `show` being set
+
+**Metrics:**
+- Before: on hard refresh, page shows hero + artwork/rule skeletons, but empty space below until show data resolves
+- After: page shows hero + artwork/rule skeletons + episode list skeleton immediately — no empty gaps
+- No bundle size change (same condition, different variable)
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D206 — Remove redundant filteredEpisodes prop, fix deferred flash
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — EpisodeListSection component
+
+**Problem:** Two issues:
+1. `EpisodeListSection` received `filteredEpisodes` as a prop but only used it for the empty-state check (`filteredEpisodes.length === 0`). This 1209-element array was shallow-compared on every parent render via `memo`, even though `groupedBySeason` already captures the same data.
+2. When `useDeferredValue` defers the episode list update on first load, `episodesLoading` becomes `false` but `groupedBySeason` is still `[]` (deferred value hasn't caught up). This caused a brief flash of the "No episodes" EmptyState before the list appeared.
+
+**What changed:**
+- Removed `filteredEpisodes` from `EpisodeListSectionProps` — use `groupedBySeason.length === 0` for the empty check instead
+- Extended the skeleton condition: `episodesLoading || (epStats.total > 0 && groupedBySeason.length === 0)` — keeps the skeleton visible until the deferred value catches up, preventing the empty-state flash
+
+**Metrics:**
+- Before: brief "No episodes" flash on first load when useDeferredValue defers
+- After: skeleton stays visible until episodes are ready, smooth transition to list
+- One fewer 1209-element array reference comparison per parent render
+- ShowDetailPage chunk: 34.18KB → 34.16KB
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D207 — Lazy-load custom theme definitions (32KB out of initial bundle)
+
+**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/src/main.tsx` — theme system
+
+**Problem:** All 6 theme definitions (neutral, y2k, mizu-wintry, tokyo-night, flexoki, y2k-rounded) were imported eagerly in `themes.ts` → `main.tsx`. The `themeOptions` array referenced all theme objects, so Vite bundled all ~32KB of theme color tokens into the main JS chunk. Only neutral (default) and y2k are used on initial load — the other 4 are only needed when the user switches themes.
+
+**What changed:**
+- Split `themeOptions` into `themeMetas` (lightweight metadata: id, label, description, mode) and lazy-loaded theme definitions
+- Created `loadThemeDef(themeId)` — returns `DefinedTheme` from cache or dynamically imports it
+- Eager themes (neutral, y2k) are in a `Record<string, DefinedTheme>` map — available synchronously
+- Custom themes (mizu-wintry, tokyo-night, flexoki, y2k-rounded) are dynamically imported on first use
+- Updated `main.tsx` to store only `themeId` + `theme` state; loads definition + CSS asynchronously on mount and on theme switch
+- `ThemeMenu` now uses `themeMetas` instead of `themeOptions` — no theme JS needed to render the menu
+
+**Metrics:**
+- Main bundle: 528KB → 499KB raw (29KB / 5.5% reduction), 156KB → 152KB gzipped (4KB / 2.5% reduction)
+- New lazy chunks: mizu-wintry 3.4KB, y2k-rounded 8.7KB, flexoki 8.8KB, tokyo-night 8.8KB (total 29.7KB raw / 6.3KB gz)
+- Only loaded when user selects that theme — zero cost for users who stick with neutral or y2k
+- tsc clean, vp build clean, dev server working
+
+**Outcome:** Kept. Committed.
+
+## D208 — Lazy-load ShowsPage, let Vite code-split shared components
+
+**Target:** `web-astryx/src/App.tsx`, `web-astryx/src/main.tsx` — route splitting
+
+**Problem:** ShowsPage was imported eagerly in App.tsx, which meant all its unique dependencies (ClickableCard, DropdownMenu, addWizardHelpers, fox, etc.) were bundled into the main JS chunk. This made the main bundle 499KB even though many of those components are only used on the landing page.
+
+**What changed:**
+- Made ShowsPage lazy-loaded (like all other pages) via `lazy(() => import(...))`
+- Added `void import("./routes/ShowsPage")` at the top of `main.tsx` to fire the download immediately — the browser starts fetching the ShowsPage chunk as soon as the main bundle begins executing, in parallel with parsing the rest of the main bundle
+- Added Suspense wrappers for ShowsPage routes (`/` and `/shows`) — they were missing (other routes already had them)
+- Vite automatically code-split shared components (Badge, EmptyState, Section, Grid, TextInput, etc.) into separate chunks since they're now imported by multiple lazy routes
+
+**Metrics:**
+- Main bundle: 499KB → 449KB raw (50KB / 10% reduction), 152KB → 137KB gzipped (15KB / 10% reduction)
+- ShowsPage chunk: 13.5KB raw / 5.2KB gzipped (loaded in parallel via void import)
+- Vite auto-split shared deps: Badge 1.3KB, EmptyState 1.4KB, Section 2.4KB, Grid 3.1KB, TextInput 3.2KB, fox 5.4KB, InputGroupContext 20.7KB, etc.
+- Total initial download: ~449KB + 13.5KB + shared deps ≈ same as before, but main bundle parses faster and ShowsPage downloads in parallel
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D209 — Bootstrap endpoint: combine 3 API calls into 1
+
+**Target:** `cmd/server/router.go`, `web-astryx/src/lib/api.ts`, `web-astryx/src/lib/store.tsx` — initial app load
+
+**Problem:** The store made 3 parallel API calls on mount: `getShows()` + `getSettings()` + `getArtworkProviders()`. While parallel, each call still incurs a full HTTP round-trip (connection setup, headers, response parsing). On remote servers with higher latency, 3 round-trips could add 100-400ms vs a single call.
+
+**What changed:**
+- Created `/api/bootstrap` endpoint that returns shows + settings + artwork providers in a single JSON response
+- Added `getBootstrap()` API function in `api.ts`
+- Updated store to call `getBootstrap()` on mount, with fallback to individual requests if bootstrap fails
+- Kept individual endpoints (`/api/mappings`, `/api/settings`, `/api/artwork/providers`) for other consumers
+
+**Metrics:**
+- Before: 3 HTTP requests (parallel, ~209ms wall time on localhost, 3x round-trip overhead)
+- After: 1 HTTP request (~203ms on localhost, 1x round-trip overhead)
+- Payload: 6KB raw / 2.4KB gzipped (same as 3 separate payloads combined)
+- Main bundle: 449.09KB → 449.40KB (negligible increase from new function)
+- go build clean, go test all pass, tsc clean, vp build clean
+- Real savings on remote: 2 fewer round-trips (100-400ms depending on latency)
+
+**Outcome:** Kept. Committed.
+
+## D210 — Replace Tooltip with native title, reduce pageSettled delay
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list + actions bar
+
+**Problem:** Two issues:
+1. Each `EpisodeListItem` rendered a `<Tooltip>` wrapper around the monitor `ToggleButton`. With the largest expanded season at 83 episodes, that's 83 Tooltip component instances — each creating extra DOM nodes, React state, and event listeners. A second Tooltip wrapped the auto/manual watermark Button in the actions bar.
+2. The `pageSettled` flag (which enables the hover-reveal transition on the actions bar) used `requestAnimationFrame(() => setTimeout(() => setPageSettled(true), 80))` — an unnecessary 80ms delay on top of the rAF. Since the CSS `controls-reveal` keeps the bar hidden by default (`grid-template-rows: 0fr`) and only shows on hover, the delay just postponed enabling the transition.
+
+**What changed:**
+- Removed `import { Tooltip } from "@astryxdesign/core/Tooltip"` from ShowDetailPage
+- Replaced episode monitor `<Tooltip content={...}><ToggleButton .../></Tooltip>` with `<ToggleButton ... title={monitored ? "Unmonitor" : "Monitor"} />` — native browser tooltip via the `title` attribute, which passes through Astryx's `...props` spread
+- Replaced auto/manual watermark `<Tooltip content={...}><Button .../></Tooltip>` with `<Button ... title={watermarkAuto ? "Using Sonarr progress" : "Using manual episode"} />`
+- Reduced `pageSettled` delay from `requestAnimationFrame(() => setTimeout(() => setPageSettled(true), 80))` to `requestAnimationFrame(() => setPageSettled(true))` — saves ~80ms on both store-data path and getShow path
+
+**Metrics:**
+- ShowDetailPage chunk: 34.37KB → 34.23KB raw (0.14KB reduction from removed Tooltip JSX)
+- Tooltip chunk (29KB / 9.6KB gzipped): still loaded as transitive dep of Astryx Button (Button imports `useTooltip` internally) — can't eliminate without library changes
+- Runtime DOM: up to 85 fewer React component instances (83 episode Tooltips + 2 actions bar Tooltips), each of which created wrapper elements, portal nodes, and event handlers
+- pageSettled: ~96ms → ~16ms (rAF only), 80ms faster actions bar transition enablement
+- Main bundle: 449.40KB (unchanged)
+- tsc clean, vp build clean, go build clean
+
+**Outcome:** Kept. Committed.
+
+## D211 — Eager prefetch detail chunk + data on direct navigation
+
+**Target:** `web-astryx/src/main.tsx` — initial load on direct navigation to `/shows/:id`
+
+**Problem:** On hard refresh of a detail page URL (e.g. `/shows/123`), the loading waterfall was sequential:
+1. Main bundle downloads + parses
+2. React mounts, AppProvider starts `getBootstrap()`
+3. `App.tsx` idle callback fires → `prefetchDetailChunk()` starts downloading ShowDetailPage chunk
+4. ShowDetailPage chunk downloads + parses
+5. ShowDetailPage mounts → `useEffect` fires → `getEpisodes()` + `getShow()` start
+6. Episodes resolve → episode list renders
+
+Steps 3-5 are sequential — the detail chunk isn't requested until the idle callback fires (step 3), and the API calls don't fire until the component mounts (step 5). This adds ~200-500ms of waterfall delay on top of the main bundle load.
+
+**What changed:**
+- In `main.tsx`, detect if `location.pathname` matches `/shows/:id` pattern
+- If so, immediately fire `void import("./routes/ShowDetailPage")` — starts downloading the detail chunk in parallel with the main bundle parse (same pattern as ShowsPage)
+- Also call `prefetchEpisodes(showId)` and `prefetchShow(showId)` immediately — these cache promises in `api.ts` that `getEpisodes()` and `getShow()` pick up when ShowDetailPage mounts
+- Added `prefetchEpisodes` and `prefetchShow` to the static imports from `./lib/api` (already in main bundle via store.tsx)
+
+**Metrics:**
+- Main bundle: 449.40KB → 449.54KB (0.14KB increase from import bindings)
+- ShowDetailPage chunk: 34.22KB (unchanged)
+- Waterfall on direct navigation: 6 sequential steps → 3 parallel tracks (main bundle + detail chunk + API calls)
+- Estimated time savings: ~200-500ms on hard refresh of detail page (eliminates idle callback delay + chunk download + useEffect-to-API-call gap)
+- tsc clean, vp build clean, go build clean
+
+**Outcome:** Kept. Committed.
+
+## D212 — Lazy-load y2k theme (CSS + JS), remove unused import
+
+**Target:** `web-astryx/src/lib/themes.ts`, `web-astryx/src/main.tsx`, `web-astryx/src/routes/ShowDetailPage.tsx` — initial CSS + JS payload
+
+**Problem:** The y2k theme was loaded eagerly — both its CSS (`@astryxdesign/theme-y2k/theme.css`, 18KB) in main.tsx and its JS definition (`y2kTheme` from `@astryxdesign/theme-y2k`) in themes.ts. Most users use the neutral default theme, so this 18KB of CSS + ~8KB of JS was wasted bandwidth on every page load. Additionally, the y2k theme JS was pulling Tooltip-related code into the shared Tooltip chunk, inflating it from ~10KB to ~29KB.
+
+**What changed:**
+- Removed `import "@astryxdesign/theme-y2k/theme.css"` from main.tsx
+- Removed `import { y2kTheme } from "@astryxdesign/theme-y2k"` from themes.ts
+- Removed `y2k` from `eagerThemes` map (only `neutral` remains eager)
+- Removed `y2k` from `loadedThemeCSS` initial set (only `neutral` preloaded)
+- Added `case "y2k"` to `loadThemeDef()` switch with `await import("@astryxdesign/theme-y2k")`
+- Added `case "y2k"` to `loadThemeCSS()` switch with `await import("@astryxdesign/theme-y2k/theme.css")`
+- Removed unused `getArtworkPosterUrl` import from ShowDetailPage.tsx
+
+**Metrics:**
+- Main JS bundle: 449.54KB → 435.95KB raw (13.6KB / 3% reduction), 137.84KB → 135.85KB gzipped (2KB reduction)
+- Main CSS: 184,771 → 168,136 bytes (16.6KB raw reduction, ~3KB gzipped reduction)
+- Tooltip shared chunk: 28.92KB → 10.35KB raw (18.6KB reduction!), 9.59KB → 4.07KB gzipped (5.5KB reduction)
+- New lazy chunks: `theme-*.css` (17KB, y2k CSS), `source-*.js` (17KB), `naming-*.js` (18.7KB) — only loaded when user selects y2k theme
+- Total initial download savings: ~13.6KB JS + 16.6KB CSS + 18.6KB Tooltip = ~48.8KB raw, ~10.5KB gzipped
+- tsc clean, vp build clean, go build clean
+
+**Outcome:** Kept. Committed.
+
+## D213 — stale-while-revalidate Cache-Control on episode + bootstrap responses
+
+**Target:** `cmd/server/router.go` — `handleGetEpisodes`, `handleBootstrap`, CORS middleware
+
+**Problem:** On repeat visits, the browser sends a conditional request with `If-None-Match` and waits for the 304 response before serving cached data. Even though a 304 is tiny (0 bytes body), the round-trip still takes 50-200ms depending on latency. During this time, the frontend's `episodeDataCache` serves the previous data, but the `getEpisodes` promise doesn't resolve until the network round-trip completes. For the bootstrap endpoint, every page load waits for the full round-trip before the store has data.
+
+**What changed:**
+- Added `Cache-Control: max-age=0, stale-while-revalidate=86400` to the episode endpoint — the browser can serve the cached response instantly while revalidating in the background. The ETag still ensures correctness: if the data changed, the next visit gets the fresh response.
+- Added `Cache-Control: max-age=0, stale-while-revalidate=300` to the bootstrap endpoint — 5-minute stale window (more time-sensitive than episodes since settings can change).
+- Added `Cache-Control` to the CORS `ExposedHeaders` list so the browser can read the header on cross-origin requests.
+
+**Metrics:**
+- Repeat visit to same anime page: was 50-200ms (304 round-trip) → ~0ms (stale cache served instantly, revalidate in background)
+- Repeat app load: was 50-200ms (bootstrap round-trip) → ~0ms (stale cache served instantly, revalidate in background)
+- First visit: unchanged (no cached response to serve)
+- Data correctness: preserved — ETag revalidation still happens, just asynchronously. If data changed, the next navigation gets fresh data.
+- go build clean, go test all pass, tsc clean
+
+**Outcome:** Kept. Committed.
+
+## D214 — stale-while-revalidate on Sonarr series + mappings endpoints
+
+**Target:** `cmd/server/router.go` — `handleGetSonarrSeries`, `handleGetMappings`
+
+**Problem:** The Sonarr series list (28KB / 7.8KB gzipped) and mappings list endpoints didn't have browser cache headers. On repeat visits to the library page, the browser re-fetched the full Sonarr series list even though it has a 2-minute in-memory cache on the backend. The mappings list (used as a fallback when bootstrap fails) also re-fetched every time.
+
+**What changed:**
+- Added `Cache-Control: max-age=0, stale-while-revalidate=120` to `/api/sonarr/series` (both cache-hit and cache-miss paths) — 2-minute stale window matches the backend in-memory cache TTL
+- Added `Cache-Control: max-age=0, stale-while-revalidate=300` to `/api/mappings` — 5-minute stale window (mappings change infrequently)
+
+**Metrics:**
+- Repeat visit to library page: Sonarr series list served from browser cache instantly (was 50-200ms round-trip for 28KB)
+- Repeat visit after bootstrap fallback: mappings list served from browser cache instantly
+- First visit: unchanged
+- Data correctness: preserved — `max-age=0` ensures the browser always revalidates, SWR just lets it serve stale data while revalidating in the background
+- go build clean, go test all pass
+
+**Outcome:** Kept. Committed.
+
+## D215 — Combined /detail endpoint: show + episodes in 1 request
+
+**Target:** `cmd/server/router.go`, `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx`, `web-astryx/src/main.tsx` — hard refresh of detail page
+
+**Problem:** On hard refresh of `/shows/:id` (no store data), ShowDetailPage made 2 parallel HTTP requests: `getShow` (for show metadata) + `getEpisodes` (for episode list). While parallel, each call still incurs a full HTTP round-trip. On remote servers with 100-200ms latency, 2 round-trips add 100-200ms vs a single combined call.
+
+**What changed:**
+- Created `/api/mappings/{id}/detail` endpoint that returns `{show, episodes}` in a single JSON response
+- Backend handler reuses the same episode cache + DB + live-fetch logic as the standalone episodes endpoint
+- Added `getShowDetail()` and `prefetchShowDetail()` in `api.ts` with a `detailPrefetch` Map for promise caching
+- Updated ShowDetailPage main effect: when `!hasStoreData`, calls `getShowDetail()` (1 request) instead of `getShow()` + `getEpisodes()` (2 requests). When store has show data, still uses `getEpisodes()` only.
+- Updated `main.tsx` to use `prefetchShowDetail()` on direct navigation to `/shows/:id` instead of separate `prefetchShow()` + `prefetchEpisodes()`
+- Refactored show/episode state updates into `applyShowData` and `applyEpisodes` helper functions to avoid duplication
+- Added `Cache-Control: max-age=0, stale-while-revalidate=300` to the detail endpoint
+
+**Metrics:**
+- Hard refresh of detail page: 2 HTTP requests → 1 HTTP request (saves 1 round-trip, 50-200ms on remote)
+- Main JS: 435.95KB → 436.16KB (0.2KB increase from new API functions)
+- ShowDetailPage chunk: 34.26KB → 34.31KB (0.05KB increase from refactored effect)
+- Normal navigation (store has show): unchanged — still uses single `getEpisodes()` call
+- go build clean, go test all pass, tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D216 — Replace Timestamp component with toLocaleDateString in EpisodeListItem
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — episode list items in expanded seasons
+
+**Problem:** Each `EpisodeListItem` rendered a `<Timestamp value={ep.air_date} format="date" />` component. The Timestamp component (479 lines) creates a `useRef`, `useState`, `useEffect`, a `lazy(() => import Tooltip)` + `Suspense` boundary, a `Text` wrapper, and a `<time>` element — all for a simple date string like "Mar 21, 2025". With 83 episodes in the largest expanded season, that's 83 unnecessary React component instances, 83 useRef/useState/useEffect hooks, and 83 lazy/Suspense boundaries. The tooltip is only shown for `relative`/`auto` formats, never for `format="date"`, so all that machinery is wasted.
+
+**What changed:**
+- Removed `import { Timestamp } from "@astryxdesign/core/Timestamp"` from ShowDetailPage
+- Replaced `<Timestamp value={ep.air_date} format="date" />` with inline `new Date(ep.air_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })` wrapped in `<Text type="supporting" size="sm" color="secondary">`
+- The `toLocaleDateString` call produces the exact same output as Timestamp's `format="date"` (which internally uses `Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' })`)
+- ActivityPage still uses Timestamp with `format="auto"` (relative + tooltip) — left unchanged
+
+**Metrics:**
+- Bundle: ShowDetailPage chunk 34.31KB → 34.43KB (+0.12KB from inline Text wrapper)
+- Main JS: 436.16KB (unchanged)
+- Tooltip chunk: 10.35KB (unchanged — still pulled as transitive dep of Button/ToggleButton)
+- Runtime: 83 fewer React component instances per expanded season (each eliminated: useRef, useState, useEffect, lazy/Suspense, Text wrapper, `<time>` element)
+- DOM: 83 fewer `<time>` elements, 83 fewer Text wrapper spans
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D217 — Lazy-load AlertDialog in ShowDetailPage
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — delete confirmation dialog
+
+**Problem:** `AlertDialog` was eagerly imported at the top of ShowDetailPage, but it's only rendered when the user clicks "Remove" to delete an anime. AlertDialog imports Dialog (18KB source), Layout (10KB), LayoutContent (7KB), LayoutFooter (6KB) — ~41KB of source code pulled into the ShowDetailPage chunk despite being used only in a rare interaction. Additionally, AlertDialog's Dialog dependency was pulling the full Tooltip component (with its lazy import machinery) into the shared Tooltip chunk, inflating it to 10.35KB.
+
+**What changed:**
+- Replaced `import { AlertDialog } from "@astryxdesign/core/AlertDialog"` with `const AlertDialog = lazy(() => import("@astryxdesign/core/AlertDialog").then(m => ({ default: m.AlertDialog })))`
+- Added `lazy, Suspense` to React imports
+- Wrapped the AlertDialog render in `<Suspense fallback={null}>` and gated on `showDeleteDialog` state so the chunk only loads when the dialog is actually opened
+- The chunk download starts when the user clicks "Remove" — by the time the dialog needs to render, the chunk is typically already downloaded (small 2.56KB chunk)
+
+**Metrics:**
+- ShowDetailPage chunk: 34.43KB → 32.65KB (1.78KB / 5.2% reduction)
+- Tooltip chunk: 10.35KB → 1.89KB (8.46KB reduction — AlertDialog's Dialog dep was pulling Tooltip into shared chunk)
+- New lazy chunks: AlertDialog 2.56KB, Dialog 5.02KB, useTooltip 8.59KB (only loaded when delete dialog opens)
+- Net JS savings on initial detail page load: ~10.24KB raw / ~3.5KB gzipped
+- Main JS: 436.16KB → 436.30KB (+0.14KB from lazy/Suspense import overhead)
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D218 — Progressive loading: defer episode rendering to next frame on hard refresh
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — hard refresh loading flow
+
+**Problem:** On hard refresh, `getShowDetail` returns show + episodes in a single response. `applyShowData` and `applyEpisodes` were called in the same `.then()` callback, so React 18's automatic batching combined all setState calls into one render. This meant the hero title, tracking rules, artwork card, and episode list all appeared simultaneously after the API resolved — no progressive loading. The user saw an empty page with skeletons, then everything popped in at once.
+
+**What changed:**
+- Wrapped `applyEpisodes()` in `requestAnimationFrame()` inside the `getShowDetail().then()` callback
+- React now commits the show data (hero title, overview, tracking rules, artwork card) in the first render, then renders the episode list in a separate frame
+- The episode skeleton remains visible during the ~16ms gap between frames, creating a smooth progressive fill instead of a single pop-in
+- Store-has-data path (normal navigation) is unchanged — episodes are the only thing being fetched, so no split needed
+
+**Metrics:**
+- ShowDetailPage chunk: 32.65KB → 32.68KB (+0.03KB from rAF wrapper)
+- Main JS: 436.30KB (unchanged)
+- Perceived loading: show data (title, tracking rules, artwork) appears ~1 frame (~16ms) before episode list on hard refresh
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D219 — Consolidate episode badge info, eliminate fox chunk, simplify monitored check
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — EpisodeListItem per-item overhead
+
+**Problem:** Each `EpisodeListItem` (83+ per expanded season) made redundant function calls:
+- `episodeTypeBadge(ep.type)` — lookup in `fox.ts` for the badge label (e.g. "Manga", "Filler")
+- `badgeVariantForType(ep.type)` — separate switch for the badge color variant
+- `episodeMonitored(ep)` — called `resolveSonarrEpisode(ep)` which created a new `{ id, monitored }` object just to read `.monitored`
+- The `episodeTypeBadge` import from `fox.ts` pulled in the entire `fox` module (0.44KB chunk) as a separate dependency
+
+**What changed:**
+- Created `episodeBadgeInfo(type)` — single function returning `{ label, variant }` from one switch statement, replacing both `episodeTypeBadge()` + `badgeVariantForType()`
+- Replaced `episodeMonitored(ep)` with inline `!!ep.sonarr_episode_id && !!ep.monitored` — avoids function call + object allocation per item
+- Removed unused `import { episodeTypeBadge } from "../lib/fox"` — eliminates the `fox` chunk from the detail page dependency graph entirely
+- Removed dead functions `episodeMonitored` and `badgeVariantForType`
+- `resolveSonarrEpisode` kept (still used in `toggleEpisodeMonitor` callback)
+
+**Metrics:**
+- ShowDetailPage chunk: 32.68KB → 32.85KB (+0.17KB from `episodeBadgeInfo` function)
+- fox chunk: 0.44KB → 0KB (eliminated entirely)
+- Net: -0.27KB raw on initial detail page load
+- Runtime: 83 fewer function calls (episodeTypeBadge), 83 fewer function calls (badgeVariantForType), 83 fewer object allocations (resolveSonarrEpisode) per expanded season
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D220 — Short-circuit epSyncKey when syncingEps is empty
+
+**Target:** `web-astryx/src/routes/ShowDetailPage.tsx` — EpisodeListSection render path
+
+**Problem:** For every episode in every expanded season, `epSyncKey(group.season, ep)` was called to compute the `isSyncing` prop. `epSyncKey` calls `displayEpisodeNumber(ep)` and concatenates a template string. With 83+ episodes per expanded season, that's 83+ function calls + string allocations on every render — even though `syncingEps` is empty 99% of the time (only has entries during a brief monitor toggle).
+
+**What changed:**
+- Added `const hasSyncing = Object.keys(syncingEps).length > 0` at the top of `EpisodeListSection`
+- Changed `isSyncing={!!syncingEps[epSyncKey(group.season, ep)]}` to `isSyncing={hasSyncing && !!syncingEps[epSyncKey(group.season, ep)]}`
+- When `hasSyncing` is false (common case), JavaScript short-circuits and never calls `epSyncKey` — all items get `isSyncing=false` without any string allocation
+- When `hasSyncing` is true (during a toggle), behavior is identical to before
+
+**Metrics:**
+- Bundle: unchanged (same code, just a boolean guard)
+- Runtime: 83+ fewer `epSyncKey` calls (each does `displayEpisodeNumber` + template string concat) per render when no syncing is active
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D221 — Lazy-load Toast component in ToastViewport
+
+**Target:** `web-astryx/src/components/ToastViewport.tsx` — main bundle size
+
+**Problem:** `ToastViewport` is rendered in `App.tsx` on every page. It eagerly imported `Toast` from `@astryxdesign/core/Toast`, which in turn imports a massive `useTranslator` i18n system (82KB) and `defineTheme` theme definition code (22KB). These were all bundled into the main index chunk — the largest chunk loaded on every page. However, `ToastViewport` returns `null` when there are no notifications, so the `Toast` component is never actually rendered on first paint. All 104KB of Toast + translator + theme definition code was dead weight on initial load.
+
+**What changed:**
+- Replaced `import { Toast } from "@astryxdesign/core/Toast"` with `const Toast = lazy(() => import("@astryxdesign/core/Toast").then(m => ({ default: m.Toast })))`
+- Wrapped each `<Toast>` instance in `<Suspense fallback={null}>`
+- The Toast chunk (2.74KB) + useTranslator chunk (81.82KB) + defineTheme chunk (21.55KB) now only download when a notification actually appears — which is always after the page is already loaded and interactive
+
+**Metrics:**
+- Main JS bundle: 436.30KB → 331.22KB (105.08KB / 24% reduction)
+- Main JS gzipped: 135.92KB → 105.57KB (30.35KB reduction)
+- New lazy chunks: useTranslator 81.82KB, defineTheme 21.55KB, Toast 2.74KB (only loaded when a toast appears)
+- ShowDetailPage chunk: 32.85KB → 32.99KB (+0.14KB — minor rebalancing)
+- All pages benefit: 105KB less JS to parse on initial load, not just the detail page
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed. Biggest single optimization in this session — 24% main bundle reduction.
+
+## D222 — Lazy-load cuelume sound library
+
+**Target:** `web-astryx/src/lib/store.tsx`, `web-astryx/src/lib/sounds.ts` — main bundle size
+
+**Problem:** Cuelume (~17KB source) was eagerly imported by `store.tsx` (`play` for notification sounds) and `sounds.ts` (`bind`, `setEnabled`, `setVolume` for interaction sounds). Since `store.tsx` is eagerly imported by `App.tsx`, cuelume was bundled into the main index chunk. However, none of these functions are called on first paint: `play` is only called when a notification appears, `bind` runs on idle via `requestIdleCallback`, and `setEnabled` runs when bootstrap resolves (after first paint).
+
+**What changed:**
+- `store.tsx`: replaced `import { play as cuelumePlay } from "cuelume"` with a module-level `import("cuelume")` promise + `cuelumePlay` variable that's set when the promise resolves. The `addNotification` callback checks `if (cuelumePlay)` before playing.
+- `sounds.ts`: replaced `import { bind, setEnabled, setVolume } from "cuelume"` with the same lazy pattern. `applySoundsEnabled` and `initSounds` both check `if (!cuelumeModule) return` before calling.
+- Cuelume is now in a separate 7.66KB lazy chunk that loads in the background after first paint. By the time `initSounds` runs on idle or a notification triggers `play`, the module is already loaded.
+- `TrackingRuleCard.tsx` still imports `play` from cuelume directly — it's in a lazy chunk that loads when the detail page loads, and cuelume is a shared dependency.
+
+**Metrics:**
+- Main JS bundle: 331.22KB → 323.95KB (7.27KB / 2.2% reduction)
+- Main JS gzipped: 105.57KB → 103.42KB (2.15KB reduction)
+- New lazy chunk: cuelume 7.66KB (loads on idle, not on critical path)
+- tsc clean, vp build clean
+
+**Outcome:** Kept. Committed.
+
+## D223 — Synchronous prefetch cache for ShowDetailPage
+
+**Target:** `web-astryx/src/lib/api.ts`, `web-astryx/src/routes/ShowDetailPage.tsx` — skeleton flash on hard refresh
+
+**Problem:** On hard refresh of `/shows/:id`, `main.tsx` fires `prefetchShowDetail(id)` before React mounts. The prefetch promise is cached, but `ShowDetailPage` still initializes all `useState` with `storeShow` (null on hard refresh), showing skeletons. Even if the prefetch resolves before the component mounts, the component doesn't know — it waits for the effect to call `getShowDetail()` which picks up the cached promise. This causes a visible skeleton flash even when data is already available.
+
+**What changed:**
+- `api.ts`: Added `detailDataCache` (Map<string, ShowDetailResponse>) alongside the existing `detailPrefetch` promise cache. `prefetchShowDetail()` now stores resolved data in `detailDataCache` via `.then()`. New export `getCachedShowDetail(id)` returns resolved data synchronously or null.
+- `ShowDetailPage.tsx`: Added `prefetchedDetail = getCachedShowDetail(showId)` check. If data is available, `initialShow` and `initialEpisodes` are used to seed all `useState` initializers (show, episodes, loadingShow, episodesLoading, pageSettled, epStats, maxEpisode, tracking rules, pristine values). Main fetch effect short-circuits with `requestAnimationFrame(() => setPageSettled(true))` when prefetch data exists — no fetch needed.
+
+**Metrics:**
+- Main JS bundle: 323.95KB → 324.06KB (negligible +0.11KB for cache logic)
+- ShowDetailPage chunk: 32.99KB → 33.42KB (+0.43KB for prefetch initialization logic)
+- tsc clean, vp build clean
+- Behavioral: when prefetch resolves before mount (fast connections/localhost), zero skeleton flash — content appears on first paint. When prefetch hasn't resolved, behavior identical to before.
+
+**Outcome:** Kept. Committed.
+
+## D224 — Pre-JS API fetch via inline script in index.html
+
+**Target:** `web-astryx/index.html`, `web-astryx/src/lib/api.ts` — API request latency on all page loads
+
+**Problem:** `getBootstrap()` and `prefetchShowDetail()` only fire after the 324KB main JS bundle downloads, parses, and React mounts. On a typical connection, the bundle takes 50-200ms to download. During that time, the API could be fetching in parallel — but it's not, because the fetch calls are inside the JS bundle. This creates a sequential waterfall: HTML parse → JS download → JS parse → React mount → API fetch → API response → render.
+
+**What changed:**
+- `index.html`: Added a tiny inline `<script>` in `<head>` that fires `fetch('/api/bootstrap')` and, if on `/shows/:id`, `fetch('/api/mappings/:id/detail')` immediately. The inline script executes as soon as the HTML parser reaches it — before the main JS bundle even starts downloading. The Response promises are stored on `window.__mizuPrefetch`.
+- `api.ts`: Added `requestPrefetched()` helper that reuses a pre-fired `Promise<Response>` if available, falling back to a normal `request()` if not. `getBootstrap()` and `getShowDetail()` now use `requestPrefetched()` to pick up the inline script's fetch. `prefetchShowDetail()` also reuses the pre-fired Response instead of making a duplicate request.
+
+**Metrics:**
+- Main JS bundle: 324.06KB → 324.37KB (+0.31KB for requestPrefetched helper + prefetch wiring)
+- Inline script: ~400 bytes (uncompressed, in HTML head)
+- tsc clean, vp build clean
+- Behavioral: API requests now start in parallel with JS bundle download instead of after it. On a 100ms bundle download, the API has a 100ms head start. On localhost where the API responds in <10ms, the data is ready before React even mounts — `getCachedShowDetail()` returns it synchronously (via D223's cache) and `getBootstrap()` resolves instantly.
 
 **Outcome:** Kept. Committed.

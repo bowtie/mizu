@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, useCallback, useMemo, useRef, useDeferredValue } from "react";
+import { memo, useEffect, useState, useCallback, useMemo, useRef, useDeferredValue, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -10,9 +10,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Badge } from "@astryxdesign/core/Badge";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
-import { AlertDialog } from "@astryxdesign/core/AlertDialog";
-import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
+const AlertDialog = lazy(() => import("@astryxdesign/core/AlertDialog").then(m => ({ default: m.AlertDialog })));
 import { Card } from "@astryxdesign/core/Card";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
@@ -43,9 +41,10 @@ import { useAppStore } from "../lib/store";
 import {
   deleteShow,
   getArtworkBannerUrl,
-  getArtworkPosterUrl,
+  getCachedShowDetail,
   getEpisodes,
   getShow,
+  getShowDetail,
   refreshArtwork,
   setArtworkSource,
   setEpisodeMonitor,
@@ -58,7 +57,6 @@ import type {
   Show,
   ShowUpdate,
 } from "../lib/types";
-import { episodeTypeBadge } from "../lib/fox";
 import { TrackingRuleCard } from "../components/TrackingRuleCard";
 
 const WATERMARK_AUTO = "auto";
@@ -94,25 +92,21 @@ function resolveSonarrEpisode(ep: Episode) {
   if (!ep.sonarr_episode_id) return null;
   return { id: ep.sonarr_episode_id, monitored: !!ep.monitored };
 }
-function episodeMonitored(ep: Episode): boolean {
-  return !!resolveSonarrEpisode(ep)?.monitored;
-}
 
-function badgeVariantForType(
-  type: string | undefined | null,
-): "neutral" | "blue" | "purple" | "yellow" | "red" {
+/** Combined badge info for an episode type — avoids two separate
+ *  lookups (episodeTypeBadge + badgeVariantForType) per item. */
+function episodeBadgeInfo(type: string | undefined | null): {
+  label: string;
+  variant: "neutral" | "blue" | "purple" | "yellow" | "red";
+} {
   switch (type) {
-    case "canon":
-      return "blue";
-    case "anime_canon":
-      return "purple";
+    case "canon": return { label: "Manga", variant: "blue" };
+    case "anime_canon": return { label: "Anime", variant: "purple" };
     case "mixed_canon":
-    case "mixed":
-      return "yellow";
-    case "filler":
-      return "red";
-    default:
-      return "neutral";
+    case "mixed": return { label: "Mixed", variant: "yellow" };
+    case "filler": return { label: "Filler", variant: "red" };
+    case "special": return { label: "Special", variant: "neutral" };
+    default: return { label: "Unknown", variant: "neutral" };
   }
 }
 
@@ -129,7 +123,6 @@ interface SeasonGroup {
 
 interface EpisodeListSectionProps {
   episodesLoading: boolean;
-  filteredEpisodes: Episode[];
   groupedBySeason: SeasonGroup[];
   epStats: { total: number; canon: number; anime: number; mixed: number; filler: number };
   activeTypeFilter: string;
@@ -152,8 +145,8 @@ const EpisodeListItem = memo(function EpisodeListItem({
   isSyncing: boolean;
   onToggleMonitor: (groupSeason: number, ep: Episode) => void;
 }) {
-  const typeBadge = episodeTypeBadge(ep.type);
-  const monitored = episodeMonitored(ep);
+  const badge = episodeBadgeInfo(ep.type);
+  const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const epNum = displayEpisodeNumber(ep);
   return (
     <ListItem
@@ -163,25 +156,30 @@ const EpisodeListItem = memo(function EpisodeListItem({
       endContent={
         <HStack gap={4} align="center">
           {ep.air_date && (
-            <Timestamp value={ep.air_date} format="date" />
+            <Text type="supporting" size="sm" color="secondary">
+              {new Date(ep.air_date).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })}
+            </Text>
           )}
           <Badge
-            variant={badgeVariantForType(ep.type)}
-            label={typeBadge.label}
+            variant={badge.variant}
+            label={badge.label}
           />
-          <Tooltip content={monitored ? "Unmonitor" : "Monitor"} placement="start">
-            <ToggleButton
-              label={monitored ? "Unmonitor episode" : "Monitor episode"}
-              isIconOnly
-              size="sm"
-              icon={<Eye size={14} />}
-              pressedIcon={<EyeOff size={14} />}
-              isPressed={monitored}
-              isDisabled={isSyncing || !ep.sonarr_episode_id}
-              isLoading={isSyncing}
-              onPressedChange={() => onToggleMonitor(groupSeason, ep)}
-            />
-          </Tooltip>
+          <ToggleButton
+            label={monitored ? "Unmonitor episode" : "Monitor episode"}
+            isIconOnly
+            size="sm"
+            icon={<Eye size={14} />}
+            pressedIcon={<EyeOff size={14} />}
+            isPressed={monitored}
+            isDisabled={isSyncing || !ep.sonarr_episode_id}
+            isLoading={isSyncing}
+            onPressedChange={() => onToggleMonitor(groupSeason, ep)}
+            title={monitored ? "Unmonitor" : "Monitor"}
+          />
         </HStack>
       }
     />
@@ -193,7 +191,6 @@ const EpisodeListItem = memo(function EpisodeListItem({
  *  filter, or syncing state actually changes. */
 const EpisodeListSection = memo(function EpisodeListSection({
   episodesLoading,
-  filteredEpisodes,
   groupedBySeason,
   epStats,
   activeTypeFilter,
@@ -201,6 +198,11 @@ const EpisodeListSection = memo(function EpisodeListSection({
   onFilterChange,
   onToggleMonitor,
 }: EpisodeListSectionProps) {
+  // Short-circuit: if no episodes are syncing, skip the epSyncKey
+  // computation for every item (83+ per expanded season). syncingEps
+  // is only non-empty during a brief monitor toggle.
+  const hasSyncing = Object.keys(syncingEps).length > 0;
+
   // Track which seasons have been expanded at least once — collapsed
   // seasons that were never opened skip rendering their (potentially
   // 1000+) episode ListItems entirely, saving DOM nodes.
@@ -269,8 +271,9 @@ const EpisodeListSection = memo(function EpisodeListSection({
         {filterItems}
       </SegmentedControl>
 
-      {/* Episodes by season */}
-      {episodesLoading ? (
+      {/* Episodes by season — keep skeleton visible while useDeferredValue
+          catches up to avoid a flash of "No episodes" empty state. */}
+      {episodesLoading || (epStats.total > 0 && groupedBySeason.length === 0) ? (
         <VStack gap={4}>
           {/* Skeleton filter bar */}
           <div style={{ display: "flex", gap: "var(--spacing-2)" }}>
@@ -291,7 +294,7 @@ const EpisodeListSection = memo(function EpisodeListSection({
             </div>
           ))}
         </VStack>
-      ) : filteredEpisodes.length === 0 ? (
+      ) : groupedBySeason.length === 0 ? (
         <EmptyState
           title="No episodes"
           description="No episodes match the selected type."
@@ -337,7 +340,7 @@ const EpisodeListSection = memo(function EpisodeListSection({
                         key={`${group.season}-${displayEpisodeNumber(ep)}`}
                         ep={ep}
                         groupSeason={group.season}
-                        isSyncing={!!syncingEps[epSyncKey(group.season, ep)]}
+                        isSyncing={hasSyncing && !!syncingEps[epSyncKey(group.season, ep)]}
                         onToggleMonitor={onToggleMonitor}
                       />
                     ))}
@@ -367,35 +370,63 @@ export function ShowDetailPage() {
     [shows, showId],
   );
 
-  const [loadingShow, setLoadingShow] = useState(!storeShow);
+  // Check if the prefetched detail data (fired in main.tsx on hard
+  // refresh) has already resolved. If so, use it as initial state to
+  // skip the skeleton entirely — the user sees content on first paint.
+  const prefetchedDetail = showId ? getCachedShowDetail(showId) : null;
+  const initialShow = storeShow ?? prefetchedDetail?.show ?? null;
+  const initialEpisodes = prefetchedDetail?.episodes as Episode[] | undefined;
+
+  const [loadingShow, setLoadingShow] = useState(!initialShow);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [show, setShow] = useState<Show | null>(storeShow);
+  const [show, setShow] = useState<Show | null>(initialShow);
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const [artworkVersion, setArtworkVersion] = useState(0);
   const [heroImgError, setHeroImgError] = useState(false);
-  const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const [episodesLoading, setEpisodesLoading] = useState(true);
-  const [pageSettled, setPageSettled] = useState(false);
-  const [epStats, setEpStats] = useState({ total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 });
-  const [maxEpisode, setMaxEpisode] = useState(0);
-  const [trackFiller, setTrackFiller] = useState(() => actionToTracked(storeShow?.filler_action, false));
-  const [trackMixed, setTrackMixed] = useState(() => actionToTracked(storeShow?.mixed_action, true));
-  const [trackAnimeCanon, setTrackAnimeCanon] = useState(() => actionToTracked(storeShow?.anime_canon_action, true));
-  const [watermarkAuto, setWatermarkAuto] = useState(() => (storeShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-  const [markerValue, setMarkerValue] = useState(() => Math.max(0, storeShow?.sync_watermark || 0));
+  const [episodes, setEpisodes] = useState<Episode[]>(initialEpisodes ?? []);
+  const [episodesLoading, setEpisodesLoading] = useState(!initialEpisodes);
+  const [pageSettled, setPageSettled] = useState(!!initialShow);
+  const [epStats, setEpStats] = useState(() => {
+    if (initialEpisodes) {
+      let total = 0, canon = 0, anime = 0, mixed = 0, filler = 0, max = 0;
+      for (const ep of initialEpisodes) {
+        max = Math.max(max, displayEpisodeNumber(ep));
+        total++;
+        switch (ep.type) {
+          case "canon": canon++; break;
+          case "anime_canon": anime++; break;
+          case "mixed_canon": mixed++; break;
+          case "filler": filler++; break;
+        }
+      }
+      return { total, canon, anime, mixed, filler };
+    }
+    return { total: 0, canon: 0, anime: 0, mixed: 0, filler: 0 };
+  });
+  const [maxEpisode, setMaxEpisode] = useState(() => {
+    if (!initialEpisodes) return 0;
+    let max = 0;
+    for (const ep of initialEpisodes) max = Math.max(max, displayEpisodeNumber(ep));
+    return max;
+  });
+  const [trackFiller, setTrackFiller] = useState(() => actionToTracked(initialShow?.filler_action, false));
+  const [trackMixed, setTrackMixed] = useState(() => actionToTracked(initialShow?.mixed_action, true));
+  const [trackAnimeCanon, setTrackAnimeCanon] = useState(() => actionToTracked(initialShow?.anime_canon_action, true));
+  const [watermarkAuto, setWatermarkAuto] = useState(() => (initialShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+  const [markerValue, setMarkerValue] = useState(() => Math.max(0, initialShow?.sync_watermark || 0));
   const [activeTypeFilter, setActiveTypeFilter] = useState<string>("all");
   const [isMobile, setIsMobile] = useState(false);
   const [syncingEps, setSyncingEps] = useState<Record<string, boolean>>({});
 
-  const [pristineFiller, setPristineFiller] = useState(() => actionToTracked(storeShow?.filler_action, false));
-  const [pristineMixed, setPristineMixed] = useState(() => actionToTracked(storeShow?.mixed_action, true));
-  const [pristineAnimeCanon, setPristineAnimeCanon] = useState(() => actionToTracked(storeShow?.anime_canon_action, true));
-  const [pristineWatermarkAuto, setPristineWatermarkAuto] = useState(() => (storeShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-  const [pristineMarkerValue, setPristineMarkerValue] = useState(() => Math.max(0, storeShow?.sync_watermark || 0));
+  const [pristineFiller, setPristineFiller] = useState(() => actionToTracked(initialShow?.filler_action, false));
+  const [pristineMixed, setPristineMixed] = useState(() => actionToTracked(initialShow?.mixed_action, true));
+  const [pristineAnimeCanon, setPristineAnimeCanon] = useState(() => actionToTracked(initialShow?.anime_canon_action, true));
+  const [pristineWatermarkAuto, setPristineWatermarkAuto] = useState(() => (initialShow?.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+  const [pristineMarkerValue, setPristineMarkerValue] = useState(() => Math.max(0, initialShow?.sync_watermark || 0));
 
   const rulesDirty =
     !!show &&
@@ -466,90 +497,110 @@ export function ShowDetailPage() {
   // Fetch show data + episodes. If the store already has show data,
   // we skip the getShow call entirely — the store data is fresh enough
   // (fetched on app mount). Episodes always need fetching since they're
-  // not in the store.
+  // not in the store. On hard refresh (no store data), we use the
+  // combined /detail endpoint to fetch show + episodes in one request.
+  // If the prefetched detail data was already resolved (fired in
+  // main.tsx before React mounted), we skip the fetch entirely.
   useEffect(() => {
     if (!showId) return;
     const hasStoreData = !!storeShow;
+    const hasPrefetched = !!prefetchedDetail;
+
+    // If we already have all data from prefetch, just settle — no fetch needed.
+    if (hasPrefetched) {
+      requestAnimationFrame(() => setPageSettled(true));
+      return;
+    }
+
     setLoadingShow(!hasStoreData);
     setEpisodesLoading(true);
     setHeroImgError(false);
 
-    // If the store already has show data, the actions bar can settle
-    // immediately — don't wait for episodes to finish loading.
+    // If the store already has show data, settle immediately — the
+    // CSS controls-reveal keeps the bar hidden until hover anyway,
+    // so we just need to enable the transition on next frame.
     if (hasStoreData) {
-      requestAnimationFrame(() => {
-        setTimeout(() => setPageSettled(true), 80);
-      });
+      requestAnimationFrame(() => setPageSettled(true));
     } else {
       setPageSettled(false);
     }
 
-    // Only fetch show data if the store doesn't have it. The store
-    // fetches all shows on app mount, so this is only needed on hard
-    // refresh or direct URL navigation before the store resolves.
+    const applyShowData = (showRes: Show) => {
+      setShow(showRes);
+      setTrackFiller(actionToTracked(showRes.filler_action, false));
+      setTrackMixed(actionToTracked(showRes.mixed_action, true));
+      setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
+      setWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+      setMarkerValue(Math.max(0, showRes.sync_watermark || 0));
+      setPristineFiller(actionToTracked(showRes.filler_action, false));
+      setPristineMixed(actionToTracked(showRes.mixed_action, true));
+      setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
+      setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
+      setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
+      requestAnimationFrame(() => setPageSettled(true));
+    };
+
+    const applyEpisodes = (eps: Episode[]) => {
+      setEpisodes(eps);
+      let freshMax = 0;
+      let total = 0, canon = 0, anime = 0, mixed = 0, filler = 0;
+      for (const ep of eps) {
+        freshMax = Math.max(freshMax, displayEpisodeNumber(ep));
+        total++;
+        switch (ep.type) {
+          case "canon": canon++; break;
+          case "anime_canon": anime++; break;
+          case "mixed_canon": mixed++; break;
+          case "filler": filler++; break;
+        }
+      }
+      setEpStats({ total, canon, anime, mixed, filler });
+      setMaxEpisode(freshMax);
+      setMarkerValue((prev) => Math.min(prev, freshMax));
+      setPristineMarkerValue((prev) => Math.min(prev, freshMax));
+      setEpisodesLoading(false);
+    };
+
     if (!hasStoreData) {
-      getShow(showId)
-      .then((showRes) => {
-        if (!showRes) {
-          addNotification("Anime not found", "error");
-          navigate("/shows");
-          return;
-        }
-
-        setShow(showRes);
-        setTrackFiller(actionToTracked(showRes.filler_action, false));
-        setTrackMixed(actionToTracked(showRes.mixed_action, true));
-        setTrackAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
-        setWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-        setMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-        setPristineFiller(actionToTracked(showRes.filler_action, false));
-        setPristineMixed(actionToTracked(showRes.mixed_action, true));
-        setPristineAnimeCanon(actionToTracked(showRes.anime_canon_action, true));
-        setPristineWatermarkAuto((showRes.watermark_mode || WATERMARK_AUTO) === WATERMARK_AUTO);
-        setPristineMarkerValue(Math.max(0, showRes.sync_watermark || 0));
-        // Settle the actions bar as soon as show data is available —
-        // don't wait for the episode list to finish loading.
-        requestAnimationFrame(() => {
-          setTimeout(() => setPageSettled(true), 80);
-        });
-      })
-      .catch((err: unknown) => {
-        addNotification("Failed to load anime: " + errorMessage(err), "error");
-      })
-      .finally(() => {
-        setLoadingShow(false);
-      });
-    }
-
-    // Load episodes in parallel — don't block the hero.
-    getEpisodes(showId)
-      .then((episodesRes) => {
-        const eps = (episodesRes as Episode[]) || [];
-        setEpisodes(eps);
-        // Compute freshMax and epStats in a single pass over the array
-        // instead of separate .reduce() + useMemo iterations.
-        let freshMax = 0;
-        let total = 0, canon = 0, anime = 0, mixed = 0, filler = 0;
-        for (const ep of eps) {
-          freshMax = Math.max(freshMax, displayEpisodeNumber(ep));
-          total++;
-          switch (ep.type) {
-            case "canon": canon++; break;
-            case "anime_canon": anime++; break;
-            case "mixed_canon": mixed++; break;
-            case "filler": filler++; break;
+      // Hard refresh — fetch show + episodes in a single request.
+      // Split the response handling into two ticks: apply show data
+      // first (title, tracking rules, artwork card) so the page fills
+      // in immediately, then apply episodes in the next frame so the
+      // episode list renders in a separate pass. This gives users a
+      // progressive loading experience instead of everything appearing
+      // at once after the API resolves.
+      getShowDetail(showId)
+        .then((res) => {
+          if (!res.show) {
+            addNotification("Anime not found", "error");
+            navigate("/shows");
+            return;
           }
-        }
-        setEpStats({ total, canon, anime, mixed, filler });
-        setMaxEpisode(freshMax);
-        setMarkerValue((prev) => Math.min(prev, freshMax));
-        setPristineMarkerValue((prev) => Math.min(prev, freshMax));
-        setEpisodesLoading(false);
-      })
-      .catch((err: unknown) => {
-        addNotification("Failed to load episodes: " + errorMessage(err), "error");
-        setEpisodesLoading(false);
-      });
+          applyShowData(res.show);
+          // Defer episode rendering to the next frame so React commits
+          // the show data (hero title, tracking rules, artwork) first.
+          requestAnimationFrame(() => {
+            applyEpisodes((res.episodes as Episode[]) || []);
+          });
+        })
+        .catch((err: unknown) => {
+          addNotification("Failed to load anime: " + errorMessage(err), "error");
+          setEpisodesLoading(false);
+        })
+        .finally(() => {
+          setLoadingShow(false);
+        });
+    } else {
+      // Store has show data — only fetch episodes.
+      getEpisodes(showId)
+        .then((episodesRes) => {
+          applyEpisodes((episodesRes as Episode[]) || []);
+        })
+        .catch((err: unknown) => {
+          addNotification("Failed to load episodes: " + errorMessage(err), "error");
+          setEpisodesLoading(false);
+        });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showId]);
 
@@ -913,10 +964,6 @@ export function ShowDetailPage() {
                       />
                     </InputGroupText>
                   </InputGroup>
-                  <Tooltip
-                    content={watermarkAuto ? "Using Sonarr progress" : "Using manual episode"}
-                    placement="end"
-                  >
                     <Button
                       label={watermarkAuto ? "Auto" : "Manual"}
                       variant="secondary"
@@ -924,9 +971,9 @@ export function ShowDetailPage() {
                       icon={<Bot size={16} />}
                       isIconOnly={isMobile}
                       onClick={() => setWatermarkAuto(!watermarkAuto)}
+                      title={watermarkAuto ? "Using Sonarr progress" : "Using manual episode"}
                       data-cuelume-toggle
                     />
-                  </Tooltip>
                 </HStack>
                 <HStack gap={2} align="center" wrap="nowrap" className="show-actions-bar-end">
                   <Button
@@ -1086,11 +1133,11 @@ export function ShowDetailPage() {
         )}
 
         {/* Episode list — memoized so tracking-rule toggles don't re-render it.
-            Rendered outside the show-gate since it has its own loading state. */}
-        {show && (
+            Rendered outside the show-gate so the skeleton appears immediately
+            even before show data resolves (e.g. hard refresh). */}
+        {showId && (
           <EpisodeListSection
             episodesLoading={episodesLoading}
-            filteredEpisodes={deferredFilteredEpisodes}
             groupedBySeason={groupedBySeason}
             epStats={epStats}
             activeTypeFilter={activeTypeFilter}
@@ -1102,7 +1149,8 @@ export function ShowDetailPage() {
         </VStack>
       </Section>
 
-      {show && (
+      {show && showDeleteDialog && (
+      <Suspense fallback={null}>
       <AlertDialog
         isOpen={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
@@ -1112,6 +1160,7 @@ export function ShowDetailPage() {
         isActionLoading={deleting}
         onAction={handleDelete}
       />
+      </Suspense>
       )}
     </>
   );

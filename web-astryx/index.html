@@ -10,6 +10,28 @@
     <link rel="preload" href="/fonts/figtree-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/figtree-latin-ext.woff2" as="font" type="font/woff2" crossorigin />
     <title>Mizu</title>
+    <script>
+      // Fire API requests before the main JS bundle downloads/parses.
+      // The inline script executes instantly — the fetch starts in
+      // parallel with the 324KB bundle download, saving 50-200ms.
+      // api.ts picks up the stored Response objects via window.__mizuPrefetch.
+      (function () {
+        var p = (window.__mizuPrefetch = {});
+        // Bootstrap is always needed — shows + settings + providers.
+        p.bootstrap = fetch("/api/bootstrap", {
+          headers: { Accept: "application/json" },
+        });
+        // If navigating directly to a show detail page, prefetch the
+        // combined show + episodes endpoint too.
+        var m = location.pathname.match(/^\/shows\/(\d+)/);
+        if (m) {
+          p.detailId = m[1];
+          p.detail = fetch("/api/mappings/" + m[1] + "/detail", {
+            headers: { Accept: "application/json" },
+          });
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root">

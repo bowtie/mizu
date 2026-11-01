@@ -1,7 +1,11 @@
-import { Toast } from "@astryxdesign/core/Toast";
 import { VStack } from "@astryxdesign/core/VStack";
 import { Check, CircleAlert, Info } from "lucide-react";
+import { lazy, Suspense } from "react";
 import { useNotifications } from "../lib/store";
+
+const Toast = lazy(() =>
+  import("@astryxdesign/core/Toast").then((m) => ({ default: m.Toast })),
+);
 
 export function ToastViewport() {
   const { notifications, removeNotification } = useNotifications();
@@ -26,6 +30,7 @@ export function ToastViewport() {
 
         return (
           <div key={n.id} data-notification-type={n.type}>
+            <Suspense fallback={null}>
             <Toast
               body={
                 <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -43,6 +48,7 @@ export function ToastViewport() {
               autoHideDuration={n.duration > 0 ? n.duration : 5000}
               onDismiss={() => removeNotification(n.id)}
             />
+            </Suspense>
           </div>
         );
       })}

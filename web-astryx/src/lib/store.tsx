@@ -1,8 +1,16 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
-import { play as cuelumePlay } from "cuelume";
 import { applySoundsEnabled } from "./sounds";
 import type { ArtworkProvider, Notification, Settings, Show } from "./types";
-import { getShows, getSettings, getArtworkProviders } from "./api";
+import { getBootstrap, getShows, getSettings, getArtworkProviders } from "./api";
+
+// Lazy-load cuelume — the `play` function is only called when a
+// notification appears, never on first paint. initSounds() (called
+// on idle in main.tsx) loads the module via bind(), so by the time
+// a notification triggers play(), cuelume is already loaded.
+let cuelumePlay: ((sound: string, opts?: { volume?: number }) => void) | null = null;
+const cuelumePromise = import("cuelume").then((m) => {
+  cuelumePlay = m.play;
+}).catch(() => { /* cuelume optional */ });
 
 interface AppStore {
   shows: Show[];
@@ -76,10 +84,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return [...n, { id, message, type, duration }];
       });
       // Play a cuelume cue matching the notification type.
-      if (type === "success") {
-        cuelumePlay("success", { volume: 0.4 });
-      } else if (type === "error") {
-        cuelumePlay("error", { volume: 0.4 });
+      if (cuelumePlay) {
+        if (type === "success") {
+          cuelumePlay("success", { volume: 0.4 });
+        } else if (type === "error") {
+          cuelumePlay("error", { volume: 0.4 });
+        }
       }
       if (duration > 0) {
         setTimeout(() => {
@@ -94,26 +104,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications((n) => n.filter((x) => x.id !== id));
   }, []);
 
-  // Fetch shows + settings + artwork providers on mount so they're
-  // available app-wide. This lets ShowDetailPage show the hero image
-  // instantly on direct navigation/refresh (before getShow resolves)
-  // via the store fallback, and avoids re-fetching artwork providers
-  // on every ShowDetailPage / SettingsPage visit.
+  // Fetch shows + settings + artwork providers on mount via a single
+  // bootstrap request — eliminates 2 round-trips. This lets ShowDetailPage
+  // show the hero image instantly on direct navigation/refresh (before
+  // getShow resolves) via the store fallback, and avoids re-fetching
+  // artwork providers on every ShowDetailPage / SettingsPage visit.
   useEffect(() => {
     const aborted = { current: false };
-    Promise.allSettled([getShows(), getSettings(), getArtworkProviders()]).then(
-      ([showsRes, settingsRes, providersRes]) => {
+    getBootstrap().then(
+      (data) => {
         if (aborted.current) return;
-        if (showsRes.status === "fulfilled") setShows(showsRes.value || []);
-        if (settingsRes.status === "fulfilled") {
-          const s = settingsRes.value ?? null;
-          setSettings(s);
-          // Apply the sounds preference from backend settings.
-          applySoundsEnabled(s?.ui_sounds_enabled !== false);
-        }
-        if (providersRes.status === "fulfilled") {
-          setArtworkProviders(providersRes.value?.providers || []);
-        }
+        setShows(data.shows || []);
+        const s = data.settings ?? null;
+        setSettings(s);
+        applySoundsEnabled(s?.ui_sounds_enabled !== false);
+        setArtworkProviders(data.providers || []);
+      },
+      () => {
+        if (aborted.current) return;
+        // Fallback to individual requests if bootstrap fails
+        Promise.allSettled([getShows(), getSettings(), getArtworkProviders()]).then(
+          ([showsRes, settingsRes, providersRes]) => {
+            if (aborted.current) return;
+            if (showsRes.status === "fulfilled") setShows(showsRes.value || []);
+            if (settingsRes.status === "fulfilled") {
+              const s = settingsRes.value ?? null;
+              setSettings(s);
+              applySoundsEnabled(s?.ui_sounds_enabled !== false);
+            }
+            if (providersRes.status === "fulfilled") {
+              setArtworkProviders(providersRes.value?.providers || []);
+            }
+          },
+        );
       },
     );
     return () => { aborted.current = true; };

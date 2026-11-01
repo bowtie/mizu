@@ -16,6 +16,16 @@ import type {
 
 const BASE = "/api";
 
+// Pre-fired fetch responses from the inline script in index.html.
+// The inline script fires fetch() before the JS bundle downloads,
+// so API requests start in parallel with the 324KB bundle download.
+interface MizuPrefetch {
+  bootstrap?: Promise<Response>;
+  detail?: Promise<Response>;
+  detailId?: string;
+}
+const prefetch = (window as unknown as { __mizuPrefetch?: MizuPrefetch }).__mizuPrefetch;
+
 async function request<T>(method: string, path: string, body: unknown = null): Promise<T> {
   const opts: RequestInit = {
     method,
@@ -29,6 +39,22 @@ async function request<T>(method: string, path: string, body: unknown = null): P
     throw new Error(err.error || res.statusText);
   }
   return res.json() as Promise<T>;
+}
+
+// Like request(), but reuses a pre-fired Response from the inline
+// script if available. The Response is already in-flight (or
+// completed) by the time the JS bundle runs — we just read it.
+async function requestPrefetched<T>(
+  prefetched: Promise<Response> | undefined,
+  fallbackPath: string,
+): Promise<T> {
+  if (prefetched) {
+    const res = await prefetched;
+    if (res.ok) return res.json() as Promise<T>;
+    // If the prefetched response failed, fall through to a fresh request.
+    if (res.status === 404) throw new Error("not found");
+  }
+  return request<T>("GET", fallbackPath);
 }
 
 // In-memory cache for Sonarr series by ID — survives navigations within
@@ -82,6 +108,18 @@ export function getShows(): Promise<Show[]> {
   return request<Show[]>("GET", "/mappings");
 }
 
+// Bootstrap — returns shows + settings + artwork providers in one
+// response, eliminating 2 round-trips on app mount.
+interface BootstrapResponse {
+  shows: Show[];
+  settings: Settings;
+  providers: ArtworkProvider[];
+}
+
+export function getBootstrap(): Promise<BootstrapResponse> {
+  return requestPrefetched<BootstrapResponse>(prefetch?.bootstrap, "/bootstrap");
+}
+
 // In-memory cache for show prefetches — when the user hovers a show
 // card, we fire getShow early and cache the promise. When they navigate
 // to the detail page, the promise is already resolving (or resolved).
@@ -103,6 +141,67 @@ export function prefetchShow(id: string | number): void {
   const key = String(id);
   if (showPrefetch.has(key)) return;
   showPrefetch.set(key, request<Show>("GET", "/mappings/" + id));
+}
+
+// Combined detail response — show + episodes in one round-trip.
+interface ShowDetailResponse {
+  show: Show;
+  episodes: Episode[];
+}
+
+// In-memory cache for combined detail prefetches — used on direct
+// navigation to /shows/:id to avoid 2 separate round-trips.
+const detailPrefetch = new Map<string, Promise<ShowDetailResponse>>();
+// Synchronous cache for resolved detail data — allows ShowDetailPage
+// to initialize with data that was prefetched before the component
+// mounted, eliminating the skeleton flash on hard refresh.
+const detailDataCache = new Map<string, ShowDetailResponse>();
+
+/** Fetch show + episodes in a single request. Used on hard refresh
+ *  of the detail page to eliminate 1 HTTP round-trip. Reuses the
+ *  pre-fired fetch from the inline script in index.html if the ID
+ *  matches — the request started before the JS bundle downloaded. */
+export function getShowDetail(id: string | number): Promise<ShowDetailResponse> {
+  const key = String(id);
+  const cached = detailPrefetch.get(key);
+  if (cached) {
+    detailPrefetch.delete(key);
+    return cached;
+  }
+  // Use the pre-fired Response from the inline script if available.
+  const preFired = prefetch?.detail && prefetch.detailId === key ? prefetch.detail : undefined;
+  return requestPrefetched<ShowDetailResponse>(preFired, "/mappings/" + key + "/detail");
+}
+
+/** Synchronously check if prefetched detail data is already resolved.
+ *  Returns the data if available, null otherwise. Used by ShowDetailPage
+ *  to initialize state without a loading flash when the prefetch
+ *  completed before the component mounted. */
+export function getCachedShowDetail(id: string | number): ShowDetailResponse | null {
+  return detailDataCache.get(String(id)) ?? null;
+}
+
+/** Prefetch combined show + episodes data. Used in main.tsx on direct
+ *  navigation to /shows/:id. The cached promise is picked up by
+ *  getShowDetail() when ShowDetailPage mounts. Resolved data is also
+ *  stored synchronously so the component can initialize with it.
+ *  If the inline script in index.html already fired the fetch, we
+ *  reuse that Response instead of making a duplicate request. */
+export function prefetchShowDetail(id: string | number): void {
+  const key = String(id);
+  if (detailPrefetch.has(key)) return;
+  // Reuse the pre-fired Response from the inline script if available.
+  const preFired = prefetch?.detail && prefetch.detailId === key ? prefetch.detail : undefined;
+  const promise = preFired
+    ? preFired.then((res) => {
+        if (!res.ok) throw new Error("prefetch failed");
+        return res.json() as Promise<ShowDetailResponse>;
+      })
+    : request<ShowDetailResponse>("GET", "/mappings/" + key + "/detail");
+  detailPrefetch.set(key, promise);
+  promise.then((data) => {
+    detailDataCache.set(key, data);
+  }).catch(() => { /* ignore — getShowDetail will re-fetch */ });
 }
 
 export function createShow(data: MappingCreate): Promise<Show> {

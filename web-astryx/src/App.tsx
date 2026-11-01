@@ -2,11 +2,15 @@ import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider } from "./lib/store";
 import { ToastViewport } from "./components/ToastViewport";
-import { ShowsPage } from "./routes/ShowsPage";
 import { prefetchDetailChunk } from "./lib/chunkPrefetch";
 
-// Route-based code splitting — ShowsPage (landing) loads eagerly,
-// other pages are lazy-loaded on first navigation.
+// Route-based code splitting — all pages are lazy-loaded. ShowsPage
+// (landing) is also lazy but its import is fired immediately in
+// main.tsx so the browser starts downloading it in parallel with
+// the main bundle parse.
+const ShowsPage = lazy(() =>
+  import("./routes/ShowsPage").then((m) => ({ default: m.ShowsPage })),
+);
 const ShowDetailPage = lazy(() =>
   import("./routes/ShowDetailPage").then((m) => ({ default: m.ShowDetailPage })),
 );
@@ -45,8 +49,22 @@ export function App() {
     <AppProvider>
       <ScrollToTop />
       <Routes>
-        <Route path="/" element={<ShowsPage />} />
-        <Route path="/shows" element={<ShowsPage />} />
+        <Route
+          path="/"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <ShowsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/shows"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <ShowsPage />
+            </Suspense>
+          }
+        />
         <Route
           path="/shows/:id"
           element={
