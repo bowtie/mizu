@@ -2,27 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
 // ── Module mocks ──
-// The page talks to the backend through the settings mutation and test
-// endpoints, to the notification store, to react-query (useSettings/
-// useUpdateSettings/useQueryClient), and to sounds. Mock those so the tests
-// drive the form with controlled data. TrackingRuleCard is replaced with a
-// plain button so a tracking-default change is one click (the real card is a
-// styled Switch that is awkward to drive from happy-dom).
+// The page reads and writes through the real query hooks; only the HTTP
+// layer (api.ts), the notification store, routing and sounds are mocked.
+// TrackingRuleCard is replaced with a plain button so a tracking-default
+// change is one click (the real card is a styled Switch that is awkward to
+// drive from happy-dom).
 
-const { addNotificationMock, updateSettingsMock, queryClient } = vi.hoisted(() => ({
-  addNotificationMock: vi.fn(),
-  updateSettingsMock: vi.fn(),
-  // useQueryClient must return a *stable* object: loadSettings is a useCallback
-  // keyed on queryClient, so a fresh object per render would re-run the
-  // settings fetch (and reset the form) every render and loop.
-  queryClient: { fetchQuery: vi.fn() },
-}));
+const { addNotificationMock } = vi.hoisted(() => ({ addNotificationMock: vi.fn() }));
 
-const EMPTY_PROVIDERS: never[] = [];
-
-// Stable settings fixture. useSettings returns this exact object, so the
-// store-settings effect dep never changes between renders.
 const SETTINGS = {
   sonarr_url: "http://localhost:8989",
   sonarr_api_key_masked: "••••",
@@ -43,31 +33,28 @@ const SETTINGS = {
   ntfy_topic: "",
   ntfy_token_set: false,
   ui_sounds_enabled: true,
-} as const;
+};
 
 vi.mock("../lib/api", () => ({
   getSettings: vi.fn(),
+  updateSettings: vi.fn(),
+  getArtworkProviders: vi.fn().mockResolvedValue({ providers: [] }),
+  getAuthStatus: vi.fn().mockResolvedValue({ configured: false, authenticated: false }),
   refreshAflCache: vi.fn(),
-  getAflCacheRefreshStatus: vi.fn().mockResolvedValue({ refreshing: false }),
+  getAflCacheRefreshStatus: vi.fn(),
   refreshAllArtwork: vi.fn(),
   testNtfyConnection: vi.fn(),
   testSonarrConnection: vi.fn(),
+  exportConfig: vi.fn(),
+  importConfig: vi.fn(),
+  setupPassword: vi.fn(),
+  removePassword: vi.fn(),
+  changePassword: vi.fn(),
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
-}));
-
-vi.mock("../lib/queries", () => ({
-  useSettings: () => ({ data: SETTINGS, isPending: false, isFetched: true }),
-  useArtworkProviders: () => ({ data: EMPTY_PROVIDERS, isPending: false, isFetched: true }),
-  useUpdateSettings: () => ({ mutateAsync: updateSettingsMock }),
-  useAuthStatus: () => ({ data: { configured: false, authenticated: false } }),
 }));
 
 vi.mock("../lib/store", () => ({
   useNotificationStore: () => addNotificationMock,
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => queryClient,
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -98,25 +85,37 @@ vi.mock("../components/TrackingRuleCard", async () => {
   };
 });
 
+import { getSettings, updateSettings, refreshAflCache, getAflCacheRefreshStatus } from "../lib/api";
 import { SettingsPage } from "./SettingsPage";
+
+const mockedGetSettings = vi.mocked(getSettings);
+const updateSettingsMock = vi.mocked(updateSettings);
+const mockedRefreshAflCache = vi.mocked(refreshAflCache);
+const mockedAflStatus = vi.mocked(getAflCacheRefreshStatus);
 
 let container: HTMLDivElement;
 let root: Root;
+let queryClient: QueryClient;
 
 beforeEach(() => {
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   addNotificationMock.mockClear();
+  mockedGetSettings.mockReset();
+  mockedGetSettings.mockResolvedValue(SETTINGS as never);
   updateSettingsMock.mockReset();
-  updateSettingsMock.mockResolvedValue(SETTINGS);
-  (queryClient.fetchQuery as ReturnType<typeof vi.fn>).mockResolvedValue(SETTINGS);
+  updateSettingsMock.mockResolvedValue({ status: "settings updated" });
+  mockedAflStatus.mockReset();
+  mockedAflStatus.mockResolvedValue({ refreshing: false });
+  mockedRefreshAflCache.mockReset();
 });
 
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  vi.clearAllMocks();
+  queryClient.clear();
 });
 
 async function flush(rounds = 6) {
@@ -129,7 +128,9 @@ async function flush(rounds = 6) {
 
 async function renderPage() {
   await act(async () => {
-    root.render(createElement(SettingsPage));
+    root.render(
+      createElement(QueryClientProvider, { client: queryClient }, createElement(SettingsPage)),
+    );
   });
   await flush();
 }
@@ -175,6 +176,8 @@ describe("SettingsPage", () => {
       expect.objectContaining({ default_filler_action: "monitor" }),
     );
     expect(addNotificationMock).toHaveBeenCalledWith("Settings saved", "success");
+    // The stored settings are re-read after saving.
+    expect(mockedGetSettings.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("Discard reverts the edit and hides the save bar without saving", async () => {
@@ -221,4 +224,31 @@ describe("SettingsPage", () => {
     expect(addSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
     addSpy.mockRestore();
   });
+
+  it("refreshes the AFL cache and reports when the background job ends", async () => {
+    await renderPage();
+    mockedRefreshAflCache.mockResolvedValue({ status: "refreshing" });
+    // First poll still running, then done.
+    mockedAflStatus.mockResolvedValueOnce({ refreshing: true }).mockResolvedValue({
+      refreshing: false,
+    });
+
+    await act(async () => {
+      findButton("Refresh")?.click();
+    });
+    await flush(2);
+    expect(mockedRefreshAflCache).toHaveBeenCalledTimes(1);
+    expect(container.innerHTML).toContain("Refreshing...");
+
+    // Polls every 2s until the job reports it has finished.
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 2100));
+      });
+    }
+    await flush();
+
+    expect(addNotificationMock).toHaveBeenCalledWith("AFL show list refreshed", "success");
+    expect(container.innerHTML).not.toContain("Refreshing...");
+  }, 15_000);
 });

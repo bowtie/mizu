@@ -8,7 +8,6 @@ ignore ./web/node_modules
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/go-chi/chi/v5 v5.5.0
-	github.com/go-chi/cors v1.2.2
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1

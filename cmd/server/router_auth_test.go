@@ -169,6 +169,33 @@ func TestSameOriginGuardBlocksForeignOrigin(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+// Behind a TLS-terminating proxy the browser's origin is https:// while
+// Mizu sees plain HTTP; a proxy may also rewrite Host and pass the public
+// host in X-Forwarded-Host. Both must pass, while a foreign host still fails.
+func TestSameOriginGuardBehindProxy(t *testing.T) {
+	handler, _ := newAuthTestRouter(t)
+	post := func(host, origin, fwdHost string) int {
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"password":"x"}`))
+		req.Host = host
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", origin)
+		if fwdHost != "" {
+			req.Header.Set("X-Forwarded-Host", fwdHost)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// TLS terminated at the proxy, Host preserved.
+	assert.Equal(t, http.StatusUnauthorized, post("mizu.example.com", "https://mizu.example.com", ""))
+	// Proxy rewrote Host to the upstream and sent the public host along.
+	assert.Equal(t, http.StatusUnauthorized, post("mizu:8978", "https://mizu.example.com", "mizu.example.com"))
+	// A foreign page is still rejected, with or without proxy headers.
+	assert.Equal(t, http.StatusForbidden, post("mizu.example.com", "https://evil.example", ""))
+	assert.Equal(t, http.StatusForbidden, post("mizu:8978", "https://evil.example", "mizu.example.com"))
+}
+
 func TestSessionExpiryRespectedByMiddleware(t *testing.T) {
 	handler, db := newAuthTestRouter(t)
 

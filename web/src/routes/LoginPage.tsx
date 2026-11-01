@@ -11,6 +11,7 @@ import { Spinner } from "@astryxdesign/core/Spinner";
 import { Waves, LogIn, ShieldCheck } from "lucide-react";
 import { getAuthStatus, login, setupPassword, errorMessage } from "../lib/api";
 import type { AuthStatus } from "../lib/api";
+import { safeRedirectPath } from "../lib/redirect";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -27,7 +28,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const from = searchParams.get("from") || "/";
+  const from = safeRedirectPath(searchParams.get("from"));
 
   useEffect(() => {
     let cancelled = false;

@@ -145,16 +145,37 @@ export function getArtworkProviders(): Promise<{ providers: ArtworkProvider[] }>
   return request<{ providers: ArtworkProvider[] }>("GET", "/artwork/providers");
 }
 
-export function getArtworkPosterUrl(mappingId: string | number): string {
-  return `${BASE}/artwork/${mappingId}/poster`;
+// The server lets browsers cache local artwork for a day, and the path for a
+// show's poster/banner/logo never changes. Each URL therefore carries a
+// version: a short hash of what the stored image is (its source URL), so a
+// newly stored image gets a new URL while an unchanged one stays cached.
+function artworkUrl(mappingId: string | number, kind: string, version?: string): string {
+  const url = `${BASE}/artwork/${mappingId}/${kind}`;
+  return version ? `${url}?v=${hashVersion(version)}` : url;
 }
 
-export function getArtworkBannerUrl(mappingId: string | number): string {
-  return `${BASE}/artwork/${mappingId}/banner`;
+/** Short, stable, non-cryptographic hash (FNV-1a) for cache-busting. */
+function hashVersion(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
-export function getArtworkLogoUrl(mappingId: string | number): string {
-  return `${BASE}/artwork/${mappingId}/logo`;
+/** `version` identifies the stored image — pass the show's
+ *  `artwork_poster_url` (or path) so the URL changes when the image does. */
+export function getArtworkPosterUrl(mappingId: string | number, version?: string): string {
+  return artworkUrl(mappingId, "poster", version);
+}
+
+export function getArtworkBannerUrl(mappingId: string | number, version?: string): string {
+  return artworkUrl(mappingId, "banner", version);
+}
+
+export function getArtworkLogoUrl(mappingId: string | number, version?: string): string {
+  return artworkUrl(mappingId, "logo", version);
 }
 
 export function refreshArtwork(

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,6 +78,18 @@ func TestPasswordTooShort(t *testing.T) {
 	mgr := newTestManager(t)
 	err := mgr.SetPassword(context.Background(), "short")
 	assert.ErrorIs(t, err, ErrPasswordTooShort)
+}
+
+// bcrypt only reads 72 bytes; longer passwords get a clear error rather
+// than bcrypt's internal one. Exactly 72 bytes is still accepted.
+func TestPasswordByteLimit(t *testing.T) {
+	_, err := HashPassword(strings.Repeat("a", MaxPasswordBytes+1))
+	assert.ErrorIs(t, err, ErrPasswordTooLong)
+	// Multi-byte characters count by bytes: 37 × "é" (2 bytes each) = 74.
+	_, err = HashPassword(strings.Repeat("é", 37))
+	assert.ErrorIs(t, err, ErrPasswordTooLong)
+	_, err = HashPassword(strings.Repeat("a", MaxPasswordBytes))
+	assert.NoError(t, err)
 }
 
 func TestLogoutInvalidatesSession(t *testing.T) {

@@ -33,6 +33,10 @@ const (
 	// for a LAN-exposed dashboard.
 	MinPasswordLength = 8
 
+	// MaxPasswordBytes is bcrypt's input limit. Longer passwords are
+	// rejected up front with a clear message instead of bcrypt's own error.
+	MaxPasswordBytes = 72
+
 	// dummyHash is compared against when no password is configured so the
 	// login path takes roughly the same time whether or not setup has
 	// happened, avoiding a trivially detectable setup-state oracle.
@@ -44,6 +48,7 @@ var (
 	ErrAlreadyConfigured = errors.New("auth: password already configured")
 	ErrInvalidPassword   = errors.New("incorrect password")
 	ErrPasswordTooShort  = fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	ErrPasswordTooLong   = fmt.Errorf("password must be at most %d characters (fewer with accented letters or emoji)", MaxPasswordBytes)
 	ErrInvalidSession    = errors.New("invalid session")
 )
 
@@ -76,6 +81,9 @@ func NewManager(store Store) *Manager {
 func HashPassword(password string) (string, error) {
 	if len(password) < MinPasswordLength {
 		return "", ErrPasswordTooShort
+	}
+	if len(password) > MaxPasswordBytes {
+		return "", ErrPasswordTooLong
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

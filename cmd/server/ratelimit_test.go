@@ -58,13 +58,23 @@ func TestRateLimiterGlobalCapDeniesRotatingKeys(t *testing.T) {
 	assert.False(t, ok, "the global cap must deny even unseen keys")
 }
 
-func TestRequestKeyPrefersForwardedFor(t *testing.T) {
+func TestRequestKeyUsesForwardedForOnlyFromProxies(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+
+	// From a proxy on the LAN: the rightmost entry is the address the proxy
+	// saw; anything left of it came from the client and is ignored.
 	r.RemoteAddr = "192.168.1.5:51000"
 	assert.Equal(t, "192.168.1.5", requestKey(r))
-
-	r.Header.Set("X-Forwarded-For", "203.0.113.7, 10.0.0.1")
+	r.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.7")
 	assert.Equal(t, "203.0.113.7", requestKey(r))
+
+	// Same-host proxy over loopback.
+	r.RemoteAddr = "127.0.0.1:51000"
+	assert.Equal(t, "203.0.113.7", requestKey(r))
+
+	// A client connecting directly from the internet can't pick its key.
+	r.RemoteAddr = "198.51.100.9:51000"
+	assert.Equal(t, "198.51.100.9", requestKey(r))
 }
 
 func TestLimitMiddlewareReturns429WithRetryAfter(t *testing.T) {

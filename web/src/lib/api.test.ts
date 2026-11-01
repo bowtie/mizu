@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { errorMessage } from "./api";
+import { errorMessage, getArtworkBannerUrl, getArtworkLogoUrl, getArtworkPosterUrl } from "./api";
 
 describe("errorMessage", () => {
   it("returns the message for a plain Error", () => {
@@ -51,5 +51,19 @@ describe("errorMessage", () => {
 
   it("preserves messages without Go-style prefixes", () => {
     expect(errorMessage(new Error("not found"))).toBe("not found");
+  });
+});
+
+describe("artwork URLs", () => {
+  it("are plain without a version", () => {
+    expect(getArtworkPosterUrl(3)).toBe("/api/artwork/3/poster");
+  });
+
+  it("carry a version that is stable for the same image and changes with it", () => {
+    const a = getArtworkBannerUrl(3, "https://assets.fanart.tv/a.jpg");
+    expect(a).toMatch(/^\/api\/artwork\/3\/banner\?v=[0-9a-z]+$/);
+    expect(getArtworkBannerUrl(3, "https://assets.fanart.tv/a.jpg")).toBe(a);
+    expect(getArtworkBannerUrl(3, "https://assets.fanart.tv/b.jpg")).not.toBe(a);
+    expect(getArtworkLogoUrl(3, "x")).toMatch(/^\/api\/artwork\/3\/logo\?v=/);
   });
 });

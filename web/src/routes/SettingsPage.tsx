@@ -24,10 +24,6 @@ import {
   type SecurityIntent,
 } from "../components/SecuritySettingsCard";
 import {
-  getSettings,
-  refreshAflCache,
-  getAflCacheRefreshStatus,
-  type AflCacheRefreshStatus,
   refreshAllArtwork,
   testNtfyConnection,
   testSonarrConnection,
@@ -37,7 +33,11 @@ import {
   setupPassword,
   removePassword,
 } from "../lib/api";
-import { queryKeys } from "../lib/queries";
+import {
+  queryKeys,
+  settingsQuery as settingsQueryOptions,
+  useAflCacheRefreshJob,
+} from "../lib/queries";
 import { SettingsFormSchema, type SettingsForm } from "../lib/schemas";
 import type { Settings as SettingsType, SelectOption } from "../lib/types";
 
@@ -57,48 +57,45 @@ export function SettingsPage() {
   const storeSettings = settingsQuery.data ?? null;
   const { data: artworkProviders = [] } = useArtworkProviders();
   const updateSettingsMutation = useUpdateSettings();
-  const [loading, setLoading] = useState(!storeSettings);
+  const loading = settingsQuery.isPending;
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [securityIntent, setSecurityIntent] = useState<SecurityIntent>(null);
   const [securityPassword, setSecurityPassword] = useState("");
   const [securityConfirm, setSecurityConfirm] = useState("");
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [refreshingCache, setRefreshingCache] = useState(false);
   const [importingConfig, setImportingConfig] = useState(false);
   const importFileRef = useRef<HTMLInputElement | null>(null);
   const [testPhase, setTestPhase] = useState<"idle" | "connecting" | "success" | "error">("idle");
 
-  // ── API key UI state (visibility, masked display, dirty tracking) ──
-  // These stay as useState because they're presentation logic, not form data.
-  const [savedApiKeyMasked, setSavedApiKeyMasked] = useState("");
-  const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
+  // ── Stored secrets ──
+  // The server only reports whether each key is set and a masked preview;
+  // read those straight from the settings query. The *Dirty flags track
+  // whether the user is replacing a key (presentation state, not form data).
+  const savedApiKeyMasked = storeSettings?.sonarr_api_key_masked ?? "";
+  const hasSavedApiKey = !!storeSettings?.sonarr_api_key_set;
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
 
-  const [savedTmdbApiKeyMasked, setSavedTmdbApiKeyMasked] = useState("");
-  const [tmdbApiKeySet, setTmdbApiKeySet] = useState(false);
+  const savedTmdbApiKeyMasked = storeSettings?.tmdb_api_key_masked ?? "";
+  const tmdbApiKeySet = !!storeSettings?.tmdb_api_key_set;
   const [tmdbApiKeyDirty, setTmdbApiKeyDirty] = useState(false);
 
-  const [savedFanartApiKeyMasked, setSavedFanartApiKeyMasked] = useState("");
-  const [fanartApiKeySet, setFanartApiKeySet] = useState(false);
+  const savedFanartApiKeyMasked = storeSettings?.fanart_api_key_masked ?? "";
+  const fanartApiKeySet = !!storeSettings?.fanart_api_key_set;
   const [fanartApiKeyDirty, setFanartApiKeyDirty] = useState(false);
 
-  const [ntfyTokenSet, setNtfyTokenSet] = useState(false);
+  const ntfyTokenSet = !!storeSettings?.ntfy_token_set;
   const [ntfyTokenDirty, setNtfyTokenDirty] = useState(false);
   const [ntfyTestPhase, setNtfyTestPhase] = useState<"idle" | "connecting" | "success" | "error">(
     "idle",
   );
 
-  // Cache info (display-only, not form fields)
-  const [cacheRefreshedAt, setCacheRefreshedAt] = useState<string | null>(null);
-  const [cacheCount, setCacheCount] = useState(0);
+  // AFL show-list cache (display-only)
+  const cacheRefreshedAt = storeSettings?.afl_show_cache_refreshed_at ?? null;
+  const cacheCount = storeSettings?.afl_show_cache_count ?? 0;
 
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ntfyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Cancels the AFL refresh status poll when the component unmounts —
-  // without it the poll loop kept hitting the status endpoint for up to
-  // ~15 minutes after leaving the page.
-  const aflPollCancelled = useRef(false);
 
   // ── React Hook Form ──
   const {
@@ -159,7 +156,6 @@ export function SettingsPage() {
       if (resetTimer.current) clearTimeout(resetTimer.current);
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
       if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
-      aflPollCancelled.current = true;
     };
   }, []);
 
@@ -189,58 +185,37 @@ export function SettingsPage() {
         soundsEnabled: data.ui_sounds_enabled !== false,
       });
 
-      // Reset API key UI state
-      setSavedApiKeyMasked(data.sonarr_api_key_masked || "");
-      setHasSavedApiKey(!!data.sonarr_api_key_set);
+      // Leave any "Replace key" edits
       setApiKeyDirty(false);
-
-      setSavedTmdbApiKeyMasked(data.tmdb_api_key_masked || "");
-      setTmdbApiKeySet(!!data.tmdb_api_key_set);
       setTmdbApiKeyDirty(false);
-
-      setSavedFanartApiKeyMasked(data.fanart_api_key_masked || "");
-      setFanartApiKeySet(!!data.fanart_api_key_set);
       setFanartApiKeyDirty(false);
-
-      setNtfyTokenSet(!!data.ntfy_token_set);
       setNtfyTokenDirty(false);
       setNtfyTestPhase("idle");
-
-      setCacheRefreshedAt(data.afl_show_cache_refreshed_at || null);
-      setCacheCount(data.afl_show_cache_count || 0);
     },
     [reset],
   );
 
-  const loadSettings = useCallback(async () => {
+  /** Re-read settings from the server and load them into the form —
+   *  after a save or import, when the form should show the stored values. */
+  const reloadSettings = useCallback(async () => {
     try {
-      const data = await queryClient.fetchQuery({
-        queryKey: ["settings"],
-        queryFn: getSettings,
-      });
-      applySettings(data);
+      applySettings(await queryClient.fetchQuery({ ...settingsQueryOptions, staleTime: 0 }));
     } catch (err: unknown) {
       addNotification("Failed to load settings: " + errorMessage(err), "error");
     }
-    setLoading(false);
   }, [applySettings, addNotification, queryClient]);
 
-  // If the store already has settings (fetched on app mount), populate
-  // immediately and skip the loading spinner. Still do a background
-  // refresh to pick up any changes. A later refetch (staleTime +
-  // refetchOnWindowFocus) must not wipe in-progress edits, so only
-  // apply while the form is pristine.
+  // Load the stored settings into the form whenever they change on the
+  // server — but only while the form is pristine, so a background refetch
+  // (e.g. on window focus) never wipes in-progress edits.
   useEffect(() => {
-    if (!storeSettings) return;
-    if (!settingsDirty) {
-      applySettings(storeSettings);
-      setLoading(false);
-    }
+    if (storeSettings && !settingsDirty) applySettings(storeSettings);
   }, [storeSettings, applySettings, settingsDirty]);
 
+  const loadError = settingsQuery.error;
   useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+    if (loadError) addNotification("Failed to load settings: " + errorMessage(loadError), "error");
+  }, [loadError, addNotification]);
 
   // Warn user when navigating away with unsaved changes
   useEffect(() => {
@@ -311,7 +286,7 @@ export function SettingsPage() {
       await updateSettingsMutation.mutateAsync(payload);
       addNotification("Settings saved", "success");
       applySoundsEnabled(formData.soundsEnabled);
-      await loadSettings();
+      await reloadSettings();
 
       // If the global artwork source changed, trigger a background refresh
       // of all shows so their local artwork matches the new default.
@@ -435,60 +410,26 @@ export function SettingsPage() {
   };
 
   // The refresh runs server-side in the background (a full scrape
-  // rate-limits at 2s/show and outlives any HTTP request), so the UI
-  // polls the status endpoint until the flag clears. Capped at ~15 min
-  // to avoid polling forever if the server died mid-scrape.
-  const AFL_REFRESH_POLL_MS = 2000;
-  const AFL_REFRESH_MAX_POLLS = 450;
-
-  const pollAflRefreshStatus = useCallback(async (): Promise<AflCacheRefreshStatus> => {
-    for (let i = 0; i < AFL_REFRESH_MAX_POLLS; i++) {
-      if (aflPollCancelled.current) return { refreshing: false };
-      const status = await getAflCacheRefreshStatus();
-      if (aflPollCancelled.current) return { refreshing: false };
-      if (!status.refreshing) return status;
-      await sleep(AFL_REFRESH_POLL_MS);
+  // rate-limits at 2s/show and outlives any HTTP request); the job hook
+  // polls its status and reports here when it ends — including a refresh
+  // that was already running when the page opened.
+  const aflJob = useAflCacheRefreshJob((status) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+    if (status.last_error) {
+      addNotification("AFL cache refresh failed: " + status.last_error, "error");
+    } else {
+      addNotification("AFL show list refreshed", "success");
     }
-    return { refreshing: false, last_error: "Refresh timed out — check the Activity page" };
-  }, []);
-
-  // Resume the spinner if a refresh is already in flight (e.g. the page
-  // was reloaded mid-scrape).
-  useEffect(() => {
-    let cancelled = false;
-    getAflCacheRefreshStatus()
-      .then((status) => {
-        if (!cancelled && status.refreshing) setRefreshingCache(true);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  });
+  const refreshingCache = aflJob.running;
 
   const handleRefreshCache = async () => {
     if (refreshingCache) return;
-    setRefreshingCache(true);
-    aflPollCancelled.current = false;
     try {
-      try {
-        await refreshAflCache();
-      } catch (err: unknown) {
-        // A refresh triggered from another tab/device is fine — just watch it.
-        if (!errorMessage(err).includes("already in progress")) throw err;
-      }
-      const status = await pollAflRefreshStatus();
-      if (aflPollCancelled.current) return; // unmounted — skip state updates
-      await loadSettings();
-      if (status.last_error) {
-        addNotification("AFL cache refresh failed: " + status.last_error, "error");
-      } else {
-        addNotification("AFL show list refreshed", "success");
-      }
+      await aflJob.start();
     } catch (err: unknown) {
       addNotification("Failed to refresh AFL cache: " + errorMessage(err), "error");
     }
-    setRefreshingCache(false);
   };
 
   // ── Config backup ──
@@ -529,8 +470,8 @@ export function SettingsPage() {
           `and ${result.settings_imported} setting${result.settings_imported === 1 ? "" : "s"}`,
         "success",
       );
-      await loadSettings();
-      queryClient.invalidateQueries({ queryKey: queryKeys.shows });
+      await reloadSettings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.shows });
     } catch (err: unknown) {
       addNotification("Failed to import config: " + errorMessage(err), "error");
     } finally {

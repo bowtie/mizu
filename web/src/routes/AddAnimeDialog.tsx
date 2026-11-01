@@ -6,15 +6,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Check, X } from "lucide-react";
 import { HTTPError } from "ky";
-import {
-  addSonarrSeries,
-  confirmMatch,
-  lookupSonarrSeries,
-  markManualMatchPending,
-  searchAFL,
-  suggestAFL,
-  errorMessage,
-} from "../lib/api";
+import { lookupSonarrSeries, searchAFL, suggestAFL, errorMessage } from "../lib/api";
+import { useAddSonarrSeries, useConfirmMatch, useMarkManualMatchPending } from "../lib/queries";
 import type { AFLMatch, SonarrAddPayload, SonarrSeries } from "../lib/types";
 
 // ── Constants, types, and helpers are in addWizardHelpers.ts ──
@@ -47,8 +40,6 @@ export interface AddAnimeDialogProps {
   w: AddWizardState;
   dispatch: React.Dispatch<AddWizardAction>;
   allSeries: SonarrSeries[];
-  setAllSeries: React.Dispatch<React.SetStateAction<SonarrSeries[]>>;
-  setSeriesById: React.Dispatch<React.SetStateAction<Record<string | number, SonarrSeries>>>;
   mappedSeriesIds: Set<string | number>;
   filteredSeriesLibrary: SonarrSeries[];
   activeWizardSteps: { key: string; label: string }[];
@@ -69,8 +60,6 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     w,
     dispatch,
     allSeries,
-    setAllSeries,
-    setSeriesById,
     mappedSeriesIds,
     filteredSeriesLibrary,
     activeWizardSteps,
@@ -83,6 +72,11 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     preferredAnimeQualityProfileId,
     posterUrl,
   } = props;
+
+  // These update the cached series lists themselves (see queries.ts).
+  const { mutateAsync: confirmMatch } = useConfirmMatch();
+  const { mutateAsync: addSonarrSeries } = useAddSonarrSeries();
+  const { mutateAsync: markManualMatchPending } = useMarkManualMatchPending();
 
   const fallbackFilterTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestReqId = useRef(0);
@@ -233,9 +227,6 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
           addStep: ADD_STEP_POST_ADD,
         },
       });
-      setAllSeries((prev) =>
-        prev.map((s) => (s.id === w.selectedSonarr?.id ? { ...s, manualMatchPending: true } : s)),
-      );
     } catch (err: unknown) {
       addNotification("Failed to persist manual match reminder: " + errorMessage(err), "error");
     }
@@ -346,11 +337,6 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     dispatch({ type: "SET", payload: { sonarrAdding: true } });
     try {
       const created = await addSonarrSeries(buildSonarrAddPayload(w.selectedSonarrLookup));
-      const nextAll = [...allSeries.filter((s) => s.id !== created.id), created].sort((a, b) =>
-        a.title.localeCompare(b.title),
-      );
-      setAllSeries(nextAll);
-      setSeriesById(Object.fromEntries(nextAll.map((s) => [s.id, s])));
       dispatch({
         type: "SET",
         payload: {

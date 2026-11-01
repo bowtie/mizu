@@ -15,15 +15,14 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { Check, Loader2, Plug, Upload, Waves } from "lucide-react";
 import { SettingsRow } from "../components/SettingsRow";
 import { syncIntervalOptions } from "../components/settings/SyncCard";
-import { queryKeys, useSettings, useUpdateSettings } from "../lib/queries";
 import {
-  errorMessage,
-  getAflCacheRefreshStatus,
-  getSettings,
-  importConfig,
-  refreshAflCache,
-  testSonarrConnection,
-} from "../lib/api";
+  queryKeys,
+  settingsQuery,
+  useAflCacheRefreshJob,
+  useSettings,
+  useUpdateSettings,
+} from "../lib/queries";
+import { errorMessage, importConfig, testSonarrConnection } from "../lib/api";
 import { trackedToAction } from "./addWizardHelpers";
 
 type StepKey = "sonarr" | "defaults";
@@ -88,43 +87,32 @@ export function OnboardingPage() {
   // Fetch the AnimeFillerList catalogue while the user picks their defaults,
   // so the Add anime wizard has matches ready on first use. Best effort: a
   // failure never blocks setup (the first sync retries it).
+  const aflJob = useAflCacheRefreshJob(async (status) => {
+    if (status.last_error) {
+      setAfl({ phase: "failed", message: status.last_error });
+      return;
+    }
+    // The count can trail the status flag by a moment; look a few times
+    // before settling on "none".
+    let count = 0;
+    for (let attempt = 0; attempt < AFL_COUNT_ATTEMPTS && count === 0; attempt++) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, AFL_POLL_MS));
+      if (unmounted.current) return;
+      const fresh = await queryClient.fetchQuery({ ...settingsQuery, staleTime: 0 });
+      count = fresh.afl_show_cache_count || 0;
+    }
+    if (!unmounted.current) setAfl({ phase: "ready", count });
+  });
+  const startAfl = aflJob.start;
+
   useEffect(() => {
     if (step !== "defaults" || aflStarted.current) return;
     aflStarted.current = true;
     setAfl({ phase: "fetching" });
-    void (async () => {
-      try {
-        try {
-          await refreshAflCache();
-        } catch (err) {
-          // Already refreshing (409): just wait for that run to finish.
-          if (!errorMessage(err).includes("already in progress")) throw err;
-        }
-        for (;;) {
-          await new Promise((resolve) => setTimeout(resolve, AFL_POLL_MS));
-          if (unmounted.current) return;
-          const status = await getAflCacheRefreshStatus();
-          if (status.refreshing) continue;
-          if (status.last_error) {
-            setAfl({ phase: "failed", message: status.last_error });
-            return;
-          }
-          // The count can trail the status flag by a moment; look a few times
-          // before settling on "none".
-          let count = 0;
-          for (let attempt = 0; attempt < AFL_COUNT_ATTEMPTS && count === 0; attempt++) {
-            if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, AFL_POLL_MS));
-            if (unmounted.current) return;
-            count = (await getSettings()).afl_show_cache_count || 0;
-          }
-          if (!unmounted.current) setAfl({ phase: "ready", count });
-          return;
-        }
-      } catch (err) {
-        if (!unmounted.current) setAfl({ phase: "failed", message: errorMessage(err) });
-      }
-    })();
-  }, [step]);
+    startAfl().catch((err: unknown) => {
+      if (!unmounted.current) setAfl({ phase: "failed", message: errorMessage(err) });
+    });
+  }, [step, startAfl]);
 
   const editConnection = (setter: (v: string) => void) => (value: string) => {
     setter(value);
@@ -187,11 +175,8 @@ export function OnboardingPage() {
       }
       const result = await importConfig(parsed);
       const shows = `${result.mappings_imported} show${result.mappings_imported === 1 ? "" : "s"}`;
-      const restored = await getSettings();
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.shows }),
-      ]);
+      const restored = await queryClient.fetchQuery({ ...settingsQuery, staleTime: 0 });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shows });
       if (restored.sonarr_api_key_set) {
         navigate("/", { replace: true });
       } else {

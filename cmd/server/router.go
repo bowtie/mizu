@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 )
 
 func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, scheduler *schedulerController, appCtx context.Context, bgWG *stdsync.WaitGroup) http.Handler {
@@ -36,14 +35,6 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			next.ServeHTTP(w, r)
 		})
 	})
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Content-Type", "If-None-Match"},
-		ExposedHeaders:   []string{"ETag", "Cache-Control"},
-		AllowCredentials: false,
-		MaxAge:           300,
-	}))
 
 	authMgr := auth.NewManager(db)
 	registerBuildInfo()
@@ -73,6 +64,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		// ── Public: monitoring + authentication ──
 		sonarrStatus := newSonarrStatusCache(healthSonarrTTL)
 		r.Get("/health", handleHealth(cfg, db, scheduler, syncEngine, sonarrStatus))
+		r.Get("/health/live", handleLiveness(db))
 
 		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]interface{}{"version": version, "commit": commit, "build_date": buildDate})

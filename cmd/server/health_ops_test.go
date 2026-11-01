@@ -175,3 +175,25 @@ func TestSweepStaleRunningSyncLogs(t *testing.T) {
 	assert.Equal(t, "success", done.Status, "completed logs must not be touched")
 	assert.Empty(t, done.Errors)
 }
+
+// Liveness ignores Sonarr: an unreachable Sonarr makes /api/health 503,
+// but /api/health/live stays 200 so a container supervisor doesn't
+// restart Mizu for Sonarr's outage.
+func TestLivenessIgnoresSonarr(t *testing.T) {
+	router, _ := newAuthTestRouter(t)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health/live", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"status":"ok"}`, rec.Body.String())
+}
+
+func TestLivenessReportsDatabaseDown(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	rec := httptest.NewRecorder()
+	handleLiveness(db)(rec, httptest.NewRequest(http.MethodGet, "/api/health/live", nil))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}

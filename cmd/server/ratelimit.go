@@ -11,9 +11,9 @@ import (
 
 // authRateLimits bounds online password guessing on /auth/login and
 // /auth/setup. Per-key windows slow a single source to a crawl; the
-// global window keeps the total guess rate bounded even when an attacker
-// rotates spoofed X-Forwarded-For values (each spoofed key gets a fresh
-// window, but the shared budget does not grow). Limits are in-memory and
+// global window keeps the total guess rate bounded even if an attacker
+// rotates source addresses (each new key gets a fresh window, but the
+// shared budget does not grow). Limits are in-memory and
 // per-process — restarting resets them — which is the right tradeoff for
 // a self-hosted dashboard: no configuration, no state to persist.
 const (
@@ -88,22 +88,33 @@ func (l *rateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 	return true, 0
 }
 
-// requestKey identifies the request source: the first X-Forwarded-For
-// hop when a proxy supplied one (the client as the proxy saw it), else
-// the remote address without its port.
+// requestKey identifies the request source for rate limiting.
+//
+// X-Forwarded-For is only believed when the TCP peer is a loopback or
+// private address — i.e. plausibly a reverse proxy on the same host or
+// network. A client connecting directly from the internet could put any
+// value there to get a fresh per-key budget. From a trusted peer the
+// rightmost entry is used: proxies append the address they saw, while
+// everything to its left was supplied by the client.
 func requestKey(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if first, _, found := strings.Cut(xff, ","); found || first != "" {
-			if key := strings.TrimSpace(first); key != "" {
-				return key
-			}
+	peer, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		peer = r.RemoteAddr
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" && isLikelyProxy(peer) {
+		parts := strings.Split(xff, ",")
+		if last := strings.TrimSpace(parts[len(parts)-1]); last != "" {
+			return last
 		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return peer
+}
+
+// isLikelyProxy reports whether addr is a loopback or private (RFC 1918 /
+// RFC 4193) address, where a reverse proxy would connect from.
+func isLikelyProxy(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
 }
 
 // limitMiddleware returns middleware that denies requests once the

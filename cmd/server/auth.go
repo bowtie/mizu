@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -42,9 +43,17 @@ func requireAuth(mgr *auth.Manager) func(http.Handler) http.Handler {
 
 // sameOriginGuard mitigates cross-site request forgery for cookie-authed
 // mutations. Browsers always attach Origin (or Referer) on cross-site
-// POSTs; if either header is present and doesn't match the request host,
-// the request is rejected. Non-browser clients that omit both headers
-// are unaffected.
+// POSTs; if either header is present and its host isn't this server's
+// host, the request is rejected. Non-browser clients that omit both
+// headers are unaffected.
+//
+// Only hosts are compared, not schemes: a reverse proxy that terminates
+// TLS forwards plain HTTP, so the browser's https:// origin would never
+// match the http:// request Mizu sees. The scheme adds nothing here — a
+// cross-site page has a different host either way. X-Forwarded-Host is
+// accepted for proxies that rewrite Host; a cross-site page can't set it,
+// because a custom header on a cross-origin request needs a CORS
+// preflight, which Mizu never grants.
 //
 // This does NOT stop DNS rebinding: a rebound request carries the
 // attacker's domain in both Host and Origin, which match each other and
@@ -52,7 +61,8 @@ func requireAuth(mgr *auth.Manager) func(http.Handler) http.Handler {
 // expose the listener to networks an attacker's page could resolve to
 // (e.g. bind to loopback behind a same-host proxy). Session cookies also
 // don't leak to a rebound origin, so a password-configured instance is
-// safe; only the pre-setup window on a directly exposed listener is.
+// safe; only an instance with no password on a directly exposed listener
+// is.
 func sameOriginGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -60,25 +70,34 @@ func sameOriginGuard(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		origin := r.Header.Get("Origin")
-		referer := r.Header.Get("Referer")
-		if origin == "" && referer == "" {
+		source := r.Header.Get("Origin")
+		if source == "" {
+			source = r.Header.Get("Referer")
+		}
+		if source == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		expected := requestScheme(r) + "://" + r.Host
-		if origin != "" {
-			if !strings.EqualFold(strings.TrimRight(origin, "/"), expected) {
-				writeError(w, http.StatusForbidden, "cross-origin request rejected")
-				return
-			}
-		} else if !strings.HasPrefix(strings.ToLower(referer), strings.ToLower(expected)+"/") &&
-			!strings.EqualFold(strings.TrimRight(referer, "/"), expected) {
+		u, err := url.Parse(source)
+		if err != nil || u.Host == "" || !isOwnHost(r, u.Host) {
 			writeError(w, http.StatusForbidden, "cross-origin request rejected")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isOwnHost reports whether host (host[:port]) names this server, as seen
+// directly (Host) or through a proxy that rewrote Host (X-Forwarded-Host).
+func isOwnHost(r *http.Request, host string) bool {
+	if strings.EqualFold(host, r.Host) {
+		return true
+	}
+	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
+		first, _, _ := strings.Cut(fwd, ",")
+		return strings.EqualFold(host, strings.TrimSpace(first))
+	}
+	return false
 }
 
 func requestScheme(r *http.Request) string {

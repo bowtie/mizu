@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Section } from "@astryxdesign/core/Section";
@@ -23,9 +24,8 @@ import {
 } from "lucide-react";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { useNotificationStore } from "../lib/store";
-import { useTriggerSync } from "../lib/queries";
-import { getSyncLogs, errorMessage } from "../lib/api";
-import type { SyncLog } from "../lib/types";
+import { queryKeys, useSyncLogPages, useTriggerSync } from "../lib/queries";
+import { errorMessage } from "../lib/api";
 import {
   formatDuration,
   formatTrigger,
@@ -36,15 +36,9 @@ import {
 
 const PAGE_SIZE = 8;
 
-// Sync-polling cadence for the Activity page. While the latest sync log is
-// "running", poll every 2s for the first ACTIVITY_FAST_POLL_ATTEMPTS polls,
-// then fall back to a slow 30s watchdog so a long or hung sync keeps being
-// tracked — the page never freezes on a stale "Running" log — without
-// runaway polling.
-const ACTIVITY_POLL_FIRST_DELAY_MS = 1800;
-const ACTIVITY_POLL_INTERVAL_MS = 2000;
-const ACTIVITY_FAST_POLL_ATTEMPTS = 150; // ≈ 5 minutes at the 2s cadence
-const ACTIVITY_SLOW_POLL_INTERVAL_MS = 30_000;
+// After "Sync now", keep polling this long even before the run's log row
+// appears (the server creates it just after accepting the trigger).
+const SYNC_START_GRACE_MS = 10_000;
 
 function statusIcon(status: string | undefined | null) {
   switch (status) {
@@ -80,20 +74,18 @@ function itemStatusIcon(status: string | undefined | null) {
 export function ActivityPage() {
   const addNotification = useNotificationStore((s) => s.addNotification);
   const triggerSyncMutation = useTriggerSync();
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState<SyncLog[]>([]);
+  const queryClient = useQueryClient();
+  const [pollUntil, setPollUntil] = useState(0);
+  const logsQuery = useSyncLogPages(PAGE_SIZE, pollUntil);
+  const logs = useMemo(
+    () => logsQuery.data?.pages.flatMap((p) => p.items ?? []) ?? [],
+    [logsQuery.data],
+  );
+  const loading = logsQuery.isPending;
   const [syncing, setSyncing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextOffset, setNextOffset] = useState(0);
   const [expandedId, setExpandedId] = useState<string | number | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollChainId = useRef(0);
-  const isInitialLoad = useRef(true);
-  const isMounted = useRef(true);
-  const logsRef = useRef<SyncLog[]>([]);
 
   const filteredLogs = useMemo(
     () =>
@@ -117,114 +109,30 @@ export function ActivityPage() {
     [logs, statusFilter, searchQuery],
   );
 
-  const loadActivity = useCallback(
-    async (reset = true) => {
-      if (reset) {
-        setLoading(isInitialLoad.current);
-      } else {
-        setLoadingMore(true);
-      }
-      try {
-        const offset = reset ? 0 : nextOffset;
-        const page = (await getSyncLogs(PAGE_SIZE, offset)) || {
-          items: [],
-          has_more: false,
-          next_offset: 0,
-        };
-        const newLogs = page.items || [];
-        const updatedLogs = reset ? newLogs : [...logsRef.current, ...newLogs];
-        logsRef.current = updatedLogs;
-        setLogs(updatedLogs);
-        setHasMore(!!page.has_more);
-        setNextOffset(page.next_offset ?? (reset ? newLogs.length : offset + newLogs.length));
-      } catch (err: unknown) {
-        addNotification("Failed to load activity: " + errorMessage(err), "error");
-      }
-      setLoading(false);
-      setLoadingMore(false);
-      isInitialLoad.current = false;
-    },
-    [nextOffset, addNotification],
-  );
-
+  const loadError = logsQuery.error;
   useEffect(() => {
-    loadActivity(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (loadError) addNotification("Failed to load activity: " + errorMessage(loadError), "error");
+  }, [loadError, addNotification]);
 
+  // When a run finishes, everything it touched is stale: the library, the
+  // episode lists and the "last synced" line.
+  const anyRunning = logs.some((l) => l.status === "running");
+  const wasRunning = useRef(anyRunning);
   useEffect(() => {
-    // StrictMode in dev mounts, cleans up, and mounts again; the cleanup
-    // below sets isMounted=false, so reset it here or polling would bail
-    // forever after the simulated unmount.
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-    };
-  }, []);
-
-  const startPolling = useCallback(() => {
-    if (pollTimer.current) clearTimeout(pollTimer.current);
-    // Supersede any earlier chain: a poll that is mid-flight when a newer
-    // startPolling runs (e.g. the focus handler while a poll is in the
-    // network await) must not keep rescheduling itself alongside the new
-    // chain — clearing the pending timer can't stop an in-flight poll.
-    const chainId = ++pollChainId.current;
-    let attempts = 0;
-    const poll = async () => {
-      if (!isMounted.current) return;
-      attempts++;
-      await loadActivity(true);
-      if (!isMounted.current) return;
-      if (pollChainId.current !== chainId) return; // superseded by a newer chain
-      const hasRunning = logsRef.current.some((l) => l.status === "running");
-      // Stop once the sync reaches a terminal state (success/partial/failed).
-      if (!hasRunning) return;
-      // Fast 2s cadence for the first ACTIVITY_FAST_POLL_ATTEMPTS polls, then
-      // a slow 30s watchdog — bounded and cheap, but the page never freezes
-      // on a stale "Running" log even for a very long or hung sync.
-      const delay =
-        attempts <= ACTIVITY_FAST_POLL_ATTEMPTS
-          ? ACTIVITY_POLL_INTERVAL_MS
-          : ACTIVITY_SLOW_POLL_INTERVAL_MS;
-      pollTimer.current = setTimeout(poll, delay);
-    };
-    pollTimer.current = setTimeout(poll, ACTIVITY_POLL_FIRST_DELAY_MS);
-  }, [loadActivity]);
-
-  // Refresh when the tab regains focus/visibility: browsers throttle
-  // background timers, and a scheduled sync may have started (or a manual
-  // sync finished) while the page was hidden — reload immediately and
-  // resume polling if a sync is still running. The running-log check must
-  // wait for the refetch: logsRef only updates once loadActivity resolves,
-  // so a synchronous check read the pre-refresh snapshot and never resumed
-  // polling for a sync that started while hidden.
-  useEffect(() => {
-    let generation = 0;
-    const onVisible = async () => {
-      if (!isMounted.current) return;
-      if (document.visibilityState !== "visible") return;
-      const gen = ++generation;
-      await loadActivity(true);
-      if (!isMounted.current || gen !== generation) return;
-      if (logsRef.current.some((l) => l.status === "running")) {
-        startPolling();
-      }
-    };
-    window.addEventListener("focus", onVisible);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("focus", onVisible);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [loadActivity, startPolling]);
+    if (wasRunning.current && !anyRunning) {
+      void queryClient.invalidateQueries({ queryKey: ["syncLogs"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.shows });
+      void queryClient.invalidateQueries({ queryKey: ["episodes"] });
+    }
+    wasRunning.current = anyRunning;
+  }, [anyRunning, queryClient]);
 
   const handleSync = async () => {
     setSyncing(true);
     try {
       await triggerSyncMutation.mutateAsync();
       addNotification("Sync started", "info");
-      startPolling();
+      setPollUntil(Date.now() + SYNC_START_GRACE_MS);
     } catch (err: unknown) {
       addNotification("Failed to trigger sync: " + errorMessage(err), "error");
     }
@@ -487,14 +395,14 @@ export function ActivityPage() {
               </VStack>
             )}
 
-            {hasMore && filteredLogs.length > 0 && (
+            {logsQuery.hasNextPage && filteredLogs.length > 0 && (
               <HStack justify="center" className="load-more-bar">
                 <Button
-                  label={loadingMore ? "Loading..." : "Load more"}
+                  label={logsQuery.isFetchingNextPage ? "Loading..." : "Load more"}
                   variant="secondary"
-                  onClick={() => loadActivity(false)}
-                  isLoading={loadingMore}
-                  isDisabled={loadingMore}
+                  onClick={() => void logsQuery.fetchNextPage()}
+                  isLoading={logsQuery.isFetchingNextPage}
+                  isDisabled={logsQuery.isFetchingNextPage}
                   data-cuelume-press
                 />
               </HStack>

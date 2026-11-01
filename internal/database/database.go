@@ -54,6 +54,11 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+// Ping checks that the database is reachable.
+func (db *DB) Ping(ctx context.Context) error {
+	return db.conn.PingContext(ctx)
+}
+
 func (db *DB) migrate() error {
 	goose.SetLogger(goose.NopLogger())
 

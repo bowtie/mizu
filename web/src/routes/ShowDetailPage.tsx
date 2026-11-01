@@ -262,7 +262,6 @@ export function ShowDetailPage() {
    *  fanart/banner when the local file is missing. */
   const backdropUrl = useMemo((): string => {
     if (!showId) return "";
-    const cacheBust = artworkVersion > 0 ? `?v=${artworkVersion}` : "";
     if (heroImgError && show) {
       const series = sonarrSeries.find((s: SonarrSeries) => s.id === show.sonarr_series_id);
       if (series?.images?.length) {
@@ -273,7 +272,10 @@ export function ShowDetailPage() {
         if (banner) return resolveSonarrImageUrl(banner, settings?.sonarr_url || "");
       }
     }
-    return getArtworkBannerUrl(showId) + cacheBust;
+    // Versioned by the stored banner, plus a counter that busts the cache
+    // after an artwork change made on this page.
+    const stored = show?.artwork_banner_url || show?.artwork_banner_path || "";
+    return getArtworkBannerUrl(showId, `${stored}#${artworkVersion}`);
   }, [showId, artworkVersion, heroImgError, show, sonarrSeries, settings?.sonarr_url]);
 
   const artworkSourceOptions = useMemo<SelectOption[]>(() => {

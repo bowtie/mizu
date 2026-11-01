@@ -1,43 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, createElement, StrictMode } from "react";
+import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── Module mocks ──
-// The component talks to the backend through getSyncLogs and triggerSync,
-// and to the notification store through useNotificationStore. Mock all
-// three so the tests drive polling purely via fake timers and controlled
-// getSyncLogs responses.
+// The page reads the sync history through the real query hooks; only the
+// HTTP layer and the notification store are mocked. Fake timers drive the
+// polling cadence.
 
 vi.mock("../lib/api", () => ({
   getSyncLogs: vi.fn(),
+  triggerSync: vi.fn(),
+  getShows: vi.fn().mockResolvedValue([]),
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
-}));
-
-vi.mock("../lib/queries", () => ({
-  useTriggerSync: () => ({
-    mutateAsync: vi.fn().mockResolvedValue(undefined),
-  }),
 }));
 
 vi.mock("../lib/store", () => ({
   useNotificationStore: () => vi.fn(),
 }));
 
-import { getSyncLogs } from "../lib/api";
+import { getSyncLogs, triggerSync } from "../lib/api";
 import type { SyncLog, SyncLogResponse } from "../lib/types";
 import { ActivityPage } from "./ActivityPage";
 
 const mockedGetSyncLogs = vi.mocked(getSyncLogs);
+const mockedTriggerSync = vi.mocked(triggerSync);
 
-// Mirror the polling constants in ActivityPage.tsx. Kept as literals (not
-// imported) so the failing-first stash check exercises the real behavior
-// rather than a missing export.
-const FIRST_DELAY = 1800;
-const INTERVAL = 2000;
-const FAST_ATTEMPTS = 150; // pre-fix cap was 20 (~40s)
-const SLOW_INTERVAL = 30_000;
+const NOW = new Date("2026-11-01T12:00:00Z").getTime();
 
-function makeLog(status: string, id: number): SyncLog {
+function makeLog(status: string, id: number, startedMinutesAgo = 0): SyncLog {
   return {
     id,
     status,
@@ -45,178 +36,131 @@ function makeLog(status: string, id: number): SyncLog {
     shows_processed: 1,
     episodes_updated: 0,
     errors: "",
-    started_at: undefined,
+    started_at: new Date(NOW - startedMinutesAgo * 60_000).toISOString(),
     completed_at: undefined,
     items: [],
   };
 }
 
-function logPage(...logs: SyncLog[]): SyncLogResponse {
-  return { items: logs, has_more: false, next_offset: logs.length };
+function logPage(logs: SyncLog[], hasMore = false): SyncLogResponse {
+  return { items: logs, has_more: hasMore, next_offset: logs.length };
 }
 
 let container: HTMLDivElement;
 let root: Root;
+let queryClient: QueryClient;
 
 beforeEach(() => {
-  vi.useFakeTimers();
-  // happy-dom defaults visibilityState to "visible", but pin it so the
-  // focus-recovery handler's guard behaves deterministically.
-  Object.defineProperty(document, "visibilityState", {
-    value: "visible",
-    configurable: true,
-  });
+  vi.useFakeTimers({ now: NOW });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  mockedGetSyncLogs.mockReset();
+  mockedTriggerSync.mockReset();
 });
 
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  queryClient.clear();
   vi.useRealTimers();
-  vi.clearAllMocks();
 });
+
+async function advance(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
 
 async function renderPage() {
   await act(async () => {
-    root.render(createElement(ActivityPage));
-  });
-}
-
-async function clickSyncNow() {
-  await act(async () => {
-    const btn = Array.from(container.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes("Sync now"),
+    root.render(
+      createElement(QueryClientProvider, { client: queryClient }, createElement(ActivityPage)),
     );
-    if (!btn) throw new Error("Sync now button not found");
-    btn.click();
   });
+  await advance(0);
 }
 
-describe("ActivityPage sync polling", () => {
-  it("keeps polling while the sync stays running, past the old ~40s cap", async () => {
-    mockedGetSyncLogs.mockResolvedValue(logPage(makeLog("running", 1)));
-    await renderPage(); // initial load
-    await clickSyncNow(); // schedules the first poll
+function findButton(label: string) {
+  return Array.from(container.querySelectorAll("button")).find((b) =>
+    b.textContent?.includes(label),
+  );
+}
 
-    // 25 polls at 2s after the 1800ms first poll — well beyond the old
-    // 20-attempt cap, so the page must still be tracking the sync.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FIRST_DELAY + 25 * INTERVAL);
-    });
-    // 1 (mount) + 26 polls; pre-fix it stops at 21 total.
-    expect(mockedGetSyncLogs.mock.calls.length).toBeGreaterThanOrEqual(27);
-  });
-
-  it("stops polling once the sync reaches a terminal state", async () => {
-    let calls = 0;
-    mockedGetSyncLogs.mockImplementation(async () => {
-      calls++;
-      return logPage(makeLog(calls <= 2 ? "running" : "success", 1));
-    });
-    await renderPage(); // call 1 — running
-    await clickSyncNow();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FIRST_DELAY); // call 2 — running
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(INTERVAL); // call 3 — success → stop
-    });
-    const callsAtTerminal = mockedGetSyncLogs.mock.calls.length;
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10_000); // no further polls expected
-    });
-    expect(mockedGetSyncLogs.mock.calls.length).toBe(callsAtTerminal);
-  });
-
-  it("keeps tracking at a slow watchdog cadence after the fast phase instead of freezing", async () => {
-    mockedGetSyncLogs.mockResolvedValue(logPage(makeLog("running", 1)));
+describe("ActivityPage", () => {
+  it("polls every 2s while a sync runs and stops once it finishes", async () => {
+    mockedGetSyncLogs
+      .mockResolvedValueOnce(logPage([makeLog("running", 1)]))
+      .mockResolvedValueOnce(logPage([makeLog("running", 1)]))
+      .mockResolvedValue(logPage([makeLog("success", 1)]));
     await renderPage();
-    await clickSyncNow();
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(1);
 
-    // Fast phase: first poll at 1800ms, then FAST_ATTEMPTS × 2s.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FIRST_DELAY + FAST_ATTEMPTS * INTERVAL);
-    });
-    const afterFast = mockedGetSyncLogs.mock.calls.length; // 1 mount + 151 polls
-    expect(afterFast).toBeGreaterThan(1 + FAST_ATTEMPTS - 20); // sanity: cap removed
+    await advance(2000);
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(2);
+    await advance(2000);
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(3);
 
-    // Sync still running — the 30s watchdog must fire (pre-fix: frozen).
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(SLOW_INTERVAL);
-    });
-    expect(mockedGetSyncLogs.mock.calls.length).toBeGreaterThan(afterFast);
+    // The run finished: the "finished" invalidation refetches once, then
+    // polling stops.
+    await advance(2000);
+    const settled = mockedGetSyncLogs.mock.calls.length;
+    await advance(30_000);
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(settled);
   });
 
-  it("refreshes and resumes polling when the tab regains focus while a sync is running", async () => {
-    mockedGetSyncLogs.mockResolvedValue(logPage(makeLog("running", 1)));
+  it("drops to a 30s watchdog for a run older than five minutes", async () => {
+    mockedGetSyncLogs.mockResolvedValue(logPage([makeLog("running", 1, 6)]));
     await renderPage();
-    await clickSyncNow();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FIRST_DELAY); // one poll — still running
-    });
-    const beforeFocus = mockedGetSyncLogs.mock.calls.length;
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      window.dispatchEvent(new Event("focus"));
-    });
-
-    // The focus handler must reload the logs immediately (pre-fix: no
-    // listener, so nothing happens until the page remounts).
-    expect(mockedGetSyncLogs.mock.calls.length).toBeGreaterThan(beforeFocus);
+    await advance(29_000);
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(1);
+    await advance(1_000);
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(2);
   });
 
-  it("does not spawn a duplicate polling chain when focus lands while a poll is in flight", async () => {
-    let calls = 0;
-    let resolveInflight!: (v: SyncLogResponse) => void;
-    const inflight = new Promise<SyncLogResponse>((r) => (resolveInflight = r));
-    mockedGetSyncLogs.mockImplementation(async () => {
-      calls++;
-      if (calls === 2) return inflight; // park the poll that focus will interrupt
-      return logPage(makeLog("running", 1));
-    });
+  it("keeps polling after Sync now until the new run's log appears", async () => {
+    mockedGetSyncLogs.mockResolvedValue(logPage([makeLog("success", 1, 60)]));
+    mockedTriggerSync.mockResolvedValue({ status: "sync triggered" });
+    await renderPage();
+    expect(mockedGetSyncLogs).toHaveBeenCalledTimes(1);
 
-    await renderPage(); // call 1 — running
-    await clickSyncNow();
+    // The run's row isn't there yet for the first polls...
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(FIRST_DELAY); // call 2 — parked in flight
+      findButton("Sync now")!.click();
     });
-    await act(async () => {
-      // Focus while the poll is mid-await: reloads (call 3) and starts a
-      // fresh chain. The old chain must not keep rescheduling itself.
-      window.dispatchEvent(new Event("focus"));
-    });
-    await act(async () => {
-      resolveInflight(logPage(makeLog("running", 1))); // old poll resumes
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FIRST_DELAY); // new chain's first tick — call 4
-    });
-    const afterNewChain = calls;
-    // If the superseded chain survived, its own 2s tick fires 200ms later.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(INTERVAL - FIRST_DELAY);
-    });
-    expect(calls).toBe(afterNewChain); // pre-fix: the old chain adds a 5th call
+    await advance(0);
+    expect(mockedTriggerSync).toHaveBeenCalledTimes(1);
+    const afterTrigger = mockedGetSyncLogs.mock.calls.length;
+    await advance(2000);
+    expect(mockedGetSyncLogs.mock.calls.length).toBeGreaterThan(afterTrigger);
+
+    // ...then it appears and is tracked.
+    mockedGetSyncLogs.mockResolvedValue(
+      logPage([makeLog("running", 2), makeLog("success", 1, 60)]),
+    );
+    await advance(2000);
+    expect(container.textContent).toContain("Running");
   });
 
-  it("keeps polling under StrictMode double-mounting (isMounted must reset on mount)", async () => {
-    mockedGetSyncLogs.mockResolvedValue(logPage(makeLog("running", 1)));
-    // main.tsx renders the app inside <StrictMode>, which in dev mounts,
-    // cleans up, and mounts again — the cleanup sets isMounted=false. If it
-    // is never reset on the second mount, every poll bails and the page
-    // freezes on a stale "Running" log.
-    await act(async () => {
-      root.render(createElement(StrictMode, null, createElement(ActivityPage)));
-    });
-    expect(mockedGetSyncLogs.mock.calls.length).toBeGreaterThanOrEqual(2); // double mount loaded twice
+  it("loads the next page with Load more", async () => {
+    mockedGetSyncLogs
+      .mockResolvedValueOnce(logPage([makeLog("success", 1, 5)], true))
+      .mockResolvedValueOnce({
+        items: [makeLog("failed", 2, 90)],
+        has_more: false,
+        next_offset: 2,
+      });
+    await renderPage();
 
-    await clickSyncNow();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(FIRST_DELAY + INTERVAL); // first + second poll
+      findButton("Load more")!.click();
     });
-    // Both mounts' load plus at least the first poll must have run.
-    expect(mockedGetSyncLogs.mock.calls.length).toBeGreaterThanOrEqual(3);
+    await advance(0);
+
+    expect(mockedGetSyncLogs).toHaveBeenLastCalledWith(8, 1);
+    expect(findButton("Load more")).toBeUndefined();
   });
 });

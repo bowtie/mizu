@@ -1,13 +1,4 @@
-import {
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-  useReducer,
-  useRef,
-  lazy,
-  Suspense,
-} from "react";
+import { useState, useCallback, useMemo, useReducer, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -37,17 +28,22 @@ import {
 } from "lucide-react";
 import { LastSyncedText } from "../components/LastSyncedText";
 import { useNotificationStore } from "../lib/store";
-import { prefetchEpisodes, useShows, useSettings, useSonarrSeries } from "../lib/queries";
+import {
+  prefetchEpisodes,
+  queryKeys,
+  settingsQuery,
+  sonarrAddOptionsQuery,
+  sonarrSeriesQuery,
+  useArtworkRefreshJob,
+  useShows,
+  useSettings,
+  useSonarrSeries,
+} from "../lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getArtworkPosterUrl,
   getArtworkBannerUrl,
   getArtworkLogoUrl,
-  refreshAllArtwork,
-  getArtworkRefreshStatus,
-  getSonarrAddOptions,
-  getSonarrSeries,
-  getSettings,
   errorMessage,
 } from "../lib/api";
 import { prefetchDetailChunk, prefetchAddDialogChunk } from "../lib/chunkPrefetch";
@@ -70,22 +66,14 @@ const AddAnimeDialog = lazy(() =>
   import("./AddAnimeDialog").then((m) => ({ default: m.AddAnimeDialog })),
 );
 
+const NO_SHOWS: Show[] = [];
+const NO_SERIES: SonarrSeries[] = [];
+
 const sortOptions: SelectOption[] = [
   { value: "title", label: "Title (A-Z)" },
   { value: "title_desc", label: "Title (Z-A)" },
   { value: "watermark", label: "Latest progress" },
 ];
-
-// Artwork-refresh completion polling: a fast phase (3s cadence for ~5 min),
-// then a 30s watchdog while the refresh is still running. Status-check
-// errors retry with backoff instead of abandoning the wait, so a transient
-// failure can't end completion tracking early (the old code stopped after a
-// single 8s fallback reload).
-const FAST_POLLS = 100;
-const POLL_INTERVAL = 3000;
-const WATCHDOG_INTERVAL = 30_000;
-const ERROR_BACKOFF_BASE = 3000;
-const ERROR_BACKOFF_CAP = 30_000;
 
 export function ShowsPage() {
   const navigate = useNavigate();
@@ -94,35 +82,36 @@ export function ShowsPage() {
 
   // ── Data from TanStack Query ──
   const showsQuery = useShows();
-  const settingsQuery = useSettings();
-  const sonarrSeriesQuery = useSonarrSeries();
+  const { data: settings = null } = useSettings();
+  // Sonarr's full series list supplies poster/banner fallbacks; it loads in
+  // the background and images fill in when it arrives.
+  const { data: allSeries = NO_SERIES } = useSonarrSeries();
 
-  const shows = showsQuery.data ?? [];
-  const settings = settingsQuery.data ?? null;
+  const shows = showsQuery.data ?? NO_SHOWS;
+  const loading = showsQuery.isPending;
 
   // ── Page-level state ──
-  // If the store already has shows, don't show a loading spinner — render
-  // immediately. SonarrSeries data (for poster/banner URLs) loads in the
-  // background and populates images when ready.
-  const isFetching = showsQuery.isPending;
-  const [loading, setLoading] = useState(() => shows.length === 0 && isFetching);
   const [filter, setFilter] = useState("");
   const [sortBy, setSortBy] = useState("title");
   const [viewMode, setViewMode] = useState<"banner" | "poster">(() => {
     return (localStorage.getItem("mizu-view-mode") as "banner" | "poster") || "banner";
   });
-  const [artworkRefreshing, setArtworkRefreshing] = useState(false);
-  const artworkReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Supersede guard for the artwork-refresh poll chain: bumped on every
-  // (re)start and on unmount, so a poll that wakes after its await can tell
-  // whether it is still the newest chain (focus restarts, re-clicks).
-  const artworkPollChain = useRef(0);
-  const [allSeries, setAllSeries] = useState<SonarrSeries[]>([]);
-  const [addSeriesLibrary, setAddSeriesLibrary] = useState<SonarrSeries[]>([]);
-  const [seriesById, setSeriesById] = useState<Record<string | number, SonarrSeries>>({});
 
   // ── Wizard state ──
   const [w, dispatch] = useReducer(addWizardReducer, INITIAL_WIZARD);
+  // The wizard's list: series that could be matched (or are already mapped).
+  const { data: addSeriesLibrary = NO_SERIES } = useSonarrSeries(true, w.showAddModal);
+
+  const seriesById = useMemo(
+    () => Object.fromEntries(allSeries.map((s) => [s.id, s])) as Record<number, SonarrSeries>,
+    [allSeries],
+  );
+
+  // ── Artwork refresh-all ──
+  const artworkJob = useArtworkRefreshJob(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.shows });
+    addNotification("Artwork refresh complete", "success");
+  });
 
   // ── Derived values ──
 
@@ -201,7 +190,7 @@ export function ShowsPage() {
   function posterUrl(show: Show, series: SonarrSeries | null | undefined): string {
     // 1. Locally downloaded artwork — always prefer when files exist
     if (show.artwork_poster_path) {
-      return getArtworkPosterUrl(show.id);
+      return getArtworkPosterUrl(show.id, show.artwork_poster_url || show.artwork_poster_path);
     }
     // 2. Sonarr images (fallback)
     return posterUrlForSeries(series);
@@ -220,7 +209,7 @@ export function ShowsPage() {
   function bannerUrl(show: Show, series: SonarrSeries | null | undefined): string {
     // 1. Locally downloaded artwork — always prefer when files exist
     if (show.artwork_banner_path) {
-      return getArtworkBannerUrl(show.id);
+      return getArtworkBannerUrl(show.id, show.artwork_banner_url || show.artwork_banner_path);
     }
     // 2. Sonarr images (fallback)
     if (!series?.images?.length) return "";
@@ -234,7 +223,7 @@ export function ShowsPage() {
 
   function logoUrl(show: Show): string {
     if (!show.artwork_logo_path) return "";
-    return getArtworkLogoUrl(show.id);
+    return getArtworkLogoUrl(show.id, show.artwork_logo_url || show.artwork_logo_path);
   }
 
   // ── Sonarr options (for the dialog) ──
@@ -274,156 +263,26 @@ export function ShowsPage() {
     return bestValue || w.sonarrQualityProfileOptions[0]?.value || "";
   }, [allSeries, w.sonarrQualityProfileOptions]);
 
-  // ── Data loading ──
-
-  const showsRef = useRef(shows);
-  showsRef.current = shows;
-
-  // Populate local series state from the query data
-  useEffect(() => {
-    if (sonarrSeriesQuery.data) {
-      setAllSeries(sonarrSeriesQuery.data);
-      setSeriesById(Object.fromEntries(sonarrSeriesQuery.data.map((s) => [s.id, s])));
-    }
-  }, [sonarrSeriesQuery.data]);
-
-  // Clear loading when shows are available
-  useEffect(() => {
-    if (shows.length > 0) {
-      setLoading(false);
-    }
-  }, [shows]);
-
-  // Also clear loading if the query has finished but returned empty
-  useEffect(() => {
-    if (showsQuery.isFetched) {
-      if (shows.length === 0) setLoading(false);
-    }
-  }, [showsQuery.isFetched, shows.length]);
-
+  // Invalidates everything the library shows; used after adding anime.
   const loadLanding = useCallback(
     async (forceRefresh: boolean = false) => {
-      if (forceRefresh) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["shows"] }),
-          queryClient.invalidateQueries({ queryKey: ["settings"] }),
-          queryClient.invalidateQueries({ queryKey: ["sonarrSeries"] }),
-        ]);
-      }
+      if (!forceRefresh) return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.shows }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
+        queryClient.invalidateQueries({ queryKey: ["sonarrSeries"] }),
+      ]);
     },
     [queryClient],
   );
 
-  useEffect(() => {
-    return () => {
-      // Supersede any in-flight poll so it can't re-schedule after unmount.
-      artworkPollChain.current += 1;
-      if (artworkReloadTimer.current) {
-        clearTimeout(artworkReloadTimer.current);
-        artworkReloadTimer.current = null;
-      }
-    };
-  }, []);
-
-  // Poll the backend until the refresh reaches a terminal state. Transient
-  // status-check errors retry with backoff (they must not abandon the wait);
-  // a still-running refresh keeps being tracked at the fast cadence and then
-  // a slow watchdog. chainId is the supersede guard: only the newest chain
-  // may continue, so a focus restart or unmount can't leave stale polls alive.
-  const pollArtworkStatus = useCallback(
-    (chainId: number, attempt = 0, backoff = ERROR_BACKOFF_BASE) => {
-      getArtworkRefreshStatus()
-        .then((status) => {
-          if (artworkPollChain.current !== chainId) return;
-          if (!status.refreshing) {
-            artworkReloadTimer.current = null;
-            loadLanding(true)
-              .then(() => {
-                if (artworkPollChain.current !== chainId) return;
-                setArtworkRefreshing(false);
-                addNotification("Artwork refresh complete", "success");
-              })
-              .catch(() => {
-                // Reload failed (rare — invalidateQueries resolves even on
-                // refetch errors) — don't leave the button stuck on
-                // "Refreshing..." or an unhandled rejection.
-                if (artworkPollChain.current !== chainId) return;
-                setArtworkRefreshing(false);
-              });
-            return;
-          }
-          const delay = attempt < FAST_POLLS ? POLL_INTERVAL : WATCHDOG_INTERVAL;
-          artworkReloadTimer.current = setTimeout(
-            () => pollArtworkStatus(chainId, attempt + 1, ERROR_BACKOFF_BASE),
-            delay,
-          );
-        })
-        .catch(() => {
-          if (artworkPollChain.current !== chainId) return;
-          artworkReloadTimer.current = setTimeout(
-            () => pollArtworkStatus(chainId, attempt, Math.min(backoff * 2, ERROR_BACKOFF_CAP)),
-            backoff,
-          );
-        });
-    },
-    [addNotification, loadLanding],
-  );
-
-  // Recovery when the tab regains focus while a refresh is still running:
-  // immediately check status and restart the poll chain (browsers throttle
-  // background timers, so a hidden tab's wait could otherwise lag behind).
-  useEffect(() => {
-    if (!artworkRefreshing) return;
-    const resume = () => {
-      if (artworkReloadTimer.current) {
-        clearTimeout(artworkReloadTimer.current);
-        artworkReloadTimer.current = null;
-      }
-      // Supersede the old chain so a poll mid-flight can't keep rescheduling
-      // itself alongside the fresh one.
-      artworkPollChain.current += 1;
-      pollArtworkStatus(artworkPollChain.current);
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") resume();
-    };
-    window.addEventListener("focus", resume);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("focus", resume);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [artworkRefreshing, pollArtworkStatus]);
-
   const handleRefreshAllArtwork = async () => {
-    if (artworkReloadTimer.current) {
-      clearTimeout(artworkReloadTimer.current);
-      artworkReloadTimer.current = null;
-    }
-    // Supersede any in-flight poll chain (e.g. a focus restart).
-    artworkPollChain.current += 1;
-    const chainId = artworkPollChain.current;
-    setArtworkRefreshing(true);
     try {
-      await refreshAllArtwork();
-      // The chain may have been superseded while the trigger was in flight
-      // (e.g. a focus restart) — only the newest chain schedules polling.
-      if (artworkPollChain.current !== chainId) return;
+      await artworkJob.start();
       addNotification("Artwork refresh triggered — waiting for completion...", "info", 6000);
-      artworkReloadTimer.current = setTimeout(() => pollArtworkStatus(chainId), POLL_INTERVAL);
     } catch (err: unknown) {
-      if (artworkPollChain.current !== chainId) return;
       addNotification("Artwork refresh failed: " + errorMessage(err), "error");
-      setArtworkRefreshing(false);
     }
-  };
-
-  const refreshSettings = async (): Promise<Settings | null> => {
-    const result = await queryClient.fetchQuery({
-      queryKey: ["settings"],
-      queryFn: getSettings,
-    });
-    return result ?? null;
   };
 
   const resetAddRuleDefaults = (current: Settings | null = settings) => {
@@ -440,10 +299,7 @@ export function ShowsPage() {
 
   const loadSonarrAddOptions = async () => {
     try {
-      const data = await queryClient.fetchQuery({
-        queryKey: ["sonarrAddOptions"],
-        queryFn: getSonarrAddOptions,
-      });
+      const data = await queryClient.fetchQuery(sonarrAddOptionsQuery);
       const payload: Partial<AddWizardState> = {
         sonarrRootFolderOptions: (data.root_folders || []).map((f) => ({
           value: f.path,
@@ -467,19 +323,25 @@ export function ShowsPage() {
 
   const openAddModal = async () => {
     dispatch({ type: "OPEN_ADD_MODAL_INIT" });
-
-    const [refreshedSettings] = await Promise.all([refreshSettings(), loadSonarrAddOptions()]);
-    resetAddRuleDefaults(refreshedSettings);
-
     dispatch({ type: "SET", payload: { sonarrLoading: true } });
+
+    // Start the series fetches before the dialog's own query mounts, so
+    // they share one request. The matchable list depends on mappings and
+    // the AFL cache, so it is always refetched when the wizard opens.
+    const seriesLoad = Promise.all([
+      queryClient.fetchQuery(sonarrSeriesQuery(false)),
+      queryClient.fetchQuery({ ...sonarrSeriesQuery(true), staleTime: 0 }),
+    ]);
+
+    // Start from the current defaults, not whatever was cached earlier.
+    const [freshSettings] = await Promise.all([
+      queryClient.fetchQuery({ ...settingsQuery, staleTime: 0 }).catch(() => settings),
+      loadSonarrAddOptions(),
+    ]);
+    resetAddRuleDefaults(freshSettings);
+
     try {
-      const [fullSeries, modalSeries] = await Promise.all([
-        allSeries.length ? Promise.resolve(allSeries) : getSonarrSeries(),
-        getSonarrSeries(true),
-      ]);
-      setAllSeries(fullSeries || []);
-      setAddSeriesLibrary(modalSeries || []);
-      setSeriesById(Object.fromEntries((fullSeries || []).map((s) => [s.id, s])));
+      await seriesLoad;
     } catch (err: unknown) {
       addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
     }
@@ -532,12 +394,12 @@ export function ShowsPage() {
           </VStack>
           <HStack gap={2} align="center">
             <Button
-              label={artworkRefreshing ? "Refreshing..." : "Refresh artwork"}
+              label={artworkJob.running ? "Refreshing..." : "Refresh artwork"}
               variant="ghost"
               size="md"
-              icon={<RefreshCw size={16} className={artworkRefreshing ? "spin" : ""} />}
+              icon={<RefreshCw size={16} className={artworkJob.running ? "spin" : ""} />}
               onClick={handleRefreshAllArtwork}
-              isDisabled={artworkRefreshing || loading}
+              isDisabled={artworkJob.running || loading}
               data-cuelume-press
             />
             <Button
@@ -735,8 +597,6 @@ export function ShowsPage() {
             w={w}
             dispatch={dispatch}
             allSeries={allSeries}
-            setAllSeries={setAllSeries}
-            setSeriesById={setSeriesById}
             mappedSeriesIds={mappedSeriesIds}
             filteredSeriesLibrary={filteredSeriesLibrary}
             activeWizardSteps={activeWizardSteps}

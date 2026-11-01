@@ -55,6 +55,23 @@ func (c *sonarrStatusCache) healthyWithin(ctx context.Context, client *sonarr.Cl
 	return c.healthy
 }
 
+// handleLiveness answers whether Mizu itself is up: the process is serving
+// and its database responds. It deliberately ignores Sonarr — a Sonarr
+// outage must not mark Mizu unhealthy, or a container supervisor would
+// restart it for someone else's problem. This is what the Docker
+// HEALTHCHECK probes; /api/health reports the full status, Sonarr included.
+func handleLiveness(db *database.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := db.Ping(ctx); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "down", "error": "database unreachable"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	}
+}
+
 func handleHealth(cfg *config.Config, db *database.DB, scheduler *schedulerController, engine *syncengine.Engine, statusCache *sonarrStatusCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status := "ok"

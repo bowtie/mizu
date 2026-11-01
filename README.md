@@ -109,6 +109,34 @@ MIZU_PASSWORD=your-password ./mizu
 
 The env var only applies while no password is configured; rotate via Settings afterwards. Sessions last 30 days, and changing the password revokes all existing sessions. Health and version endpoints stay public for monitoring.
 
+### Behind a reverse proxy or auth proxy
+
+If an auth proxy (tinyauth, Authelia, Authentik, oauth2-proxy, …) or your
+reverse proxy already handles sign-in, you can leave Mizu's own password off.
+Then the proxy is the only thing protecting Mizu, so make sure nothing can
+reach Mizu except through it:
+
+- Don't publish Mizu's port (`8978`) on the host. Put Mizu on the same
+  Docker network as the proxy and let the proxy reach it there; with a bare
+  binary, keep the default `127.0.0.1` listen address.
+- Pass the public host through. Mizu rejects cross-site writes by checking
+  the browser's `Origin` against the request's host, so the proxy must keep
+  the original `Host` header or send it as `X-Forwarded-Host`. Caddy and
+  Traefik do this by default; for nginx add:
+
+  ```nginx
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  ```
+
+`X-Forwarded-Proto: https` marks the session cookie `Secure`.
+`X-Forwarded-For` is only trusted from loopback and private addresses (where
+a proxy connects from), and only for rate-limiting sign-in attempts.
+
+For uptime monitoring, `/api/health/live` reports whether Mizu itself is up;
+`/api/health` also checks Sonarr and returns 503 while Sonarr is unreachable.
+
 ### Metrics
 
 Mizu exposes Prometheus-style metrics at `/metrics` (public, like `/api/health`): request counts by method/route/status, sync cycle outcomes, episodes updated, AFL cache refresh outcomes, and Go runtime gauges. Point any scraper at it — no service discovery or extra config required.
@@ -172,7 +200,8 @@ Endpoints are under `/api`, except `/metrics`. Once a password is set, everythin
 
 | Method   | Path                                         | Description                                             |
 | -------- | -------------------------------------------- | ------------------------------------------------------- |
-| `GET`    | `/api/health`                                | Health check (503 when Sonarr is unreachable)           |
+| `GET`    | `/api/health`                                | Status incl. Sonarr (503 when Sonarr is unreachable)    |
+| `GET`    | `/api/health/live`                           | Liveness: process and database only                     |
 | `GET`    | `/api/version`                               | Version info                                            |
 | `GET`    | `/metrics`                                   | Prometheus-style metrics                                |
 | `GET`    | `/api/auth/status`                           | Whether a password is set and the caller is signed in   |
