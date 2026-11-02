@@ -4,6 +4,7 @@ import { ToastViewport } from "./components/ToastViewport";
 import { prefetchDetailChunk } from "./lib/chunkPrefetch";
 import { useAuthStatus, useSettings } from "./lib/queries";
 import { needsOnboarding } from "./lib/onboarding";
+import { rememberReturnPath } from "./lib/redirect";
 import { applySoundsEnabled } from "./lib/sounds";
 
 // Route-based code splitting — all pages are lazy-loaded. ShowsPage
@@ -84,17 +85,20 @@ function SoundsPreference() {
 
 // Gate every content route behind auth. While the status request is in
 // flight we render a neutral fallback rather than flashing the app; once
-// resolved, unauthenticated visitors are bounced to /login with a
-// return path. A fresh install has no password yet; the login page then
-// asks for one, and nothing else is served until it is set.
+// resolved, unauthenticated visitors are bounced to /login, which returns
+// them here afterwards. A fresh install (no sign-in chosen yet) goes to the
+// welcome flow, whose last step makes that choice.
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { data: status, isLoading } = useAuthStatus();
   const location = useLocation();
 
   if (isLoading) return <PageFallback />;
   if (!status?.authenticated) {
-    const from = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/login?from=${from}`} replace />;
+    rememberReturnPath(location.pathname + location.search);
+    return <Navigate to="/login" replace />;
+  }
+  if (!status.configured && location.pathname !== "/welcome") {
+    return <Navigate to="/welcome" replace />;
   }
   return (
     <>
@@ -113,12 +117,16 @@ function RequireSonarr({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Setup is one-time: once Sonarr is connected the welcome page is gone and
-// everything lives in Settings.
+// Setup is one-time: once Sonarr is connected and sign-in chosen the welcome
+// page is gone and everything lives in Settings.
 function OnboardingGate({ children }: { children: React.ReactNode }) {
   const { data: settings, isPending } = useSettings();
+  const { data: status } = useAuthStatus();
   if (isPending) return <PageFallback />;
-  if (!needsOnboarding(settings?.sonarr_api_key_set)) return <Navigate to="/" replace />;
+  const firstRun = status?.configured === false;
+  if (!firstRun && !needsOnboarding(settings?.sonarr_api_key_set)) {
+    return <Navigate to="/" replace />;
+  }
   return <>{children}</>;
 }
 

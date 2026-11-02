@@ -12,25 +12,35 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Switch } from "@astryxdesign/core/Switch";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Divider } from "@astryxdesign/core/Divider";
-import { Check, Loader2, Plug, Upload, Waves } from "lucide-react";
+import { Check, Loader2, Plug, ShieldCheck, Upload, Waves } from "lucide-react";
 import { SettingsRow } from "../components/SettingsRow";
 import { syncIntervalOptions } from "../components/settings/SyncCard";
 import {
   queryKeys,
   settingsQuery,
   useAflCacheRefreshJob,
+  useAuthStatus,
   useSettings,
   useUpdateSettings,
 } from "../lib/queries";
-import { errorMessage, importConfig, testSonarrConnection } from "../lib/api";
+import {
+  errorMessage,
+  importConfig,
+  setupOpen,
+  setupPassword,
+  testSonarrConnection,
+} from "../lib/api";
 import { trackedToAction } from "./addWizardHelpers";
 
-type StepKey = "sonarr" | "defaults";
+type StepKey = "sonarr" | "defaults" | "signin";
 
-const STEPS: { key: StepKey; label: string }[] = [
+const ALL_STEPS: { key: StepKey; label: string }[] = [
   { key: "sonarr", label: "Connect Sonarr" },
   { key: "defaults", label: "Sync and defaults" },
+  { key: "signin", label: "Sign-in" },
 ];
+
+const MIN_PASSWORD_LENGTH = 8;
 
 type AflState =
   | { phase: "idle" }
@@ -41,17 +51,29 @@ type AflState =
 const AFL_POLL_MS = 1000;
 const AFL_COUNT_ATTEMPTS = 4;
 
-// One-time setup: this page is only reachable until Sonarr is connected
-// (see OnboardingGate in App.tsx); everything here can be changed later in
-// Settings. Nothing is saved until the last step, because saving the API key
-// is what closes this page.
+// One-time setup: this page is only reachable until Sonarr is connected and
+// a sign-in choice is made (see OnboardingGate in App.tsx); everything here
+// can be changed later in Settings. On a fresh install the last step picks a
+// password or skips it, and the server answers without sign-in until then.
+// Settings are saved on finishing, never per step.
 export function OnboardingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: settings } = useSettings();
+  const { data: authStatus } = useAuthStatus();
   const updateSettings = useUpdateSettings();
 
-  const [step, setStep] = useState<StepKey>("sonarr");
+  const needsSignIn = authStatus?.configured === false;
+  const steps = needsSignIn ? ALL_STEPS : ALL_STEPS.slice(0, 2);
+  // Sonarr is already saved when a finish got as far as saving settings but
+  // not the sign-in choice, or a backup was restored: only sign-in is left.
+  const settingsSaved = useRef(settings?.sonarr_api_key_set === true);
+
+  const [step, setStep] = useState<StepKey>(() =>
+    needsSignIn && settingsSaved.current ? "signin" : "sonarr",
+  );
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [url, setUrl] = useState(settings?.sonarr_url || "http://localhost:8989");
   const [apiKey, setApiKey] = useState("");
   const [tested, setTested] = useState(false);
@@ -72,7 +94,7 @@ export function OnboardingPage() {
   const aflStarted = useRef(false);
   const unmounted = useRef(false);
 
-  const stepIndex = STEPS.findIndex((s) => s.key === step);
+  const stepIndex = steps.findIndex((s) => s.key === step);
   const busy = testing || saving || restoring;
 
   useEffect(() => {
@@ -114,6 +136,7 @@ export function OnboardingPage() {
 
   const editConnection = (setter: (v: string) => void) => (value: string) => {
     setter(value);
+    settingsSaved.current = false;
     setTested(false);
     setError(null);
   };
@@ -137,24 +160,53 @@ export function OnboardingPage() {
     }
   };
 
-  const handleFinish = async () => {
+  // Saves Sonarr and the defaults (unless already saved), then the sign-in
+  // choice, which ends first-run setup.
+  const handleFinish = async (signIn?: { password: string } | "skip") => {
     setSaving(true);
     setError(null);
     try {
-      // Saved last: it flips the "needs onboarding" flag that guards this page.
-      await updateSettings.mutateAsync({
-        sonarr_url: url.trim(),
-        sonarr_api_key: apiKey.trim(),
-        sync_interval: syncInterval,
-        default_anime_canon_action: trackedToAction(trackCanon),
-        default_mixed_canon_action: trackedToAction(trackMixed),
-        default_filler_action: trackedToAction(trackFiller),
-      });
+      if (!settingsSaved.current) {
+        await updateSettings.mutateAsync({
+          sonarr_url: url.trim(),
+          sonarr_api_key: apiKey.trim(),
+          sync_interval: syncInterval,
+          default_anime_canon_action: trackedToAction(trackCanon),
+          default_mixed_canon_action: trackedToAction(trackMixed),
+          default_filler_action: trackedToAction(trackFiller),
+        });
+        settingsSaved.current = true;
+      }
+      if (signIn === "skip") {
+        await setupOpen();
+        queryClient.setQueryData(queryKeys.authStatus, {
+          configured: true,
+          authenticated: true,
+          open: true,
+        });
+      } else if (signIn) {
+        await setupPassword(signIn.password);
+        queryClient.setQueryData(queryKeys.authStatus, { configured: true, authenticated: true });
+      }
       navigate("/", { replace: true });
     } catch (err) {
       setError(errorMessage(err));
       setSaving(false);
     }
+  };
+
+  const handlePasswordFinish = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (busy) return;
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    void handleFinish({ password });
   };
 
   // Restore a config exported from another Mizu: it carries the Sonarr
@@ -176,7 +228,9 @@ export function OnboardingPage() {
       const restored = await queryClient.fetchQuery({ ...settingsQuery, staleTime: 0 });
       await queryClient.invalidateQueries({ queryKey: queryKeys.shows });
       if (restored.sonarr_api_key_set) {
-        navigate("/", { replace: true });
+        settingsSaved.current = true;
+        if (needsSignIn) setStep("signin");
+        else navigate("/", { replace: true });
       } else {
         setUrl(restored.sonarr_url || url);
         setError(`Restored ${shows}, but the backup has no Sonarr API key. Enter it below.`);
@@ -203,12 +257,12 @@ export function OnboardingPage() {
             <Waves size={32} aria-hidden="true" />
             <Heading level={1}>Welcome to Mizu</Heading>
             <Text type="supporting" color="secondary">
-              Two quick steps and you can start skipping filler.
+              {needsSignIn ? "Three" : "Two"} quick steps and you can start skipping filler.
             </Text>
           </VStack>
 
           <ol className="wizard-steps" aria-label="Setup progress">
-            {STEPS.map((s, i) => {
+            {steps.map((s, i) => {
               const isCurrent = s.key === step;
               const isPast = stepIndex > i;
               return (
@@ -359,15 +413,89 @@ export function OnboardingPage() {
                     isDisabled={saving}
                     data-cuelume-press
                   />
+                  {needsSignIn ? (
+                    <Button
+                      label="Continue"
+                      variant="primary"
+                      onClick={() => {
+                        setError(null);
+                        setStep("signin");
+                      }}
+                      isDisabled={busy}
+                      data-cuelume-press
+                    />
+                  ) : (
+                    <Button
+                      label="Finish and open library"
+                      variant="primary"
+                      onClick={() => void handleFinish()}
+                      isLoading={saving}
+                      isDisabled={busy}
+                      data-cuelume-press
+                    />
+                  )}
+                </HStack>
+              </VStack>
+            )}
+
+            {step === "signin" && (
+              <VStack gap={4} as="form" onSubmit={handlePasswordFinish}>
+                <Text type="supporting" color="secondary">
+                  Protect the dashboard with a password. You'll sign in with it from now on.
+                </Text>
+                <TextInput
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="Choose a password"
+                  hasAutoFocus
+                  isDisabled={saving}
+                />
+                <TextInput
+                  label="Confirm password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  placeholder="Repeat your password"
+                  isDisabled={saving}
+                />
+                {errorLine}
+                <HStack gap={2} justify="between" wrap="wrap">
                   <Button
-                    label="Finish and open library"
-                    variant="primary"
-                    onClick={handleFinish}
-                    isLoading={saving}
-                    isDisabled={busy}
+                    label="Back"
+                    variant="ghost"
+                    onClick={() => {
+                      setError(null);
+                      setStep("defaults");
+                    }}
+                    isDisabled={saving}
                     data-cuelume-press
                   />
+                  <HStack gap={2} wrap="wrap">
+                    <Button
+                      label="Skip"
+                      variant="secondary"
+                      onClick={() => void handleFinish("skip")}
+                      isDisabled={busy}
+                      data-cuelume-press
+                    />
+                    <Button
+                      type="submit"
+                      label="Finish and open library"
+                      variant="primary"
+                      icon={<ShieldCheck size={16} />}
+                      isLoading={saving}
+                      isDisabled={busy || !password}
+                      data-cuelume-press
+                    />
+                  </HStack>
                 </HStack>
+                <Text size="xsm" color="secondary">
+                  Skip only if something else already protects Mizu, like a VPN or a private
+                  network: anyone who can reach it can then use it. You can add a password later in
+                  Settings.
+                </Text>
               </VStack>
             )}
           </Card>

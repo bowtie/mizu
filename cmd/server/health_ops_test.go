@@ -209,13 +209,14 @@ func TestHealthHidesDetailsFromStrangers(t *testing.T) {
 	mgr := auth.NewManager(db)
 	h := handleHealth(cfg, db, newSchedulerController(cfg.ScanInterval), engine, newSonarrStatusCache(healthSonarrTTL), mgr, newAccessControl(accessPolicy{}))
 
+	token, _, err := mgr.Setup(t.Context(), "health-check-pass")
+	require.NoError(t, err)
+
 	rec := httptest.NewRecorder()
 	h(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"status":"ok"}`, rec.Body.String())
 
-	token, _, err := mgr.Setup(t.Context(), "health-check-pass")
-	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
 	rec = httptest.NewRecorder()

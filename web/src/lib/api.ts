@@ -16,6 +16,7 @@ import type {
   SyncLogResponse,
   TestConnectionResult,
 } from "./types";
+import { rememberReturnPath } from "./redirect";
 
 const BASE = "/api";
 
@@ -53,8 +54,8 @@ const api = ky.create({
           !response.url.includes("/auth/") &&
           location.pathname !== "/login"
         ) {
-          const from = encodeURIComponent(location.pathname + location.search);
-          location.assign(`/login?from=${from}`);
+          rememberReturnPath(location.pathname + location.search);
+          location.assign("/login");
         }
       },
     ],

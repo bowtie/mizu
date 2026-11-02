@@ -20,9 +20,11 @@ import (
 // isAuthenticated reports whether the request may use the protected API.
 // In external mode that means it came from a trusted proxy (the proxy did
 // the sign-in), and in open mode every request is. Otherwise it needs a
-// valid session cookie. With no password configured nothing is
-// authenticated: a fresh install serves only first-run setup until a
-// password is set or sign-in is turned off.
+// valid session cookie. A fresh install, with no password and no mode
+// chosen yet, lets every request through so the welcome flow can connect
+// Sonarr before its last step picks a password or turns sign-in off. Until
+// then the first visitor could already turn sign-in off, so this hands out
+// nothing more.
 func isAuthenticated(r *http.Request, mgr *auth.Manager, acc *accessControl) (bool, error) {
 	pol := acc.get()
 	if pol.External {
@@ -33,7 +35,7 @@ func isAuthenticated(r *http.Request, mgr *auth.Manager, acc *accessControl) (bo
 	}
 	configured, err := mgr.IsConfigured(r.Context())
 	if err != nil || !configured {
-		return false, err
+		return err == nil, err
 	}
 	c, err := r.Cookie(auth.SessionCookieName)
 	if err != nil {

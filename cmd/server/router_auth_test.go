@@ -93,21 +93,25 @@ func getStatus(t *testing.T, handler http.Handler, remote string) authStatus {
 	return st
 }
 
-// A fresh install serves nothing but first-run setup: no settings, no
-// backup export, no library, until a password is set.
-func TestUnconfiguredInstanceIsLocked(t *testing.T) {
+// A fresh install answers the API without sign-in, so the welcome flow
+// can connect Sonarr before its last step picks a password. Once one is
+// set, everything needs a session.
+func TestFreshInstallIsOpenUntilSignInIsChosen(t *testing.T) {
 	handler, _ := newAuthTestRouter(t)
 
+	for _, path := range []string{"/api/mappings", "/api/settings", "/api/version"} {
+		rec := doJSON(t, handler, http.MethodGet, path, "", nil)
+		assert.Equal(t, http.StatusOK, rec.Code, path)
+	}
+	assert.Equal(t, authStatus{Authenticated: true}, getStatus(t, handler, ""))
+
+	cookie := signIn(t, handler)
 	for _, path := range []string{"/api/mappings", "/api/settings", "/api/backup/export", "/api/version"} {
 		rec := doJSON(t, handler, http.MethodGet, path, "", nil)
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, path)
 	}
 	rec := doJSON(t, handler, http.MethodPut, "/api/settings", `{"sonarr_url":"http://attacker:1"}`, nil)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-
-	assert.Equal(t, authStatus{}, getStatus(t, handler, ""))
-
-	cookie := signIn(t, handler)
 	rec = doJSON(t, handler, http.MethodGet, "/api/mappings", "", cookie)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }

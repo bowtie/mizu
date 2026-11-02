@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { safeRedirectPath } from "./redirect";
+import { rememberReturnPath, safeRedirectPath, takeReturnPath } from "./redirect";
 
 describe("safeRedirectPath", () => {
   it("keeps in-app paths, including query strings", () => {
@@ -18,5 +18,18 @@ describe("safeRedirectPath", () => {
     ]) {
       expect(safeRedirectPath(bad)).toBe("/");
     }
+  });
+});
+
+describe("return path", () => {
+  it("returns the remembered path once, then the library", () => {
+    rememberReturnPath("/shows/3");
+    expect(takeReturnPath()).toBe("/shows/3");
+    expect(takeReturnPath()).toBe("/");
+  });
+
+  it("never returns an off-site target", () => {
+    rememberReturnPath("//evil.example");
+    expect(takeReturnPath()).toBe("/");
   });
 });

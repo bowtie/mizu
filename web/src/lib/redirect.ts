@@ -7,3 +7,28 @@ export function safeRedirectPath(from: string | null): string {
   }
   return from;
 }
+
+const RETURN_PATH_KEY = "mizu-return-path";
+
+/** Remembers where to go after signing in, so /login needs no query string.
+ *  Kept in sessionStorage; a blocked or private-mode storage just means the
+ *  library is the landing page. */
+export function rememberReturnPath(path: string): void {
+  try {
+    sessionStorage.setItem(RETURN_PATH_KEY, path);
+  } catch {
+    // Storage unavailable: fall back to the library.
+  }
+}
+
+/** The remembered return path (validated by safeRedirectPath), cleared once read. */
+export function takeReturnPath(): string {
+  let path: string | null = null;
+  try {
+    path = sessionStorage.getItem(RETURN_PATH_KEY);
+    sessionStorage.removeItem(RETURN_PATH_KEY);
+  } catch {
+    // Storage unavailable: fall back to the library.
+  }
+  return safeRedirectPath(path);
+}

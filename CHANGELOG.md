@@ -7,11 +7,14 @@ choice made at first run, and stored secrets stay on the server.
 
 ### Security
 
-- First-run setup asks for a password or continues without one. Settings →
-  Security switches between the Mizu password, a sign-in proxy and no
-  sign-in. Turning sign-in off needs the current password and revokes every
-  session; turning it back on sets a new password and signs the caller in.
-  Two simultaneous first-run setups can't both succeed.
+- Sign-in is the welcome flow's third step: set a password, or skip it.
+  Until that choice is made a fresh install answers without sign-in, so
+  Sonarr can be connected first (the first visitor could already turn
+  sign-in off, so this opens nothing new). Settings → Security switches
+  between the Mizu password, a sign-in proxy and no sign-in. Turning sign-in
+  off needs the current password and revokes every session; turning it back
+  on sets a new password and signs the caller in. Two simultaneous first-run
+  setups can't both succeed.
 - With sign-in off, Mizu only answers requests addressed to an IP address,
   localhost or a listed hostname (Settings → Security → Allowed hostnames),
   so a DNS-rebinding page can't drive it through a LAN browser. The hostname
@@ -62,6 +65,8 @@ choice made at first run, and stored secrets stay on the server.
   old, so new titles reach the add dialog and new-title alerts. Before, only
   the Settings button refreshed it: the 30-day refresh hung off an auto-match
   path the dashboard never used.
+- The sign-in page lives at a plain `/login`; the page to return to is
+  remembered for the browser session instead of riding along as `?from=`.
 - Custom artwork uploads over 1 MiB are accepted again, up to the advertised
   10 MB (the global request body cap rejected them with a 413).
 - Settings reads "Never refreshed" for an AnimeFillerList cache that was never
