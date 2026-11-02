@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -227,6 +228,9 @@ func TestNotificationsMutedSurvivesUpsertAndImport(t *testing.T) {
 }
 
 func TestNewCreatesOwnerOnlyFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no Unix file modes; release targets are Linux")
+	}
 	path := filepath.Join(t.TempDir(), "perm.db")
 	db, err := New(path)
 	require.NoError(t, err)
@@ -244,6 +248,9 @@ func TestNewCreatesOwnerOnlyFiles(t *testing.T) {
 }
 
 func TestNewTightensExistingFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no Unix file modes; release targets are Linux")
+	}
 	path := filepath.Join(t.TempDir(), "old.db")
 	require.NoError(t, os.WriteFile(path, nil, 0o644))
 	db, err := New(path)
