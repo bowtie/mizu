@@ -45,7 +45,7 @@ First public release. Covers everything since 0.2.0.
 - Go modules, web dependencies and the toolchain bumped (Go 1.27).
 - CI for vet, lint, race tests, web checks and the Docker build, plus a
   tag-triggered release workflow that publishes a multi-arch image to GHCR.
-- MIT license, security policy, and the Figtree OFL notice.
+- MIT license and the Figtree OFL notice.
 
 ## [0.2.0] - 2026-08-24
 
