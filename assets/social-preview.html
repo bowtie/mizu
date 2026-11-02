@@ -1,0 +1,239 @@
+<!doctype html>
+<!--
+  Source for social-preview.png (GitHub Settings → Social preview, 1280×640).
+  Colors are the Flexoki dark tokens from web/src/lib/flexokiTheme.ts; the
+  card mirrors the episode list (VirtualizedEpisodeList.tsx) badges.
+  Re-render with headless Edge/Chrome from the repo root:
+    msedge --headless --hide-scrollbars --window-size=1280,640 \
+      --screenshot=assets/social-preview.png assets/social-preview.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mizu social preview</title>
+<style>
+  @font-face {
+    font-family: "Figtree";
+    font-weight: 400 700;
+    src: url("../web/public/fonts/figtree-latin.woff2") format("woff2");
+  }
+
+  :root {
+    --color-background-body: #100F0F;
+    --color-background-surface: #1C1B1A;
+    --color-background-muted: #282726;
+    --color-border: #403E3C;
+    --color-text-primary: #CECDC3;
+    --color-text-secondary: #9F9D96;
+    --color-text-disabled: #575653;
+    --color-accent: #4385BE;
+    --color-icon-secondary: #9F9D96;
+
+    --color-background-blue: #4385BE3F;
+    --color-text-blue: #92BFDB;
+    --color-background-purple: #8B7EC83F;
+    --color-text-purple: #8B7EC8;
+    --color-background-yellow: #D0A2153F;
+    --color-text-yellow: #D0A215;
+    --color-background-red: #D14D413F;
+    --color-text-red: #D14D41;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+
+  html, body {
+    width: 1280px;
+    height: 640px;
+    overflow: hidden;
+    background: var(--color-background-body);
+    color: var(--color-text-primary);
+    font-family: "Figtree", system-ui, sans-serif;
+  }
+
+  .canvas {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 520px;
+    align-items: center;
+    gap: 56px;
+    padding: 0 88px 0 96px;
+  }
+
+  .waves {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 220px;
+    pointer-events: none;
+  }
+
+  .brand { position: relative; }
+
+  .logo {
+    width: 104px;
+    height: 104px;
+    margin-left: -10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: 112px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+  }
+
+  .tagline {
+    margin-top: 24px;
+    max-width: 560px;
+    font-size: 30px;
+    line-height: 1.3;
+    color: var(--color-text-secondary);
+  }
+
+  .tagline b { color: var(--color-text-blue); font-weight: 600; }
+
+  .source {
+    margin-top: 36px;
+    font-size: 20px;
+    color: var(--color-text-disabled);
+  }
+
+  /* Episode list card, scaled up from the app's row layout */
+  .card {
+    position: relative;
+    background: var(--color-background-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    padding: 8px 12px;
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 8px;
+  }
+
+  .row + .row::before {
+    content: "";
+    position: absolute;
+    inset: 0 14px auto;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .content { flex: 1; min-width: 0; }
+
+  .title {
+    height: 12px;
+    border-radius: 6px;
+    background: var(--color-background-muted);
+    margin: 4px 0 10px;
+  }
+
+  .ep {
+    font-size: 17px;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .badge {
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .blue { background: var(--color-background-blue); color: var(--color-text-blue); }
+  .purple { background: var(--color-background-purple); color: var(--color-text-purple); }
+  .yellow { background: var(--color-background-yellow); color: var(--color-text-yellow); }
+  .red { background: var(--color-background-red); color: var(--color-text-red); }
+
+  .toggle {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--color-background-muted);
+    color: var(--color-icon-secondary);
+  }
+
+  .toggle.on { color: var(--color-text-primary); }
+  .toggle svg { width: 20px; height: 20px; }
+
+  .unmonitored .title { opacity: 0.5; }
+  .unmonitored .ep { color: var(--color-text-disabled); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- lucide Eye / EyeOff, as used by the monitor toggle -->
+    <g id="eye" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
+      <circle cx="12" cy="12" r="3"/>
+    </g>
+    <g id="eye-off" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/>
+      <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/>
+      <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/>
+      <path d="m2 2 20 20"/>
+    </g>
+  </defs>
+</svg>
+
+<div class="canvas">
+  <svg class="waves" viewBox="0 0 1280 220" preserveAspectRatio="none" fill="none" stroke="#4385BE" stroke-width="2">
+    <path d="M0 90c107-50 213-50 320 0s213 50 320 0 213-50 320 0 213 50 320 0" opacity="0.14"/>
+    <path d="M0 140c107-50 213-50 320 0s213 50 320 0 213-50 320 0 213 50 320 0" opacity="0.09"/>
+    <path d="M0 190c107-50 213-50 320 0s213 50 320 0 213-50 320 0 213 50 320 0" opacity="0.05"/>
+  </svg>
+
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="#4385BE" stroke-width="2" stroke-linecap="round">
+      <path d="M3 8c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0" />
+      <path d="M3 16c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0" opacity="0.55" />
+    </svg>
+    <h1>Mizu</h1>
+    <p class="tagline">A <b>water filter</b> that removes episodes that add nothing to the plot.</p>
+    <p class="source">For Sonarr · Powered by AnimeFillerList data</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="content"><div class="title" style="width:72%"></div><div class="ep">Episode 101</div></div>
+      <span class="badge blue">Manga</span>
+      <span class="toggle on"><svg viewBox="0 0 24 24"><use href="#eye"/></svg></span>
+    </div>
+    <div class="row">
+      <div class="content"><div class="title" style="width:58%"></div><div class="ep">Episode 102</div></div>
+      <span class="badge purple">Anime</span>
+      <span class="toggle on"><svg viewBox="0 0 24 24"><use href="#eye"/></svg></span>
+    </div>
+    <div class="row unmonitored">
+      <div class="content"><div class="title" style="width:66%"></div><div class="ep">Episode 103</div></div>
+      <span class="badge red">Filler</span>
+      <span class="toggle"><svg viewBox="0 0 24 24"><use href="#eye-off"/></svg></span>
+    </div>
+    <div class="row">
+      <div class="content"><div class="title" style="width:80%"></div><div class="ep">Episode 104</div></div>
+      <span class="badge yellow">Mixed</span>
+      <span class="toggle on"><svg viewBox="0 0 24 24"><use href="#eye"/></svg></span>
+    </div>
+    <div class="row unmonitored">
+      <div class="content"><div class="title" style="width:54%"></div><div class="ep">Episode 105</div></div>
+      <span class="badge red">Filler</span>
+      <span class="toggle"><svg viewBox="0 0 24 24"><use href="#eye-off"/></svg></span>
+    </div>
+    <div class="row">
+      <div class="content"><div class="title" style="width:68%"></div><div class="ep">Episode 106</div></div>
+      <span class="badge blue">Manga</span>
+      <span class="toggle on"><svg viewBox="0 0 24 24"><use href="#eye"/></svg></span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
