@@ -60,11 +60,11 @@ choice made at first run, and stored secrets stay on the server.
 
 ### Fixes
 
-- The AnimeFillerList show list refreshes on its own. Mizu checks shortly
-  after startup and then hourly, and fetches the list again once it's a day
-  old, so new titles reach the add dialog and new-title alerts. Before, only
-  the Settings button refreshed it: the 30-day refresh hung off an auto-match
-  path the dashboard never used.
+- The AnimeFillerList show list refreshes on its own, so new titles reach
+  the add dialog and new-title alerts. Settings → Sync → AFL refresh picks
+  how often: daily, weekly (default), monthly or manual only. An empty list
+  is always filled. Before, only the Settings button refreshed it: the
+  30-day refresh hung off an auto-match path the dashboard never used.
 - The sign-in page lives at a plain `/login`; the page to return to is
   remembered for the browser session instead of riding along as `?from=`.
 - Custom artwork uploads over 1 MiB are accepted again, up to the advertised

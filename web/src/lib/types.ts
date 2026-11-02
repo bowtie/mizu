@@ -23,6 +23,7 @@ export interface Settings {
   ntfy_token_set?: boolean;
   ntfy_notify_on?: string;
   ntfy_notify_new_titles?: boolean;
+  afl_refresh_interval?: string;
   ui_sounds_enabled?: boolean;
   [key: string]: unknown;
 }

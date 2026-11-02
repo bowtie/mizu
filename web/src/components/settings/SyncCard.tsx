@@ -27,6 +27,13 @@ export const syncIntervalOptions: SelectOption[] = [
   { value: "24h", label: "24 hours" },
 ];
 
+export const aflRefreshIntervalOptions: SelectOption[] = [
+  { value: "1d", label: "Daily" },
+  { value: "7d", label: "Weekly" },
+  { value: "30d", label: "Monthly" },
+  { value: "off", label: "Manual only" },
+];
+
 interface SyncCardProps {
   control: Control<SettingsForm>;
   artworkSourceOptions: SelectOption[];
@@ -136,6 +143,27 @@ export function SyncCard({
             emptyPlaceholder="Enter Fanart.tv API key"
             width={260}
             onDirtyChange={setFanartApiKeyDirty}
+          />
+        </SettingsRow>
+        <Divider />
+
+        <SettingsRow
+          label="AFL refresh"
+          description="How often Mizu fetches AnimeFillerList's anime list, so new titles show up when adding anime."
+        >
+          <Controller
+            control={control}
+            name="aflRefreshInterval"
+            render={({ field }) => (
+              <Selector
+                label="AFL refresh"
+                value={field.value}
+                options={aflRefreshIntervalOptions}
+                onChange={(v) => field.onChange(v as string)}
+                isLabelHidden
+                width={180}
+              />
+            )}
           />
         </SettingsRow>
         <Divider />

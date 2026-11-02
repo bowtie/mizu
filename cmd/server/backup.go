@@ -52,6 +52,7 @@ var importableSettings = map[string]struct{}{
 	"ntfy_token":                      {},
 	"ntfy_notify_on":                  {},
 	"ntfy_notify_new_titles":          {},
+	"afl_refresh_interval":            {},
 	"artwork_default_source":          {},
 	"tmdb_api_key":                    {},
 	"fanart_api_key":                  {},
@@ -370,6 +371,8 @@ func validateImportedSettings(settings map[string]string, artworkMgr *artwork.Ma
 			bad = !config.IsValidSonarrMonitorMode(value)
 		case "ntfy_notify_on":
 			bad = value != "" && !config.IsValidNtfyNotifyOn(value)
+		case "afl_refresh_interval":
+			bad = value != "" && !config.IsValidAFLRefreshInterval(value)
 		case "ntfy_enabled", "sonarr_add_season_folder", "ui_sounds_enabled":
 			bad = value != "" && value != "true" && value != "false"
 		case "sonarr_add_quality_profile_id":

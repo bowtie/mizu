@@ -20,11 +20,9 @@ import (
 )
 
 const (
-	baseURL   = "https://www.animefillerlist.com"
-	userAgent = "Mizu/1.0"
-	// ShowListRefreshInterval is how old the cached show list may get
-	// before it is fetched again. A refresh is a single page request.
-	ShowListRefreshInterval = 24 * time.Hour
+	baseURL                 = "https://www.animefillerlist.com"
+	userAgent               = "Mizu/1.0"
+	showListRefreshInterval = 30 * 24 * time.Hour
 
 	// maxResponseBytes caps how much HTML is parsed per page. AFL pages
 	// are well under 1 MB; anything larger means a hostile or broken
@@ -139,7 +137,7 @@ func (s *Scraper) GetAllShows(ctx context.Context) ([]models.AFLShow, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(cached) > 0 && !refreshedAt.IsZero() && time.Since(refreshedAt) < ShowListRefreshInterval {
+		if len(cached) > 0 && !refreshedAt.IsZero() && time.Since(refreshedAt) < showListRefreshInterval {
 			return cached, nil
 		}
 	}

@@ -57,6 +57,11 @@ type Config struct {
 	// finds shows that were not in the cache before. Off by default.
 	NtfyNotifyNewTitles bool
 
+	// AFLRefreshInterval is how often the AnimeFillerList show list is
+	// fetched again: "1d", "7d" (default), "30d", or "off" (only the
+	// Settings button refreshes it).
+	AFLRefreshInterval string
+
 	// Artwork
 	ArtworkDefaultSource string // "sonarr" (default), "anilist", "tmdb", "fanart", "kitsu"
 	TMDBAPIKey           string
@@ -108,6 +113,7 @@ func DefaultConfig() *Config {
 		NtfyEnabled:               false,
 		NtfyServerURL:             "https://ntfy.sh",
 		NtfyTopic:                 "",
+		AFLRefreshInterval:        "7d",
 		NtfyToken:                 "",
 		NtfyNotifyOn:              "always",
 		ArtworkDefaultSource:      "sonarr",
@@ -199,4 +205,25 @@ func IsValidFillerAction(value string) bool {
 	default:
 		return false
 	}
+}
+
+// aflRefreshIntervals maps each AFLRefreshInterval value to its duration;
+// "off" is zero.
+var aflRefreshIntervals = map[string]time.Duration{
+	"1d":  24 * time.Hour,
+	"7d":  7 * 24 * time.Hour,
+	"30d": 30 * 24 * time.Hour,
+	"off": 0,
+}
+
+// IsValidAFLRefreshInterval reports whether v is a supported AFLRefreshInterval.
+func IsValidAFLRefreshInterval(v string) bool {
+	_, ok := aflRefreshIntervals[v]
+	return ok
+}
+
+// AFLRefreshDuration is how old the show list may get under v before it
+// is fetched again, or zero when automatic refreshes are off.
+func AFLRefreshDuration(v string) time.Duration {
+	return aflRefreshIntervals[v]
 }

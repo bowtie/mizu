@@ -41,6 +41,7 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"ntfy_token_set":                cfg.NtfyToken != "",
 			"ntfy_notify_on":                cfg.NtfyNotifyOn,
 			"ntfy_notify_new_titles":        cfg.NtfyNotifyNewTitles,
+			"afl_refresh_interval":          cfg.AFLRefreshInterval,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key_masked":           maskedTmdbKey,
 			"tmdb_api_key_set":              cfg.TMDBAPIKey != "",
@@ -87,6 +88,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			NtfyToken                 *string `json:"ntfy_token"`
 			NtfyNotifyOn              *string `json:"ntfy_notify_on"`
 			NtfyNotifyNewTitles       *bool   `json:"ntfy_notify_new_titles"`
+			AFLRefreshInterval        *string `json:"afl_refresh_interval"`
 			ArtworkDefaultSource      *string `json:"artwork_default_source"`
 			TMDBAPIKey                *string `json:"tmdb_api_key"`
 			FanartAPIKey              *string `json:"fanart_api_key"`
@@ -128,6 +130,10 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		}
 		if update.NtfyNotifyOn != nil && !config.IsValidNtfyNotifyOn(*update.NtfyNotifyOn) {
 			writeError(w, http.StatusBadRequest, "invalid ntfy_notify_on")
+			return
+		}
+		if update.AFLRefreshInterval != nil && !config.IsValidAFLRefreshInterval(*update.AFLRefreshInterval) {
+			writeError(w, http.StatusBadRequest, "invalid afl_refresh_interval")
 			return
 		}
 		if update.SonarrURL != nil && strings.TrimSpace(*update.SonarrURL) != "" {
@@ -241,6 +247,9 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		if update.NtfyNotifyOn != nil {
 			cfg.NtfyNotifyOn = *update.NtfyNotifyOn
 		}
+		if update.AFLRefreshInterval != nil {
+			cfg.AFLRefreshInterval = *update.AFLRefreshInterval
+		}
 		if update.ArtworkDefaultSource != nil {
 			cfg.ArtworkDefaultSource = *update.ArtworkDefaultSource
 		}
@@ -272,6 +281,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			"ntfy_token":                    cfg.NtfyToken,
 			"ntfy_notify_on":                cfg.NtfyNotifyOn,
 			"ntfy_notify_new_titles":        strconv.FormatBool(cfg.NtfyNotifyNewTitles),
+			"afl_refresh_interval":          cfg.AFLRefreshInterval,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"fanart_api_key":                cfg.FanartAPIKey,

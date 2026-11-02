@@ -83,7 +83,7 @@ func main() {
 	}
 
 	go startScheduler(ctx, cfg, scheduler, syncEngine)
-	go startAFLCacheRefresher(ctx, syncEngine, db, &bgWG)
+	go startAFLCacheRefresher(ctx, cfg, syncEngine, db, &bgWG)
 	go sweepSessions(ctx, auth.NewManager(db))
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -181,6 +181,9 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	}
 	if value, ok := settings["ntfy_notify_on"]; ok && config.IsValidNtfyNotifyOn(value) {
 		cfg.NtfyNotifyOn = value
+	}
+	if value, ok := settings["afl_refresh_interval"]; ok && config.IsValidAFLRefreshInterval(value) {
+		cfg.AFLRefreshInterval = value
 	}
 	if value, ok := settings["artwork_default_source"]; ok && value != "" {
 		cfg.ArtworkDefaultSource = value
