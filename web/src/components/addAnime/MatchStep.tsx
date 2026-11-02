@@ -167,7 +167,7 @@ export function MatchStep({
             <HStack gap={2} justify="between" wrap="wrap">
               <Button
                 label="Keep Sonarr only"
-                variant="ghost"
+                variant="secondary"
                 onClick={handleKeepSonarrOnly}
                 data-cuelume-press
               />

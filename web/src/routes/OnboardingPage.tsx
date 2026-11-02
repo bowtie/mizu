@@ -385,7 +385,7 @@ export function OnboardingPage() {
             <HStack justify="center">
               <Button
                 label="Restore from a backup"
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 icon={<Upload size={14} />}
                 isLoading={restoring}

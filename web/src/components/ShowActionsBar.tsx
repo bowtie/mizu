@@ -2,7 +2,17 @@ import { HStack } from "@astryxdesign/core/HStack";
 import { Button } from "@astryxdesign/core/Button";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { InputGroup, InputGroupText } from "@astryxdesign/core/InputGroup";
-import { Trash2, Save, Check, Bot, Minus, Plus } from "lucide-react";
+import {
+  Trash2,
+  Save,
+  Check,
+  Bot,
+  Minus,
+  Plus,
+  Bell,
+  BellOff,
+  Palette,
+} from "lucide-react";
 
 interface ShowActionsBarProps {
   watermarkAuto: boolean;
@@ -13,14 +23,19 @@ interface ShowActionsBarProps {
   saving: boolean;
   savedFlash: boolean;
   rulesDirty: boolean;
+  notificationsMuted: boolean;
+  notificationsSaving: boolean;
   /** Receives the requested marker; the parent clamps it. */
   onMarkerChange: (value: number) => void;
   onToggleAuto: () => void;
+  onToggleMuted: () => void;
+  onEditArtwork: () => void;
   onRemove: () => void;
   onSave: () => void;
 }
 
-/** Watermark stepper plus Remove / Save actions, revealed once show data is in. */
+/** Watermark stepper, artwork and notification buttons, plus Remove / Save,
+ *  revealed once show data is in. */
 export function ShowActionsBar({
   watermarkAuto,
   markerValue,
@@ -30,8 +45,12 @@ export function ShowActionsBar({
   saving,
   savedFlash,
   rulesDirty,
+  notificationsMuted,
+  notificationsSaving,
   onMarkerChange,
   onToggleAuto,
+  onToggleMuted,
+  onEditArtwork,
   onRemove,
   onSave,
 }: ShowActionsBarProps) {
@@ -93,6 +112,31 @@ export function ShowActionsBar({
               isIconOnly={isMobile}
               onClick={() => onToggleAuto()}
               aria-label={watermarkAuto ? "Using Sonarr progress" : "Using manual episode"}
+              data-cuelume-toggle
+            />
+            <Button
+              label="Edit artwork"
+              tooltip="Artwork"
+              variant="secondary"
+              size="md"
+              isIconOnly
+              icon={<Palette size={16} />}
+              onClick={() => onEditArtwork()}
+              data-cuelume-press
+            />
+            <Button
+              label={notificationsMuted ? "Notifications muted" : "Notifications on"}
+              variant="secondary"
+              size="md"
+              isIconOnly
+              icon={notificationsMuted ? <BellOff size={16} /> : <Bell size={16} />}
+              tooltip={
+                notificationsMuted
+                  ? "Notifications muted — click to unmute"
+                  : "Notifications on — click to mute"
+              }
+              isDisabled={notificationsSaving}
+              onClick={() => onToggleMuted()}
               data-cuelume-toggle
             />
           </HStack>

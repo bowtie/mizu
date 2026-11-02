@@ -42,30 +42,32 @@ type EpisodeInfo struct {
 }
 
 type ShowMapping struct {
-	ID                int64
-	SonarrSeriesID    int64
-	SonarrTitle       string
-	AflSlug           string
-	AflTitle          string
-	AutoMatched       int64
-	MatchConfidence   float64
-	FillerAction      string
-	MixedAction       string
-	AnimeCanonAction  string
-	Enabled           int64
-	StartMode         string
-	WatermarkMode     string
-	SyncWatermark     int64
-	ArtworkSource     string
-	ArtworkPosterPath string
-	ArtworkBannerPath string
-	ArtworkLogoPath   string
-	Overview          string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	ArtworkPosterUrl  string
-	ArtworkBannerUrl  string
-	ArtworkLogoUrl    string
+	ID                 int64
+	SonarrSeriesID     int64
+	SonarrTitle        string
+	AflSlug            string
+	AflTitle           string
+	AutoMatched        int64
+	MatchConfidence    float64
+	FillerAction       string
+	MixedAction        string
+	AnimeCanonAction   string
+	Enabled            int64
+	StartMode          string
+	WatermarkMode      string
+	SyncWatermark      int64
+	ArtworkSource      string
+	ArtworkPosterPath  string
+	ArtworkBannerPath  string
+	ArtworkLogoPath    string
+	Overview           string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	ArtworkPosterUrl   string
+	ArtworkBannerUrl   string
+	ArtworkLogoUrl     string
+	NotificationsMuted int64
+	ArtworkCustomSlots string
 }
 
 type SonarrSeriesCache struct {

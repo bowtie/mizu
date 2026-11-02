@@ -49,6 +49,7 @@ var importableSettings = map[string]struct{}{
 	"ntfy_topic":                      {},
 	"ntfy_token":                      {},
 	"ntfy_notify_on":                  {},
+	"ntfy_notify_new_titles":          {},
 	"artwork_default_source":          {},
 	"tmdb_api_key":                    {},
 	"fanart_api_key":                  {},
@@ -72,60 +73,63 @@ func validAFLSlug(s string) bool {
 // round-trips fields that models.ShowMapping hides from its JSON
 // encoding (auto_matched, match_confidence).
 type mappingBackup struct {
-	SonarrSeriesID   int                  `json:"sonarr_series_id"`
-	SonarrTitle      string               `json:"sonarr_title"`
-	AFLSlug          string               `json:"afl_slug"`
-	AFLTitle         string               `json:"afl_title"`
-	AutoMatched      bool                 `json:"auto_matched"`
-	MatchConfidence  float64              `json:"match_confidence"`
-	FillerAction     models.FillerAction  `json:"filler_action"`
-	MixedAction      models.FillerAction  `json:"mixed_action"`
-	AnimeCanonAction models.FillerAction  `json:"anime_canon_action"`
-	Enabled          bool                 `json:"enabled"`
-	StartMode        models.StartMode     `json:"start_mode"`
-	WatermarkMode    models.WatermarkMode `json:"watermark_mode"`
-	SyncWatermark    int                  `json:"sync_watermark"`
-	ArtworkSource    string               `json:"artwork_source"`
-	Overview         string               `json:"overview"`
+	SonarrSeriesID     int                  `json:"sonarr_series_id"`
+	SonarrTitle        string               `json:"sonarr_title"`
+	AFLSlug            string               `json:"afl_slug"`
+	AFLTitle           string               `json:"afl_title"`
+	AutoMatched        bool                 `json:"auto_matched"`
+	MatchConfidence    float64              `json:"match_confidence"`
+	FillerAction       models.FillerAction  `json:"filler_action"`
+	MixedAction        models.FillerAction  `json:"mixed_action"`
+	AnimeCanonAction   models.FillerAction  `json:"anime_canon_action"`
+	Enabled            bool                 `json:"enabled"`
+	StartMode          models.StartMode     `json:"start_mode"`
+	WatermarkMode      models.WatermarkMode `json:"watermark_mode"`
+	SyncWatermark      int                  `json:"sync_watermark"`
+	ArtworkSource      string               `json:"artwork_source"`
+	Overview           string               `json:"overview"`
+	NotificationsMuted bool                 `json:"notifications_muted"`
 }
 
 func toMappingBackup(m models.ShowMapping) mappingBackup {
 	return mappingBackup{
-		SonarrSeriesID:   m.SonarrSeriesID,
-		SonarrTitle:      m.SonarrTitle,
-		AFLSlug:          m.AFLSlug,
-		AFLTitle:         m.AFLTitle,
-		AutoMatched:      m.AutoMatched,
-		MatchConfidence:  m.MatchConfidence,
-		FillerAction:     m.FillerAction,
-		MixedAction:      m.MixedAction,
-		AnimeCanonAction: m.AnimeCanonAction,
-		Enabled:          m.Enabled,
-		StartMode:        m.StartMode,
-		WatermarkMode:    m.WatermarkMode,
-		SyncWatermark:    m.SyncWatermark,
-		ArtworkSource:    m.ArtworkSource,
-		Overview:         m.Overview,
+		SonarrSeriesID:     m.SonarrSeriesID,
+		SonarrTitle:        m.SonarrTitle,
+		AFLSlug:            m.AFLSlug,
+		AFLTitle:           m.AFLTitle,
+		AutoMatched:        m.AutoMatched,
+		MatchConfidence:    m.MatchConfidence,
+		FillerAction:       m.FillerAction,
+		MixedAction:        m.MixedAction,
+		AnimeCanonAction:   m.AnimeCanonAction,
+		Enabled:            m.Enabled,
+		StartMode:          m.StartMode,
+		WatermarkMode:      m.WatermarkMode,
+		SyncWatermark:      m.SyncWatermark,
+		ArtworkSource:      m.ArtworkSource,
+		Overview:           m.Overview,
+		NotificationsMuted: m.NotificationsMuted,
 	}
 }
 
 func (b mappingBackup) toMapping() models.ShowMapping {
 	return models.ShowMapping{
-		SonarrSeriesID:   b.SonarrSeriesID,
-		SonarrTitle:      b.SonarrTitle,
-		AFLSlug:          b.AFLSlug,
-		AFLTitle:         b.AFLTitle,
-		AutoMatched:      b.AutoMatched,
-		MatchConfidence:  b.MatchConfidence,
-		FillerAction:     b.FillerAction,
-		MixedAction:      b.MixedAction,
-		AnimeCanonAction: b.AnimeCanonAction,
-		Enabled:          b.Enabled,
-		StartMode:        b.StartMode,
-		WatermarkMode:    b.WatermarkMode,
-		SyncWatermark:    b.SyncWatermark,
-		ArtworkSource:    b.ArtworkSource,
-		Overview:         b.Overview,
+		SonarrSeriesID:     b.SonarrSeriesID,
+		SonarrTitle:        b.SonarrTitle,
+		AFLSlug:            b.AFLSlug,
+		AFLTitle:           b.AFLTitle,
+		AutoMatched:        b.AutoMatched,
+		MatchConfidence:    b.MatchConfidence,
+		FillerAction:       b.FillerAction,
+		MixedAction:        b.MixedAction,
+		AnimeCanonAction:   b.AnimeCanonAction,
+		Enabled:            b.Enabled,
+		StartMode:          b.StartMode,
+		WatermarkMode:      b.WatermarkMode,
+		SyncWatermark:      b.SyncWatermark,
+		ArtworkSource:      b.ArtworkSource,
+		Overview:           b.Overview,
+		NotificationsMuted: b.NotificationsMuted,
 	}
 }
 

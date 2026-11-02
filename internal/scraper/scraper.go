@@ -43,6 +43,17 @@ type Scraper struct {
 	// animefillerlist.com. The cache holds no per-key user state, so reuse
 	// of the in-flight result is always safe.
 	showListFlight singleflight.Group
+
+	// onNewShows, when set, is called once per scrape that discovered
+	// shows missing from the previous cache. It runs for every refresh
+	// path (manual button, stale-cache fallback) because it hangs off the
+	// scrape itself rather than a particular caller.
+	onNewShows func(ctx context.Context, shows []models.AFLShow)
+}
+
+// SetOnNewShows registers the callback invoked with newly discovered shows.
+func (s *Scraper) SetOnNewShows(fn func(ctx context.Context, shows []models.AFLShow)) {
+	s.onNewShows = fn
 }
 
 func New(requestTimeout, rateLimitDelay time.Duration, db *database.DB) *Scraper {
@@ -215,9 +226,29 @@ func (s *Scraper) doRefreshAllShows(ctx context.Context) ([]models.AFLShow, []st
 		if len(newSlugs) > 0 {
 			log.Info().Int("new", len(newSlugs)).Msg("new shows detected in AFL cache")
 		}
+		// Every show being "new" means the cache was empty (fresh install,
+		// restore): that is a first fill, not a discovery worth announcing.
+		if s.onNewShows != nil && len(newSlugs) > 0 && len(newSlugs) < len(shows) {
+			s.onNewShows(ctx, showsBySlug(shows, newSlugs))
+		}
 	}
 
 	return shows, newSlugs, nil
+}
+
+// showsBySlug returns the shows whose slugs appear in slugs, in slugs order.
+func showsBySlug(shows []models.AFLShow, slugs []string) []models.AFLShow {
+	bySlug := make(map[string]models.AFLShow, len(shows))
+	for _, sh := range shows {
+		bySlug[sh.Slug] = sh
+	}
+	out := make([]models.AFLShow, 0, len(slugs))
+	for _, slug := range slugs {
+		if sh, ok := bySlug[slug]; ok {
+			out = append(out, sh)
+		}
+	}
+	return out
 }
 
 func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []models.AFLEpisode, error) {

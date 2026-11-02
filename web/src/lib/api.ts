@@ -43,14 +43,13 @@ const api = ky.create({
     beforeError: [
       async (state) => {
         const { error } = state;
-        if (error instanceof HTTPError && error.response) {
-          try {
-            const body = (await error.response.clone().json()) as { error?: string };
-            if (body.error) {
-              error.message = body.error;
-            }
-          } catch {
-            // response body isn't JSON — keep ky's default message
+        // ky has already read and parsed the body into `error.data` (the
+        // response itself can't be read again). Surface the server's own
+        // message; a non-JSON body leaves ky's default.
+        if (error instanceof HTTPError) {
+          const data = error.data as { error?: unknown } | undefined;
+          if (typeof data?.error === "string" && data.error) {
+            error.message = data.error;
           }
         }
         return error;
@@ -208,6 +207,28 @@ export function selectArtwork(
   payload: ArtworkSelectPayload,
 ): Promise<ArtworkRefreshResult> {
   return request<ArtworkRefreshResult>("PUT", `/mappings/${showId}/artwork/select`, payload);
+}
+
+/** Stores an image the user chose for one slot of a show's artwork. */
+export function uploadCustomArtwork(
+  showId: string | number,
+  slot: string,
+  file: File,
+): Promise<Show> {
+  const form = new FormData();
+  form.set("file", file);
+  // The shared instance defaults to a JSON content type; a multipart body
+  // needs the browser to set its own (with the boundary).
+  return api(`mappings/${showId}/artwork/custom/${slot}`, {
+    method: "POST",
+    body: form,
+    headers: { "Content-Type": undefined },
+  }).json() as Promise<Show>;
+}
+
+/** Drops an uploaded image so a refresh can fill the slot again. */
+export function removeCustomArtwork(showId: string | number, slot: string): Promise<Show> {
+  return request<Show>("DELETE", `/mappings/${showId}/artwork/custom/${slot}`);
 }
 
 export function refreshAllArtwork(): Promise<{ status: string }> {

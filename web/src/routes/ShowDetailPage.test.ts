@@ -25,6 +25,8 @@ vi.mock("../lib/api", () => ({
   refreshArtwork: vi.fn(),
   setArtworkSource: vi.fn(),
   selectArtwork: vi.fn(),
+  uploadCustomArtwork: vi.fn(),
+  removeCustomArtwork: vi.fn(),
   getArtworkCandidates: vi.fn(),
   setEpisodeMonitor: vi.fn(),
   updateShow: vi.fn(),
@@ -54,27 +56,62 @@ vi.mock("../components/ArtworkPickerDialog", () => ({
     isOpen: boolean;
     initialSource?: string;
     currentArtwork?: { poster?: string; banner?: string; logo?: string };
+    customSlots: string[];
     onSelect: (source: string, slot: string, url: string) => void;
+    onUploadCustom: (slot: string, file: File) => void;
+    onRemoveCustom: (slot: string) => void;
   }) => {
     if (!props.isOpen) return null;
     return createElement(
-      "button",
-      {
-        "data-testid": "picker-pick",
-        "data-current-poster": props.currentArtwork?.poster ?? "",
-        onClick: () =>
-          props.onSelect(
-            props.initialSource ?? "fanart",
-            "poster",
-            "https://example.com/picked.jpg",
-          ),
-      },
-      "Pick",
+      "div",
+      { "data-custom-slots": props.customSlots.join(",") },
+      createElement(
+        "button",
+        {
+          "data-testid": "picker-pick",
+          "data-current-poster": props.currentArtwork?.poster ?? "",
+          onClick: () =>
+            props.onSelect(
+              props.initialSource ?? "fanart",
+              "poster",
+              "https://example.com/picked.jpg",
+            ),
+        },
+        "Pick",
+      ),
+      createElement(
+        "button",
+        {
+          "data-testid": "picker-upload",
+          onClick: () =>
+            props.onUploadCustom("banner", new File(["x"], "mine.png", { type: "image/png" })),
+        },
+        "Upload",
+      ),
+      createElement(
+        "button",
+        { "data-testid": "picker-upload-huge", onClick: () => props.onUploadCustom("poster", bigFile()) },
+        "UploadHuge",
+      ),
+      createElement(
+        "button",
+        { "data-testid": "picker-remove", onClick: () => props.onRemoveCustom("banner") },
+        "Remove",
+      ),
     );
   },
 }));
 
-import { getShow, getEpisodes, updateShow, setEpisodeMonitor, selectArtwork } from "../lib/api";
+import {
+  getShow,
+  getEpisodes,
+  updateShow,
+  setEpisodeMonitor,
+  selectArtwork,
+  uploadCustomArtwork,
+  removeCustomArtwork,
+  refreshArtwork,
+} from "../lib/api";
 import type { Show, Episode } from "../lib/types";
 import { ShowDetailPage } from "./ShowDetailPage";
 
@@ -83,6 +120,16 @@ const mockedGetEpisodes = vi.mocked(getEpisodes);
 const mockedUpdateShow = vi.mocked(updateShow);
 const mockedSetEpisodeMonitor = vi.mocked(setEpisodeMonitor);
 const mockedSelectArtwork = vi.mocked(selectArtwork);
+const mockedUpload = vi.mocked(uploadCustomArtwork);
+const mockedRemove = vi.mocked(removeCustomArtwork);
+const mockedRefreshArtwork = vi.mocked(refreshArtwork);
+
+/** A file over the 10 MB limit, without allocating 10 MB. */
+function bigFile(): File {
+  const f = new File(["x"], "huge.png", { type: "image/png" });
+  Object.defineProperty(f, "size", { value: 10 * 1024 * 1024 + 1 });
+  return f;
+}
 
 const SHOW: Show = {
   id: 1,
@@ -124,6 +171,9 @@ beforeEach(() => {
   mockedUpdateShow.mockReset();
   mockedSetEpisodeMonitor.mockReset();
   mockedSelectArtwork.mockReset();
+  mockedUpload.mockReset();
+  mockedRemove.mockReset();
+  mockedRefreshArtwork.mockReset();
   addNotificationMock.mockClear();
 });
 
@@ -162,6 +212,11 @@ async function renderPage() {
     );
   });
   await flush();
+}
+
+/** The toolbar's icon-only button that opens the artwork dialog. */
+function editArtworkButton(): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>('button[aria-label="Edit artwork"]');
 }
 
 function findButton(label: string): HTMLButtonElement | undefined {
@@ -241,12 +296,10 @@ describe("ShowDetailPage", () => {
     mockedSelectArtwork.mockResolvedValue({ source: "fanart", found: true });
     await renderPage();
 
-    // The "Choose" button only appears when the resolved source supports
-    // candidate browsing (fanart/tmdb).
-    const choose = findButton("Choose");
-    expect(choose).toBeDefined();
+    const edit = editArtworkButton();
+    expect(edit).not.toBeNull();
     await act(async () => {
-      choose!.click();
+      edit!.click();
     });
     await flush(2);
 
@@ -266,6 +319,8 @@ describe("ShowDetailPage", () => {
       logo_url: "",
     });
     expect(addNotificationMock).toHaveBeenCalledWith(expect.stringContaining("updated"), "success");
+    // The dialog stays open so the next slot (banner, logo) can be set too.
+    expect(container.querySelector('[data-testid="picker-pick"]')).not.toBeNull();
   });
 
   it("passes the show's current artwork URLs to the picker", async () => {
@@ -278,7 +333,7 @@ describe("ShowDetailPage", () => {
     await renderPage();
 
     await act(async () => {
-      findButton("Choose")!.click();
+      editArtworkButton()!.click();
     });
     await flush(2);
 
@@ -286,12 +341,101 @@ describe("ShowDetailPage", () => {
     expect(pick?.dataset.currentPoster).toBe("https://example.com/current-poster.jpg");
   });
 
-  it("hides the picker for a source without candidate browsing", async () => {
+  it("uploads a custom image into a slot and keeps the dialog open", async () => {
+    mockedGetShow.mockResolvedValue({ ...SHOW, artwork_custom_slots: ["poster"] });
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    mockedUpload.mockResolvedValue({} as never);
+    await renderPage();
+    await act(async () => {
+      editArtworkButton()!.click();
+    });
+    await flush(2);
+
+    // The dialog is told which slots already hold an upload.
+    expect(container.querySelector("[data-custom-slots]")?.getAttribute("data-custom-slots")).toBe("poster");
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="picker-upload"]')!.click();
+    });
+    await flush(3);
+
+    expect(mockedUpload).toHaveBeenCalledWith("1", "banner", expect.any(File));
+    expect(addNotificationMock).toHaveBeenCalledWith(expect.stringContaining("banner"), "success");
+    expect(container.querySelector('[data-testid="picker-upload"]')).not.toBeNull();
+  });
+
+  it("refuses an oversize image before sending it", async () => {
+    mockedGetShow.mockResolvedValue(SHOW);
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    await renderPage();
+    await act(async () => {
+      editArtworkButton()!.click();
+    });
+    await flush(2);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="picker-upload-huge"]')!.click();
+    });
+    await flush(2);
+
+    expect(mockedUpload).not.toHaveBeenCalled();
+    expect(addNotificationMock).toHaveBeenCalledWith(expect.stringContaining("10 MB"), "error");
+  });
+
+  it("reports an upload the server rejects", async () => {
+    mockedGetShow.mockResolvedValue(SHOW);
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    mockedUpload.mockRejectedValue(new Error("invalid image: use a JPG, PNG, GIF or WebP file"));
+    await renderPage();
+    await act(async () => {
+      editArtworkButton()!.click();
+    });
+    await flush(2);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="picker-upload"]')!.click();
+    });
+    await flush(3);
+
+    expect(addNotificationMock).toHaveBeenCalledWith(
+      expect.stringContaining("use a JPG, PNG, GIF or WebP"),
+      "error",
+    );
+  });
+
+  it("removing a custom image lets the automatic source fill the slot again", async () => {
+    mockedGetShow.mockResolvedValue({ ...SHOW, artwork_custom_slots: ["banner"] });
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    mockedRemove.mockResolvedValue({} as never);
+    mockedRefreshArtwork.mockResolvedValue({ source: "tmdb", found: true });
+    await renderPage();
+    await act(async () => {
+      editArtworkButton()!.click();
+    });
+    await flush(2);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="picker-remove"]')!.click();
+    });
+    await flush(3);
+
+    expect(mockedRemove).toHaveBeenCalledWith("1", "banner");
+    expect(mockedRefreshArtwork).toHaveBeenCalledWith("1");
+  });
+
+  it("opens the artwork dialog even when the source has no candidate browsing", async () => {
+    // The dialog also hosts the source selector and Refresh, so it must be
+    // reachable for sources like kitsu that have nothing to browse.
     mockedGetShow.mockResolvedValue({ ...SHOW, artwork_source: "kitsu" });
     mockedGetEpisodes.mockResolvedValue([EPISODE]);
     await renderPage();
 
-    expect(findButton("Choose")).toBeUndefined();
+    expect(container.querySelector('[data-testid="picker-pick"]')).toBeNull();
+    await act(async () => {
+      editArtworkButton()!.click();
+    });
+    await flush(2);
+    expect(container.querySelector('[data-testid="picker-pick"]')).not.toBeNull();
   });
 
   it("toggles an episode's monitor state via setEpisodeMonitor", async () => {

@@ -395,7 +395,7 @@ export function ShowsPage() {
           <HStack gap={2} align="center">
             <Button
               label={artworkJob.running ? "Refreshing..." : "Refresh artwork"}
-              variant="ghost"
+              variant="secondary"
               size="md"
               icon={<RefreshCw size={16} className={artworkJob.running ? "spin" : ""} />}
               onClick={handleRefreshAllArtwork}
@@ -443,7 +443,7 @@ export function ShowsPage() {
           <StackItem size="static">
             <Button
               label={viewMode === "poster" ? "Banner view" : "Poster view"}
-              variant="ghost"
+              variant="secondary"
               size="lg"
               isIconOnly
               icon={viewMode === "poster" ? <LayoutGrid size={16} /> : <Image size={16} />}

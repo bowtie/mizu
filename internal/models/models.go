@@ -55,30 +55,34 @@ const (
 
 // ShowMapping links a Sonarr series to an AnimeFillerList show.
 type ShowMapping struct {
-	ID                int64         `json:"id"`
-	SonarrSeriesID    int           `json:"sonarr_series_id"`
-	SonarrTitle       string        `json:"sonarr_title"`
-	AFLSlug           string        `json:"afl_slug"` // e.g., "naruto-shippuden"
-	AFLTitle          string        `json:"afl_title"`
-	AutoMatched       bool          `json:"-"`             // internal only, not used by frontend
-	MatchConfidence   float64       `json:"-"`             // internal only, not used by frontend
-	FillerAction      FillerAction  `json:"filler_action"` // per-show override
-	MixedAction       FillerAction  `json:"mixed_action"`  // per-show override
-	AnimeCanonAction  FillerAction  `json:"anime_canon_action"`
-	Enabled           bool          `json:"enabled"`
-	StartMode         StartMode     `json:"start_mode"`
-	WatermarkMode     WatermarkMode `json:"watermark_mode"`
-	SyncWatermark     int           `json:"sync_watermark"`
-	ArtworkSource     string        `json:"artwork_source,omitempty"`      // provider that supplied current artwork
-	ArtworkPosterPath string        `json:"artwork_poster_path,omitempty"` // relative path to local poster file
-	ArtworkBannerPath string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file
-	ArtworkLogoPath   string        `json:"artwork_logo_path,omitempty"`   // relative path to local logo file
-	ArtworkPosterURL  string        `json:"artwork_poster_url,omitempty"`  // source URL of the current poster
-	ArtworkBannerURL  string        `json:"artwork_banner_url,omitempty"`  // source URL of the current banner
-	ArtworkLogoURL    string        `json:"artwork_logo_url,omitempty"`    // source URL of the current logo
-	Overview          string        `json:"overview,omitempty"`            // series synopsis (cached from Sonarr)
-	CreatedAt         time.Time     `json:"-"`                             // internal only, not used by frontend
-	UpdatedAt         time.Time     `json:"-"`                             // internal only, not used by frontend
+	ID                 int64         `json:"id"`
+	SonarrSeriesID     int           `json:"sonarr_series_id"`
+	SonarrTitle        string        `json:"sonarr_title"`
+	AFLSlug            string        `json:"afl_slug"` // e.g., "naruto-shippuden"
+	AFLTitle           string        `json:"afl_title"`
+	AutoMatched        bool          `json:"-"`             // internal only, not used by frontend
+	MatchConfidence    float64       `json:"-"`             // internal only, not used by frontend
+	FillerAction       FillerAction  `json:"filler_action"` // per-show override
+	MixedAction        FillerAction  `json:"mixed_action"`  // per-show override
+	AnimeCanonAction   FillerAction  `json:"anime_canon_action"`
+	Enabled            bool          `json:"enabled"`
+	StartMode          StartMode     `json:"start_mode"`
+	WatermarkMode      WatermarkMode `json:"watermark_mode"`
+	SyncWatermark      int           `json:"sync_watermark"`
+	ArtworkSource      string        `json:"artwork_source,omitempty"`      // provider that supplied current artwork
+	ArtworkPosterPath  string        `json:"artwork_poster_path,omitempty"` // relative path to local poster file
+	ArtworkBannerPath  string        `json:"artwork_banner_path,omitempty"` // relative path to local banner file
+	ArtworkLogoPath    string        `json:"artwork_logo_path,omitempty"`   // relative path to local logo file
+	ArtworkPosterURL   string        `json:"artwork_poster_url,omitempty"`  // source URL of the current poster
+	ArtworkBannerURL   string        `json:"artwork_banner_url,omitempty"`  // source URL of the current banner
+	ArtworkLogoURL     string        `json:"artwork_logo_url,omitempty"`    // source URL of the current logo
+	Overview           string        `json:"overview,omitempty"`            // series synopsis (cached from Sonarr)
+	NotificationsMuted bool          `json:"notifications_muted"`
+	// ArtworkCustomSlots lists the slots (poster, banner, logo) holding an
+	// image the user uploaded. Refreshes and source switches leave them alone.
+	ArtworkCustomSlots []string  `json:"artwork_custom_slots"` // suppress ntfy notifications for this show
+	CreatedAt          time.Time `json:"-"`                    // internal only, not used by frontend
+	UpdatedAt          time.Time `json:"-"`                    // internal only, not used by frontend
 }
 
 // EpisodeInfo holds filler data for a single episode.

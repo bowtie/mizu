@@ -114,6 +114,8 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 					r.Put("/artwork/source", handleSetArtworkSource(db, artworkMgr))
 					r.Get("/artwork/candidates", handleListArtworkCandidates(cfg, db, artworkMgr, syncEngine))
 					r.Put("/artwork/select", handleSelectArtwork(cfg, db, artworkMgr, syncEngine))
+					r.Post("/artwork/custom/{slot}", handleUploadCustomArtwork(db, artworkMgr))
+					r.Delete("/artwork/custom/{slot}", handleRemoveCustomArtwork(db, artworkMgr))
 					r.Get("/episodes", handleGetEpisodes(db, syncEngine))
 					r.Get("/episodes/sonarr", handleGetSonarrEpisodes(db, syncEngine))
 					r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(db, syncEngine))

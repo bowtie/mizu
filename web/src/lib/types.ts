@@ -29,6 +29,7 @@ export interface Settings {
   ntfy_topic?: string;
   ntfy_token_set?: boolean;
   ntfy_notify_on?: string;
+  ntfy_notify_new_titles?: boolean;
   ui_sounds_enabled?: boolean;
   [key: string]: unknown;
 }
@@ -82,6 +83,9 @@ export interface Show {
   mixed_action: string;
   anime_canon_action: string;
   watermark_mode: string;
+  notifications_muted?: boolean;
+  /** Slots (poster, banner, logo) holding an image the user uploaded. */
+  artwork_custom_slots?: string[];
   [key: string]: unknown;
 }
 
@@ -151,6 +155,8 @@ export interface ArtworkOption {
   width?: number;
   height?: number;
   likes?: number;
+  /** Duplicates of this image that were merged into it. */
+  alt_urls?: string[];
 }
 
 export interface ArtworkOptions {

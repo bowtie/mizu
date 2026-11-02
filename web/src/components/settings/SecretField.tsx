@@ -17,7 +17,7 @@ interface SecretFieldProps {
   isSet: boolean;
   /** The user has typed a replacement this session. */
   dirty: boolean;
-  /** Masked form of the stored value (e.g. "abcd...wxyz"), if the server sent one. */
+  /** Masked form of the stored value (a fixed placeholder, never part of the key), if the server sent one. */
   savedMasked: string;
   emptyPlaceholder: string;
   width: number;

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -34,6 +35,10 @@ type Manager struct {
 	// acquisition order, not recency of intent.
 	intentMu sync.Mutex
 	intents  map[int64]int64
+
+	// hashCache remembers perceptual hashes by image URL (uint64) so a
+	// candidate listing only downloads each thumbnail once per process.
+	hashCache sync.Map
 }
 
 // NewManager creates a Manager that stores images under artDir.
@@ -163,8 +168,27 @@ func (m *Manager) ClearArtworkForSonarr(ctx context.Context, mappingID int64) er
 // ClearArtworkForSonarr acquires it and delegates here, while fetchAndStore
 // calls it directly because it already holds the lock for the same mapping.
 func (m *Manager) clearArtworkForSonarrUnlocked(ctx context.Context, mappingID int64) error {
-	m.deleteArtworkUnlocked(mappingID)
-	return m.db.UpdateArtwork(ctx, mappingID, "", "", "", "", "", "")
+	// Uploaded images are the user's own and survive a switch to Sonarr's.
+	current, err := m.db.GetMappingByID(ctx, mappingID)
+	if err != nil {
+		return err
+	}
+	if current == nil || len(current.ArtworkCustomSlots) == 0 {
+		m.deleteArtworkUnlocked(mappingID)
+		return m.db.UpdateArtwork(ctx, mappingID, "", "", "", "", "", "")
+	}
+	custom := current.ArtworkCustomSlots
+	m.deleteArtworkExceptUnlocked(mappingID, custom)
+	keep := func(slot, path, url string) (string, string) {
+		if slices.Contains(custom, slot) {
+			return path, url
+		}
+		return "", ""
+	}
+	poster, posterURL := keep(SlotPoster, current.ArtworkPosterPath, current.ArtworkPosterURL)
+	banner, bannerURL := keep(SlotBanner, current.ArtworkBannerPath, current.ArtworkBannerURL)
+	logo, logoURL := keep(SlotLogo, current.ArtworkLogoPath, current.ArtworkLogoURL)
+	return m.db.UpdateArtwork(ctx, mappingID, poster, banner, logo, posterURL, bannerURL, logoURL)
 }
 
 // FetchResult is returned by FetchAndStore.

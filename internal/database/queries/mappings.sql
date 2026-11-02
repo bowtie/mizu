@@ -5,7 +5,8 @@ SELECT
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
     overview, created_at, updated_at,
-    artwork_poster_url, artwork_banner_url, artwork_logo_url
+    artwork_poster_url, artwork_banner_url, artwork_logo_url, notifications_muted,
+    artwork_custom_slots
 FROM show_mappings
 ORDER BY sonarr_title ASC;
 
@@ -16,7 +17,8 @@ SELECT
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
     overview, created_at, updated_at,
-    artwork_poster_url, artwork_banner_url, artwork_logo_url
+    artwork_poster_url, artwork_banner_url, artwork_logo_url, notifications_muted,
+    artwork_custom_slots
 FROM show_mappings
 WHERE id = ?;
 
@@ -27,7 +29,8 @@ SELECT
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
     overview, created_at, updated_at,
-    artwork_poster_url, artwork_banner_url, artwork_logo_url
+    artwork_poster_url, artwork_banner_url, artwork_logo_url, notifications_muted,
+    artwork_custom_slots
 FROM show_mappings
 WHERE sonarr_series_id = ?;
 
@@ -39,8 +42,8 @@ INSERT INTO show_mappings (
     sonarr_series_id, sonarr_title, afl_slug, afl_title,
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-    overview, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    overview, notifications_muted, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(sonarr_series_id) DO UPDATE SET
     sonarr_title = excluded.sonarr_title,
     afl_slug = excluded.afl_slug,
@@ -80,4 +83,14 @@ WHERE id = ?;
 -- name: UpdateWatermarkState :exec
 UPDATE show_mappings
 SET sync_watermark = ?, watermark_mode = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
+
+-- name: UpdateNotificationsMuted :exec
+UPDATE show_mappings
+SET notifications_muted = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
+
+-- name: UpdateArtworkCustomSlots :exec
+UPDATE show_mappings
+SET artwork_custom_slots = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;

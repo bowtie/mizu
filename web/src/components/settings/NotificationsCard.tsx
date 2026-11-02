@@ -85,6 +85,26 @@ export function NotificationsCard({
         <Divider />
 
         <SettingsRow
+          label="New anime alerts"
+          description="Get a push when AnimeFillerList adds anime that weren't in the list before."
+        >
+          <Controller
+            control={control}
+            name="notifyNewTitles"
+            render={({ field }) => (
+              <Switch
+                label="New anime alerts"
+                value={field.value}
+                onChange={field.onChange}
+                isLabelHidden
+                data-cuelume-toggle
+              />
+            )}
+          />
+        </SettingsRow>
+        <Divider />
+
+        <SettingsRow
           label="Server URL"
           description="ntfy server URL (self-hosted or public ntfy.sh)."
         >

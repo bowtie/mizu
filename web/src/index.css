@@ -755,7 +755,6 @@ body {
   .button-icon-chevron,
   .activity-log-card,
   .season-card,
-  .artwork-card,
   .activity-log-summary[role="button"],
   .save-flash[data-variant="primary"],
   .astryx-collapsible > button,
@@ -869,6 +868,7 @@ body {
 /* Disabled InputGroup already fades the whole group; prevent double opacity on the input */
 .show-actions-bar .astryx-number-input {
   opacity: 1;
+  width: 5.5rem;
 }
 
 .show-actions-bar .astryx-number-input input[type="number"] {
@@ -940,8 +940,7 @@ body {
 }
 
 /* Season card hover */
-.season-card,
-.artwork-card {
+.season-card {
   transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
@@ -984,7 +983,6 @@ body {
 
 @media (hover: hover) {
   .season-card:hover,
-  .artwork-card:hover,
   .tracking-rule-card:hover {
     border-color: var(--color-border-emphasized);
   }
@@ -998,8 +996,11 @@ body {
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-height: 58vh;
+  max-height: 50vh;
   overflow-y: auto;
+  /* Room for the keyboard focus ring, which is drawn outside the tile. */
+  padding: 4px;
+  box-sizing: border-box;
 }
 
 /* Logos are transparent PNGs — inset them inside the 3:1 box. */
@@ -1015,9 +1016,15 @@ body {
 .artwork-picker-item {
   position: relative;
 }
+.artwork-picker-item.is-saving {
+  opacity: 0.5;
+}
 .artwork-picker-item.is-selected {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  /* Drawn inside the tile: an outline outside it gets cut off by the scroll
+     container whenever the tile sits against its edge. Outlines paint above
+     the image, so the ring stays visible. */
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
 }
 .artwork-picker-check {
   position: absolute;

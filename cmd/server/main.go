@@ -170,6 +170,9 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	if value, ok := settings["ntfy_token"]; ok {
 		cfg.NtfyToken = value
 	}
+	if value, ok := settings["ntfy_notify_new_titles"]; ok && value != "" {
+		cfg.NtfyNotifyNewTitles = value == "true"
+	}
 	if value, ok := settings["ntfy_notify_on"]; ok && config.IsValidNtfyNotifyOn(value) {
 		cfg.NtfyNotifyOn = value
 	}

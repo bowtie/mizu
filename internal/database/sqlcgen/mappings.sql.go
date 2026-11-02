@@ -26,7 +26,8 @@ SELECT
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
     overview, created_at, updated_at,
-    artwork_poster_url, artwork_banner_url, artwork_logo_url
+    artwork_poster_url, artwork_banner_url, artwork_logo_url, notifications_muted,
+    artwork_custom_slots
 FROM show_mappings
 ORDER BY sonarr_title ASC
 `
@@ -65,6 +66,8 @@ func (q *Queries) GetAllMappings(ctx context.Context) ([]ShowMapping, error) {
 			&i.ArtworkPosterUrl,
 			&i.ArtworkBannerUrl,
 			&i.ArtworkLogoUrl,
+			&i.NotificationsMuted,
+			&i.ArtworkCustomSlots,
 		); err != nil {
 			return nil, err
 		}
@@ -86,7 +89,8 @@ SELECT
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
     overview, created_at, updated_at,
-    artwork_poster_url, artwork_banner_url, artwork_logo_url
+    artwork_poster_url, artwork_banner_url, artwork_logo_url, notifications_muted,
+    artwork_custom_slots
 FROM show_mappings
 WHERE id = ?
 `
@@ -119,6 +123,8 @@ func (q *Queries) GetMappingByID(ctx context.Context, id int64) (ShowMapping, er
 		&i.ArtworkPosterUrl,
 		&i.ArtworkBannerUrl,
 		&i.ArtworkLogoUrl,
+		&i.NotificationsMuted,
+		&i.ArtworkCustomSlots,
 	)
 	return i, err
 }
@@ -130,7 +136,8 @@ SELECT
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
     artwork_source, artwork_poster_path, artwork_banner_path, artwork_logo_path,
     overview, created_at, updated_at,
-    artwork_poster_url, artwork_banner_url, artwork_logo_url
+    artwork_poster_url, artwork_banner_url, artwork_logo_url, notifications_muted,
+    artwork_custom_slots
 FROM show_mappings
 WHERE sonarr_series_id = ?
 `
@@ -163,6 +170,8 @@ func (q *Queries) GetMappingBySonarrID(ctx context.Context, sonarrSeriesID int64
 		&i.ArtworkPosterUrl,
 		&i.ArtworkBannerUrl,
 		&i.ArtworkLogoUrl,
+		&i.NotificationsMuted,
+		&i.ArtworkCustomSlots,
 	)
 	return i, err
 }
@@ -209,6 +218,22 @@ func (q *Queries) UpdateArtwork(ctx context.Context, arg UpdateArtworkParams) er
 	return err
 }
 
+const updateArtworkCustomSlots = `-- name: UpdateArtworkCustomSlots :exec
+UPDATE show_mappings
+SET artwork_custom_slots = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+type UpdateArtworkCustomSlotsParams struct {
+	ArtworkCustomSlots string
+	ID                 int64
+}
+
+func (q *Queries) UpdateArtworkCustomSlots(ctx context.Context, arg UpdateArtworkCustomSlotsParams) error {
+	_, err := q.db.ExecContext(ctx, updateArtworkCustomSlots, arg.ArtworkCustomSlots, arg.ID)
+	return err
+}
+
 const updateArtworkSource = `-- name: UpdateArtworkSource :exec
 UPDATE show_mappings
 SET artwork_source = ?, updated_at = CURRENT_TIMESTAMP
@@ -222,6 +247,22 @@ type UpdateArtworkSourceParams struct {
 
 func (q *Queries) UpdateArtworkSource(ctx context.Context, arg UpdateArtworkSourceParams) error {
 	_, err := q.db.ExecContext(ctx, updateArtworkSource, arg.ArtworkSource, arg.ID)
+	return err
+}
+
+const updateNotificationsMuted = `-- name: UpdateNotificationsMuted :exec
+UPDATE show_mappings
+SET notifications_muted = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+type UpdateNotificationsMutedParams struct {
+	NotificationsMuted int64
+	ID                 int64
+}
+
+func (q *Queries) UpdateNotificationsMuted(ctx context.Context, arg UpdateNotificationsMutedParams) error {
+	_, err := q.db.ExecContext(ctx, updateNotificationsMuted, arg.NotificationsMuted, arg.ID)
 	return err
 }
 
@@ -263,8 +304,8 @@ INSERT INTO show_mappings (
     sonarr_series_id, sonarr_title, afl_slug, afl_title,
     auto_matched, match_confidence, filler_action, mixed_action,
     anime_canon_action, enabled, start_mode, watermark_mode, sync_watermark,
-    overview, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    overview, notifications_muted, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(sonarr_series_id) DO UPDATE SET
     sonarr_title = excluded.sonarr_title,
     afl_slug = excluded.afl_slug,
@@ -283,22 +324,23 @@ ON CONFLICT(sonarr_series_id) DO UPDATE SET
 `
 
 type UpsertMappingParams struct {
-	SonarrSeriesID   int64
-	SonarrTitle      string
-	AflSlug          string
-	AflTitle         string
-	AutoMatched      int64
-	MatchConfidence  float64
-	FillerAction     string
-	MixedAction      string
-	AnimeCanonAction string
-	Enabled          int64
-	StartMode        string
-	WatermarkMode    string
-	SyncWatermark    int64
-	Overview         string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	SonarrSeriesID     int64
+	SonarrTitle        string
+	AflSlug            string
+	AflTitle           string
+	AutoMatched        int64
+	MatchConfidence    float64
+	FillerAction       string
+	MixedAction        string
+	AnimeCanonAction   string
+	Enabled            int64
+	StartMode          string
+	WatermarkMode      string
+	SyncWatermark      int64
+	Overview           string
+	NotificationsMuted int64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 func (q *Queries) UpsertMapping(ctx context.Context, arg UpsertMappingParams) error {
@@ -317,6 +359,7 @@ func (q *Queries) UpsertMapping(ctx context.Context, arg UpsertMappingParams) er
 		arg.WatermarkMode,
 		arg.SyncWatermark,
 		arg.Overview,
+		arg.NotificationsMuted,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)

@@ -332,14 +332,15 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 		}
 
 		var update struct {
-			FillerAction     *string `json:"filler_action"`
-			MixedAction      *string `json:"mixed_action"`
-			AnimeCanonAction *string `json:"anime_canon_action"`
-			Enabled          *bool   `json:"enabled"`
-			AFLSlug          *string `json:"afl_slug"`
-			StartMode        *string `json:"start_mode"`
-			WatermarkMode    *string `json:"watermark_mode"`
-			SyncWatermark    *int    `json:"sync_watermark"`
+			FillerAction       *string `json:"filler_action"`
+			MixedAction        *string `json:"mixed_action"`
+			AnimeCanonAction   *string `json:"anime_canon_action"`
+			Enabled            *bool   `json:"enabled"`
+			AFLSlug            *string `json:"afl_slug"`
+			StartMode          *string `json:"start_mode"`
+			WatermarkMode      *string `json:"watermark_mode"`
+			SyncWatermark      *int    `json:"sync_watermark"`
+			NotificationsMuted *bool   `json:"notifications_muted"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -368,6 +369,9 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 		}
 		if update.Enabled != nil {
 			mapping.Enabled = *update.Enabled
+		}
+		if update.NotificationsMuted != nil {
+			mapping.NotificationsMuted = *update.NotificationsMuted
 		}
 		if update.AFLSlug != nil {
 			if !validAFLSlug(*update.AFLSlug) {
@@ -420,6 +424,12 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 		if err := db.UpsertMapping(r.Context(), mapping); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to update mapping: "+err.Error())
 			return
+		}
+		if update.NotificationsMuted != nil {
+			if err := db.SetNotificationsMuted(r.Context(), mapping.ID, mapping.NotificationsMuted); err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to update mapping: "+err.Error())
+				return
+			}
 		}
 		if syncEngine != nil {
 			hydratedMapping, err := syncEngine.HydrateMapping(r.Context(), mapping.ID)

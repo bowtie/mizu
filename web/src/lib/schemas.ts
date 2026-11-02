@@ -26,6 +26,7 @@ export const SettingsSchema = v.object({
   ntfy_topic: v.optional(v.string()),
   ntfy_token_set: v.optional(v.boolean()),
   ntfy_notify_on: v.optional(v.picklist(["always", "changes", "failures"])),
+  ntfy_notify_new_titles: v.optional(v.boolean()),
   ui_sounds_enabled: v.optional(v.boolean()),
 });
 
@@ -52,6 +53,7 @@ export const SettingsFormSchema = v.object({
   ntfyTopic: v.string(),
   ntfyToken: v.string(),
   notifyOn: v.picklist(["always", "changes", "failures"]),
+  notifyNewTitles: v.boolean(),
   soundsEnabled: v.boolean(),
 });
 
@@ -80,6 +82,8 @@ export const ShowSchema = v.object({
   mixed_action: v.string(),
   anime_canon_action: v.string(),
   watermark_mode: v.string(),
+  notifications_muted: v.optional(v.boolean()),
+  artwork_custom_slots: v.optional(v.array(v.string())),
 });
 
 // ── Episode ──

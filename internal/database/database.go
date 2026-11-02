@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"strings"
 
 	"mizu/internal/database/sqlcgen"
 	"mizu/internal/models"
@@ -79,32 +80,43 @@ func (db *DB) migrate() error {
 
 // ── Conversion helpers ──
 
+// splitSlots parses the comma-separated custom-slot column. It never
+// returns nil, so the JSON field is always an array.
+func splitSlots(s string) []string {
+	if s == "" {
+		return []string{}
+	}
+	return strings.Split(s, ",")
+}
+
 func sqlcMappingToModel(s sqlcgen.ShowMapping) models.ShowMapping {
 	return models.ShowMapping{
-		ID:                s.ID,
-		SonarrSeriesID:    int(s.SonarrSeriesID),
-		SonarrTitle:       s.SonarrTitle,
-		AFLSlug:           s.AflSlug,
-		AFLTitle:          s.AflTitle,
-		AutoMatched:       s.AutoMatched != 0,
-		MatchConfidence:   s.MatchConfidence,
-		FillerAction:      models.FillerAction(s.FillerAction),
-		MixedAction:       models.FillerAction(s.MixedAction),
-		AnimeCanonAction:  models.FillerAction(s.AnimeCanonAction),
-		Enabled:           s.Enabled != 0,
-		StartMode:         models.StartMode(s.StartMode),
-		WatermarkMode:     models.WatermarkMode(s.WatermarkMode),
-		SyncWatermark:     int(s.SyncWatermark),
-		ArtworkSource:     s.ArtworkSource,
-		ArtworkPosterPath: s.ArtworkPosterPath,
-		ArtworkBannerPath: s.ArtworkBannerPath,
-		ArtworkLogoPath:   s.ArtworkLogoPath,
-		ArtworkPosterURL:  s.ArtworkPosterUrl,
-		ArtworkBannerURL:  s.ArtworkBannerUrl,
-		ArtworkLogoURL:    s.ArtworkLogoUrl,
-		Overview:          s.Overview,
-		CreatedAt:         s.CreatedAt,
-		UpdatedAt:         s.UpdatedAt,
+		ID:                 s.ID,
+		SonarrSeriesID:     int(s.SonarrSeriesID),
+		SonarrTitle:        s.SonarrTitle,
+		AFLSlug:            s.AflSlug,
+		AFLTitle:           s.AflTitle,
+		AutoMatched:        s.AutoMatched != 0,
+		MatchConfidence:    s.MatchConfidence,
+		FillerAction:       models.FillerAction(s.FillerAction),
+		MixedAction:        models.FillerAction(s.MixedAction),
+		AnimeCanonAction:   models.FillerAction(s.AnimeCanonAction),
+		Enabled:            s.Enabled != 0,
+		StartMode:          models.StartMode(s.StartMode),
+		WatermarkMode:      models.WatermarkMode(s.WatermarkMode),
+		SyncWatermark:      int(s.SyncWatermark),
+		ArtworkSource:      s.ArtworkSource,
+		ArtworkPosterPath:  s.ArtworkPosterPath,
+		ArtworkBannerPath:  s.ArtworkBannerPath,
+		ArtworkLogoPath:    s.ArtworkLogoPath,
+		ArtworkPosterURL:   s.ArtworkPosterUrl,
+		ArtworkBannerURL:   s.ArtworkBannerUrl,
+		ArtworkLogoURL:     s.ArtworkLogoUrl,
+		Overview:           s.Overview,
+		NotificationsMuted: s.NotificationsMuted != 0,
+		ArtworkCustomSlots: splitSlots(s.ArtworkCustomSlots),
+		CreatedAt:          s.CreatedAt,
+		UpdatedAt:          s.UpdatedAt,
 	}
 }
 

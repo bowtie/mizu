@@ -165,3 +165,42 @@ func TestGetAllShowsUsesFreshCacheWithoutHittingAFL(t *testing.T) {
 	require.Len(t, shows, 1)
 	assert.Equal(t, 0, hits, "fresh cache must not trigger a scrape")
 }
+
+func showListHTML(slugs ...string) string {
+	html := `<!DOCTYPE html><html><body><div id="ShowList"><div class="Group"><ul>`
+	for _, s := range slugs {
+		html += `<li><a href="/shows/` + s + `">` + s + `</a></li>`
+	}
+	return html + `</ul></div></div></body></html>`
+}
+
+func TestNewShowsHookSkipsFirstFillAndReportsLaterAdditions(t *testing.T) {
+	page := showListHTML("one-piece", "bleach")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(page))
+	}))
+	defer srv.Close()
+
+	s := newTestScraper(t, srv)
+	var got [][]models.AFLShow
+	s.SetOnNewShows(func(_ context.Context, shows []models.AFLShow) { got = append(got, shows) })
+
+	// Empty cache: everything is "new", which is a first fill, not news.
+	_, _, err := s.RefreshAllShows(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	// Same list again: nothing new.
+	_, _, err = s.RefreshAllShows(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	// A show appears upstream: the hook gets exactly that one.
+	page = showListHTML("one-piece", "bleach", "frieren")
+	_, _, err = s.RefreshAllShows(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Len(t, got[0], 1)
+	assert.Equal(t, "frieren", got[0][0].Slug)
+}

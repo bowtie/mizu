@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"mizu/internal/models"
@@ -107,16 +108,29 @@ func (m *Manager) storeArtworkLocked(ctx context.Context, mappingID int64, art *
 		return nil, fmt.Errorf("create artwork dir: %w", err)
 	}
 
+	// Slots the user uploaded their own image to are never touched by a
+	// refresh: their files stay, nothing is downloaded over them, and their
+	// DB paths are carried through the write-back below.
+	current, err := m.db.GetMappingByID(ctx, mappingID)
+	if err != nil {
+		return nil, fmt.Errorf("load mapping for artwork store: %w", err)
+	}
+	var custom []string
+	if current != nil {
+		custom = current.ArtworkCustomSlots
+	}
+	isCustom := func(slot string) bool { return slices.Contains(custom, slot) }
+
 	// Clear old artwork files so stale images from a previous provider
 	// don't linger when the new provider doesn't return all three types.
-	m.deleteArtworkUnlocked(mappingID)
+	m.deleteArtworkExceptUnlocked(mappingID, custom)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("recreate artwork dir: %w", err)
 	}
 
 	result := &FetchResult{Source: art.Source, Found: true}
 
-	if art.PosterURL != "" {
+	if art.PosterURL != "" && !isCustom(SlotPoster) {
 		path, err := m.downloadImage(ctx, art.PosterURL, filepath.Join(dir, "poster.jpg"))
 		if err == nil {
 			result.PosterPath = path
@@ -124,7 +138,7 @@ func (m *Manager) storeArtworkLocked(ctx context.Context, mappingID int64, art *
 			log.Warn().Err(err).Str("url", art.PosterURL).Int64("mapping_id", mappingID).Msg("failed to download poster")
 		}
 	}
-	if art.BannerURL != "" {
+	if art.BannerURL != "" && !isCustom(SlotBanner) {
 		path, err := m.downloadImage(ctx, art.BannerURL, filepath.Join(dir, "banner.jpg"))
 		if err == nil {
 			result.BannerPath = path
@@ -132,7 +146,7 @@ func (m *Manager) storeArtworkLocked(ctx context.Context, mappingID int64, art *
 			log.Warn().Err(err).Str("url", art.BannerURL).Int64("mapping_id", mappingID).Msg("failed to download banner")
 		}
 	}
-	if art.LogoURL != "" {
+	if art.LogoURL != "" && !isCustom(SlotLogo) {
 		ext := "logo.png"
 		if isSVGURL(art.LogoURL) {
 			ext = "logo.svg"
@@ -151,7 +165,7 @@ func (m *Manager) storeArtworkLocked(ctx context.Context, mappingID int64, art *
 	// stale fetch leaves no trace that could render over the newer choice
 	// (the newer operation, queued on the per-mapping lock, rewrites both).
 	if m.captureIntent(mappingID) != capturedIntent {
-		m.deleteArtworkUnlocked(mappingID)
+		m.deleteArtworkExceptUnlocked(mappingID, custom)
 		return &FetchResult{Source: source, Found: false}, nil
 	}
 
@@ -161,7 +175,17 @@ func (m *Manager) storeArtworkLocked(ctx context.Context, mappingID int64, art *
 	relPoster := relPath(m.artDir, result.PosterPath)
 	relBanner := relPath(m.artDir, result.BannerPath)
 	relLogo := relPath(m.artDir, result.LogoPath)
-	if err := m.db.UpdateArtwork(ctx, mappingID, relPoster, relBanner, relLogo, art.PosterURL, art.BannerURL, art.LogoURL); err != nil {
+	posterURL, bannerURL, logoURL := art.PosterURL, art.BannerURL, art.LogoURL
+	if isCustom(SlotPoster) {
+		relPoster, posterURL = current.ArtworkPosterPath, current.ArtworkPosterURL
+	}
+	if isCustom(SlotBanner) {
+		relBanner, bannerURL = current.ArtworkBannerPath, current.ArtworkBannerURL
+	}
+	if isCustom(SlotLogo) {
+		relLogo, logoURL = current.ArtworkLogoPath, current.ArtworkLogoURL
+	}
+	if err := m.db.UpdateArtwork(ctx, mappingID, relPoster, relBanner, relLogo, posterURL, bannerURL, logoURL); err != nil {
 		log.Error().Err(err).Int64("mapping_id", mappingID).Msg("failed to update artwork file paths in DB")
 	}
 
@@ -191,7 +215,12 @@ func (m *Manager) ListCandidates(ctx context.Context, series models.SonarrSeries
 	if !p.Available() {
 		return nil, fmt.Errorf("provider %s is not configured (missing API key?)", source)
 	}
-	return cp.Candidates(ctx, series)
+	opts, err := cp.Candidates(ctx, series)
+	if err != nil {
+		return nil, err
+	}
+	m.dedupeOptions(ctx, opts)
+	return opts, nil
 }
 
 // fetchFromSource fetches from the specified provider. "sonarr" (or empty)

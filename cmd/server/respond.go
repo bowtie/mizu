@@ -16,15 +16,15 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	}
 }
 
-// maskKey returns a masked version of an API key for display.
-// Keys >= 8 chars show first 4 + "..." + last 4; shorter keys show first char + "...".
+// maskKey returns a fixed placeholder for a stored API key, or "" if none is
+// set. It deliberately reveals nothing about the key (no prefix, suffix or
+// length): partial previews shrink the search space and, for short keys,
+// can expose the whole secret.
 func maskKey(key string) string {
-	if len(key) >= 8 {
-		return key[:4] + "..." + key[len(key)-4:]
-	} else if len(key) > 0 {
-		return key[:1] + "..."
+	if key == "" {
+		return ""
 	}
-	return ""
+	return "••••••••"
 }
 
 // humanizeError translates raw Go networking errors into user-friendly messages.

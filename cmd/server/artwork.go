@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"mizu/internal/artwork"
 	"mizu/internal/config"
 	"mizu/internal/database"
@@ -20,6 +22,109 @@ import (
 // artworkRefreshing prevents concurrent background artwork refreshes —
 // two simultaneous refreshes waste bandwidth and race on file writes.
 var artworkRefreshing atomic.Bool
+
+// handleUploadCustomArtwork stores an image the user supplied for one slot
+// (poster, banner or logo). The slot is then protected from refreshes and
+// source switches until the user removes it or picks a provider image.
+func handleUploadCustomArtwork(db *database.DB, mgr *artwork.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid mapping ID")
+			return
+		}
+		slot := chi.URLParam(r, "slot")
+		if !artwork.IsSlot(slot) {
+			writeError(w, http.StatusBadRequest, "slot must be poster, banner or logo")
+			return
+		}
+		mapping, err := db.GetMappingByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
+			writeError(w, http.StatusNotFound, "mapping not found")
+			return
+		}
+
+		// Cap the whole request a little above the image limit so multipart
+		// framing fits, and so an oversize body is cut off rather than buffered.
+		r.Body = http.MaxBytesReader(w, r.Body, artwork.MaxCustomImageBytes+(1<<20))
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			var tooBig *http.MaxBytesError
+			if errors.As(err, &tooBig) {
+				writeError(w, http.StatusRequestEntityTooLarge, "that image is too large")
+				return
+			}
+			writeError(w, http.StatusBadRequest, "expected a multipart upload")
+			return
+		}
+		defer r.MultipartForm.RemoveAll()
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "no image attached (field \"file\")")
+			return
+		}
+		defer file.Close()
+		data, err := io.ReadAll(io.LimitReader(file, artwork.MaxCustomImageBytes+1))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "could not read the upload")
+			return
+		}
+
+		if err := mgr.SetCustomArtwork(r.Context(), id, slot, data); err != nil {
+			if errors.Is(err, artwork.ErrInvalidCustomImage) {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to save artwork: "+err.Error())
+			return
+		}
+		updated, err := db.GetMappingByID(r.Context(), id)
+		if err != nil || updated == nil {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "uploaded"})
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	}
+}
+
+// handleRemoveCustomArtwork drops an uploaded image so the slot can be
+// filled by a refresh again.
+func handleRemoveCustomArtwork(db *database.DB, mgr *artwork.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid mapping ID")
+			return
+		}
+		slot := chi.URLParam(r, "slot")
+		if !artwork.IsSlot(slot) {
+			writeError(w, http.StatusBadRequest, "slot must be poster, banner or logo")
+			return
+		}
+		mapping, err := db.GetMappingByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if mapping == nil {
+			writeError(w, http.StatusNotFound, "mapping not found")
+			return
+		}
+		if err := mgr.RemoveCustomArtwork(r.Context(), id, slot); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to remove artwork: "+err.Error())
+			return
+		}
+		updated, err := db.GetMappingByID(r.Context(), id)
+		if err != nil || updated == nil {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	}
+}
 
 func handleGetArtworkProviders(mgr *artwork.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

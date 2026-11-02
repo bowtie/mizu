@@ -34,6 +34,8 @@ import {
   refreshArtwork,
   setArtworkSource,
   selectArtwork,
+  uploadCustomArtwork,
+  removeCustomArtwork,
   errorMessage,
 } from "../lib/api";
 import type { Episode, SelectOption, Show, ShowUpdate, SonarrSeries } from "../lib/types";
@@ -50,6 +52,7 @@ import {
   WATERMARK_AUTO,
   WATERMARK_MANUAL,
   PICKER_SOURCES,
+  MAX_CUSTOM_IMAGE_BYTES,
   displayEpisodeNumber,
   episodeLabel,
   episodeSeason,
@@ -60,7 +63,6 @@ import { EpisodeListSection } from "../components/EpisodeListSection";
 import { ShowHero } from "../components/ShowHero";
 import { ShowActionsBar } from "../components/ShowActionsBar";
 import { ShowDetailSkeleton } from "../components/ShowDetailSkeleton";
-import { ArtworkCard } from "../components/ArtworkCard";
 import { TrackingRulesSection } from "../components/TrackingRulesSection";
 
 const NO_EPISODES: Episode[] = [];
@@ -294,11 +296,10 @@ export function ShowDetailPage() {
   // default. The picker only appears for sources with candidate images.
   const resolvedArtworkSource =
     show?.artwork_source || settings?.artwork_default_source || "sonarr";
-  const canPickArtwork = PICKER_SOURCES.has(resolvedArtworkSource);
   const pickerSources = useMemo<ArtworkPickerSource[]>(
     () =>
       artworkProviders
-        .filter((p) => PICKER_SOURCES.has(p.id))
+        .filter((p) => PICKER_SOURCES.has(p.id) && p.available)
         .map((p) => ({ id: p.id, label: p.label })),
     [artworkProviders],
   );
@@ -334,9 +335,30 @@ export function ShowDetailPage() {
         logo_url: slot === "logo" ? url : "",
       });
       await reloadArtwork();
-      setPickerOpen(false);
       addNotification(`Artwork ${slot} updated`, "success");
     }, "Failed to save artwork");
+
+  const handleUploadCustom = (slot: ArtworkSlot, file: File) =>
+    withArtworkBusy(async () => {
+      if (!showId) return;
+      if (file.size > MAX_CUSTOM_IMAGE_BYTES) {
+        addNotification(`That image is over ${MAX_CUSTOM_IMAGE_BYTES >> 20} MB`, "error");
+        return;
+      }
+      await uploadCustomArtwork(showId, slot, file);
+      await reloadArtwork();
+      addNotification(`Your ${slot} is set`, "success");
+    }, "Failed to upload image");
+
+  const handleRemoveCustom = (slot: ArtworkSlot) =>
+    withArtworkBusy(async () => {
+      if (!showId) return;
+      await removeCustomArtwork(showId, slot);
+      // Let the show's automatic source fill the slot again.
+      await refreshArtwork(showId);
+      await reloadArtwork();
+      addNotification(`Removed your ${slot}`, "success");
+    }, "Failed to remove image");
 
   const handleRefreshArtwork = (source?: string) =>
     withArtworkBusy(async () => {
@@ -402,6 +424,21 @@ export function ShowDetailPage() {
       addNotification("Failed to save anime: " + errorMessage(err), "error");
     }
   });
+
+  const handleMuteChange = async (muted: boolean) => {
+    if (!showId) return;
+    try {
+      await updateShowMutation.mutateAsync({ id: showId, data: { notifications_muted: muted } });
+      addNotification(
+        muted
+          ? `Muted notifications for ${show?.sonarr_title || "anime"}`
+          : `Unmuted notifications for ${show?.sonarr_title || "anime"}`,
+        "success",
+      );
+    } catch (err: unknown) {
+      addNotification("Failed to update notifications: " + errorMessage(err), "error");
+    }
+  };
 
   const handleDelete = async () => {
     if (!showId) return;
@@ -481,6 +518,10 @@ export function ShowDetailPage() {
                 rulesDirty={rulesDirty}
                 onMarkerChange={(value) => setRule("markerValue", clampMarkerValue(value))}
                 onToggleAuto={() => setRule("watermarkAuto", !watermarkAuto)}
+                notificationsMuted={!!show.notifications_muted}
+                notificationsSaving={updateShowMutation.isPending}
+                onToggleMuted={() => void handleMuteChange(!show.notifications_muted)}
+                onEditArtwork={() => setPickerOpen(true)}
                 onRemove={() => setShowDeleteDialog(true)}
                 onSave={() => {
                   if (rulesDirty) void handleSave();
@@ -495,16 +536,6 @@ export function ShowDetailPage() {
             <ShowDetailSkeleton />
           ) : (
             <>
-              <ArtworkCard
-                show={show}
-                sourceOptions={artworkSourceOptions}
-                canPick={canPickArtwork}
-                refreshing={artworkRefreshing}
-                onChoose={() => setPickerOpen(true)}
-                onRefresh={() => void handleRefreshArtwork()}
-                onSourceChange={(source) => void handleArtworkSourceChange(source)}
-              />
-
               <TrackingRulesSection
                 rulesDirty={rulesDirty}
                 trackAnimeCanon={trackAnimeCanon}
@@ -564,6 +595,14 @@ export function ShowDetailPage() {
             logo: show?.artwork_logo_url || undefined,
           }}
           onSelect={(source, slot, url) => void handleArtworkPick(source, slot, url)}
+          artworkSource={show?.artwork_source || ""}
+          artworkSourceOptions={artworkSourceOptions}
+          refreshing={artworkRefreshing}
+          onArtworkSourceChange={(source) => void handleArtworkSourceChange(source)}
+          customSlots={show?.artwork_custom_slots ?? []}
+          onUploadCustom={(slot, file) => void handleUploadCustom(slot, file)}
+          onRemoveCustom={(slot) => void handleRemoveCustom(slot)}
+          onRefresh={() => void handleRefreshArtwork()}
         />
       )}
     </>

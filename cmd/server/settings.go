@@ -39,6 +39,7 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			"ntfy_topic":                    cfg.NtfyTopic,
 			"ntfy_token_set":                cfg.NtfyToken != "",
 			"ntfy_notify_on":                cfg.NtfyNotifyOn,
+			"ntfy_notify_new_titles":        cfg.NtfyNotifyNewTitles,
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key_masked":           maskedTmdbKey,
 			"tmdb_api_key_set":              cfg.TMDBAPIKey != "",
@@ -77,6 +78,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			NtfyTopic                 *string `json:"ntfy_topic"`
 			NtfyToken                 *string `json:"ntfy_token"`
 			NtfyNotifyOn              *string `json:"ntfy_notify_on"`
+			NtfyNotifyNewTitles       *bool   `json:"ntfy_notify_new_titles"`
 			ArtworkDefaultSource      *string `json:"artwork_default_source"`
 			TMDBAPIKey                *string `json:"tmdb_api_key"`
 			FanartAPIKey              *string `json:"fanart_api_key"`
@@ -197,6 +199,9 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		if update.NtfyToken != nil {
 			cfg.NtfyToken = *update.NtfyToken
 		}
+		if update.NtfyNotifyNewTitles != nil {
+			cfg.NtfyNotifyNewTitles = *update.NtfyNotifyNewTitles
+		}
 		if update.NtfyNotifyOn != nil {
 			cfg.NtfyNotifyOn = *update.NtfyNotifyOn
 		}
@@ -230,6 +235,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			"ntfy_topic":                    cfg.NtfyTopic,
 			"ntfy_token":                    cfg.NtfyToken,
 			"ntfy_notify_on":                cfg.NtfyNotifyOn,
+			"ntfy_notify_new_titles":        strconv.FormatBool(cfg.NtfyNotifyNewTitles),
 			"artwork_default_source":        cfg.ArtworkDefaultSource,
 			"tmdb_api_key":                  cfg.TMDBAPIKey,
 			"fanart_api_key":                cfg.FanartAPIKey,

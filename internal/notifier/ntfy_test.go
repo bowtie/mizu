@@ -122,3 +122,42 @@ func TestFormatSyncMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestSendNewTitles(t *testing.T) {
+	var received map[string]interface{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&received)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	n := New(ts.URL, "topic", "")
+	require.NoError(t, n.SendNewTitles(context.Background(), []string{"Frieren", "Dandadan"}))
+	assert.Equal(t, "2 new anime on AnimeFillerList", received["title"])
+	assert.Equal(t, "- Frieren\n- Dandadan", received["message"])
+}
+
+func TestSendNewTitlesNothingToSend(t *testing.T) {
+	called := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer ts.Close()
+
+	require.NoError(t, New(ts.URL, "topic", "").SendNewTitles(context.Background(), nil))
+	assert.False(t, called)
+}
+
+func TestFormatNewTitlesMessage(t *testing.T) {
+	title, body := formatNewTitlesMessage([]string{"Solo"})
+	assert.Equal(t, "New anime on AnimeFillerList", title)
+	assert.Equal(t, "- Solo", body)
+
+	many := make([]string, 13)
+	for i := range many {
+		many[i] = "Show"
+	}
+	title, body = formatNewTitlesMessage(many)
+	assert.Equal(t, "13 new anime on AnimeFillerList", title)
+	assert.Contains(t, body, "...and 3 more")
+}

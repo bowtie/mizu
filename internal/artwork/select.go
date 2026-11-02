@@ -131,6 +131,22 @@ func (m *Manager) SelectArtwork(ctx context.Context, mappingID int64, source, po
 	if err := m.db.UpdateArtwork(ctx, mappingID, relPoster, relBanner, relLogo, posterURL, bannerURL, logoURL); err != nil {
 		log.Error().Err(err).Int64("mapping_id", mappingID).Msg("failed to update artwork file paths in DB")
 	}
+	// A slot just filled from a provider is no longer the user's upload.
+	var replaced []string
+	if result.PosterPath != "" {
+		replaced = append(replaced, SlotPoster)
+	}
+	if result.BannerPath != "" {
+		replaced = append(replaced, SlotBanner)
+	}
+	if result.LogoPath != "" {
+		replaced = append(replaced, SlotLogo)
+	}
+	if len(current.ArtworkCustomSlots) > 0 && len(replaced) > 0 {
+		if err := m.db.SetArtworkCustomSlots(ctx, mappingID, withoutSlots(current.ArtworkCustomSlots, replaced...)); err != nil {
+			log.Warn().Err(err).Int64("mapping_id", mappingID).Msg("failed to clear custom artwork flags")
+		}
+	}
 
 	return result, nil
 }

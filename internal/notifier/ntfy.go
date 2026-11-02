@@ -58,6 +58,40 @@ func (n *Notifier) SendSyncResult(ctx context.Context, result SyncResult) error 
 	return n.send(ctx, title, body, priority, tags)
 }
 
+// maxListedTitles caps how many titles a new-titles push spells out; the
+// rest are summarised so a large first import can't produce a huge message.
+const maxListedTitles = 10
+
+// SendNewTitles announces shows that appeared on AnimeFillerList since the
+// last refresh.
+func (n *Notifier) SendNewTitles(ctx context.Context, titles []string) error {
+	if !n.Enabled() || len(titles) == 0 {
+		return nil
+	}
+	title, body := formatNewTitlesMessage(titles)
+	return n.send(ctx, title, body, 3, []string{"new", "tv"})
+}
+
+// formatNewTitlesMessage builds the push text for a set of new titles.
+func formatNewTitlesMessage(titles []string) (title, body string) {
+	if len(titles) == 1 {
+		title = "New anime on AnimeFillerList"
+	} else {
+		title = fmt.Sprintf("%d new anime on AnimeFillerList", len(titles))
+	}
+	for i, t := range titles {
+		if i >= maxListedTitles {
+			body += fmt.Sprintf("\n...and %d more", len(titles)-maxListedTitles)
+			break
+		}
+		if i > 0 {
+			body += "\n"
+		}
+		body += "- " + t
+	}
+	return title, body
+}
+
 // SendTestNotification sends a test message to verify the configuration.
 func (n *Notifier) SendTestNotification(ctx context.Context) error {
 	if !n.Enabled() {

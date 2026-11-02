@@ -43,6 +43,9 @@ type ArtworkOption struct {
 	Width    int    `json:"width,omitempty"`
 	Height   int    `json:"height,omitempty"`
 	Likes    int    `json:"likes,omitempty"`
+	// AltURLs are duplicates of this image that were folded into it; they
+	// let a caller recognize the image the show already uses.
+	AltURLs []string `json:"alt_urls,omitempty"`
 }
 
 // ArtworkOptions is the full set of candidate images for one series. A

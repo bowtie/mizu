@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"mizu/internal/database/sqlcgen"
@@ -73,22 +74,23 @@ func upsertMapping(ctx context.Context, q *sqlcgen.Queries, m *models.ShowMappin
 	m.UpdatedAt = now
 
 	err := q.UpsertMapping(ctx, sqlcgen.UpsertMappingParams{
-		SonarrSeriesID:   int64(m.SonarrSeriesID),
-		SonarrTitle:      m.SonarrTitle,
-		AflSlug:          m.AFLSlug,
-		AflTitle:         m.AFLTitle,
-		AutoMatched:      boolToInt(m.AutoMatched),
-		MatchConfidence:  m.MatchConfidence,
-		FillerAction:     string(m.FillerAction),
-		MixedAction:      string(m.MixedAction),
-		AnimeCanonAction: string(m.AnimeCanonAction),
-		Enabled:          boolToInt(m.Enabled),
-		StartMode:        string(m.StartMode),
-		WatermarkMode:    string(m.WatermarkMode),
-		SyncWatermark:    int64(m.SyncWatermark),
-		Overview:         m.Overview,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		SonarrSeriesID:     int64(m.SonarrSeriesID),
+		SonarrTitle:        m.SonarrTitle,
+		AflSlug:            m.AFLSlug,
+		AflTitle:           m.AFLTitle,
+		AutoMatched:        boolToInt(m.AutoMatched),
+		MatchConfidence:    m.MatchConfidence,
+		FillerAction:       string(m.FillerAction),
+		MixedAction:        string(m.MixedAction),
+		AnimeCanonAction:   string(m.AnimeCanonAction),
+		Enabled:            boolToInt(m.Enabled),
+		StartMode:          string(m.StartMode),
+		WatermarkMode:      string(m.WatermarkMode),
+		SyncWatermark:      int64(m.SyncWatermark),
+		Overview:           m.Overview,
+		NotificationsMuted: boolToInt(m.NotificationsMuted),
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	})
 	if err != nil {
 		return err
@@ -124,8 +126,32 @@ func (db *DB) ImportConfig(ctx context.Context, settings map[string]string, mapp
 		if err := upsertMapping(ctx, qtx, &mappings[i]); err != nil {
 			return fmt.Errorf("mapping for series %d: %w", mappings[i].SonarrSeriesID, err)
 		}
+		if err := qtx.UpdateNotificationsMuted(ctx, sqlcgen.UpdateNotificationsMutedParams{
+			NotificationsMuted: boolToInt(mappings[i].NotificationsMuted),
+			ID:                 mappings[i].ID,
+		}); err != nil {
+			return fmt.Errorf("mute flag for series %d: %w", mappings[i].SonarrSeriesID, err)
+		}
 	}
 	return tx.Commit()
+}
+
+// SetNotificationsMuted flips a mapping's ntfy mute flag. It is separate
+// from UpsertMapping so re-saving or re-adding a show never unmutes it.
+func (db *DB) SetNotificationsMuted(ctx context.Context, mappingID int64, muted bool) error {
+	return db.q.UpdateNotificationsMuted(ctx, sqlcgen.UpdateNotificationsMutedParams{
+		NotificationsMuted: boolToInt(muted),
+		ID:                 mappingID,
+	})
+}
+
+// SetArtworkCustomSlots records which artwork slots hold user-uploaded
+// images. It is separate from UpsertMapping so re-saving a show never drops it.
+func (db *DB) SetArtworkCustomSlots(ctx context.Context, mappingID int64, slots []string) error {
+	return db.q.UpdateArtworkCustomSlots(ctx, sqlcgen.UpdateArtworkCustomSlotsParams{
+		ArtworkCustomSlots: strings.Join(slots, ","),
+		ID:                 mappingID,
+	})
 }
 
 func (db *DB) UpdateArtwork(ctx context.Context, mappingID int64, posterPath, bannerPath, logoPath, posterURL, bannerURL, logoURL string) error {

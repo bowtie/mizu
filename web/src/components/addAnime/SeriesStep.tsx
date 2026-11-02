@@ -124,7 +124,7 @@ export function SeriesStep({
       <HStack gap={2} justify="between" align="center" wrap="wrap">
         <Button
           label="Not in Sonarr? Add from AFL"
-          variant="ghost"
+          variant="secondary"
           onClick={() => goToFallbackAflStep(w.seriesQuery.trim())}
           data-cuelume-press
         />

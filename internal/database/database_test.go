@@ -171,3 +171,56 @@ func TestReplaceEpisodesForMappingReplacesStaleRows(t *testing.T) {
 		assert.NotEqual(t, 1197, ep.EpisodeNum, "stale episode beyond AFL coverage should be removed")
 	}
 }
+
+func TestNotificationsMutedSurvivesUpsertAndImport(t *testing.T) {
+	db, err := New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	ctx := context.Background()
+
+	m := models.ShowMapping{
+		SonarrSeriesID: 7, SonarrTitle: "Bleach", AFLSlug: "bleach", AFLTitle: "Bleach",
+		FillerAction: models.ActionUnmonitor, MixedAction: models.ActionMonitor,
+		AnimeCanonAction: models.ActionMonitor, Enabled: true,
+	}
+	require.NoError(t, db.UpsertMapping(ctx, &m))
+	stored, err := db.GetMappingByID(ctx, m.ID)
+	require.NoError(t, err)
+	assert.False(t, stored.NotificationsMuted, "new mappings are audible")
+
+	require.NoError(t, db.SetNotificationsMuted(ctx, m.ID, true))
+	stored, err = db.GetMappingByID(ctx, m.ID)
+	require.NoError(t, err)
+	assert.True(t, stored.NotificationsMuted)
+
+	// Re-saving or re-adding the show goes through UpsertMapping with a
+	// model that does not carry the flag; it must not unmute.
+	again := models.ShowMapping{
+		SonarrSeriesID: 7, SonarrTitle: "Bleach (2004)", AFLSlug: "bleach", AFLTitle: "Bleach",
+		FillerAction: models.ActionUnmonitor, MixedAction: models.ActionMonitor,
+		AnimeCanonAction: models.ActionMonitor, Enabled: true,
+	}
+	require.NoError(t, db.UpsertMapping(ctx, &again))
+	stored, err = db.GetMappingByID(ctx, m.ID)
+	require.NoError(t, err)
+	assert.True(t, stored.NotificationsMuted)
+	assert.Equal(t, "Bleach (2004)", stored.SonarrTitle)
+
+	// An import carries the flag through explicitly, in both directions.
+	imported := []models.ShowMapping{{
+		SonarrSeriesID: 7, SonarrTitle: "Bleach", AFLSlug: "bleach", AFLTitle: "Bleach",
+		FillerAction: models.ActionUnmonitor, MixedAction: models.ActionMonitor,
+		AnimeCanonAction: models.ActionMonitor, Enabled: true, NotificationsMuted: false,
+	}, {
+		SonarrSeriesID: 8, SonarrTitle: "Naruto", AFLSlug: "naruto", AFLTitle: "Naruto",
+		FillerAction: models.ActionUnmonitor, MixedAction: models.ActionMonitor,
+		AnimeCanonAction: models.ActionMonitor, Enabled: true, NotificationsMuted: true,
+	}}
+	require.NoError(t, db.ImportConfig(ctx, nil, imported))
+	got, err := db.GetMappingBySonarrID(ctx, 7)
+	require.NoError(t, err)
+	assert.False(t, got.NotificationsMuted)
+	got, err = db.GetMappingBySonarrID(ctx, 8)
+	require.NoError(t, err)
+	assert.True(t, got.NotificationsMuted)
+}

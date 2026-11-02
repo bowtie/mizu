@@ -66,7 +66,56 @@ func New(cfg *config.Config, db *database.DB) *Engine {
 	if cfg.NtfyEnabled {
 		e.notifier = notifier.New(cfg.NtfyServerURL, cfg.NtfyTopic, cfg.NtfyToken)
 	}
+	e.scraper.SetOnNewShows(e.handleNewAFLShows)
 	return e
+}
+
+// handleNewAFLShows records shows that newly appeared on AnimeFillerList in
+// the activity feed and, when enabled, announces them over ntfy. It is wired
+// to the scraper so it fires for every refresh path, manual or automatic.
+func (e *Engine) handleNewAFLShows(ctx context.Context, shows []models.AFLShow) {
+	if len(shows) == 0 {
+		return
+	}
+	// The scrape may have been started by a request that is already gone;
+	// the record and the push should not be lost with it.
+	ctx = context.WithoutCancel(ctx)
+
+	items := make([]models.SyncLogItem, 0, len(shows))
+	titles := make([]string, 0, len(shows))
+	for _, s := range shows {
+		titles = append(titles, s.Title)
+		items = append(items, models.SyncLogItem{
+			SonarrTitle: s.Title,
+			Status:      "new_in_cache",
+			Summary:     "New anime detected in AFL cache",
+		})
+	}
+	logID, err := e.db.CreateSyncLog(ctx, "afl_cache_refresh")
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to create AFL new-shows log")
+	} else {
+		if err := e.db.ReplaceSyncLogItems(ctx, logID, items); err != nil {
+			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to store AFL new-shows log items")
+		}
+		if err := e.db.CompleteSyncLog(ctx, logID, "success", len(shows), 0, ""); err != nil {
+			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL new-shows log")
+		}
+	}
+
+	e.cfg.RLock()
+	enabled := e.cfg.NtfyNotifyNewTitles
+	e.cfg.RUnlock()
+	if !enabled {
+		return
+	}
+	if n := e.notifierClient(); n != nil && n.Enabled() {
+		sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		if err := n.SendNewTitles(sendCtx, titles); err != nil {
+			log.Warn().Err(err).Msg("failed to send new-titles ntfy notification")
+		}
+	}
 }
 
 func (e *Engine) SonarrClient() *sonarr.Client {
@@ -232,6 +281,9 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 	episodesUpdated := 0
 	var syncErrors []string
 	var totalFiller, totalMixedCanon, totalAnimeCanon int
+	// nt tallies only what a notification may mention: shows muted via
+	// notifications_muted contribute to the activity log but not to the push.
+	var nt notifyTally
 	runItems := make([]models.SyncLogItem, 0, len(enabledMappings))
 	for _, res := range results {
 		if res.skipped {
@@ -248,6 +300,7 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 			errMsg := fmt.Sprintf("failed to fetch Sonarr series %d (%s): %v", res.mapping.SonarrSeriesID, res.mapping.SonarrTitle, res.fetchErr)
 			log.Error().Err(res.fetchErr).Msg(errMsg)
 			syncErrors = append(syncErrors, errMsg)
+			nt.addError(res.mapping.NotificationsMuted, errMsg)
 			runItems = append(runItems, models.SyncLogItem{
 				MappingID:       res.mapping.ID,
 				SonarrTitle:     res.mapping.SonarrTitle,
@@ -262,6 +315,7 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 			errMsg := fmt.Sprintf("error processing %q: %v", res.mapping.SonarrTitle, res.procErr)
 			log.Error().Err(res.procErr).Str("series", res.mapping.SonarrTitle).Msg("failed to process series")
 			syncErrors = append(syncErrors, errMsg)
+			nt.addError(res.mapping.NotificationsMuted, errMsg)
 			runItems = append(runItems, models.SyncLogItem{
 				MappingID:       res.mapping.ID,
 				SonarrTitle:     res.mapping.SonarrTitle,
@@ -277,6 +331,7 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 		totalFiller += res.result.FillerFound
 		totalMixedCanon += res.result.MixedCanonFound
 		totalAnimeCanon += res.result.AnimeCanonFound
+		nt.addSuccess(res.mapping.NotificationsMuted, res.result)
 		runItems = append(runItems, models.SyncLogItem{
 			MappingID:       res.mapping.ID,
 			SonarrTitle:     res.mapping.SonarrTitle,
@@ -286,12 +341,7 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 		})
 	}
 
-	status := "success"
-	if len(syncErrors) > 0 && showsProcessed == 0 {
-		status = "failed"
-	} else if len(syncErrors) > 0 {
-		status = "partial"
-	}
+	status := runStatus(len(syncErrors), showsProcessed)
 	errorsStr := strings.Join(syncErrors, "; ")
 	if err := e.db.ReplaceSyncLogItems(ctx, logID, runItems); err != nil {
 		log.Error().Err(err).Int64("log_id", logID).Msg("failed to store sync log items")
@@ -303,15 +353,18 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 	e.cfg.RLock()
 	notifyOn := e.cfg.NtfyNotifyOn
 	e.cfg.RUnlock()
-	if n := e.notifierClient(); n != nil && n.Enabled() && shouldNotify(notifyOn, status, episodesUpdated) {
+	// A run that only touched muted shows says nothing about the ones the
+	// user still wants to hear about, so it sends nothing at all.
+	notifyStatus := runStatus(len(nt.errors), nt.shows)
+	if n := e.notifierClient(); n != nil && n.Enabled() && !nt.allMuted() && shouldNotify(notifyOn, notifyStatus, nt.episodes) {
 		result := notifier.SyncResult{
-			Status:          status,
-			ShowsProcessed:  showsProcessed,
-			EpisodesUpdated: episodesUpdated,
-			FillerFound:     totalFiller,
-			MixedCanonFound: totalMixedCanon,
-			AnimeCanonFound: totalAnimeCanon,
-			Errors:          syncErrors,
+			Status:          notifyStatus,
+			ShowsProcessed:  nt.shows,
+			EpisodesUpdated: nt.episodes,
+			FillerFound:     nt.filler,
+			MixedCanonFound: nt.mixedCanon,
+			AnimeCanonFound: nt.animeCanon,
+			Errors:          nt.errors,
 			Duration:        time.Since(startTime),
 			Trigger:         trigger,
 		}
@@ -320,6 +373,52 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 		}
 	}
 	return nil
+}
+
+// notifyTally accumulates the sync results a notification may report,
+// leaving out shows whose notifications are muted.
+type notifyTally struct {
+	shows, episodes, filler, mixedCanon, animeCanon int
+	errors                                          []string
+	audible, muted                                  int // processed mappings by mute state
+}
+
+func (t *notifyTally) addError(muted bool, msg string) {
+	if muted {
+		t.muted++
+		return
+	}
+	t.audible++
+	t.errors = append(t.errors, msg)
+}
+
+func (t *notifyTally) addSuccess(muted bool, r processSeriesResult) {
+	if muted {
+		t.muted++
+		return
+	}
+	t.audible++
+	t.shows++
+	t.episodes += r.EpisodesUpdated
+	t.filler += r.FillerFound
+	t.mixedCanon += r.MixedCanonFound
+	t.animeCanon += r.AnimeCanonFound
+}
+
+// allMuted reports whether the run touched shows but every one was muted.
+func (t *notifyTally) allMuted() bool { return t.muted > 0 && t.audible == 0 }
+
+// runStatus classifies a sync run: failed when nothing succeeded, partial
+// when some shows failed, success otherwise.
+func runStatus(errCount, processed int) string {
+	switch {
+	case errCount > 0 && processed == 0:
+		return "failed"
+	case errCount > 0:
+		return "partial"
+	default:
+		return "success"
+	}
 }
 
 // mappingResult holds the outcome of processing a single mapping.

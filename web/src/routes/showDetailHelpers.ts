@@ -5,6 +5,9 @@ export const WATERMARK_MANUAL = "manual";
 
 // Providers that expose many candidate images (the artwork picker).
 // Sonarr/anilist/kitsu have a single best pick and no candidates endpoint.
+/** Largest image the server accepts for a custom upload. */
+export const MAX_CUSTOM_IMAGE_BYTES = 10 << 20;
+
 export const PICKER_SOURCES = new Set(["fanart", "tmdb"]);
 
 export const actionToTracked = (action: string | undefined, fallback: boolean = true): boolean =>

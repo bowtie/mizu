@@ -121,6 +121,7 @@ export function SettingsPage() {
       ntfyTopic: "",
       ntfyToken: "",
       notifyOn: "always",
+      notifyNewTitles: false,
       soundsEnabled: true,
     },
     mode: "onChange",
@@ -182,6 +183,7 @@ export function SettingsPage() {
         ntfyTopic: data.ntfy_topic || "",
         ntfyToken: "",
         notifyOn: isNotifyOn(data.ntfy_notify_on) ? data.ntfy_notify_on : "always",
+        notifyNewTitles: !!data.ntfy_notify_new_titles,
         soundsEnabled: data.ui_sounds_enabled !== false,
       });
 
@@ -279,6 +281,7 @@ export function SettingsPage() {
       payload.ntfy_server_url = formData.ntfyServerUrl;
       payload.ntfy_topic = formData.ntfyTopic;
       payload.ntfy_notify_on = formData.notifyOn;
+      payload.ntfy_notify_new_titles = formData.notifyNewTitles;
       if (ntfyTokenDirty) {
         payload.ntfy_token = formData.ntfyToken;
       }

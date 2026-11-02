@@ -54,6 +54,9 @@ type Config struct {
 	// "always" (default), "changes" (episodes updated or any failure),
 	// or "failures".
 	NtfyNotifyOn string
+	// NtfyNotifyNewTitles sends a push when an AnimeFillerList refresh
+	// finds shows that were not in the cache before. Off by default.
+	NtfyNotifyNewTitles bool
 
 	// Artwork
 	ArtworkDefaultSource string // "sonarr" (default), "anilist", "tmdb", "fanart", "kitsu"

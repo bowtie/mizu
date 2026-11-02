@@ -81,38 +81,15 @@ func runAFLCacheRefresh(ctx context.Context, engine *sync.Engine, db *database.D
 		return
 	}
 
-	// Log the cache refresh to the activity feed.
-	logID, err := db.CreateSyncLog(ctx, "afl_cache_refresh")
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to create AFL cache refresh log")
-	}
-	items := make([]models.SyncLogItem, 0, len(newSlugs))
-	for _, slug := range newSlugs {
-		// Find the title for this slug from the fetched shows.
-		title := slug
-		for _, s := range shows {
-			if s.Slug == slug {
-				title = s.Title
-				break
-			}
-		}
-		items = append(items, models.SyncLogItem{
-			SonarrTitle: title,
-			Status:      "new_in_cache",
-			Summary:     "New anime detected in AFL cache",
-		})
-	}
-	if len(items) > 0 {
-		if err := db.ReplaceSyncLogItems(ctx, logID, items); err != nil {
-			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to store AFL cache refresh log items")
-		}
-	}
-	status := "success"
-	// "partial" is reserved for partial failures. A successful refresh
-	// that detects new shows is still a success — the new items are
-	// logged individually with "new_in_cache" status.
-	if logID > 0 {
-		if err := db.CompleteSyncLog(ctx, logID, status, len(newSlugs), 0, ""); err != nil {
+	// Newly discovered shows are logged (and announced) by the scraper's
+	// new-shows hook, which covers automatic refreshes too. This row only
+	// records the refresh itself, so skip it when the hook already wrote
+	// one; a first fill (every show "new") is not reported by the hook.
+	if len(newSlugs) == 0 || len(newSlugs) == len(shows) {
+		logID, err := db.CreateSyncLog(ctx, "afl_cache_refresh")
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to create AFL cache refresh log")
+		} else if err := db.CompleteSyncLog(ctx, logID, "success", 0, 0, ""); err != nil {
 			log.Warn().Err(err).Int64("log_id", logID).Msg("failed to complete AFL cache refresh log")
 		}
 	}
