@@ -13,7 +13,7 @@ import { cacheStatus } from "./cacheStatus";
 import type { SettingsForm } from "../../lib/schemas";
 import type { SelectOption } from "../../lib/types";
 
-export interface SecretKeyState {
+interface SecretKeyState {
   isSet: boolean;
   dirty: boolean;
   savedMasked: string;

@@ -1,10 +1,3 @@
-export interface Notification {
-  id: number;
-  message: string;
-  type: string;
-  duration: number;
-}
-
 export interface Settings {
   sonarr_url: string;
   sonarr_api_key_masked?: string;

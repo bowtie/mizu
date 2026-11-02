@@ -4,7 +4,7 @@ import { create } from "zustand";
 // Only notifications live here. Shows, settings, and artwork providers
 // are managed by TanStack Query (see queries.ts).
 
-export interface Notification {
+interface Notification {
   id: number;
   message: string;
   type: string;
@@ -72,8 +72,3 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       notifications: state.notifications.filter((x) => x.id !== id),
     })),
 }));
-
-// Convenience hook for components that only need addNotification.
-export function useAddNotification() {
-  return useNotificationStore((s) => s.addNotification);
-}

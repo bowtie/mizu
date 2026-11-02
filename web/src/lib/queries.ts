@@ -39,9 +39,7 @@ import {
   SyncLogResponseSchema,
   SonarrAddOptionsSchema,
   type Show,
-  type Settings,
   type SonarrSeries,
-  type ArtworkProvider,
   type Episode,
 } from "./schemas";
 import type { ShowUpdate } from "./types";
@@ -392,4 +390,4 @@ export function useTriggerSync() {
 
 // ── Re-export types for convenience ──
 
-export type { Show, Settings, SonarrSeries, ArtworkProvider, Episode };
+export type { Show, SonarrSeries, Episode };

@@ -14,7 +14,7 @@ export const actionToTracked = (action: string | undefined, fallback: boolean = 
   (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
 export const trackedToAction = (tracked: boolean): string => (tracked ? "monitor" : "unmonitor");
 
-export function isSpecialSeasonNumber(num: number | undefined): boolean {
+function isSpecialSeasonNumber(num: number | undefined): boolean {
   return num === -1 || num === 0;
 }
 export function seasonLabel(num: number | undefined): string {

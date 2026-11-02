@@ -104,7 +104,7 @@ export const EpisodeSchema = v.object({
 
 // ── SonarrSeries ──
 
-export const SonarrImageSchema = v.object({
+const SonarrImageSchema = v.object({
   url: v.optional(v.string()),
   remoteUrl: v.optional(v.string()),
   coverType: v.optional(v.string()),
@@ -138,17 +138,9 @@ export const ArtworkProviderSchema = v.object({
   available: v.boolean(),
 });
 
-// ── Bootstrap ──
-
-export const BootstrapSchema = v.object({
-  shows: v.array(ShowSchema),
-  settings: SettingsSchema,
-  providers: v.array(ArtworkProviderSchema),
-});
-
 // ── SyncLog ──
 
-export const SyncLogItemSchema = v.object({
+const SyncLogItemSchema = v.object({
   id: v.optional(v.number()),
   sync_log_id: v.optional(v.number()),
   mapping_id: v.optional(v.number()),
@@ -159,7 +151,7 @@ export const SyncLogItemSchema = v.object({
   error: v.optional(v.string()),
 });
 
-export const SyncLogSchema = v.object({
+const SyncLogSchema = v.object({
   id: v.union([v.number(), v.string()]),
   status: v.optional(v.string()),
   trigger: v.optional(v.string()),
@@ -177,47 +169,15 @@ export const SyncLogResponseSchema = v.object({
   next_offset: v.optional(v.number()),
 });
 
-// ── AFLMatch ──
-
-export const AFLMatchSchema = v.object({
-  slug: v.optional(v.string()),
-  title: v.optional(v.string()),
-  method: v.optional(v.string()),
-  confidence: v.optional(v.number()),
-  afl_show: v.optional(v.object({ slug: v.optional(v.string()), title: v.optional(v.string()) })),
-});
-
 // ── Misc ──
-
-export const ArtworkRefreshResultSchema = v.object({
-  source: v.string(),
-  found: v.boolean(),
-  poster_path: v.optional(v.string()),
-  banner_path: v.optional(v.string()),
-  logo_path: v.optional(v.string()),
-});
 
 export const SonarrAddOptionsSchema = v.object({
   root_folders: v.array(v.object({ path: v.string() })),
   quality_profiles: v.array(v.object({ id: v.number(), name: v.string() })),
 });
 
-export const TestConnectionResultSchema = v.object({
-  success: v.boolean(),
-  error: v.optional(v.string()),
-});
-
 // ── Inferred types (replace the manual interfaces in types.ts over time) ──
 
-export type Settings = v.InferOutput<typeof SettingsSchema>;
 export type Show = v.InferOutput<typeof ShowSchema>;
 export type Episode = v.InferOutput<typeof EpisodeSchema>;
 export type SonarrSeries = v.InferOutput<typeof SonarrSeriesSchema>;
-export type ArtworkProvider = v.InferOutput<typeof ArtworkProviderSchema>;
-export type SyncLog = v.InferOutput<typeof SyncLogSchema>;
-export type SyncLogItem = v.InferOutput<typeof SyncLogItemSchema>;
-export type SyncLogResponse = v.InferOutput<typeof SyncLogResponseSchema>;
-export type AFLMatch = v.InferOutput<typeof AFLMatchSchema>;
-export type ArtworkRefreshResult = v.InferOutput<typeof ArtworkRefreshResultSchema>;
-export type SonarrAddOptions = v.InferOutput<typeof SonarrAddOptionsSchema>;
-export type TestConnectionResult = v.InferOutput<typeof TestConnectionResultSchema>;

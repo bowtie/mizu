@@ -23,7 +23,7 @@ import {
 import type { SelectOption } from "../lib/types";
 import { SettingsRow } from "./SettingsRow";
 
-export const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 8;
 
 const modeOptions: SelectOption[] = [
   { value: "password", label: "Mizu password" },

@@ -23,7 +23,7 @@ const BASE = "/api";
  *  whenever a session ends (sign-out, expiry, password change) so library
  *  data fetched under it can't be served to whoever uses the browser
  *  next. Best-effort: the SW may not be registered or supported. */
-export function clearOfflineApiCache(): void {
+function clearOfflineApiCache(): void {
   if (typeof caches === "undefined") return;
   caches
     .keys()
@@ -118,10 +118,6 @@ export function getShows(): Promise<Show[]> {
 
 export function getShow(id: string | number): Promise<Show> {
   return request<Show>("GET", "/mappings/" + id);
-}
-
-export function createShow(data: MappingCreate): Promise<Show> {
-  return request<Show>("POST", "/mappings", data);
 }
 
 export function updateShow(id: string | number, data: ShowUpdate): Promise<Show> {

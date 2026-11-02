@@ -7,7 +7,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Eye, EyeOff } from "lucide-react";
 import type { SettingsForm } from "../../lib/schemas";
 
-export type SecretFieldName = "sonarrApiKey" | "tmdbApiKey" | "fanartApiKey" | "ntfyToken";
+type SecretFieldName = "sonarrApiKey" | "tmdbApiKey" | "fanartApiKey" | "ntfyToken";
 
 interface SecretFieldProps {
   control: Control<SettingsForm>;
