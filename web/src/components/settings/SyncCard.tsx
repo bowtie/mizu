@@ -9,7 +9,7 @@ import { RefreshCw } from "lucide-react";
 import { SettingsRow } from "../SettingsRow";
 import { SecretField } from "./SecretField";
 import { DefaultsSection } from "./DefaultsSection";
-import { formatRelativeTime } from "../../lib/time";
+import { cacheStatus } from "./cacheStatus";
 import type { SettingsForm } from "../../lib/schemas";
 import type { SelectOption } from "../../lib/types";
 
@@ -18,11 +18,6 @@ export interface SecretKeyState {
   dirty: boolean;
   savedMasked: string;
 }
-
-const cacheStatus = (count: number, refreshedAt: string | null | undefined): string =>
-  refreshedAt
-    ? `${count} shows cached, refreshed ${formatRelativeTime(refreshedAt)}.`
-    : `${count} shows cached. Never refreshed.`;
 
 export const syncIntervalOptions: SelectOption[] = [
   { value: "1h", label: "1 hour" },

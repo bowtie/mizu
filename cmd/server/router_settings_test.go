@@ -9,12 +9,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"mizu/internal/config"
 	"mizu/internal/database"
+	"mizu/internal/models"
 )
 
 func TestHandleUpdateSettingsRejectsInvalidFillerAction(t *testing.T) {
@@ -129,6 +131,50 @@ func TestHandleGetSettingsReturnsNtfyFields(t *testing.T) {
 	assert.Equal(t, true, result["ntfy_enabled"])
 	assert.Equal(t, "test-topic", result["ntfy_topic"])
 	assert.Equal(t, true, result["ntfy_token_set"])
+}
+
+func TestHandleGetSettingsReturnsNullCacheRefreshedAtWhenNeverRefreshed(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	rec := httptest.NewRecorder()
+
+	handleGetSettings(config.DefaultConfig(), db)(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &result))
+	refreshedAt, present := result["afl_show_cache_refreshed_at"]
+	require.True(t, present, "afl_show_cache_refreshed_at should be present")
+	assert.Nil(t, refreshedAt, "a never-refreshed cache must not serialise Go's zero time")
+	assert.EqualValues(t, 0, result["afl_show_cache_count"])
+}
+
+func TestHandleGetSettingsReturnsCacheRefreshedAtAfterRefresh(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	refreshed := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	_, err = db.ReplaceCachedAFLShows(t.Context(), []models.AFLShow{
+		{Title: "Naruto", Slug: "naruto", URL: "https://example.com/naruto"},
+	}, refreshed)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	rec := httptest.NewRecorder()
+
+	handleGetSettings(config.DefaultConfig(), db)(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &result))
+	assert.Equal(t, "2026-10-29T12:00:00Z", result["afl_show_cache_refreshed_at"])
+	assert.EqualValues(t, 1, result["afl_show_cache_count"])
 }
 
 func TestHandleCreateMappingRejectsInvalidFillerAction(t *testing.T) {

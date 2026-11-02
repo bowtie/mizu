@@ -6,6 +6,19 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["minute", 60],
 ];
 
+/**
+ * Parses an API timestamp, returning null when it is missing, unparseable, or
+ * a placeholder at or before the Unix epoch (e.g. Go's zero time,
+ * "0001-01-01T00:00:00Z"), none of which mean a real event happened.
+ */
+export function parseTimestamp(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  const ms = date.getTime();
+  if (Number.isNaN(ms) || ms <= 0) return null;
+  return date;
+}
+
 const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
 /** "3 days ago", "in 2 hours", "just now" — for a timestamp relative to now. */

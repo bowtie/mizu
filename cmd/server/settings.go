@@ -55,7 +55,14 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 			writeInternalError(w, err, "")
 			return
 		}
-		settings["afl_show_cache_refreshed_at"] = cacheRefreshedAt
+		// A zero time means the cache has never been refreshed; send null
+		// rather than "0001-01-01T00:00:00Z" so clients don't render it as
+		// a real date.
+		if cacheRefreshedAt.IsZero() {
+			settings["afl_show_cache_refreshed_at"] = nil
+		} else {
+			settings["afl_show_cache_refreshed_at"] = cacheRefreshedAt
+		}
 		settings["afl_show_cache_count"] = cacheCount
 		writeJSON(w, http.StatusOK, settings)
 	}
