@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCounterWithLabelsRenders(t *testing.T) {
@@ -27,19 +26,6 @@ func TestLabeledGaugeRendersSortedLabels(t *testing.T) {
 	})
 	out := Render()
 	assert.Contains(t, out, `test_build_info{commit="abc",version="1.0 \"beta\""} 1`)
-}
-
-func TestGaugeFuncEvaluatesOnScrape(t *testing.T) {
-	calls := 0
-	RegisterGaugeFunc("test_dynamic_gauge", "Dynamic.", func() float64 {
-		calls++
-		return float64(calls)
-	})
-
-	out1 := Render()
-	out2 := Render()
-	require.NotEqual(t, out1, out2)
-	assert.Contains(t, out2, "test_dynamic_gauge 2")
 }
 
 func TestLabelValuesAreEscaped(t *testing.T) {

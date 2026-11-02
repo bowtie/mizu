@@ -308,9 +308,3 @@ func newToken() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
-
-// SecureCompare is a constant-time string comparison helper exposed for
-// tests and future token schemes.
-func SecureCompare(a, b string) bool {
-	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
-}

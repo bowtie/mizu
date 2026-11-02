@@ -126,10 +126,9 @@ func (e *Engine) SonarrClient() *sonarr.Client {
 func (e *Engine) ScraperClient() *scraper.Scraper    { return e.scraper }
 func (e *Engine) MatcherClient() *matcherpkg.Matcher { return e.matcher }
 func (e *Engine) DB() *database.DB                   { return e.db }
-func (e *Engine) IsRunning() bool                    { return e.running.Load() }
 
 // SetRunning is a test helper to force the running flag. Production code
-// should use CompareAndSwap via RunSync/RunResync instead.
+// should claim the slot via TryAcquireRun instead.
 func (e *Engine) SetRunning(v bool) { e.running.Store(v) }
 
 // BumpMappingEpoch records a user-initiated change to a mapping. Called by
@@ -197,7 +196,7 @@ func (e *Engine) UpdateClients() {
 
 // TryAcquireRun atomically claims the engine's single-run slot without
 // starting work. It closes the check-then-act gap in HTTP handlers:
-// checking IsRunning and then spawning a goroutine that CASes again
+// checking the running flag and then spawning a goroutine that CASes again
 // could return 202 for a sync that instantly no-ops. Callers that claim
 // the slot MUST eventually call done — normally deferred in the spawned
 // goroutine around a RunSyncClaimed/RunResyncClaimed call.
@@ -488,15 +487,6 @@ func (e *Engine) processMappingsConcurrent(ctx context.Context, mappings []model
 	wg.Wait()
 
 	return results
-}
-
-func (e *Engine) RunResync(ctx context.Context, mappingID int64) error {
-	done, ok := e.TryAcquireRun()
-	if !ok {
-		return fmt.Errorf("sync already in progress")
-	}
-	defer done()
-	return e.RunResyncClaimed(ctx, mappingID)
 }
 
 // RunResyncClaimed runs a resync while already holding the claim from

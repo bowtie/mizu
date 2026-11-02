@@ -104,8 +104,6 @@ type httpError struct {
 	message string
 }
 
-func (e *httpError) Error() string { return e.message }
-
 func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID int64, sonarrSeriesID int, aflSlug string) ([]models.EpisodeInfo, *httpError) {
 	sonarrEpisodes, err := syncEngine.SonarrClient().GetEpisodes(ctx, sonarrSeriesID)
 	if err != nil {

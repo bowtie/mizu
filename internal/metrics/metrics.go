@@ -84,15 +84,6 @@ func rawLabelKey(values []string) string {
 	return strings.Join(values, "\x00")
 }
 
-// RegisterGaugeFunc exposes a value computed on scrape.
-func RegisterGaugeFunc(name, help string, fn func() float64) {
-	mu.Lock()
-	defer mu.Unlock()
-	if _, ok := gauges[name]; !ok {
-		gauges[name] = &gauge{help: help, value: fn}
-	}
-}
-
 // SetGauge stores a static gauge value.
 func SetGauge(name, help string, v float64) {
 	mu.Lock()

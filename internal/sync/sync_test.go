@@ -353,11 +353,11 @@ func TestRunSyncClaimedKeepsSlotUntilDone(t *testing.T) {
 	done, ok := e.TryAcquireRun()
 	require.True(t, ok)
 	require.Error(t, e.RunSyncClaimed(context.Background(), "manual"))
-	assert.True(t, e.IsRunning(), "slot must stay held until done() is called")
 
 	_, ok = e.TryAcquireRun()
 	assert.False(t, ok, "a second sync must not start while the slot is held")
 
 	done()
-	assert.False(t, e.IsRunning())
+	_, ok = e.TryAcquireRun()
+	assert.True(t, ok, "slot must be free once done() is called")
 }
