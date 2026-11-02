@@ -3,7 +3,11 @@
 # =============================================================================
 
 # Stage 1: Build the frontend (Astryx React app via Vite+)
-FROM oven/bun:1.4.2 AS frontend
+# Bun installs, but the build tools must run under Node: the StyleX media-query
+# parser fails when Vite runs on the Bun runtime, which is what the plain
+# oven/bun image falls back to because it ships no Node.
+FROM node:24-slim AS frontend
+COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
 
 WORKDIR /frontend
 
