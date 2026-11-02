@@ -1,25 +1,32 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] - 2026-11-02
 
-First public release. Covers everything since 0.2.0.
+Security pass on 0.3.0. Every setting lives in the database, sign-in is a
+choice made at first run, and stored secrets stay on the server.
 
 ### Security
 
-- A password is required. A fresh install serves only first-run setup until
-  one is set, and it can no longer be switched off from a session. Two
-  simultaneous first-run setups can't both succeed.
-- Sign-in can instead be handed to an auth proxy (Settings → Security). Mizu
-  then answers only requests from the listed trusted proxy addresses, so the
-  proxy can't be bypassed and DNS rebinding gets nowhere. Switching needs the
-  current password.
+- First-run setup asks for a password or continues without one. Settings →
+  Security switches between the Mizu password, a sign-in proxy and no
+  sign-in. Turning sign-in off needs the current password and revokes every
+  session; turning it back on sets a new password and signs the caller in.
+  Two simultaneous first-run setups can't both succeed.
+- With sign-in off, Mizu only answers requests addressed to an IP address,
+  localhost or a listed hostname (Settings → Security → Allowed hostnames),
+  so a DNS-rebinding page can't drive it through a LAN browser. The hostname
+  setup was opened under stays allowed, and a change that would lock out the
+  current hostname is refused.
+- Sign-in proxy mode answers only requests from the listed trusted proxy
+  addresses, so the proxy can't be bypassed and DNS rebinding gets nowhere.
 - No environment variables: `MIZU_PASSWORD` and `MIZU_ADDR` are gone. Mizu
-  listens on `:8978` (or `-addr`), and all settings, including sign-in mode and
-  trusted proxies, live in the database.
+  listens on `:8978` (or `-addr`), and all settings, including sign-in mode,
+  trusted proxies and allowed hostnames, live in the database.
 - Stored API keys never leave the server unasked: changing the Sonarr or ntfy
   URL requires the key or token again (it was silently sent to the new URL),
   config imports clear a credential whose URL changed, and exports leave keys
-  out unless requested with the password.
+  out unless requested with the password (or without one while sign-in is
+  off).
 - `X-Forwarded-For` / `X-Forwarded-Proto` are trusted only from configured
   proxies (and loopback). Login rate limiting counts only failures, can't be
   used to lock the owner out, and keeps its memory bounded. Password checks on
@@ -46,7 +53,39 @@ First public release. Covers everything since 0.2.0.
 - The offline API cache is cleared whenever a session ends.
 - Releases pin actions to commit SHAs and base images to digests, build
   without the shared CI cache, and publish signed images with provenance and
-  an SBOM.
+  an SBOM. Dependabot keeps the pins current.
+
+### Fixes
+
+- Custom artwork uploads over 1 MiB are accepted again, up to the advertised
+  10 MB (the global request body cap rejected them with a 413).
+- Settings reads "Never refreshed" for an AnimeFillerList cache that was never
+  refreshed, instead of "2,027 years ago".
+- Episode monitor toggles show the episode's state (an open eye when
+  monitored) and keep a visible button when unmonitored.
+- The last episode in a season no longer draws a thick divider under it.
+- Season headers highlight the whole card on hover instead of a strip inside
+  it.
+- The sign-out button is hidden while sign-in is off.
+
+### Engineering
+
+- Unreachable Go functions and unused web exports and types removed.
+- A GitHub social preview image (`assets/social-preview.png`) with its HTML
+  source.
+
+## [0.3.0] - 2026-11-02
+
+First public release. Covers everything since 0.2.0.
+
+### Security
+
+- Selectable auth modes: Mizu's own password, or none when an auth proxy in
+  front handles sign-in. Stored API keys are no longer sent to the browser,
+  and `maskKey` reveals no characters of a key.
+- Works behind reverse proxies and auth proxies: `X-Forwarded-Host` and
+  `X-Forwarded-Proto` handling for the same-origin guard and `Secure`
+  cookies, and `X-Forwarded-For` trusted only from private addresses.
 
 ### Notifications
 
