@@ -291,7 +291,7 @@ export function refreshAflCache(): Promise<{ status: string }> {
 /** Downloads the full config (mappings + settings) as a JSON blob. */
 /** Downloads a config backup. API keys and tokens are left out unless
  *  `includeSecrets` is set, which needs the dashboard password (not asked
- *  for when a sign-in proxy handles authentication). */
+ *  for when a sign-in proxy handles authentication or sign-in is off). */
 export function exportConfig(includeSecrets = false, password = ""): Promise<Blob> {
   return api("backup/export", {
     method: "POST",
@@ -331,9 +331,11 @@ export interface AuthStatus {
   authenticated: boolean;
   /** Sign-in is handled by a reverse proxy in front of Mizu. */
   external?: boolean;
+  /** Sign-in is turned off. */
+  open?: boolean;
 }
 
-export type AuthMode = "password" | "external";
+export type AuthMode = "password" | "external" | "open";
 
 export interface AccessSettings {
   mode: AuthMode;
@@ -341,6 +343,11 @@ export interface AccessSettings {
   /** The address this browser's requests reach Mizu from. */
   client_address: string;
   via_trusted_proxy: boolean;
+  /** Hostnames Mizu answers to with sign-in off, besides IPs and localhost. */
+  allowed_hosts: string;
+  /** Whether a Mizu password exists; without one, switching to password
+   *  sign-in takes a new password. */
+  password_set: boolean;
 }
 
 export function getAccessSettings(): Promise<AccessSettings> {
@@ -350,7 +357,9 @@ export function getAccessSettings(): Promise<AccessSettings> {
 export function updateAccessSettings(data: {
   mode: AuthMode;
   trusted_proxies: string;
+  allowed_hosts: string;
   current_password: string;
+  new_password: string;
 }): Promise<AccessSettings> {
   return request<AccessSettings>("PUT", "/auth/access", data);
 }
@@ -365,6 +374,11 @@ export function login(password: string): Promise<{ ok: boolean }> {
 
 export function setupPassword(password: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>("POST", "/auth/setup", { password });
+}
+
+/** First-run setup without a password: turns sign-in off. */
+export function setupOpen(): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("POST", "/auth/setup", { open: true });
 }
 
 export function logout(): Promise<{ ok: boolean }> {

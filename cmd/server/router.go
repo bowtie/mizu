@@ -25,6 +25,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 
 	r := chi.NewRouter()
 	r.Use(securityHeaders(acc))
+	r.Use(hostGuard(acc))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
@@ -69,7 +70,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Get("/status", handleAuthStatus(authMgr, acc))
-			r.Post("/setup", wrapLimited(handleAuthSetup(authMgr, acc)))
+			r.Post("/setup", wrapLimited(handleAuthSetup(authMgr, acc, db)))
 			r.Post("/login", wrapLimited(handleAuthLogin(authMgr, acc)))
 			r.Post("/logout", handleAuthLogout(authMgr, acc))
 		})
@@ -83,7 +84,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			})
 
 			r.Post("/auth/change-password", wrapLimited(handleAuthChangePassword(authMgr, acc)))
-			r.Get("/auth/access", handleGetAccessSettings(acc))
+			r.Get("/auth/access", handleGetAccessSettings(authMgr, acc))
 			r.Put("/auth/access", wrapLimited(handleUpdateAccessSettings(authMgr, acc, db)))
 
 			r.Get("/stats", handleGetStats(db))

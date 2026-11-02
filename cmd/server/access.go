@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync/atomic"
+	"unicode"
 
 	"mizu/internal/database"
 
@@ -21,6 +22,7 @@ import (
 const (
 	settingAuthMode       = "auth_mode"
 	settingTrustedProxies = "trusted_proxies"
+	settingAllowedHosts   = "allowed_hosts"
 
 	// authModePassword (the default) makes Mizu ask for its own password.
 	authModePassword = "password"
@@ -30,11 +32,18 @@ const (
 	// bypassed by connecting to Mizu directly — and a DNS-rebinding page,
 	// which reaches Mizu from the victim's own address, is refused too.
 	authModeExternal = "external"
+	// authModeOpen turns sign-in off, for a Mizu that something else
+	// already protects (a VPN, a tailnet, a LAN nobody else is on). With
+	// nothing to authenticate, DNS rebinding is stopped by the Host check
+	// instead (see allowsHost).
+	authModeOpen = "open"
 )
 
 // accessPolicy is the effective sign-in configuration.
 type accessPolicy struct {
 	External bool
+	// Open means no sign-in at all.
+	Open bool
 	// TrustedProxies are the addresses (or networks) of reverse proxies
 	// in front of Mizu. Their X-Forwarded-For / X-Forwarded-Proto headers
 	// are believed, and in external mode only they may connect. Loopback
@@ -42,6 +51,20 @@ type accessPolicy struct {
 	TrustedProxies []netip.Prefix
 	// TrustedRaw is the normalized text form shown in the UI.
 	TrustedRaw string
+	// AllowedHosts are the hostnames Mizu answers to in open mode, besides
+	// IP addresses and localhost.
+	AllowedHosts []string
+}
+
+// mode is the sign-in mode's setting value.
+func (p accessPolicy) mode() string {
+	switch {
+	case p.External:
+		return authModeExternal
+	case p.Open:
+		return authModeOpen
+	}
+	return authModePassword
 }
 
 // accessControl holds the current policy; handlers read it per request
@@ -67,7 +90,11 @@ func loadAccessPolicy(ctx context.Context, db *database.DB) accessPolicy {
 		log.Warn().Err(err).Msg("failed to load sign-in settings; using password sign-in")
 		return accessPolicy{}
 	}
-	p := accessPolicy{External: settings[settingAuthMode] == authModeExternal}
+	p := accessPolicy{
+		External:     settings[settingAuthMode] == authModeExternal,
+		Open:         settings[settingAuthMode] == authModeOpen,
+		AllowedHosts: parseAllowedHosts(settings[settingAllowedHosts]),
+	}
 	prefixes, normalized, perr := parseTrustedProxies(settings[settingTrustedProxies])
 	if perr != nil {
 		log.Warn().Err(perr).Msg("ignoring invalid trusted_proxies setting")
@@ -107,6 +134,65 @@ func parseTrustedProxies(raw string) ([]netip.Prefix, string, error) {
 		}
 	}
 	return prefixes, strings.Join(names, ", "), nil
+}
+
+// parseAllowedHosts splits a comma or whitespace separated hostname list,
+// lowercased, dropping any port.
+func parseAllowedHosts(raw string) []string {
+	fields := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	hosts := make([]string, 0, len(fields))
+	for _, f := range fields {
+		hosts = append(hosts, hostOnly(f))
+	}
+	return hosts
+}
+
+// hostOnly lowercases a Host header value and strips its port.
+func hostOnly(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
+}
+
+// allowsHost reports whether a request addressed to host may be served.
+// Only open mode restricts it: a DNS-rebinding page reaches Mizu under the
+// attacker's own hostname, and with no sign-in nothing else would stop it.
+// IP addresses and localhost can't be rebound; any other name has to be
+// listed. X-Forwarded-Host is ignored, since a rebound page is same-origin
+// and may set any header it likes.
+func (p accessPolicy) allowsHost(host string) bool {
+	if !p.Open {
+		return true
+	}
+	host = hostOnly(host)
+	if _, err := netip.ParseAddr(host); err == nil {
+		return true
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	for _, h := range p.AllowedHosts {
+		if h == host {
+			return true
+		}
+	}
+	return false
+}
+
+// hostGuard refuses requests addressed to a hostname open mode doesn't
+// allow.
+func hostGuard(acc *accessControl) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !acc.get().allowsHost(r.Host) {
+				writeError(w, http.StatusMisdirectedRequest,
+					"Mizu doesn't answer to "+hostOnly(r.Host)+". Add it under Settings > Security > Allowed hostnames")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // peerIP is the address of the TCP peer, which can't be spoofed.

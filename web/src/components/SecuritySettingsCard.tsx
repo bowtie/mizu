@@ -28,6 +28,7 @@ const MIN_PASSWORD_LENGTH = 8;
 const modeOptions: SelectOption[] = [
   { value: "password", label: "Mizu password" },
   { value: "external", label: "Sign-in proxy" },
+  { value: "open", label: "No sign-in" },
 ];
 
 type Panel = "change" | "access" | null;
@@ -51,6 +52,7 @@ export function SecuritySettingsCard() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [mode, setMode] = useState<AuthMode>("password");
   const [trustedProxies, setTrustedProxies] = useState("");
+  const [allowedHosts, setAllowedHosts] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Start every panel with empty password fields and the saved values.
@@ -61,11 +63,17 @@ export function SecuritySettingsCard() {
     if (access) {
       setMode(access.mode);
       setTrustedProxies(access.trusted_proxies);
+      setAllowedHosts(access.allowed_hosts);
     }
   }, [panel, access]);
 
   if (!status) return null;
   const external = !!status.external;
+  const open = !!status.open;
+  // The server asks for the password while one exists, except with
+  // sign-in off; switching to password sign-in without one sets a new one.
+  const needsCurrentPassword = !!access?.password_set && !open;
+  const needsNewPassword = mode === "password" && !access?.password_set;
 
   const run = async (action: () => Promise<void>, failure: string) => {
     if (submitting) return;
@@ -79,16 +87,21 @@ export function SecuritySettingsCard() {
     }
   };
 
+  const checkNewPassword = () => {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      addNotification(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, "error");
+      return false;
+    }
+    if (newPassword !== confirmPassword) {
+      addNotification("Passwords don't match", "error");
+      return false;
+    }
+    return true;
+  };
+
   const handleChange = () =>
     run(async () => {
-      if (newPassword.length < MIN_PASSWORD_LENGTH) {
-        addNotification(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, "error");
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        addNotification("Passwords don't match", "error");
-        return;
-      }
+      if (!checkNewPassword()) return;
       await changePassword(currentPassword, newPassword);
       addNotification("Password changed. Please sign in again.", "success");
       queryClient.clear();
@@ -97,10 +110,13 @@ export function SecuritySettingsCard() {
 
   const handleAccess = () =>
     run(async () => {
+      if (needsNewPassword && !checkNewPassword()) return;
       await updateAccessSettings({
         mode,
         trusted_proxies: trustedProxies,
+        allowed_hosts: allowedHosts,
         current_password: currentPassword,
+        new_password: needsNewPassword ? newPassword : "",
       });
       setPanel(null);
       void refetchAccess();
@@ -111,6 +127,17 @@ export function SecuritySettingsCard() {
           external: true,
         });
         addNotification("Sign-in is now handled by your proxy", "success");
+      } else if (mode === "open") {
+        queryClient.setQueryData(["authStatus"], {
+          configured: true,
+          authenticated: true,
+          open: true,
+        });
+        addNotification(open ? "Allowed hostnames saved" : "Sign-in is off", "success");
+      } else if (needsNewPassword) {
+        // The server signed this browser in with the new password.
+        queryClient.setQueryData(["authStatus"], { configured: true, authenticated: true });
+        addNotification("Password set. Mizu asks for it from now on.", "success");
       } else if (external) {
         addNotification("Mizu asks for its own password again. Please sign in.", "success");
         queryClient.clear();
@@ -134,13 +161,39 @@ export function SecuritySettingsCard() {
     />
   );
 
+  const newPasswordFields = (
+    <>
+      <TextInput
+        type="password"
+        label="New password"
+        value={newPassword}
+        onChange={setNewPassword}
+        placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+        isDisabled={submitting}
+      />
+      <TextInput
+        type="password"
+        label="Confirm password"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        isDisabled={submitting}
+      />
+    </>
+  );
+
+  const signInDescription = external
+    ? "Handled by your sign-in proxy. Mizu only answers requests from the trusted proxy addresses."
+    : open
+      ? "Off: anyone who can reach Mizu can use it. It only answers IP addresses, localhost and the allowed hostnames."
+      : "Mizu's own password. If a sign-in proxy (tinyauth, Authelia, Authentik…) already protects Mizu, it can take over, or sign-in can be turned off.";
+
   return (
     <Card variant="muted" padding={4}>
       <VStack gap={3}>
         <Heading level={2}>Security</Heading>
         <Divider />
 
-        {!external && (
+        {!external && !open && (
           <SettingsRow
             label="Password"
             description="Mizu asks for this password before showing anything."
@@ -159,21 +212,7 @@ export function SecuritySettingsCard() {
         {panel === "change" && (
           <VStack gap={3} maxWidth={420}>
             {currentPasswordField}
-            <TextInput
-              type="password"
-              label="New password"
-              value={newPassword}
-              onChange={setNewPassword}
-              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
-              isDisabled={submitting}
-            />
-            <TextInput
-              type="password"
-              label="Confirm password"
-              value={confirmPassword}
-              onChange={setConfirmPassword}
-              isDisabled={submitting}
-            />
+            {newPasswordFields}
             <HStack gap={2}>
               <Button
                 variant="primary"
@@ -187,16 +226,9 @@ export function SecuritySettingsCard() {
           </VStack>
         )}
 
-        {!external && <Divider />}
+        {!external && !open && <Divider />}
 
-        <SettingsRow
-          label="Sign-in"
-          description={
-            external
-              ? "Handled by your sign-in proxy. Mizu only answers requests from the trusted proxy addresses."
-              : "Mizu's own password. If a sign-in proxy (tinyauth, Authelia, Authentik…) already protects Mizu, it can take over."
-          }
-        >
+        <SettingsRow label="Sign-in" description={signInDescription}>
           <Button
             variant="secondary"
             label="Change"
@@ -216,6 +248,22 @@ export function SecuritySettingsCard() {
               onChange={(v) => setMode(v as AuthMode)}
               isDisabled={submitting}
             />
+            {mode === "open" && (
+              <>
+                <TextInput
+                  label="Allowed hostnames"
+                  value={allowedHosts}
+                  onChange={setAllowedHosts}
+                  placeholder="e.g. mizu.lan, nas.local"
+                  isDisabled={submitting}
+                />
+                <Text type="supporting" color="secondary">
+                  With sign-in off, Mizu only answers when it's opened by IP address, localhost, or
+                  one of these names, so other websites can't reach it through your browser.
+                  {!open && " Turning sign-in off removes the password."}
+                </Text>
+              </>
+            )}
             <TextInput
               label="Trusted proxy addresses"
               value={trustedProxies}
@@ -229,13 +277,18 @@ export function SecuritySettingsCard() {
               answers. This browser reaches Mizu from {access.client_address}
               {access.via_trusted_proxy ? ", a trusted proxy." : "."}
             </Text>
-            {currentPasswordField}
+            {needsNewPassword && newPasswordFields}
+            {needsCurrentPassword && currentPasswordField}
             <HStack gap={2}>
               <Button
                 variant="primary"
                 label="Save sign-in"
                 isLoading={submitting}
-                isDisabled={submitting || !currentPassword}
+                isDisabled={
+                  submitting ||
+                  (needsCurrentPassword && !currentPassword) ||
+                  (needsNewPassword && (!newPassword || !confirmPassword))
+                }
                 onClick={() => void handleAccess()}
               />
               {cancel}

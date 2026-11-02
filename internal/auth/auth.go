@@ -69,9 +69,8 @@ type Store interface {
 // Manager wires password + session operations to a Store. The configured
 // state is cached atomically after the first lookup so the request-path
 // middleware doesn't hit SQLite on every call; the only code paths that
-// flip it (SetPassword / ChangePassword) update the cache themselves.
-// A password can be set or changed but never removed: once configured,
-// Mizu stays protected.
+// flip it (SetPassword / ChangePassword / ClearPassword) update the cache
+// themselves.
 type Manager struct {
 	store      Store
 	configured atomic.Bool
@@ -162,6 +161,17 @@ func (m *Manager) ChangePassword(ctx context.Context, current, next string) erro
 	if err := m.storeHash(ctx, next); err != nil {
 		return err
 	}
+	return m.store.DeleteAllSessions(ctx)
+}
+
+// ClearPassword removes the password and revokes every session, for
+// switching sign-in off. The caller is responsible for authorizing it.
+func (m *Manager) ClearPassword(ctx context.Context) error {
+	if err := m.store.SetSetting(ctx, SettingPasswordHash, ""); err != nil {
+		return err
+	}
+	m.configured.Store(false)
+	m.checked.Store(true)
 	return m.store.DeleteAllSessions(ctx)
 }
 

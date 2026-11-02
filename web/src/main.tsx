@@ -137,8 +137,8 @@ function LogoutButton() {
   const { data: status } = useAuthStatus();
   const navigate = useNavigate();
 
-  // Nothing to sign out of while no password is set.
-  if (!status?.authenticated) return null;
+  // Nothing to sign out of while no password is set or sign-in is off.
+  if (!status?.authenticated || status.open) return null;
 
   const handleLogout = async () => {
     try {

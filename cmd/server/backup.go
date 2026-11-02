@@ -157,7 +157,8 @@ type backupFile struct {
 // (or a POST without include_secrets) leaves API keys and tokens out.
 // POST {"include_secrets": true, "password": "..."} includes them after
 // checking the dashboard password; with a sign-in proxy in front, the
-// proxy has already vouched for the caller and no password is asked.
+// proxy has already vouched for the caller, and with sign-in off there is
+// no password, so none is asked.
 func handleExportConfig(db *database.DB, mgr *auth.Manager, acc *accessControl) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		includeSecrets := false
@@ -172,7 +173,7 @@ func handleExportConfig(db *database.DB, mgr *auth.Manager, acc *accessControl) 
 					return
 				}
 			}
-			if req.IncludeSecrets && !acc.get().External {
+			if pol := acc.get(); req.IncludeSecrets && !pol.External && !pol.Open {
 				if err := mgr.Verify(r.Context(), req.Password); err != nil {
 					if err == auth.ErrInvalidPassword {
 						writeError(w, http.StatusUnauthorized, "incorrect password")

@@ -9,7 +9,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Waves, LogIn, ShieldCheck } from "lucide-react";
-import { getAuthStatus, login, setupPassword, errorMessage } from "../lib/api";
+import { getAuthStatus, login, setupOpen, setupPassword, errorMessage } from "../lib/api";
 import type { AuthStatus } from "../lib/api";
 import { safeRedirectPath } from "../lib/redirect";
 
@@ -91,6 +91,25 @@ export function LoginPage() {
     },
     [status, submitting, password, confirmPassword, queryClient, navigate, from],
   );
+
+  const handleSkip = useCallback(async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await setupOpen();
+      queryClient.setQueryData(["authStatus"], {
+        configured: true,
+        authenticated: true,
+        open: true,
+      });
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [submitting, queryClient, navigate, from]);
 
   if (loading) {
     return (
@@ -199,9 +218,18 @@ export function LoginPage() {
           </Button>
 
           {isSetup && (
-            <Text size="xsm" color="secondary" style={{ textAlign: "center" }}>
-              Mizu stays locked until a password is set.
-            </Text>
+            <VStack gap={1} align="center">
+              <Button
+                variant="ghost"
+                label="Continue without a password"
+                isDisabled={submitting}
+                onClick={() => void handleSkip()}
+              />
+              <Text size="xsm" color="secondary" style={{ textAlign: "center" }}>
+                Only if something else already protects Mizu, like a VPN or a private network.
+                Anyone who can reach it can then use it. You can add a password later in Settings.
+              </Text>
+            </VStack>
           )}
         </VStack>
       </Card>
