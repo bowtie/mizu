@@ -51,7 +51,7 @@ export function BackupCard({
         <Divider />
         <SettingsRow
           label="Export config"
-          description="Download your shows and settings as a JSON file. API keys and tokens are left out unless you include them."
+          description="Your shows and settings as a JSON file. API keys are left out unless included."
         >
           <Button
             label="Export"
@@ -65,7 +65,7 @@ export function BackupCard({
         </SettingsRow>
         <SettingsRow
           label="Include API keys and tokens"
-          description="Needed to restore without re-entering them. Keep a file like this private."
+          description="Saves re-entering them on restore. Keep the file private."
         >
           <Switch
             label="Include API keys and tokens"
@@ -92,7 +92,7 @@ export function BackupCard({
         <Divider />
         <SettingsRow
           label="Import config"
-          description="Restore shows and settings from an exported file. Shows you already have are replaced."
+          description="Import an exported file. Existing shows are replaced."
         >
           <Button
             label={importingConfig ? "Importing..." : "Import"}

@@ -220,7 +220,7 @@ export function OnboardingPage() {
       try {
         parsed = JSON.parse(await file.text());
       } catch {
-        setError("That file isn't valid JSON. Pick a Mizu config export.");
+        setError("That's not a Mizu export file.");
         return;
       }
       const result = await importConfig(parsed);
@@ -283,7 +283,7 @@ export function OnboardingPage() {
             {step === "sonarr" && (
               <VStack gap={4}>
                 <Text type="supporting" color="secondary">
-                  Your Sonarr address and API key (Sonarr, Settings, General, Security).
+                  The API key is in Sonarr under Settings, General.
                 </Text>
                 <TextInput
                   label="Sonarr URL"
@@ -325,10 +325,7 @@ export function OnboardingPage() {
 
             {step === "defaults" && (
               <VStack gap={4}>
-                <SettingsRow
-                  label="Sync interval"
-                  description="How often Mizu checks for episode changes."
-                >
+                <SettingsRow label="Sync interval" description="How often Mizu syncs with Sonarr.">
                   <Selector
                     label="Sync interval"
                     value={syncInterval}
@@ -345,7 +342,7 @@ export function OnboardingPage() {
                   <VStack gap={1}>
                     <Heading level={3}>Tracking defaults</Heading>
                     <Text type="supporting" color="secondary">
-                      Applied when you add an anime. You can override them per anime.
+                      Applied to new anime. You can change them per anime.
                     </Text>
                   </VStack>
                   <SettingsRow label="Canon" description="Main plot episodes">
@@ -384,7 +381,7 @@ export function OnboardingPage() {
                     <>
                       <Loader2 size={16} className="spin" aria-hidden="true" />
                       <Text type="supporting" color="secondary">
-                        Fetching all available anime from AnimeFillerList…
+                        Fetching anime from AnimeFillerList…
                       </Text>
                     </>
                   )}
@@ -441,7 +438,7 @@ export function OnboardingPage() {
             {step === "signin" && (
               <VStack gap={4} as="form" onSubmit={handlePasswordFinish}>
                 <Text type="supporting" color="secondary">
-                  Protect the dashboard with a password. You'll sign in with it from now on.
+                  Set a password to protect the dashboard.
                 </Text>
                 <TextInput
                   label="Password"
@@ -492,8 +489,7 @@ export function OnboardingPage() {
                   </HStack>
                 </HStack>
                 <Text size="xsm" color="secondary">
-                  Skip only if something else already protects Mizu, like a VPN or a private
-                  network: anyone who can reach it can then use it. You can add a password later in
+                  Skip only behind a VPN or private network. You can add a password later in
                   Settings.
                 </Text>
               </VStack>

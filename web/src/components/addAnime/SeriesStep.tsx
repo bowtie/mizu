@@ -57,7 +57,7 @@ export function SeriesStep({
       {filteredSeriesLibrary.length === 0 ? (
         <EmptyState
           title="No anime match that search"
-          description="Try a different title or year, or add it from the AFL list instead."
+          description="Try another title or year, or add it from AFL."
           icon={<Icon icon={Search} size="lg" color="secondary" />}
           actions={
             <Button

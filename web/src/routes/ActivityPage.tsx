@@ -193,7 +193,7 @@ export function ActivityPage() {
         ) : logs.length === 0 ? (
           <EmptyState
             title="No sync activity yet"
-            description="Run a sync and its history will show up here."
+            description="Syncs show up here."
             icon={<Icon icon={History} size="lg" color="secondary" />}
             actions={
               <Button
@@ -237,7 +237,7 @@ export function ActivityPage() {
             {filteredLogs.length === 0 ? (
               <EmptyState
                 title="No matching logs"
-                description="Try a different filter or search."
+                description="Try another filter or search."
                 icon={<Icon icon={Search} size="lg" color="secondary" />}
                 actions={
                   <Button

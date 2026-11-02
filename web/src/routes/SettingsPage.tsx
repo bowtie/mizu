@@ -291,7 +291,7 @@ export function SettingsPage() {
         addNotification("Refreshing artwork from the new source...", "info", 6000);
         refreshAllArtwork()
           .then(() => {
-            addNotification("Artwork refresh started. Updates will appear shortly.", "info");
+            addNotification("Refreshing artwork…", "info");
           })
           .catch((err: unknown) => {
             addNotification("Artwork refresh failed: " + errorMessage(err), "error");
@@ -405,7 +405,7 @@ export function SettingsPage() {
       try {
         parsed = JSON.parse(text);
       } catch {
-        addNotification("That file isn't valid JSON. Pick a Mizu config export.", "error");
+        addNotification("That's not a Mizu export file.", "error");
         return;
       }
       const proceed = window.confirm(
@@ -484,7 +484,7 @@ export function SettingsPage() {
           <VStack gap={1}>
             <Heading level={1}>Settings</Heading>
             <Text type="supporting" color="secondary">
-              Configure Sonarr connection, sync behavior, and defaults.
+              Sonarr, syncing and defaults.
             </Text>
           </VStack>
         </HStack>

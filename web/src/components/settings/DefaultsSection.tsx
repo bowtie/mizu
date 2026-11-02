@@ -16,7 +16,7 @@ export function DefaultsSection({ control }: DefaultsSectionProps) {
       <VStack gap={1}>
         <Heading level={3}>Tracking defaults</Heading>
         <Text type="supporting" color="secondary" display="block">
-          Mizu applies these when you add an anime. You can override them per anime.
+          Applied to new anime. You can change them per anime.
         </Text>
       </VStack>
 

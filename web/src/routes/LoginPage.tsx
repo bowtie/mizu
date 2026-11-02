@@ -101,8 +101,7 @@ export function LoginPage() {
           <VStack gap={3} align="center" style={{ padding: "var(--spacing-5)" }}>
             <Heading level={1}>Sign in through your proxy</Heading>
             <Text size="sm" color="secondary" style={{ textAlign: "center" }}>
-              This Mizu is protected by a sign-in proxy and only answers requests that come through
-              it. Open Mizu at your proxy's address instead.
+              This Mizu sits behind a sign-in proxy. Open it at your proxy's address.
             </Text>
           </VStack>
         </Card>
@@ -133,7 +132,7 @@ export function LoginPage() {
             </div>
             <Heading level={1}>Sign in to Mizu</Heading>
             <Text size="sm" color="secondary" style={{ textAlign: "center" }}>
-              Enter your dashboard password to continue.
+              Enter your password.
             </Text>
           </VStack>
 

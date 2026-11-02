@@ -226,7 +226,7 @@ export const EpisodeListSection = memo(function EpisodeListSection({
              for episodes to arrive from prefetch/network. */
           <EmptyState
             title="Loading episodes…"
-            description="Fetching episode data from Sonarr."
+            description="Fetching from Sonarr."
             icon={<Icon icon={LoaderCircle} size="lg" color="secondary" className="spin" />}
           />
         ) : (
@@ -269,7 +269,7 @@ export const EpisodeListSection = memo(function EpisodeListSection({
       ) : groupedBySeason.length === 0 ? (
         <EmptyState
           title="No episodes"
-          description="No episodes match the selected type."
+          description="No episodes of this type."
           icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
           actions={
             <Button

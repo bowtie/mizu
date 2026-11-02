@@ -575,7 +575,7 @@ export function ShowDetailPage() {
             isOpen={showDeleteDialog}
             onOpenChange={setShowDeleteDialog}
             title="Remove anime?"
-            description={`This will remove "${show.sonarr_title}" from Mizu. The series stays in Sonarr. You can re-add it anytime.`}
+            description={`Removes "${show.sonarr_title}" from Mizu. It stays in Sonarr, and you can add it back anytime.`}
             actionLabel="Remove"
             isActionLoading={deleteShowMutation.isPending}
             onAction={() => void handleDelete()}

@@ -19,7 +19,7 @@ export function InterfaceCard({ control }: InterfaceCardProps) {
         <Divider />
         <SettingsRow
           label="Interaction sounds"
-          description="Play soft sounds when you hover, click, and get notifications."
+          description="Soft sounds on hover, click and notifications."
         >
           <Controller
             control={control}

@@ -103,7 +103,7 @@ export function SecuritySettingsCard() {
     run(async () => {
       if (!checkNewPassword()) return;
       await changePassword(currentPassword, newPassword);
-      addNotification("Password changed. Please sign in again.", "success");
+      addNotification("Password changed. Sign in again.", "success");
       queryClient.clear();
       navigate("/login", { replace: true });
     }, "Couldn't change password");
@@ -137,9 +137,9 @@ export function SecuritySettingsCard() {
       } else if (needsNewPassword) {
         // The server signed this browser in with the new password.
         queryClient.setQueryData(["authStatus"], { configured: true, authenticated: true });
-        addNotification("Password set. Mizu asks for it from now on.", "success");
+        addNotification("Password set.", "success");
       } else if (external) {
-        addNotification("Mizu asks for its own password again. Please sign in.", "success");
+        addNotification("Password sign-in is on. Sign in again.", "success");
         queryClient.clear();
         navigate("/login", { replace: true });
       } else {
@@ -194,10 +194,7 @@ export function SecuritySettingsCard() {
         <Divider />
 
         {!external && !open && (
-          <SettingsRow
-            label="Password"
-            description="Mizu asks for this password before showing anything."
-          >
+          <SettingsRow label="Password" description="Needed to open Mizu.">
             <Button
               variant="secondary"
               label="Change password"
@@ -258,8 +255,8 @@ export function SecuritySettingsCard() {
                   isDisabled={submitting}
                 />
                 <Text type="supporting" color="secondary">
-                  With sign-in off, Mizu only answers when it's opened by IP address, localhost, or
-                  one of these names, so other websites can't reach it through your browser.
+                  With sign-in off, Mizu only answers on its IP address, localhost or these names,
+                  so other sites can't reach it through your browser.
                   {!open && " Turning sign-in off removes the password."}
                 </Text>
               </>
@@ -272,9 +269,9 @@ export function SecuritySettingsCard() {
               isDisabled={submitting}
             />
             <Text type="supporting" color="secondary">
-              Reverse proxies in front of Mizu, as IP addresses or networks. Mizu trusts the client
-              addresses they forward, and with a sign-in proxy it answers only them. This browser
-              reaches Mizu from {access.client_address}
+              IP addresses or networks of proxies in front of Mizu. Mizu trusts the addresses they
+              forward; with a sign-in proxy it answers only them. You're connecting from{" "}
+              {access.client_address}
               {access.via_trusted_proxy ? ", a trusted proxy." : "."}
             </Text>
             {needsNewPassword && newPasswordFields}

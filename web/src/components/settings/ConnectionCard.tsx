@@ -43,11 +43,7 @@ export function ConnectionCard({
         <Heading level={2}>Connection</Heading>
         <Divider />
 
-        <SettingsRow
-          label="Sonarr URL"
-          description="The address of your Sonarr server."
-          error={sonarrUrlError}
-        >
+        <SettingsRow label="Sonarr URL" description="Your Sonarr address." error={sonarrUrlError}>
           <Controller
             control={control}
             name="sonarrUrl"
@@ -68,7 +64,7 @@ export function ConnectionCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow label="API key" description="Found in Sonarr under Settings, General.">
+        <SettingsRow label="API key" description="In Sonarr under Settings, General.">
           <SecretField
             control={control}
             name="sonarrApiKey"
@@ -84,10 +80,7 @@ export function ConnectionCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow
-          label="Test connection"
-          description="Check that Mizu can reach Sonarr with the details above."
-        >
+        <SettingsRow label="Test connection" description="Check that Mizu can reach Sonarr.">
           <Button
             label={
               testPhase === "connecting"

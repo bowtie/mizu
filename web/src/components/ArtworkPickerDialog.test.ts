@@ -271,7 +271,7 @@ describe("ArtworkPickerDialog source controls", () => {
   it("points at Settings when no source offers images to browse", async () => {
     await renderPicker(vi.fn(), "", undefined, { sources: [] });
 
-    expect(container.textContent).toContain("Add a TMDB or Fanart API key");
+    expect(container.textContent).toContain("Add a TMDB or Fanart key");
     expect(getArtworkCandidatesMock).not.toHaveBeenCalled();
   });
 

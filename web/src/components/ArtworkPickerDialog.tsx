@@ -287,7 +287,7 @@ export function ArtworkPickerDialog({
         </HStack>
         {sources.length === 0 && (
           <Text type="supporting" color="secondary">
-            Add a TMDB or Fanart API key in Settings to browse their images.
+            Add a TMDB or Fanart key in Settings to use them.
           </Text>
         )}
         {loading && (

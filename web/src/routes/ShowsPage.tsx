@@ -455,7 +455,7 @@ export function ShowsPage() {
         ) : filteredShows.length === 0 && (shows || []).length === 0 ? (
           <EmptyState
             title="No anime synced yet"
-            description="Add an anime from Sonarr to start tracking its filler episodes."
+            description="Add an anime from Sonarr to get started."
             icon={<Icon icon={Waves} size="lg" color="secondary" />}
             actions={
               <Button
@@ -471,7 +471,7 @@ export function ShowsPage() {
         ) : filteredShows.length === 0 ? (
           <EmptyState
             title="No matching anime"
-            description="Try a different title or keyword."
+            description="Try another title."
             icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
             actions={
               <Button

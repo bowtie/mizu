@@ -48,7 +48,7 @@ export function NotificationsCard({
 
         <SettingsRow
           label="Enable notifications"
-          description="Get a push notification after each sync, using ntfy."
+          description="Push a notification after each sync, via ntfy."
         >
           <Controller
             control={control}
@@ -66,7 +66,7 @@ export function NotificationsCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow label="Notify on" description="Which sync results send a notification.">
+        <SettingsRow label="Notify on" description="Which syncs notify you.">
           <Controller
             control={control}
             name="notifyOn"
@@ -84,10 +84,7 @@ export function NotificationsCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow
-          label="New anime alerts"
-          description="Get notified when AnimeFillerList adds new anime."
-        >
+        <SettingsRow label="New anime alerts" description="Notify when AnimeFillerList adds anime.">
           <Controller
             control={control}
             name="notifyNewTitles"
@@ -140,10 +137,7 @@ export function NotificationsCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow
-          label="Access token"
-          description="Optional. Only needed if your ntfy server requires a login."
-        >
+        <SettingsRow label="Access token" description="Only if your server needs a login.">
           <SecretField
             control={control}
             name="ntfyToken"
@@ -158,10 +152,7 @@ export function NotificationsCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow
-          label="Test notification"
-          description="Send a test notification to check your setup."
-        >
+        <SettingsRow label="Test notification" description="Check your setup.">
           <Button
             label={
               ntfyTestPhase === "connecting"

@@ -50,7 +50,7 @@ function ErrorPage({ error }: { error: Error }) {
         <EmptyState
           headingLevel={1}
           title="This page ran into a problem"
-          description="Mizu couldn't show this page. Your shows and settings are safe, and reloading usually fixes it."
+          description="Your shows and settings are safe. Reloading usually fixes it."
           icon={<Icon icon={CircleAlert} size="lg" color="error" />}
           actions={
             <>

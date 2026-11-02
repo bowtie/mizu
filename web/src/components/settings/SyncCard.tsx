@@ -65,10 +65,7 @@ export function SyncCard({
         <Heading level={2}>Sync</Heading>
         <Divider />
 
-        <SettingsRow
-          label="Sync interval"
-          description="How often Mizu checks for episode changes and updates Sonarr."
-        >
+        <SettingsRow label="Sync interval" description="How often Mizu syncs with Sonarr.">
           <Controller
             control={control}
             name="syncInterval"
@@ -92,7 +89,7 @@ export function SyncCard({
         {/* Multi-source artwork system */}
         <SettingsRow
           label="Artwork source"
-          description="Where artwork comes from by default. Images are saved locally, so browsing works offline."
+          description="Default artwork source. Images are stored locally for offline use."
         >
           <Controller
             control={control}
@@ -113,7 +110,7 @@ export function SyncCard({
 
         <SettingsRow
           label="TMDB API key"
-          description="Required for TMDB artwork. Get a free key at themoviedb.org."
+          description="Needed for TMDB artwork. Free at themoviedb.org."
         >
           <SecretField
             control={control}
@@ -131,7 +128,7 @@ export function SyncCard({
 
         <SettingsRow
           label="Fanart.tv API key"
-          description="Required for Fanart.tv artwork. Get a free key at fanart.tv."
+          description="Needed for Fanart.tv artwork. Free at fanart.tv."
         >
           <SecretField
             control={control}
@@ -149,7 +146,7 @@ export function SyncCard({
 
         <SettingsRow
           label="AFL refresh"
-          description="How often Mizu fetches AnimeFillerList's anime list, so new titles show up when adding anime."
+          description="How often to check AnimeFillerList for new anime."
         >
           <Controller
             control={control}
