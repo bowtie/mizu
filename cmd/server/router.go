@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"path"
 	"path/filepath"
 	stdsync "sync"
 
@@ -28,17 +29,7 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 	r.Use(instrumentRequests)
-	// Cap request bodies: every handler decodes JSON without an individual
-	// limit, so an oversized body could balloon memory. 1 MiB is far above
-	// the largest legitimate payload (settings, add-series).
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Body != nil {
-				r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
+	r.Use(limitRequestBody)
 
 	registerBuildInfo()
 
@@ -174,4 +165,35 @@ func securityHeaders(acc *accessControl) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// defaultMaxRequestBody caps request bodies: every JSON handler decodes
+// without an individual limit, so an oversized body could balloon memory.
+// 1 MiB is far above the largest legitimate JSON payload (settings,
+// add-series).
+const defaultMaxRequestBody = 1 << 20
+
+// customArtworkUploadPath matches the custom artwork upload route.
+const customArtworkUploadPath = "/api/mappings/*/artwork/custom/*"
+
+// limitRequestBody wraps every request body in a MaxBytesReader. Custom
+// artwork uploads get the larger upload cap instead of the default one:
+// a MaxBytesReader can't be loosened by an inner one, so the handler's own
+// limit would otherwise never be reachable.
+func limitRequestBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody(r))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func maxRequestBody(r *http.Request) int64 {
+	if r.Method == http.MethodPost {
+		if ok, _ := path.Match(customArtworkUploadPath, r.URL.Path); ok {
+			return maxCustomArtworkUploadBody
+		}
+	}
+	return defaultMaxRequestBody
 }

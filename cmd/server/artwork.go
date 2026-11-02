@@ -23,6 +23,10 @@ import (
 // two simultaneous refreshes waste bandwidth and race on file writes.
 var artworkRefreshing atomic.Bool
 
+// maxCustomArtworkUploadBody caps a custom artwork upload request: the image
+// limit plus headroom for multipart framing.
+const maxCustomArtworkUploadBody = artwork.MaxCustomImageBytes + (1 << 20)
+
 // handleUploadCustomArtwork stores an image the user supplied for one slot
 // (poster, banner or logo). The slot is then protected from refreshes and
 // source switches until the user removes it or picks a provider image.
@@ -50,7 +54,8 @@ func handleUploadCustomArtwork(db *database.DB, mgr *artwork.Manager) http.Handl
 
 		// Cap the whole request a little above the image limit so multipart
 		// framing fits, and so an oversize body is cut off rather than buffered.
-		r.Body = http.MaxBytesReader(w, r.Body, artwork.MaxCustomImageBytes+(1<<20))
+		// The router's body-limit middleware uses the same cap for this route.
+		r.Body = http.MaxBytesReader(w, r.Body, maxCustomArtworkUploadBody)
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
 			var tooBig *http.MaxBytesError
 			if errors.As(err, &tooBig) {
@@ -70,6 +75,12 @@ func handleUploadCustomArtwork(db *database.DB, mgr *artwork.Manager) http.Handl
 		data, err := io.ReadAll(io.LimitReader(file, artwork.MaxCustomImageBytes+1))
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "could not read the upload")
+			return
+		}
+		if len(data) > artwork.MaxCustomImageBytes {
+			// The request fit under the body cap (it allows for multipart
+			// framing) but the image itself is over the limit.
+			writeError(w, http.StatusRequestEntityTooLarge, "that image is too large")
 			return
 		}
 
