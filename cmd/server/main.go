@@ -83,6 +83,7 @@ func main() {
 	}
 
 	go startScheduler(ctx, cfg, scheduler, syncEngine)
+	go startAFLCacheRefresher(ctx, syncEngine, db, &bgWG)
 	go sweepSessions(ctx, auth.NewManager(db))
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

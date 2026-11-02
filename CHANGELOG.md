@@ -57,6 +57,11 @@ choice made at first run, and stored secrets stay on the server.
 
 ### Fixes
 
+- The AnimeFillerList show list refreshes on its own. Mizu checks shortly
+  after startup and then hourly, and fetches the list again once it's a day
+  old, so new titles reach the add dialog and new-title alerts. Before, only
+  the Settings button refreshed it: the 30-day refresh hung off an auto-match
+  path the dashboard never used.
 - Custom artwork uploads over 1 MiB are accepted again, up to the advertised
   10 MB (the global request body cap rejected them with a 413).
 - Settings reads "Never refreshed" for an AnimeFillerList cache that was never

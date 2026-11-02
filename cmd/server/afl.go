@@ -6,6 +6,7 @@ import (
 	matcherpkg "mizu/internal/matcher"
 	"mizu/internal/metrics"
 	"mizu/internal/models"
+	"mizu/internal/scraper"
 	"mizu/internal/sync"
 	"net/http"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	stdsync "sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -35,8 +37,8 @@ func handleRefreshAFLCache(engine *sync.Engine, db *database.DB, appCtx context.
 		// Ownership of the CAS flag transfers to the goroutine — it clears
 		// the flag when the scrape finishes. The scrape runs on the app
 		// context (not the request) so it survives client disconnects and
-		// the server's WriteTimeout; a full pass rate-limits at 2s per show
-		// and routinely outlives both.
+		// the server's WriteTimeout, which a slow or retried fetch can
+		// outlive.
 		bgWG.Add(1)
 		go func() {
 			defer bgWG.Done()
@@ -44,6 +46,57 @@ func handleRefreshAFLCache(engine *sync.Engine, db *database.DB, appCtx context.
 			runAFLCacheRefresh(appCtx, engine, db)
 		}()
 		writeJSON(w, http.StatusAccepted, map[string]string{"status": "refreshing"})
+	}
+}
+
+// aflCacheCheckInterval is how often the background refresher checks
+// whether the cached show list is due. A failed refresh is retried on the
+// next check.
+const aflCacheCheckInterval = time.Hour
+
+// aflCacheRefreshDue reports whether the cached show list should be
+// fetched again: it is empty or at least ShowListRefreshInterval old.
+func aflCacheRefreshDue(count int, refreshedAt, now time.Time) bool {
+	return count == 0 || refreshedAt.IsZero() || now.Sub(refreshedAt) >= scraper.ShowListRefreshInterval
+}
+
+// refreshAFLCacheIfDue runs a refresh when the cache is due and no other
+// refresh is running, reporting whether it ran one.
+func refreshAFLCacheIfDue(ctx context.Context, engine *sync.Engine, db *database.DB, bgWG *stdsync.WaitGroup) bool {
+	count, refreshedAt, err := db.GetAFLShowCacheStatus(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to read AFL cache status")
+		return false
+	}
+	// Skip once shutdown has begun, so bgWG isn't added to while main waits on it.
+	if ctx.Err() != nil || !aflCacheRefreshDue(count, refreshedAt, time.Now()) || !aflCacheRefreshing.CompareAndSwap(false, true) {
+		return false
+	}
+	bgWG.Add(1)
+	defer bgWG.Done()
+	defer aflCacheRefreshing.Store(false)
+	log.Info().Int("cached", count).Msg("AFL show list is due, refreshing")
+	runAFLCacheRefresh(ctx, engine, db)
+	return true
+}
+
+// startAFLCacheRefresher keeps the AFL show list current, so new titles
+// reach the add dialog and new-title alerts without a manual refresh. It
+// checks shortly after startup and then every aflCacheCheckInterval.
+func startAFLCacheRefresher(ctx context.Context, engine *sync.Engine, db *database.DB, bgWG *stdsync.WaitGroup) {
+	first := time.NewTimer(catchUpSyncDelay)
+	defer first.Stop()
+	ticker := time.NewTicker(aflCacheCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-first.C:
+		case <-ticker.C:
+		}
+		refreshAFLCacheIfDue(ctx, engine, db, bgWG)
 	}
 }
 
