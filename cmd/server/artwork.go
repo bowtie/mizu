@@ -60,7 +60,7 @@ func handleUploadCustomArtwork(db *database.DB, mgr *artwork.Manager) http.Handl
 			writeError(w, http.StatusBadRequest, "expected a multipart upload")
 			return
 		}
-		defer r.MultipartForm.RemoveAll()
+		defer func() { _ = r.MultipartForm.RemoveAll() }()
 		file, _, err := r.FormFile("file")
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "no image attached (field \"file\")")
