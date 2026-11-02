@@ -1,9 +1,0 @@
-{
-  "name": "mizu-dev",
-  "private": true,
-  "scripts": {
-    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
-    "dev:windows": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -SeparateWindows",
-    "build": "powershell -ExecutionPolicy Bypass -File ./scripts/build.ps1"
-  }
-}

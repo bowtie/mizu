@@ -1,51 +1,21 @@
+# Build output
 mizu
-mizu.exe
 *.exe
-vendor/
-web/node_modules/
 internal/web/dist/*
 !internal/web/dist/.gitkeep
+web/dist/
+web/node_modules/
+*.tsbuildinfo
+
+# Local data (databases hold plaintext API keys)
 *.db
-*.db.bak
 *.db-shm
 *.db-wal
-
-# Local database snapshots (plaintext API keys) kept for onboarding tests
 /backups/
-
-# Downloaded artwork (stored locally for offline browsing)
 /artwork/
 
-# Air live reload temp
-.air/
+# Local tooling
+.gocache/
+.claude/
 .DS_Store
 Thumbs.db
-.tmp/
-.worktrees/
-.gocache/
-.gotmp/
-web/.codex-tmp/
-web/.codex-cache/
-web/.bun-home/
-web/.bun-tmp/
-web/dist/
-web/.svelte-kit/
-web/build/
-
-# Root-level dev artifacts
-/node_modules/
-/build-*.txt
-/check-*.txt
-REDESIGN_PROMPT.md
-
-# Freebuff desktop app local state
-.freebuff/
-
-# Python bytecode (agent skill scripts)
-__pycache__/
-
-# Local agent tooling
-.agents/
-skills-lock.json
-.impeccable.md
-.claude/

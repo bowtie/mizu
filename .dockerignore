@@ -1,31 +1,19 @@
-# VCS
 .git
 .gitattributes
 .gitignore
 
-# Databases — contain plaintext API keys/tokens; must never enter image layers
+# Databases hold plaintext API keys; they must never enter image layers
 *.db
 *.db-shm
 *.db-wal
 backups/
+artwork/
 
-# Local build artifacts
-server.exe
+# Local artifacts
+*.exe
 .gocache/
-.gotmp/
-.worktrees/
-
-# Node / frontend tooling (frontend builds inside its own stage)
+.claude/
 node_modules/
 web/node_modules/
 web/dist/
-web/package-lock.json
-
-# Docs and local config
-docs/
-scripts/
-.air.toml
 .golangci.yml
-.agents/
-.freebuff/
-.impeccable.md
