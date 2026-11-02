@@ -132,7 +132,7 @@ func limitMiddleware(l *rateLimiter, acc *accessControl, next http.Handler) http
 		if ok, retry := l.allow(key, time.Now()); !ok {
 			secs := int(retry/time.Second) + 1
 			w.Header().Set("Retry-After", strconv.Itoa(secs))
-			writeError(w, http.StatusTooManyRequests, "too many attempts — try again later")
+			writeError(w, http.StatusTooManyRequests, "too many attempts, try again later")
 			return
 		}
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)

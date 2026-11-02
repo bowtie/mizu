@@ -126,7 +126,7 @@ export function SecuritySettingsCard() {
           authenticated: true,
           external: true,
         });
-        addNotification("Sign-in is now handled by your proxy", "success");
+        addNotification("Your proxy now handles sign-in", "success");
       } else if (mode === "open") {
         queryClient.setQueryData(["authStatus"], {
           configured: true,
@@ -272,9 +272,9 @@ export function SecuritySettingsCard() {
               isDisabled={submitting}
             />
             <Text type="supporting" color="secondary">
-              Reverse proxies in front of Mizu, as IP addresses or networks. Their forwarded client
-              addresses are trusted, and with a sign-in proxy they are the only addresses Mizu
-              answers. This browser reaches Mizu from {access.client_address}
+              Reverse proxies in front of Mizu, as IP addresses or networks. Mizu trusts the client
+              addresses they forward, and with a sign-in proxy it answers only them. This browser
+              reaches Mizu from {access.client_address}
               {access.via_trusted_proxy ? ", a trusted proxy." : "."}
             </Text>
             {needsNewPassword && newPasswordFields}

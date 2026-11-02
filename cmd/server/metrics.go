@@ -71,7 +71,7 @@ func metricsAuth(mgr *auth.Manager, acc *accessControl, limiter *rateLimiter, ne
 		key := acc.get().clientIP(r).String()
 		if allowed, retry := limiter.allow(key, time.Now()); !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(int(retry/time.Second)+1))
-			writeError(w, http.StatusTooManyRequests, "too many attempts — try again later")
+			writeError(w, http.StatusTooManyRequests, "too many attempts, try again later")
 			return
 		}
 		if err := mgr.VerifyCached(r.Context(), password); err != nil {

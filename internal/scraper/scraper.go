@@ -213,7 +213,7 @@ func (s *Scraper) doRefreshAllShows(ctx context.Context) ([]models.AFLShow, []st
 	// structure (redesign, bot-block interstitial) — treat it as an error
 	// instead of writing an empty cache that would wipe coverage.
 	if len(shows) == 0 {
-		return nil, nil, fmt.Errorf("parsed 0 shows from %s — AnimeFillerList layout may have changed", s.baseURL+"/shows")
+		return nil, nil, fmt.Errorf("parsed 0 shows from %s (AnimeFillerList's layout may have changed)", s.baseURL+"/shows")
 	}
 
 	log.Info().Int("count", len(shows)).Msg("fetched show list")
@@ -301,7 +301,7 @@ func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []m
 	// episode types survive. A table that parses to zero rows is left
 	// alone; that's unusual but not structurally impossible.
 	if doc.Find("table.EpisodeList").Length() == 0 {
-		return "", nil, fmt.Errorf("episode list table not found for %s — AnimeFillerList layout may have changed", slug)
+		return "", nil, fmt.Errorf("episode list table not found for %s (AnimeFillerList's layout may have changed)", slug)
 	}
 
 	log.Info().Str("show", showTitle).Int("episodes", len(episodes)).Msg("parsed episode data")

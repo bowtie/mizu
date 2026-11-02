@@ -337,9 +337,7 @@ export function ActivityPage() {
                             className="activity-error-row activity-error-row-center"
                           >
                             <TriangleAlert size={14} />
-                            <Text type="supporting">
-                              This run completed with errors that need attention.
-                            </Text>
+                            <Text type="supporting">This run finished with errors.</Text>
                           </HStack>
                         )}
 

@@ -95,16 +95,16 @@ func humanizeErrString(msg string) string {
 	msg = strings.ReplaceAll(msg, "dial tcp: i/o timeout", "connection timed out")
 	msg = strings.ReplaceAll(msg, "context deadline exceeded", "request timed out")
 	if strings.Contains(msg, "returned 401") {
-		return "unauthorized — check your API key"
+		return "unauthorized (check your API key)"
 	}
 	if strings.Contains(msg, "returned 403") {
-		return "forbidden — check your API key and permissions"
+		return "forbidden (check your API key and permissions)"
 	}
 	if strings.Contains(msg, "returned 404") {
-		return "not found — check the server URL"
+		return "not found (check the server URL)"
 	}
 	if strings.Contains(msg, "returned 500") || strings.Contains(msg, "returned 502") || strings.Contains(msg, "returned 503") {
-		return "server error — the remote service may be down"
+		return "server error (the remote service may be down)"
 	}
 	return msg
 }

@@ -134,7 +134,7 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			// exceeding the HTTP timeout. Return a clear error instead.
 			cacheCount, _, cacheErr := db.GetAFLShowCacheStatus(r.Context())
 			if cacheErr != nil || cacheCount == 0 {
-				writeError(w, http.StatusConflict, "AFL cache is empty — refresh the AFL cache before using auto-match")
+				writeError(w, http.StatusConflict, "AFL cache is empty: refresh it before using auto-match")
 				return
 			}
 			mapping, err := syncEngine.AutoMatchSeries(r.Context(), req.SonarrSeriesID)

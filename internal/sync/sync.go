@@ -291,7 +291,7 @@ func (e *Engine) runSyncClaimed(ctx context.Context, trigger string) error {
 				MappingID:   res.mapping.ID,
 				SonarrTitle: res.mapping.SonarrTitle,
 				Status:      "skipped",
-				Summary:     "Skipped — modified during sync",
+				Summary:     "Skipped: modified during sync",
 			})
 			continue
 		}
