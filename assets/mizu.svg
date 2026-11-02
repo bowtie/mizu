@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Mizu">
+  <rect width="128" height="128" rx="28" fill="#1a1b26"/>
+  <path d="M20 46c10-14 20-14 30 0s20 14 30 0 18-12 28-2" fill="none" stroke="#bb9af7" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
+  <path d="M20 70c10-14 20-14 30 0s20 14 30 0 18-12 28-2" fill="none" stroke="#7aa2f7" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 94c10-14 20-14 30 0s20 14 30 0 18-12 28-2" fill="none" stroke="#7dcfff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
+</svg>

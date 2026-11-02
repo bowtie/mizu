@@ -1,5 +1,52 @@
 # Changelog
 
+## [Unreleased]
+
+First public release. Covers everything since 0.2.0.
+
+### Security
+
+- Selectable auth modes: Mizu's own password, or none when an auth proxy in
+  front handles sign-in. Stored API keys are no longer sent to the browser,
+  and `maskKey` reveals no characters of a key.
+- Works behind reverse proxies and auth proxies: `X-Forwarded-Host` and
+  `X-Forwarded-Proto` handling for the same-origin guard and `Secure`
+  cookies, and `X-Forwarded-For` trusted only from private addresses.
+
+### Notifications
+
+- Per-show mute (bell in the show toolbar). Muted shows are left out of sync
+  pushes, and a run that only touched muted shows sends nothing. Mute
+  round-trips through config backup and import.
+- New-title alerts: shows that newly appear on AnimeFillerList are logged to
+  activity and can send one ntfy push (`ntfy_notify_new_titles`, off by
+  default).
+
+### Artwork
+
+- Redesigned artwork dialog with slot tabs, a source switcher, and a footer
+  with automatic source, Refresh and Done.
+- Near-duplicate candidates are merged by perceptual hash.
+- Custom uploads per slot (JPG, PNG, GIF, WebP, up to 10 MB) that survive
+  refreshes and a switch to Sonarr.
+- Artwork URLs are versioned so changed images are not served stale.
+
+### Frontend
+
+- First-run welcome flow, error retry, settings save bar, and accessibility
+  and small-screen fixes.
+- TanStack Query is the only client cache. Routes and dialogs are lazy-loaded
+  with prefetch, service worker offline caching, and a self-hosted font.
+- `ShowDetailPage`, `SettingsPage` and `AddAnimeDialog` split into components.
+
+### Operations
+
+- Catch-up sync at startup and a last-synced indicator.
+- Go modules, web dependencies and the toolchain bumped (Go 1.27).
+- CI for vet, lint, race tests, web checks and the Docker build, plus a
+  tag-triggered release workflow that publishes a multi-arch image to GHCR.
+- MIT license, security policy, and the Figtree OFL notice.
+
 ## [0.2.0] - 2026-08-24
 
 Security hardening and reliability pass: dashboard authentication, scraper

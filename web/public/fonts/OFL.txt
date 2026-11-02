@@ -1,0 +1,7 @@
+Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://openfontlicense.org
+
+The full license text is published at:
+https://scripts.sil.org/OFL
