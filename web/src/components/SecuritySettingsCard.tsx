@@ -91,7 +91,7 @@ export function SecuritySettingsCard({
       return false;
     }
     if (newPassword !== confirmPassword) {
-      addNotification("Passwords do not match", "error");
+      addNotification("Passwords don't match", "error");
       return false;
     }
     return true;
@@ -101,10 +101,10 @@ export function SecuritySettingsCard({
     run(async () => {
       if (!validNew()) return;
       await changePassword(currentPassword, newPassword);
-      addNotification("Password changed — please sign in again", "success");
+      addNotification("Password changed. Please sign in again.", "success");
       queryClient.clear();
       navigate("/login", { replace: true });
-    }, "Failed to change password");
+    }, "Couldn't change password");
 
   const cancel = (
     <Button variant="ghost" label="Cancel" isDisabled={submitting} onClick={() => setPanel(null)} />

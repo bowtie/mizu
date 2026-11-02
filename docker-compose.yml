@@ -7,7 +7,7 @@ services:
   mizu:
     build: .
     # Or use the published image:
-    # image: ghcr.io/OWNER/mizu:latest  # replace OWNER with the GitHub account hosting the repo
+    # image: ghcr.io/bowtie/mizu:latest
     container_name: mizu
     restart: unless-stopped
     ports:

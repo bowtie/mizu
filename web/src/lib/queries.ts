@@ -17,9 +17,7 @@ import {
   getArtworkProviders,
   getSyncLogs,
   getSonarrAddOptions,
-  getArtworkRefreshStatus,
   getAflCacheRefreshStatus,
-  refreshAllArtwork,
   refreshAflCache,
   addSonarrSeries,
   markManualMatchPending,
@@ -67,7 +65,6 @@ export const queryKeys = {
   syncLogs: (limit: number, offset: number) => ["syncLogs", limit, offset] as const,
   syncLogPages: (pageSize: number) => ["syncLogs", "pages", pageSize] as const,
   artworkProviders: ["artworkProviders"] as const,
-  artworkRefreshStatus: ["artworkRefreshStatus"] as const,
   aflCacheRefreshStatus: ["aflCacheRefreshStatus"] as const,
 };
 
@@ -328,15 +325,6 @@ function useRefreshJob({ queryKey, getStatus, trigger, onFinished }: RefreshJobO
     running: running || startMutation.isPending,
     start: startMutation.mutateAsync,
   };
-}
-
-export function useArtworkRefreshJob(onFinished: (status: RefreshJobStatus) => void) {
-  return useRefreshJob({
-    queryKey: queryKeys.artworkRefreshStatus,
-    getStatus: getArtworkRefreshStatus,
-    trigger: refreshAllArtwork,
-    onFinished,
-  });
 }
 
 export function useAflCacheRefreshJob(onFinished: (status: RefreshJobStatus) => void) {

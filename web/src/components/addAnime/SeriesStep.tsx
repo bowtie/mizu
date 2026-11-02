@@ -41,7 +41,7 @@ export function SeriesStep({
   ) : allSeries.length === 0 ? (
     <EmptyState
       title="No anime found in Sonarr"
-      description="Sonarr returned no anime series for this library."
+      description="Sonarr doesn't have any anime series yet."
       icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
     />
   ) : (
@@ -57,7 +57,7 @@ export function SeriesStep({
       {filteredSeriesLibrary.length === 0 ? (
         <EmptyState
           title="No anime match that search"
-          description="Try a different title, year, or jump into the cached AFL list and add it from there."
+          description="Try a different title or year, or add it from the AFL list instead."
           icon={<Icon icon={Search} size="lg" color="secondary" />}
           actions={
             <Button

@@ -235,10 +235,6 @@ export function refreshAllArtwork(): Promise<{ status: string }> {
   return request<{ status: string }>("POST", "/artwork/refresh-all");
 }
 
-export function getArtworkRefreshStatus(): Promise<{ refreshing: boolean }> {
-  return request<{ refreshing: boolean }>("GET", "/artwork/refresh-status");
-}
-
 export function setEpisodeMonitor(
   showId: string | number,
   epId: string | number,

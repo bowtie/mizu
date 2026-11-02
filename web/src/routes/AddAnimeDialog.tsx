@@ -117,7 +117,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     } catch (err: unknown) {
       if (reqId !== suggestReqId.current) return;
       dispatch({ type: "SET", payload: { displayedMatches: [], manualSearchVisible: true } });
-      addNotification("Failed to load AFL suggestions: " + errorMessage(err), "error");
+      addNotification("Couldn't load AFL suggestions: " + errorMessage(err), "error");
     }
     if (reqId === suggestReqId.current) {
       dispatch({ type: "SET", payload: { matchLoading: false } });
@@ -201,7 +201,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         }
         return; // declined — no error toast
       }
-      addNotification("Failed to sync anime: " + errorMessage(err), "error");
+      addNotification("Couldn't sync anime: " + errorMessage(err), "error");
     } finally {
       dispatch({ type: "SET", payload: { confirming: false } });
     }
@@ -228,7 +228,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
         },
       });
     } catch (err: unknown) {
-      addNotification("Failed to persist manual match reminder: " + errorMessage(err), "error");
+      addNotification("Couldn't save the manual match reminder: " + errorMessage(err), "error");
     }
   };
 
@@ -371,7 +371,7 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
       }
       await handleKeepSonarrOnly();
     } catch (err: unknown) {
-      addNotification("Failed to add anime to Sonarr: " + errorMessage(err), "error");
+      addNotification("Couldn't add anime to Sonarr: " + errorMessage(err), "error");
     } finally {
       dispatch({ type: "SET", payload: { sonarrAdding: false } });
     }

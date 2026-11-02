@@ -59,7 +59,7 @@ const VirtualEpisodeRow = memo(function VirtualEpisodeRow({
   return (
     <div className="virtual-episode-row" role="listitem">
       <div className="virtual-episode-row-content">
-        <span className="virtual-episode-label">{ep.title || "—"}</span>
+        <span className="virtual-episode-label">{ep.title || "Untitled"}</span>
         <span className="virtual-episode-desc">Episode {epNum}</span>
       </div>
       <HStack gap={4} align="center">

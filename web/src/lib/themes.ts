@@ -28,12 +28,12 @@ export const themeMetas: ThemeMeta[] = [
   {
     id: "flexoki",
     label: "Flexoki",
-    description: "Steph Ango — warm paper tones, inky text, muted accents",
+    description: "Warm paper tones and inky text, from Steph Ango",
   },
   {
     id: "tokyo-night",
     label: "Tokyo Night",
-    description: "folke/tokyonight.nvim — deep navy bg, blue/purple accents",
+    description: "Deep navy with blue and purple accents, from folke/tokyonight.nvim",
   },
 ];
 
@@ -69,7 +69,7 @@ export async function loadThemeDef(themeId: string): Promise<DefinedTheme> {
 export const defaultTheme: ThemeOption = {
   id: "flexoki",
   label: "Flexoki",
-  description: "Steph Ango — warm paper tones, inky text, muted accents",
+  description: "Warm paper tones and inky text, from Steph Ango",
   theme: flexokiTheme,
 };
 

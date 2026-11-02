@@ -2,17 +2,7 @@ import { HStack } from "@astryxdesign/core/HStack";
 import { Button } from "@astryxdesign/core/Button";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { InputGroup, InputGroupText } from "@astryxdesign/core/InputGroup";
-import {
-  Trash2,
-  Save,
-  Check,
-  Bot,
-  Minus,
-  Plus,
-  Bell,
-  BellOff,
-  Palette,
-} from "lucide-react";
+import { Trash2, Save, Check, Bot, Minus, Plus, Bell, BellOff, Palette } from "lucide-react";
 
 interface ShowActionsBarProps {
   watermarkAuto: boolean;
@@ -130,11 +120,7 @@ export function ShowActionsBar({
               size="md"
               isIconOnly
               icon={notificationsMuted ? <BellOff size={16} /> : <Bell size={16} />}
-              tooltip={
-                notificationsMuted
-                  ? "Notifications muted — click to unmute"
-                  : "Notifications on — click to mute"
-              }
+              tooltip={notificationsMuted ? "Click to unmute" : "Click to mute"}
               isDisabled={notificationsSaving}
               onClick={() => onToggleMuted()}
               data-cuelume-toggle

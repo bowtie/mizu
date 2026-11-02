@@ -90,7 +90,7 @@ export function SyncCard({
         {/* Multi-source artwork system */}
         <SettingsRow
           label="Artwork source"
-          description="Default provider for fetching show artwork. Images are downloaded and stored locally so browsing works offline."
+          description="Where artwork comes from by default. Images are saved locally, so browsing works offline."
         >
           <Controller
             control={control}

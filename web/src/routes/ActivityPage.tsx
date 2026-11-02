@@ -43,31 +43,31 @@ const SYNC_START_GRACE_MS = 10_000;
 function statusIcon(status: string | undefined | null) {
   switch (status) {
     case "success":
-      return { icon: <Check size={14} />, className: "activity-status-icon-success" };
+      return { icon: <Check size={18} />, className: "activity-status-icon-success" };
     case "partial":
-      return { icon: <TriangleAlert size={14} />, className: "activity-status-icon-partial" };
+      return { icon: <TriangleAlert size={18} />, className: "activity-status-icon-partial" };
     case "failed":
-      return { icon: <CircleAlert size={14} />, className: "activity-status-icon-failed" };
+      return { icon: <CircleAlert size={18} />, className: "activity-status-icon-failed" };
     case "running":
       return {
-        icon: <Loader2 size={14} className="spin" />,
+        icon: <Loader2 size={18} className="spin" />,
         className: "activity-status-icon-running",
       };
     default:
-      return { icon: <CircleDot size={14} />, className: "activity-status-icon-neutral" };
+      return { icon: <CircleDot size={18} />, className: "activity-status-icon-neutral" };
   }
 }
 
 function itemStatusIcon(status: string | undefined | null) {
   switch (status) {
     case "success":
-      return { icon: <Check size={12} />, className: "activity-status-icon-success" };
+      return { icon: <Check size={14} />, className: "activity-status-icon-success" };
     case "failed":
-      return { icon: <CircleAlert size={12} />, className: "activity-status-icon-failed" };
+      return { icon: <CircleAlert size={14} />, className: "activity-status-icon-failed" };
     case "new_in_cache":
-      return { icon: <CircleDot size={12} />, className: "activity-status-icon-partial" };
+      return { icon: <CircleDot size={14} />, className: "activity-status-icon-partial" };
     default:
-      return { icon: <CircleDot size={12} />, className: "activity-status-icon-neutral" };
+      return { icon: <CircleDot size={14} />, className: "activity-status-icon-neutral" };
   }
 }
 
@@ -111,7 +111,7 @@ export function ActivityPage() {
 
   const loadError = logsQuery.error;
   useEffect(() => {
-    if (loadError) addNotification("Failed to load activity: " + errorMessage(loadError), "error");
+    if (loadError) addNotification("Couldn't load activity: " + errorMessage(loadError), "error");
   }, [loadError, addNotification]);
 
   // When a run finishes, everything it touched is stale: the library, the
@@ -134,7 +134,7 @@ export function ActivityPage() {
       addNotification("Sync started", "info");
       setPollUntil(Date.now() + SYNC_START_GRACE_MS);
     } catch (err: unknown) {
-      addNotification("Failed to trigger sync: " + errorMessage(err), "error");
+      addNotification("Couldn't start the sync: " + errorMessage(err), "error");
     }
     setSyncing(false);
   };
@@ -193,7 +193,7 @@ export function ActivityPage() {
         ) : logs.length === 0 ? (
           <EmptyState
             title="No sync activity yet"
-            description="Run a sync to start building the activity history for your anime library."
+            description="Run a sync and its history will show up here."
             icon={<Icon icon={History} size="lg" color="secondary" />}
             actions={
               <Button
@@ -237,7 +237,7 @@ export function ActivityPage() {
             {filteredLogs.length === 0 ? (
               <EmptyState
                 title="No matching logs"
-                description="Try adjusting your filters or search query."
+                description="Try a different filter or search."
                 icon={<Icon icon={Search} size="lg" color="secondary" />}
                 actions={
                   <Button
@@ -331,7 +331,11 @@ export function ActivityPage() {
 
                         {/* Run-level errors shown only when not expanded (expanded view shows them below) */}
                         {log.errors && !isExpanded && (
-                          <HStack gap={2} align="start" className="activity-error-row">
+                          <HStack
+                            gap={2}
+                            align="center"
+                            className="activity-error-row activity-error-row-center"
+                          >
                             <TriangleAlert size={14} />
                             <Text type="supporting">
                               This run completed with errors that need attention.

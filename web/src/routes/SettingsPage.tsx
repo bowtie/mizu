@@ -203,7 +203,7 @@ export function SettingsPage() {
     try {
       applySettings(await queryClient.fetchQuery({ ...settingsQueryOptions, staleTime: 0 }));
     } catch (err: unknown) {
-      addNotification("Failed to load settings: " + errorMessage(err), "error");
+      addNotification("Couldn't load settings: " + errorMessage(err), "error");
     }
   }, [applySettings, addNotification, queryClient]);
 
@@ -216,7 +216,7 @@ export function SettingsPage() {
 
   const loadError = settingsQuery.error;
   useEffect(() => {
-    if (loadError) addNotification("Failed to load settings: " + errorMessage(loadError), "error");
+    if (loadError) addNotification("Couldn't load settings: " + errorMessage(loadError), "error");
   }, [loadError, addNotification]);
 
   // Warn user when navigating away with unsaved changes
@@ -294,20 +294,20 @@ export function SettingsPage() {
       // If the global artwork source changed, trigger a background refresh
       // of all shows so their local artwork matches the new default.
       if (sourceChanged) {
-        addNotification("Refreshing all artwork from new source...", "info", 6000);
+        addNotification("Refreshing artwork from the new source...", "info", 6000);
         refreshAllArtwork()
           .then(() => {
-            addNotification("Artwork refresh triggered — updates will appear shortly", "info");
+            addNotification("Artwork refresh started. Updates will appear shortly.", "info");
           })
           .catch((err: unknown) => {
-            addNotification("Background artwork refresh failed: " + errorMessage(err), "error");
+            addNotification("Artwork refresh failed: " + errorMessage(err), "error");
           });
       }
       setSavedFlash(true);
       if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
       savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
     } catch (err: unknown) {
-      addNotification("Failed to save settings: " + errorMessage(err), "error");
+      addNotification("Couldn't save settings: " + errorMessage(err), "error");
     }
     setSaving(false);
   };
@@ -334,7 +334,7 @@ export function SettingsPage() {
         configured: false,
         authenticated: false,
       });
-      addNotification("Password turned off — the dashboard is now open", "success");
+      addNotification("Password turned off. The dashboard is now open.", "success");
     }
     resetSecurityIntent();
   };
@@ -346,7 +346,7 @@ export function SettingsPage() {
         return;
       }
       if (securityPassword !== securityConfirm) {
-        addNotification("Passwords do not match", "error");
+        addNotification("Passwords don't match", "error");
         return;
       }
     }
@@ -361,7 +361,7 @@ export function SettingsPage() {
         if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
         savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
       } catch (err: unknown) {
-        addNotification("Failed to update password: " + errorMessage(err), "error");
+        addNotification("Couldn't update password: " + errorMessage(err), "error");
       }
       setSaving(false);
     }
@@ -401,7 +401,7 @@ export function SettingsPage() {
         throw new Error(result?.error || "Connection failed");
       }
       setTestPhase("success");
-      addNotification("Sonarr connection successful", "success");
+      addNotification("Connected to Sonarr", "success");
       scheduleReset(2000);
     } catch (err: unknown) {
       const elapsed = Date.now() - startTime;
@@ -431,7 +431,7 @@ export function SettingsPage() {
     try {
       await aflJob.start();
     } catch (err: unknown) {
-      addNotification("Failed to refresh AFL cache: " + errorMessage(err), "error");
+      addNotification("Couldn't refresh AFL cache: " + errorMessage(err), "error");
     }
   };
 
@@ -447,7 +447,7 @@ export function SettingsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: unknown) {
-      addNotification("Failed to export config: " + errorMessage(err), "error");
+      addNotification("Couldn't export config: " + errorMessage(err), "error");
     }
   };
 
@@ -459,7 +459,7 @@ export function SettingsPage() {
       try {
         parsed = JSON.parse(text);
       } catch {
-        addNotification("That file isn't valid JSON — pick a Mizu config export", "error");
+        addNotification("That file isn't valid JSON. Pick a Mizu config export.", "error");
         return;
       }
       const proceed = window.confirm(
@@ -476,7 +476,7 @@ export function SettingsPage() {
       await reloadSettings();
       void queryClient.invalidateQueries({ queryKey: queryKeys.shows });
     } catch (err: unknown) {
-      addNotification("Failed to import config: " + errorMessage(err), "error");
+      addNotification("Couldn't import config: " + errorMessage(err), "error");
     } finally {
       setImportingConfig(false);
       if (importFileRef.current) importFileRef.current.value = "";
@@ -511,7 +511,7 @@ export function SettingsPage() {
         throw new Error(result?.error || "Test failed");
       }
       setNtfyTestPhase("success");
-      addNotification("ntfy notification sent successfully", "success");
+      addNotification("Test notification sent", "success");
       if (ntfyResetTimer.current) clearTimeout(ntfyResetTimer.current);
       ntfyResetTimer.current = setTimeout(() => setNtfyTestPhase("idle"), 2000);
     } catch (err: unknown) {

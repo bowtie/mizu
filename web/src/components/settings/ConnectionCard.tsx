@@ -45,7 +45,7 @@ export function ConnectionCard({
 
         <SettingsRow
           label="Sonarr URL"
-          description="Base URL of your Sonarr instance."
+          description="The address of your Sonarr server."
           error={sonarrUrlError}
         >
           <Controller
@@ -86,7 +86,7 @@ export function ConnectionCard({
 
         <SettingsRow
           label="Test connection"
-          description="Check that Mizu can reach Sonarr with the URL and API key above."
+          description="Check that Mizu can reach Sonarr with the details above."
         >
           <Button
             label={

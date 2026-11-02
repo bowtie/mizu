@@ -38,6 +38,8 @@ interface EpisodeListSectionProps {
   onRetryEpisodes: () => void;
   hasShowData: boolean;
   groupedBySeason: SeasonGroup[];
+  /** True while the deferred list lags behind the selected filter. */
+  listStale: boolean;
   epStats: { total: number; canon: number; anime: number; mixed: number; filler: number };
   activeTypeFilter: string;
   syncingEps: Record<string, boolean>;
@@ -66,7 +68,7 @@ const EpisodeListItem = memo(function EpisodeListItem({
   return (
     <ListItem
       key={`${groupSeason}-${epNum}`}
-      label={ep.title || "—"}
+      label={ep.title || "Untitled"}
       description={`Episode ${epNum}`}
       endContent={
         <HStack gap={4} align="center">
@@ -107,6 +109,7 @@ export const EpisodeListSection = memo(function EpisodeListSection({
   onRetryEpisodes,
   hasShowData,
   groupedBySeason,
+  listStale,
   epStats,
   activeTypeFilter,
   syncingEps,
@@ -149,29 +152,36 @@ export const EpisodeListSection = memo(function EpisodeListSection({
     });
   }, [groupedBySeason]);
 
+  // Types with no episodes are not offered as tabs. The active one stays so
+  // the control never loses its selection.
+  const typeTabs = [
+    {
+      value: "canon",
+      label: "Manga",
+      count: isMobile ? epStats.canon + epStats.anime : epStats.canon,
+      icon: <BookOpen size={16} />,
+    },
+    { value: "anime_canon", label: "Anime", count: epStats.anime, icon: <Tv size={16} /> },
+    { value: "mixed_canon", label: "Mixed", count: epStats.mixed, icon: <Shuffle size={16} /> },
+    {
+      value: "filler",
+      label: "Filler",
+      count: epStats.filler,
+      icon: <SkipForward size={16} />,
+    },
+  ].filter((tab) => tab.count > 0 || tab.value === activeTypeFilter);
+
   const filterItems = (
     <>
       <SegmentedControlItem value="all" label={`All (${epStats.total})`} />
-      <SegmentedControlItem
-        value="canon"
-        label={`Manga (${isMobile ? epStats.canon + epStats.anime : epStats.canon})`}
-        icon={<BookOpen size={16} />}
-      />
-      <SegmentedControlItem
-        value="anime_canon"
-        label={`Anime (${epStats.anime})`}
-        icon={<Tv size={16} />}
-      />
-      <SegmentedControlItem
-        value="mixed_canon"
-        label={`Mixed (${epStats.mixed})`}
-        icon={<Shuffle size={16} />}
-      />
-      <SegmentedControlItem
-        value="filler"
-        label={`Filler (${epStats.filler})`}
-        icon={<SkipForward size={16} />}
-      />
+      {typeTabs.map((tab) => (
+        <SegmentedControlItem
+          key={tab.value}
+          value={tab.value}
+          label={`${tab.label} (${tab.count})`}
+          icon={tab.icon}
+        />
+      ))}
     </>
   );
 
@@ -209,7 +219,7 @@ export const EpisodeListSection = memo(function EpisodeListSection({
             />
           }
         />
-      ) : episodesLoading || (epStats.total > 0 && groupedBySeason.length === 0) ? (
+      ) : episodesLoading || listStale ? (
         hasShowData ? (
           /* Minimal loader — show data is already rendered, just waiting
              for episodes to arrive from prefetch/network. */

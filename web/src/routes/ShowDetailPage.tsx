@@ -135,7 +135,7 @@ export function ShowDetailPage() {
 
   const showError = showQuery.error;
   useEffect(() => {
-    if (showError) addNotification("Failed to load anime: " + errorMessage(showError), "error");
+    if (showError) addNotification("Couldn't load anime: " + errorMessage(showError), "error");
   }, [showError, addNotification]);
 
   // ── Tracking rules form ──
@@ -336,7 +336,7 @@ export function ShowDetailPage() {
       });
       await reloadArtwork();
       addNotification(`Artwork ${slot} updated`, "success");
-    }, "Failed to save artwork");
+    }, "Couldn't save artwork");
 
   const handleUploadCustom = (slot: ArtworkSlot, file: File) =>
     withArtworkBusy(async () => {
@@ -348,7 +348,7 @@ export function ShowDetailPage() {
       await uploadCustomArtwork(showId, slot, file);
       await reloadArtwork();
       addNotification(`Your ${slot} is set`, "success");
-    }, "Failed to upload image");
+    }, "Couldn't upload image");
 
   const handleRemoveCustom = (slot: ArtworkSlot) =>
     withArtworkBusy(async () => {
@@ -358,7 +358,7 @@ export function ShowDetailPage() {
       await refreshArtwork(showId);
       await reloadArtwork();
       addNotification(`Removed your ${slot}`, "success");
-    }, "Failed to remove image");
+    }, "Couldn't remove image");
 
   const handleRefreshArtwork = (source?: string) =>
     withArtworkBusy(async () => {
@@ -375,7 +375,7 @@ export function ShowDetailPage() {
           "warning",
         );
       }
-    }, "Failed to fetch artwork");
+    }, "Couldn't fetch artwork");
 
   const handleArtworkSourceChange = (source: string) =>
     withArtworkBusy(async () => {
@@ -396,7 +396,7 @@ export function ShowDetailPage() {
       } else {
         addNotification(`No artwork found from ${source}`, "warning");
       }
-    }, "Failed to set artwork source");
+    }, "Couldn't set artwork source");
 
   // ── Save / delete ──
 
@@ -421,7 +421,7 @@ export function ShowDetailPage() {
       if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
       savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
     } catch (err: unknown) {
-      addNotification("Failed to save anime: " + errorMessage(err), "error");
+      addNotification("Couldn't save anime: " + errorMessage(err), "error");
     }
   });
 
@@ -436,7 +436,7 @@ export function ShowDetailPage() {
         "success",
       );
     } catch (err: unknown) {
-      addNotification("Failed to update notifications: " + errorMessage(err), "error");
+      addNotification("Couldn't update notifications: " + errorMessage(err), "error");
     }
   };
 
@@ -448,7 +448,7 @@ export function ShowDetailPage() {
       setShowDeleteDialog(false);
       navigate("/shows");
     } catch (err: unknown) {
-      addNotification("Failed to remove anime: " + errorMessage(err), "error");
+      addNotification("Couldn't remove anime: " + errorMessage(err), "error");
     }
   };
 
@@ -470,7 +470,7 @@ export function ShowDetailPage() {
           "success",
         );
       } catch (err: unknown) {
-        addNotification("Failed to update episode: " + errorMessage(err), "error");
+        addNotification("Couldn't update episode: " + errorMessage(err), "error");
       }
       setSyncingEps((prev) => {
         const next = { ...prev };
@@ -557,6 +557,7 @@ export function ShowDetailPage() {
               onRetryEpisodes={retryEpisodes}
               hasShowData={!!show}
               groupedBySeason={groupedBySeason}
+              listStale={deferredFilteredEpisodes !== filteredEpisodes}
               epStats={epStats}
               activeTypeFilter={activeTypeFilter}
               syncingEps={syncingEps}

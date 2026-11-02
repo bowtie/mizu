@@ -90,7 +90,10 @@ vi.mock("../components/ArtworkPickerDialog", () => ({
       ),
       createElement(
         "button",
-        { "data-testid": "picker-upload-huge", onClick: () => props.onUploadCustom("poster", bigFile()) },
+        {
+          "data-testid": "picker-upload-huge",
+          onClick: () => props.onUploadCustom("poster", bigFile()),
+        },
         "UploadHuge",
       ),
       createElement(
@@ -352,7 +355,9 @@ describe("ShowDetailPage", () => {
     await flush(2);
 
     // The dialog is told which slots already hold an upload.
-    expect(container.querySelector("[data-custom-slots]")?.getAttribute("data-custom-slots")).toBe("poster");
+    expect(container.querySelector("[data-custom-slots]")?.getAttribute("data-custom-slots")).toBe(
+      "poster",
+    );
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="picker-upload"]')!.click();

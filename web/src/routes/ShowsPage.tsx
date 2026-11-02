@@ -20,7 +20,6 @@ import {
   Search,
   Waves,
   CircleAlert,
-  RefreshCw,
   Check,
   ArrowDownUp,
   LayoutGrid,
@@ -34,7 +33,6 @@ import {
   settingsQuery,
   sonarrAddOptionsQuery,
   sonarrSeriesQuery,
-  useArtworkRefreshJob,
   useShows,
   useSettings,
   useSonarrSeries,
@@ -50,6 +48,7 @@ import { prefetchDetailChunk, prefetchAddDialogChunk } from "../lib/chunkPrefetc
 import type { SelectOption, Settings, Show, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { syncStateBadge } from "../lib/fox";
+import { isUnsafeMatch } from "../components/addAnime/matchHelpers";
 import {
   addWizardReducer,
   INITIAL_WIZARD,
@@ -106,12 +105,6 @@ export function ShowsPage() {
     () => Object.fromEntries(allSeries.map((s) => [s.id, s])) as Record<number, SonarrSeries>,
     [allSeries],
   );
-
-  // ── Artwork refresh-all ──
-  const artworkJob = useArtworkRefreshJob(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.shows });
-    addNotification("Artwork refresh complete", "success");
-  });
 
   // ── Derived values ──
 
@@ -184,7 +177,7 @@ export function ShowsPage() {
     [addSeriesLibrary, w.seriesQuery, mappedSeriesIds],
   );
 
-  const activeWizardSteps = getWizardSteps(w.addStep);
+  const activeWizardSteps = getWizardSteps(w.addStep, isUnsafeMatch(w.selectedAfl));
   const currentStepIndex = activeWizardSteps.findIndex((s) => s.key === w.addStep);
 
   function posterUrl(show: Show, series: SonarrSeries | null | undefined): string {
@@ -276,15 +269,6 @@ export function ShowsPage() {
     [queryClient],
   );
 
-  const handleRefreshAllArtwork = async () => {
-    try {
-      await artworkJob.start();
-      addNotification("Artwork refresh triggered — waiting for completion...", "info", 6000);
-    } catch (err: unknown) {
-      addNotification("Artwork refresh failed: " + errorMessage(err), "error");
-    }
-  };
-
   const resetAddRuleDefaults = (current: Settings | null = settings) => {
     dispatch({
       type: "SET",
@@ -315,7 +299,7 @@ export function ShowsPage() {
       }
       dispatch({ type: "SET", payload });
     } catch (err: unknown) {
-      addNotification("Failed to load Sonarr add options: " + errorMessage(err), "error");
+      addNotification("Couldn't load Sonarr add options: " + errorMessage(err), "error");
     }
   };
 
@@ -343,7 +327,7 @@ export function ShowsPage() {
     try {
       await seriesLoad;
     } catch (err: unknown) {
-      addNotification("Failed to load Sonarr series: " + errorMessage(err), "error");
+      addNotification("Couldn't load Sonarr series: " + errorMessage(err), "error");
     }
     dispatch({ type: "SET", payload: { sonarrLoading: false } });
   };
@@ -394,15 +378,6 @@ export function ShowsPage() {
           </VStack>
           <HStack gap={2} align="center">
             <Button
-              label={artworkJob.running ? "Refreshing..." : "Refresh artwork"}
-              variant="secondary"
-              size="md"
-              icon={<RefreshCw size={16} className={artworkJob.running ? "spin" : ""} />}
-              onClick={handleRefreshAllArtwork}
-              isDisabled={artworkJob.running || loading}
-              data-cuelume-press
-            />
-            <Button
               label="Add anime"
               variant="primary"
               icon={<Plus size={16} />}
@@ -430,7 +405,7 @@ export function ShowsPage() {
             <DropdownMenu
               button={{
                 label: sortOptions.find((o) => o.value === sortBy)?.label ?? "Sort",
-                size: "lg",
+                size: "md",
                 icon: <ArrowDownUp size={16} />,
               }}
               items={sortOptions.map((o) => ({
@@ -444,7 +419,7 @@ export function ShowsPage() {
             <Button
               label={viewMode === "poster" ? "Banner view" : "Poster view"}
               variant="secondary"
-              size="lg"
+              size="md"
               isIconOnly
               icon={viewMode === "poster" ? <LayoutGrid size={16} /> : <Image size={16} />}
               onClick={() => {
@@ -480,7 +455,7 @@ export function ShowsPage() {
         ) : filteredShows.length === 0 && (shows || []).length === 0 ? (
           <EmptyState
             title="No anime synced yet"
-            description="Add your first Sonarr anime mapping to start monitoring filler decisions in Mizu."
+            description="Add an anime from Sonarr to start tracking its filler episodes."
             icon={<Icon icon={Waves} size="lg" color="secondary" />}
             actions={
               <Button
@@ -496,7 +471,7 @@ export function ShowsPage() {
         ) : filteredShows.length === 0 ? (
           <EmptyState
             title="No matching anime"
-            description="Try another title, slug, or keyword."
+            description="Try a different title or keyword."
             icon={<Icon icon={CircleAlert} size="lg" color="secondary" />}
             actions={
               <Button

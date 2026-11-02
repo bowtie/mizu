@@ -27,7 +27,7 @@ export function BackupCard({
         <Divider />
         <SettingsRow
           label="Export config"
-          description="Download all shows and settings as a JSON file for backup or migration."
+          description="Download your shows and settings as a JSON file."
         >
           <Button
             label="Export"
@@ -40,7 +40,7 @@ export function BackupCard({
         <Divider />
         <SettingsRow
           label="Import config"
-          description="Restore shows and settings from an exported file. Existing shows with the same series are replaced."
+          description="Restore shows and settings from an exported file. Shows you already have are replaced."
         >
           <Button
             label={importingConfig ? "Importing..." : "Import"}

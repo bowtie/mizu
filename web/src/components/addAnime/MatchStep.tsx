@@ -172,7 +172,7 @@ export function MatchStep({
                 data-cuelume-press
               />
               <Button
-                label="Confirm match"
+                label={isUnsafeMatch(w.selectedAfl) ? "Continue" : "Confirm match"}
                 variant="primary"
                 onClick={handlePrimaryMatchAction}
                 isLoading={w.confirming}

@@ -206,7 +206,7 @@ describe("ArtworkPickerDialog", () => {
     getArtworkCandidatesMock.mockResolvedValue({ posters: [], banners: [], logos: [] });
     await renderPicker(() => {});
 
-    expect(container.textContent).toContain("no selectable images");
+    expect(container.textContent).toContain("has no images");
     expect(pickTiles().length).toBe(0);
   });
 
@@ -258,14 +258,14 @@ describe("ArtworkPickerDialog source controls", () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it("disables Refresh while a refresh is running", async () => {
+  it("shows Refresh as busy while a refresh is running", async () => {
     getArtworkCandidatesMock.mockResolvedValue(OPTIONS);
     await renderPicker(vi.fn(), "fanart", undefined, { refreshing: true });
 
     const refresh = Array.from(container.querySelectorAll("button")).find((b) =>
       b.textContent?.includes("Refreshing"),
     );
-    expect(refresh?.disabled).toBe(true);
+    expect(refresh?.getAttribute("aria-busy")).toBe("true");
   });
 
   it("points at Settings when no source offers images to browse", async () => {
@@ -357,7 +357,6 @@ describe("ArtworkPickerDialog custom uploads", () => {
 
     expect(getArtworkCandidatesMock).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="artwork-upload-input"]')).not.toBeNull();
-    expect(container.textContent).toContain("Upload your poster");
+    expect(container.textContent).toContain("Upload poster");
   });
 });
-

@@ -48,7 +48,7 @@ export function NotificationsCard({
 
         <SettingsRow
           label="Enable notifications"
-          description="Get a push notification after each sync via ntfy.sh."
+          description="Get a push notification after each sync, using ntfy."
         >
           <Controller
             control={control}
@@ -66,7 +66,7 @@ export function NotificationsCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow label="Notify on" description="Which sync results should send a notification.">
+        <SettingsRow label="Notify on" description="Which sync results send a notification.">
           <Controller
             control={control}
             name="notifyOn"
@@ -86,7 +86,7 @@ export function NotificationsCard({
 
         <SettingsRow
           label="New anime alerts"
-          description="Get a push when AnimeFillerList adds anime that weren't in the list before."
+          description="Get notified when AnimeFillerList adds new anime."
         >
           <Controller
             control={control}
@@ -104,10 +104,7 @@ export function NotificationsCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow
-          label="Server URL"
-          description="ntfy server URL (self-hosted or public ntfy.sh)."
-        >
+        <SettingsRow label="Server URL" description="Your ntfy server, self-hosted or ntfy.sh.">
           <Controller
             control={control}
             name="ntfyServerUrl"
@@ -125,7 +122,7 @@ export function NotificationsCard({
         </SettingsRow>
         <Divider />
 
-        <SettingsRow label="Topic" description="ntfy topic name to publish to.">
+        <SettingsRow label="Topic" description="The ntfy topic to publish to.">
           <Controller
             control={control}
             name="ntfyTopic"
@@ -145,7 +142,7 @@ export function NotificationsCard({
 
         <SettingsRow
           label="Access token"
-          description="Optional — only needed if your ntfy server requires authentication."
+          description="Optional. Only needed if your ntfy server requires a login."
         >
           <SecretField
             control={control}
@@ -163,7 +160,7 @@ export function NotificationsCard({
 
         <SettingsRow
           label="Test notification"
-          description="Send a test notification to verify your configuration."
+          description="Send a test notification to check your setup."
         >
           <Button
             label={

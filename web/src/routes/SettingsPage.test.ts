@@ -251,4 +251,43 @@ describe("SettingsPage", () => {
     expect(addNotificationMock).toHaveBeenCalledWith("AFL show list refreshed", "success");
     expect(container.innerHTML).not.toContain("Refreshing...");
   }, 15_000);
+
+  it("keeps polling through a transient status-check error", async () => {
+    await renderPage();
+    mockedRefreshAflCache.mockResolvedValue({ status: "refreshing" });
+    mockedAflStatus
+      .mockRejectedValueOnce(new Error("network blip"))
+      .mockResolvedValueOnce({ refreshing: true })
+      .mockResolvedValue({ refreshing: false });
+
+    await act(async () => {
+      findButton("Refresh")?.click();
+    });
+    // Poll errors, retries after a short delay, then polls again until done.
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 2100));
+      });
+    }
+    await flush();
+
+    expect(addNotificationMock).toHaveBeenCalledWith("AFL show list refreshed", "success");
+    expect(container.innerHTML).not.toContain("Refreshing...");
+  }, 20_000);
+
+  it("picks up a refresh that was already running when the page opened", async () => {
+    mockedAflStatus.mockResolvedValueOnce({ refreshing: true }).mockResolvedValue({
+      refreshing: false,
+    });
+    await renderPage();
+    expect(container.innerHTML).toContain("Refreshing...");
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 2100));
+    });
+    await flush();
+
+    expect(addNotificationMock).toHaveBeenCalledWith("AFL show list refreshed", "success");
+    expect(mockedRefreshAflCache).not.toHaveBeenCalled();
+  }, 10_000);
 });

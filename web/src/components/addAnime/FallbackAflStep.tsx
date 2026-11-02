@@ -42,7 +42,7 @@ export function FallbackAflStep({
       ) : w.fallbackAflResults.length === 0 ? (
         <EmptyState
           title="No cached AFL titles found"
-          description="Try another filter or refresh the AFL cache in Settings if this anime is new."
+          description="Try another filter, or refresh the AFL cache in Settings if the anime is new."
           icon={<Icon icon={Search} size="lg" color="secondary" />}
         />
       ) : (

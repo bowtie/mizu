@@ -18,6 +18,12 @@ export const ADD_STEP_POST_ADD = "post_add";
 const wizardSteps = [
   { key: ADD_STEP_SERIES, label: "Select" },
   { key: ADD_STEP_MATCH, label: "Match" },
+  { key: ADD_STEP_POST_ADD, label: "Done" },
+];
+// Only matches the server couldn't verify get a separate confirmation step.
+const wizardStepsWithConfirm = [
+  { key: ADD_STEP_SERIES, label: "Select" },
+  { key: ADD_STEP_MATCH, label: "Match" },
   { key: ADD_STEP_UNSAFE_MATCH, label: "Confirm" },
   { key: ADD_STEP_POST_ADD, label: "Done" },
 ];
@@ -27,10 +33,11 @@ const wizardFallbackSteps = [
   { key: ADD_STEP_MATCH, label: "Match" },
 ];
 
-export function getWizardSteps(addStep: string) {
-  return [ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep)
-    ? wizardFallbackSteps
-    : wizardSteps;
+export function getWizardSteps(addStep: string, needsConfirm = false) {
+  if ([ADD_STEP_FALLBACK_AFL, ADD_STEP_FALLBACK_SONARR].includes(addStep)) {
+    return wizardFallbackSteps;
+  }
+  return needsConfirm || addStep === ADD_STEP_UNSAFE_MATCH ? wizardStepsWithConfirm : wizardSteps;
 }
 
 // ── Types ──

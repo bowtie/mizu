@@ -10,6 +10,8 @@ import { Button } from "@astryxdesign/core/Button";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Badge } from "@astryxdesign/core/Badge";
 import { RefreshCw, Upload, Trash2 } from "lucide-react";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Spinner } from "@astryxdesign/core/Spinner";
 import { Grid } from "@astryxdesign/core/Grid";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { AspectRatio } from "@astryxdesign/core/AspectRatio";
@@ -39,7 +41,7 @@ const SLOT_META: {
     emptyLabel: "No posters from this source.",
     ratio: 2 / 3,
     fit: "cover",
-    minWidth: 96,
+    minWidth: 140,
   },
   {
     slot: "banner",
@@ -60,6 +62,46 @@ const SLOT_META: {
     minWidth: 200,
   },
 ];
+
+/** Thumbnail that shows a skeleton until the image has loaded, then fades in. */
+function ArtworkThumb({
+  src,
+  alt,
+  index,
+  className,
+}: {
+  src: string;
+  alt: string;
+  index: number;
+  className?: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  // A cached image can finish before React attaches onLoad.
+  useEffect(() => {
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) setLoaded(true);
+  }, []);
+  return (
+    <>
+      {!loaded && (
+        <span className="artwork-picker-thumb-skeleton" aria-hidden="true">
+          <Skeleton index={index % 12} />
+        </span>
+      )}
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        // Show the broken-image state rather than a skeleton forever.
+        onError={() => setLoaded(true)}
+        className={`artwork-picker-thumb${loaded ? " is-loaded" : ""}${className ? ` ${className}` : ""}`}
+      />
+    </>
+  );
+}
 
 interface ArtworkPickerDialogProps {
   isOpen: boolean;
@@ -124,6 +166,16 @@ export function ArtworkPickerDialog({
   // can be set in turn; this dims the tile until the save lands.
   const [savingUrl, setSavingUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const upload = async (slot: ArtworkSlot, file: File) => {
+    setUploading(true);
+    try {
+      await onUploadCustom(slot, file);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const pick = async (source: string, slot: ArtworkSlot, url: string) => {
     setSavingUrl(url);
@@ -200,14 +252,14 @@ export function ArtworkPickerDialog({
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       variant={isMobile ? "fullscreen" : "standard"}
-      width={720}
+      width={800}
       maxHeight="85vh"
       purpose="info"
     >
       <VStack gap={4} className="artwork-picker-dialog">
         <DialogHeader
           title="Artwork"
-          subtitle="Pick an image for each slot. Your choices apply right away."
+          subtitle="Pick an image for each slot. Changes save right away."
           onOpenChange={onOpenChange}
         />
         <HStack gap={3} align="center" wrap="wrap" hAlign="between">
@@ -223,7 +275,7 @@ export function ArtworkPickerDialog({
           {sources.length > 1 && (
             <SegmentedControl
               label="Image source"
-              size="sm"
+              size="md"
               value={activeSource}
               onChange={setSelectedSource}
             >
@@ -233,57 +285,31 @@ export function ArtworkPickerDialog({
             </SegmentedControl>
           )}
         </HStack>
-        <HStack gap={2} align="center" wrap="wrap" className="artwork-picker-custom">
-          <Button
-            label={`Upload your ${activeSlot}`}
-            variant="secondary"
-            size="sm"
-            icon={<Upload size={14} />}
-            isDisabled={refreshing}
-            onClick={() => fileInputRef.current?.click()}
-            data-cuelume-press
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            hidden
-            data-testid="artwork-upload-input"
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              // Reset so picking the same file again still fires onChange.
-              e.target.value = "";
-              if (file) void onUploadCustom(activeSlot, file);
-            }}
-          />
-          {activeSlotIsCustom ? (
-            <>
-              <Badge variant="info" label="Your image is in use" />
-              <Button
-                label="Remove"
-                variant="ghost"
-                size="sm"
-                icon={<Trash2 size={14} />}
-                isDisabled={refreshing}
-                onClick={() => void onRemoveCustom(activeSlot)}
-                data-cuelume-press
-              />
-            </>
-          ) : (
-            <Text type="supporting" color="secondary">
-              JPG, PNG, GIF or WebP, up to 10 MB
-            </Text>
-          )}
-        </HStack>
         {sources.length === 0 && (
           <Text type="supporting" color="secondary">
             Add a TMDB or Fanart API key in Settings to browse their images.
           </Text>
         )}
         {loading && (
-          <Text type="supporting" color="secondary">
-            Loading candidates…
-          </Text>
+          <div
+            className="artwork-picker-sections"
+            role="status"
+            aria-busy="true"
+            aria-label="Loading candidates"
+          >
+            <Grid
+              columns={{
+                minWidth: isMobile && activeSlot === "poster" ? 100 : activeMeta.minWidth,
+              }}
+              gap={2}
+            >
+              {Array.from({ length: activeSlot === "poster" ? 10 : 6 }, (_, i) => (
+                <AspectRatio key={i} ratio={activeMeta.ratio}>
+                  <Skeleton index={i} />
+                </AspectRatio>
+              ))}
+            </Grid>
+          </div>
         )}
         {error && (
           <Text type="supporting" color="secondary">
@@ -296,7 +322,7 @@ export function ArtworkPickerDialog({
               {items.length > 0 ? (
                 <Grid
                   columns={{
-                    minWidth: isMobile && activeSlot === "poster" ? 80 : activeMeta.minWidth,
+                    minWidth: isMobile && activeSlot === "poster" ? 100 : activeMeta.minWidth,
                   }}
                   gap={2}
                 >
@@ -314,7 +340,7 @@ export function ArtworkPickerDialog({
                     return (
                       <ClickableCard
                         key={opt.url}
-                        label={`${activeMeta.label} ${i + 1}${meta ? ` — ${meta}` : ""}`}
+                        label={`${activeMeta.label} ${i + 1}${meta ? ` (${meta})` : ""}`}
                         onClick={() => void pick(activeSource, activeSlot, opt.url)}
                         isDisabled={refreshing}
                         padding={0}
@@ -324,14 +350,18 @@ export function ArtworkPickerDialog({
                         aria-pressed={isCurrent || undefined}
                       >
                         <AspectRatio ratio={activeMeta.ratio} fit={activeMeta.fit}>
-                          <img
+                          <ArtworkThumb
                             src={opt.thumb_url || opt.url}
                             alt={`${activeMeta.label} ${i + 1}`}
-                            loading="lazy"
-                            decoding="async"
+                            index={i}
                             className={activeSlot === "logo" ? "artwork-picker-logo" : undefined}
                           />
                         </AspectRatio>
+                        {savingUrl === opt.url && (
+                          <span className="artwork-picker-saving">
+                            <Spinner size="lg" aria-label="Saving" />
+                          </span>
+                        )}
                         {isCurrent && (
                           <span className="artwork-picker-check" aria-hidden="true">
                             ✓
@@ -351,15 +381,12 @@ export function ArtworkPickerDialog({
         )}
         {!loading && !error && allEmpty && (
           <Text type="supporting" color="secondary">
-            This source has no selectable images.
+            This source has no images.
           </Text>
         )}
         <Divider />
         <HStack gap={3} align="center" wrap="wrap" hAlign="between">
           <HStack gap={2} align="center" wrap="wrap">
-            <Text type="supporting" color="secondary">
-              Automatic source
-            </Text>
             <Selector
               label="Automatic artwork source"
               value={artworkSource}
@@ -373,13 +400,59 @@ export function ArtworkPickerDialog({
               label={refreshing ? "Refreshing..." : "Refresh"}
               variant="secondary"
               size="md"
-              icon={<RefreshCw size={14} className={refreshing ? "spin" : ""} />}
+              icon={<RefreshCw size={14} />}
               onClick={() => onRefresh()}
-              isDisabled={refreshing}
+              isLoading={refreshing}
               data-cuelume-press
             />
           </HStack>
-          <Button label="Done" variant="primary" size="md" onClick={() => onOpenChange(false)} data-cuelume-press />
+          <HStack gap={2} align="center" wrap="wrap">
+            {activeSlotIsCustom && (
+              <>
+                <Badge variant="info" label="Your image is in use" />
+                <Button
+                  label="Remove"
+                  variant="ghost"
+                  size="md"
+                  icon={<Trash2 size={14} />}
+                  isDisabled={refreshing || uploading}
+                  onClick={() => void onRemoveCustom(activeSlot)}
+                  data-cuelume-press
+                />
+              </>
+            )}
+            <Button
+              label={`Upload ${activeSlot}`}
+              tooltip="JPG, PNG, GIF or WebP, up to 10 MB"
+              variant="secondary"
+              size="md"
+              icon={<Upload size={14} />}
+              isLoading={uploading}
+              isDisabled={refreshing}
+              onClick={() => fileInputRef.current?.click()}
+              data-cuelume-press
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              hidden
+              data-testid="artwork-upload-input"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                // Reset so picking the same file again still fires onChange.
+                e.target.value = "";
+                if (file) void upload(activeSlot, file);
+              }}
+            />
+            <Button
+              label="Done"
+              variant="primary"
+              size="md"
+              onClick={() => onOpenChange(false)}
+              data-cuelume-press
+            />
+          </HStack>
         </HStack>
       </VStack>
     </Dialog>
