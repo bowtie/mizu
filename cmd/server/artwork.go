@@ -40,7 +40,7 @@ func handleUploadCustomArtwork(db *database.DB, mgr *artwork.Manager) http.Handl
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {
@@ -78,7 +78,7 @@ func handleUploadCustomArtwork(db *database.DB, mgr *artwork.Manager) http.Handl
 				writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "failed to save artwork: "+err.Error())
+			writeInternalError(w, err, "failed to save artwork")
 			return
 		}
 		updated, err := db.GetMappingByID(r.Context(), id)
@@ -106,7 +106,7 @@ func handleRemoveCustomArtwork(db *database.DB, mgr *artwork.Manager) http.Handl
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {
@@ -114,7 +114,7 @@ func handleRemoveCustomArtwork(db *database.DB, mgr *artwork.Manager) http.Handl
 			return
 		}
 		if err := mgr.RemoveCustomArtwork(r.Context(), id, slot); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to remove artwork: "+err.Error())
+			writeInternalError(w, err, "failed to remove artwork")
 			return
 		}
 		updated, err := db.GetMappingByID(r.Context(), id)
@@ -167,7 +167,7 @@ func handleRefreshArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Mana
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {
@@ -241,7 +241,7 @@ func handleRefreshAllArtwork(cfg *config.Config, db *database.DB, mgr *artwork.M
 		mappings, err := db.GetAllMappings(r.Context())
 		if err != nil {
 			artworkRefreshing.Store(false)
-			writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
+			writeInternalError(w, err, "failed to load mappings")
 			return
 		}
 
@@ -308,7 +308,7 @@ func handleSetArtworkSource(db *database.DB, mgr *artwork.Manager) http.HandlerF
 		}
 		// Store the per-show override. Empty string means "use global default".
 		if err := db.UpdateArtworkSource(r.Context(), id, body.Source); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		// Record newer intent so an in-flight refresh-all skips its stale
@@ -365,7 +365,7 @@ func handleListArtworkCandidates(cfg *config.Config, db *database.DB, mgr *artwo
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {
@@ -431,7 +431,7 @@ func handleSelectArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Manag
 		// network.
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {
@@ -458,7 +458,7 @@ func handleSelectArtwork(cfg *config.Config, db *database.DB, mgr *artwork.Manag
 		// must not overwrite the override set by the newer operation.
 		if result.Found {
 			if err := db.UpdateArtworkSource(r.Context(), id, body.Source); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
+				writeInternalError(w, err, "")
 				return
 			}
 		}

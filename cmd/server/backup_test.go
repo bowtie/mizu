@@ -44,7 +44,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 	// Export
 	req := httptest.NewRequest(http.MethodGet, "/api/backup/export", nil)
 	rec := httptest.NewRecorder()
-	handleExportConfig(source)(rec, req)
+	handleExportConfig(source, auth.NewManager(source), newAccessControl(accessPolicy{}))(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Disposition"), "attachment")
 
@@ -173,4 +173,115 @@ func TestImportNormalizesSyncInterval(t *testing.T) {
 	v, err := target.GetSetting(context.Background(), "sync_interval")
 	require.NoError(t, err)
 	assert.Equal(t, "6h", v)
+}
+
+func newExportTestDB(t *testing.T) (*database.DB, *auth.Manager) {
+	t.Helper()
+	db, err := database.New(filepath.Join(t.TempDir(), "export.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	ctx := t.Context()
+	require.NoError(t, db.SetSettings(ctx, map[string]string{
+		"sonarr_url":      "http://sonarr:8989",
+		"sonarr_api_key":  "sonarr-secret",
+		"tmdb_api_key":    "tmdb-secret",
+		"fanart_api_key":  "fanart-secret",
+		"ntfy_token":      "ntfy-secret",
+		settingAuthMode:   authModePassword,
+		"trusted_proxies": "10.0.0.2",
+	}))
+	mgr := auth.NewManager(db)
+	require.NoError(t, mgr.SetPassword(ctx, "export-password"))
+	return db, mgr
+}
+
+func exportWith(t *testing.T, db *database.DB, mgr *auth.Manager, method, body string) (*httptest.ResponseRecorder, backupFile) {
+	t.Helper()
+	req := httptest.NewRequest(method, "/api/backup/export", strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	rec := httptest.NewRecorder()
+	handleExportConfig(db, mgr, newAccessControl(accessPolicy{}))(rec, req)
+	var file backupFile
+	if rec.Code == http.StatusOK {
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &file))
+	}
+	return rec, file
+}
+
+func TestExportOmitsSecretsByDefault(t *testing.T) {
+	db, mgr := newExportTestDB(t)
+	for _, tc := range []struct{ method, body string }{
+		{http.MethodGet, ""},
+		{http.MethodPost, ""},
+		{http.MethodPost, `{"include_secrets":false}`},
+	} {
+		rec, file := exportWith(t, db, mgr, tc.method, tc.body)
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.False(t, file.IncludesSecrets)
+		for k := range secretSettings {
+			assert.NotContains(t, file.Settings, k)
+		}
+		assert.NotContains(t, rec.Body.String(), "-secret")
+		assert.NotContains(t, file.Settings, settingAuthMode, "sign-in mode is never exported")
+		assert.NotContains(t, file.Settings, settingTrustedProxies)
+		assert.Equal(t, "http://sonarr:8989", file.Settings["sonarr_url"])
+	}
+}
+
+func TestExportWithSecretsNeedsPassword(t *testing.T) {
+	db, mgr := newExportTestDB(t)
+
+	rec, _ := exportWith(t, db, mgr, http.MethodPost, `{"include_secrets":true}`)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	rec, _ = exportWith(t, db, mgr, http.MethodPost, `{"include_secrets":true,"password":"wrong-password"}`)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	rec, file := exportWith(t, db, mgr, http.MethodPost, `{"include_secrets":true,"password":"export-password"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, file.IncludesSecrets)
+	assert.Equal(t, "sonarr-secret", file.Settings["sonarr_api_key"])
+	assert.Equal(t, "ntfy-secret", file.Settings["ntfy_token"])
+}
+
+func TestImportClearsCredentialForNewURL(t *testing.T) {
+	target, err := database.New(filepath.Join(t.TempDir(), "target.db"))
+	require.NoError(t, err)
+	defer target.Close()
+	ctx := t.Context()
+	require.NoError(t, target.SetSettings(ctx, map[string]string{"sonarr_url": "http://sonarr:8989", "sonarr_api_key": "keep-me-safe"}))
+	cfg := config.DefaultConfig()
+	applyRuntimeSettings(ctx, target, cfg)
+
+	run := func(payload string) {
+		req := httptest.NewRequest(http.MethodPost, "/api/backup/import", strings.NewReader(payload))
+		rec := httptest.NewRecorder()
+		handleImportConfig(cfg, target, newSchedulerController(cfg.ScanInterval), nil, nil)(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	// Same URL, no key in the file: the saved key stays.
+	run(`{"version":1,"settings":{"sonarr_url":"http://sonarr:8989/"},"mappings":[]}`)
+	key, _ := target.GetSetting(ctx, "sonarr_api_key")
+	assert.Equal(t, "keep-me-safe", key)
+
+	// A different URL without a key must not inherit the saved one.
+	run(`{"version":1,"settings":{"sonarr_url":"http://elsewhere:8989"},"mappings":[]}`)
+	key, _ = target.GetSetting(ctx, "sonarr_api_key")
+	assert.Empty(t, key)
+	cfg.RLock()
+	assert.Empty(t, cfg.SonarrAPIKey)
+	cfg.RUnlock()
+}
+
+func TestImportRejectsSmugglingURL(t *testing.T) {
+	target, err := database.New(filepath.Join(t.TempDir(), "target.db"))
+	require.NoError(t, err)
+	defer target.Close()
+	payload := `{"version":1,"settings":{"sonarr_url":"http://169.254.169.254/latest/meta-data/?"},"mappings":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/backup/import", strings.NewReader(payload))
+	rec := httptest.NewRecorder()
+	handleImportConfig(config.DefaultConfig(), target, newSchedulerController(0), nil, nil)(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }

@@ -32,6 +32,18 @@ func humanizeError(err error) string {
 	return humanizeErrString(err.Error())
 }
 
+// writeInternalError answers 500 without exposing the cause: database
+// errors, file paths and the like are logged, not sent to the client.
+// context names what failed ("failed to load mappings"); empty means a
+// generic message.
+func writeInternalError(w http.ResponseWriter, err error, context string) {
+	if context == "" {
+		context = "internal server error"
+	}
+	log.Error().Err(err).Msg(context)
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": context})
+}
+
 func writeError(w http.ResponseWriter, status int, message string) {
 	// Humanize any embedded Go networking errors in the message.
 	message = humanizeMessage(message)

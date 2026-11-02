@@ -1,16 +1,21 @@
+import { useState } from "react";
 import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Switch } from "@astryxdesign/core/Switch";
+import { TextInput } from "@astryxdesign/core/TextInput";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Button } from "@astryxdesign/core/Button";
 import { Divider } from "@astryxdesign/core/Divider";
 import { Card } from "@astryxdesign/core/Card";
 import { FileDown, FileUp } from "lucide-react";
 import { SettingsRow } from "../SettingsRow";
+import { useAuthStatus } from "../../lib/queries";
 import type { RefObject } from "react";
 
 interface BackupCardProps {
   importingConfig: boolean;
   importFileRef: RefObject<HTMLInputElement | null>;
-  handleExportConfig: () => Promise<void>;
+  handleExportConfig: (includeSecrets: boolean, password: string) => Promise<void>;
   handleImportConfigFile: (file: File) => Promise<void>;
 }
 
@@ -20,6 +25,24 @@ export function BackupCard({
   handleExportConfig,
   handleImportConfigFile,
 }: BackupCardProps) {
+  const { data: status } = useAuthStatus();
+  // Behind a sign-in proxy the proxy vouches for the user; otherwise
+  // exporting secrets takes the dashboard password.
+  const needsPassword = !status?.external;
+  const [includeSecrets, setIncludeSecrets] = useState(false);
+  const [password, setPassword] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const exportNow = async () => {
+    setExporting(true);
+    try {
+      await handleExportConfig(includeSecrets, password);
+    } finally {
+      setPassword("");
+      setExporting(false);
+    }
+  };
+
   return (
     <Card variant="muted" padding={4}>
       <VStack gap={3}>
@@ -27,16 +50,44 @@ export function BackupCard({
         <Divider />
         <SettingsRow
           label="Export config"
-          description="Download your shows and settings as a JSON file."
+          description="Download your shows and settings as a JSON file. API keys and tokens are left out unless you include them."
         >
           <Button
             label="Export"
             variant="secondary"
             icon={<FileDown size={16} />}
-            onClick={() => void handleExportConfig()}
+            isLoading={exporting}
+            isDisabled={exporting || (includeSecrets && needsPassword && !password)}
+            onClick={() => void exportNow()}
             data-cuelume-press
           />
         </SettingsRow>
+        <SettingsRow
+          label="Include API keys and tokens"
+          description="Needed to restore without re-entering them. Keep a file like this private."
+        >
+          <Switch
+            label="Include API keys and tokens"
+            value={includeSecrets}
+            isLabelHidden
+            onChange={(on: boolean) => {
+              setIncludeSecrets(on);
+              setPassword("");
+            }}
+            data-cuelume-toggle
+          />
+        </SettingsRow>
+        {includeSecrets && needsPassword && (
+          <HStack maxWidth={420}>
+            <TextInput
+              type="password"
+              label="Dashboard password"
+              value={password}
+              onChange={setPassword}
+              isDisabled={exporting}
+            />
+          </HStack>
+        )}
         <Divider />
         <SettingsRow
           label="Import config"

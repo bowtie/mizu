@@ -3,12 +3,14 @@ package artwork
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -226,4 +228,10 @@ func TestPickingAProviderImageEndsCustomStatus(t *testing.T) {
 	m, err := db.GetMappingByID(ctx, id)
 	require.NoError(t, err)
 	assert.Empty(t, m.ArtworkCustomSlots, "a picked provider image replaces the upload")
+}
+
+func TestRedactURLErrorDropsAPIKey(t *testing.T) {
+	err := redactURLError(&url.Error{Op: "Get", URL: "https://webservice.fanart.tv/v3.2/tv/1?api_key=SECRET", Err: errors.New("dial tcp: i/o timeout")})
+	assert.NotContains(t, err.Error(), "SECRET")
+	assert.Contains(t, err.Error(), "i/o timeout")
 }

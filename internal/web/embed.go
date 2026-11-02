@@ -3,9 +3,11 @@ package web
 import (
 	"crypto/sha256"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"io/fs"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -17,6 +19,55 @@ var distFS embed.FS
 // this is stable within a single server binary version.
 var indexETag string
 
+// CSP is the Content-Security-Policy for the app. Scripts may only come
+// from Mizu itself, plus the inline scripts in the built index.html, which
+// are allowed by hash (computed below) so no other inline script can run.
+// Images may come from anywhere: posters are loaded from Sonarr and
+// artwork providers directly. Styles allow inline because the component
+// library sets style attributes.
+var CSP = buildCSP(nil)
+
+func buildCSP(scriptHashes []string) string {
+	scriptSrc := "'self'"
+	for _, h := range scriptHashes {
+		scriptSrc += " '" + h + "'"
+	}
+	return strings.Join([]string{
+		"default-src 'self'",
+		"script-src " + scriptSrc,
+		"style-src 'self' 'unsafe-inline'",
+		"img-src 'self' data: blob: http: https:",
+		"font-src 'self' data:",
+		"connect-src 'self'",
+		"worker-src 'self'",
+		"manifest-src 'self'",
+		"object-src 'none'",
+		"base-uri 'self'",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
+	}, "; ")
+}
+
+// inlineScript matches a <script> element without a src attribute.
+var (
+	inlineScript = regexp.MustCompile(`(?is)<script\b([^>]*)>(.*?)</script>`)
+	srcAttr      = regexp.MustCompile(`(?i)\ssrc\s*=`)
+)
+
+// inlineScriptHashes returns the CSP hash source for every inline script
+// in html.
+func inlineScriptHashes(html []byte) []string {
+	var hashes []string
+	for _, m := range inlineScript.FindAllSubmatch(html, -1) {
+		if srcAttr.Match(m[1]) {
+			continue
+		}
+		sum := sha256.Sum256(m[2])
+		hashes = append(hashes, "sha256-"+base64.StdEncoding.EncodeToString(sum[:]))
+	}
+	return hashes
+}
+
 func init() {
 	// Compute a hash of index.html for ETag-based conditional requests.
 	// This lets the browser send If-None-Match on repeat visits and get
@@ -25,6 +76,7 @@ func init() {
 	if err == nil {
 		h := sha256.Sum256(data)
 		indexETag = "W/\"" + hex.EncodeToString(h[:8]) + "\""
+		CSP = buildCSP(inlineScriptHashes(data))
 	}
 }
 

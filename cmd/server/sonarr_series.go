@@ -40,7 +40,7 @@ func handleMarkManualMatchPending(db *database.DB) http.HandlerFunc {
 			return
 		}
 		if err := markManualMatchPendingSeriesID(r.Context(), db, req.SonarrSeriesID); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to persist pending manual match: "+err.Error())
+			writeInternalError(w, err, "failed to persist pending manual match")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"status": "pending", "sonarr_series_id": req.SonarrSeriesID})
@@ -112,19 +112,19 @@ func handleGetSonarrSeries(db *database.DB, engine *sync.Engine) http.HandlerFun
 		if matchableOnly {
 			mappings, err := db.GetAllMappings(r.Context())
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
+				writeInternalError(w, err, "failed to load mappings")
 				return
 			}
 
 			cachedShows, err := loadCachedAFLShows(r.Context(), db)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to load cached AFL shows: "+err.Error())
+				writeInternalError(w, err, "failed to load cached AFL shows")
 				return
 			}
 
 			pendingManualMatchIDs, err := loadManualMatchPendingSeriesIDs(r.Context(), db)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to load pending manual matches: "+err.Error())
+				writeInternalError(w, err, "failed to load pending manual matches")
 				return
 			}
 

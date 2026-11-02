@@ -19,6 +19,22 @@ import type {
 
 const BASE = "/api";
 
+/** Drops the service worker's offline copy of API responses. Called
+ *  whenever a session ends (sign-out, expiry, password change) so library
+ *  data fetched under it can't be served to whoever uses the browser
+ *  next. Best-effort: the SW may not be registered or supported. */
+export function clearOfflineApiCache(): void {
+  if (typeof caches === "undefined") return;
+  caches
+    .keys()
+    .then((keys) =>
+      Promise.all(keys.filter((k) => k.endsWith("-api")).map((k) => caches.delete(k))),
+    )
+    .catch(() => {
+      /* non-fatal */
+    });
+}
+
 // ky instance — handles JSON serialization and error parsing. Caching is
 // TanStack Query's job (see queries.ts); this module only talks HTTP.
 const api = ky.create({
@@ -28,8 +44,10 @@ const api = ky.create({
   hooks: {
     afterResponse: [
       ({ response }) => {
-        // Session expired or revoked — bounce to the login page.
-        // Auth endpoints are exempt so the login flow itself never loops.
+        // Session expired or revoked: forget the offline copy of its data
+        // and bounce to the login page. Auth endpoints are exempt from the
+        // redirect so the login flow itself never loops.
+        if (response.status === 401) clearOfflineApiCache();
         if (
           response.status === 401 &&
           !response.url.includes("/auth/") &&
@@ -275,8 +293,14 @@ export function refreshAflCache(): Promise<{ status: string }> {
 // ── Config backup ──
 
 /** Downloads the full config (mappings + settings) as a JSON blob. */
-export function exportConfig(): Promise<Blob> {
-  return api("backup/export").blob();
+/** Downloads a config backup. API keys and tokens are left out unless
+ *  `includeSecrets` is set, which needs the dashboard password (not asked
+ *  for when a sign-in proxy handles authentication). */
+export function exportConfig(includeSecrets = false, password = ""): Promise<Blob> {
+  return api("backup/export", {
+    method: "POST",
+    json: { include_secrets: includeSecrets, password },
+  }).blob();
 }
 
 /** Restores a config file previously produced by exportConfig. */
@@ -309,6 +333,30 @@ export function testNtfyConnection(data: {
 export interface AuthStatus {
   configured: boolean;
   authenticated: boolean;
+  /** Sign-in is handled by a reverse proxy in front of Mizu. */
+  external?: boolean;
+}
+
+export type AuthMode = "password" | "external";
+
+export interface AccessSettings {
+  mode: AuthMode;
+  trusted_proxies: string;
+  /** The address this browser's requests reach Mizu from. */
+  client_address: string;
+  via_trusted_proxy: boolean;
+}
+
+export function getAccessSettings(): Promise<AccessSettings> {
+  return request<AccessSettings>("GET", "/auth/access");
+}
+
+export function updateAccessSettings(data: {
+  mode: AuthMode;
+  trusted_proxies: string;
+  current_password: string;
+}): Promise<AccessSettings> {
+  return request<AccessSettings>("PUT", "/auth/access", data);
 }
 
 export function getAuthStatus(): Promise<AuthStatus> {
@@ -325,25 +373,9 @@ export function setupPassword(password: string): Promise<{ ok: boolean }> {
 
 export function logout(): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>("POST", "/auth/logout").then((res) => {
-    // Evict the service worker's offline API cache so library data fetched
-    // under this session can't be served to the next one. Best-effort —
-    // the SW may not be registered or supported.
-    if (typeof caches !== "undefined") {
-      caches
-        .keys()
-        .then((keys) =>
-          Promise.all(keys.filter((k) => k.endsWith("-api")).map((k) => caches.delete(k))),
-        )
-        .catch(() => {
-          /* non-fatal */
-        });
-    }
+    clearOfflineApiCache();
     return res;
   });
-}
-
-export function removePassword(): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>("POST", "/auth/remove-password", {});
 }
 
 export function changePassword(
@@ -353,6 +385,10 @@ export function changePassword(
   return request<{ ok: boolean }>("POST", "/auth/change-password", {
     current_password: currentPassword,
     new_password: newPassword,
+  }).then((res) => {
+    // Every session was revoked server-side; drop their offline data too.
+    clearOfflineApiCache();
+    return res;
   });
 }
 

@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { errorMessage, getArtworkBannerUrl, getArtworkLogoUrl, getArtworkPosterUrl } from "./api";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  errorMessage,
+  exportConfig,
+  getArtworkBannerUrl,
+  getArtworkLogoUrl,
+  getArtworkPosterUrl,
+  getAuthStatus,
+} from "./api";
 
 describe("errorMessage", () => {
   it("returns the message for a plain Error", () => {
@@ -65,5 +72,58 @@ describe("artwork URLs", () => {
     expect(getArtworkBannerUrl(3, "https://assets.fanart.tv/a.jpg")).toBe(a);
     expect(getArtworkBannerUrl(3, "https://assets.fanart.tv/b.jpg")).not.toBe(a);
     expect(getArtworkLogoUrl(3, "x")).toMatch(/^\/api\/artwork\/3\/logo\?v=/);
+  });
+});
+
+describe("session hygiene", () => {
+  const fakeCaches = () => {
+    const deleted: string[] = [];
+    const store = {
+      keys: vi.fn().mockResolvedValue(["mizu-v3-api", "mizu-v3-assets"]),
+      delete: vi.fn((k: string) => {
+        deleted.push(k);
+        return Promise.resolve(true);
+      }),
+    };
+    vi.stubGlobal("caches", store);
+    return deleted;
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("drops the offline API cache when a request comes back 401", async () => {
+    const deleted = fakeCaches();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "authentication required" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    await expect(getAuthStatus()).rejects.toThrow();
+    await vi.waitFor(() => expect(deleted).toEqual(["mizu-v3-api"]));
+  });
+
+  it("asks for secrets in the export only when told to", async () => {
+    const seen: { method: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (req: Request) => {
+        seen.push({ method: req.method, body: await req.json() });
+        return new Response("{}", { status: 200 });
+      }),
+    );
+
+    await exportConfig();
+    await exportConfig(true, "pw");
+    expect(seen).toEqual([
+      { method: "POST", body: { include_secrets: false, password: "" } },
+      { method: "POST", body: { include_secrets: true, password: "pw" } },
+    ]);
   });
 });

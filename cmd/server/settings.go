@@ -5,6 +5,7 @@ import (
 	"mizu/internal/artwork"
 	"mizu/internal/config"
 	"mizu/internal/database"
+	"mizu/internal/netguard"
 	"mizu/internal/notifier"
 	"mizu/internal/sonarr"
 	"mizu/internal/sync"
@@ -51,7 +52,7 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 
 		cacheCount, cacheRefreshedAt, err := db.GetAFLShowCacheStatus(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		settings["afl_show_cache_refreshed_at"] = cacheRefreshedAt
@@ -122,6 +123,18 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 			writeError(w, http.StatusBadRequest, "invalid ntfy_notify_on")
 			return
 		}
+		if update.SonarrURL != nil && strings.TrimSpace(*update.SonarrURL) != "" {
+			if err := netguard.ValidateServiceURL(*update.SonarrURL); err != nil {
+				writeError(w, http.StatusBadRequest, "Sonarr URL: "+err.Error())
+				return
+			}
+		}
+		if update.NtfyServerURL != nil && strings.TrimSpace(*update.NtfyServerURL) != "" {
+			if err := netguard.ValidateServiceURL(*update.NtfyServerURL); err != nil {
+				writeError(w, http.StatusBadRequest, "ntfy server URL: "+err.Error())
+				return
+			}
+		}
 		// Compute effective ntfy values to validate without mutating cfg.
 		cfg.RLock()
 		ntfyEnabled := cfg.NtfyEnabled
@@ -160,6 +173,22 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 
 		// All validation passed — apply mutations under the write lock.
 		cfg.Lock()
+
+		// A saved credential belongs to the server it was entered for: the
+		// browser never sees it, so changing only the URL would otherwise
+		// send it to whatever address was typed in. Require it again
+		// (checked under the lock so a concurrent save can't slip past).
+		if update.SonarrURL != nil && cfg.SonarrAPIKey != "" && !sameBaseURL(*update.SonarrURL, cfg.SonarrURL) &&
+			(update.SonarrAPIKey == nil || *update.SonarrAPIKey == "") {
+			cfg.Unlock()
+			writeError(w, http.StatusBadRequest, "enter the Sonarr API key again when changing the Sonarr URL")
+			return
+		}
+		if cfg.NtfyToken != "" && !sameBaseURL(ntfyServerURL, cfg.NtfyServerURL) && update.NtfyToken == nil {
+			cfg.Unlock()
+			writeError(w, http.StatusBadRequest, "enter the ntfy access token again (or clear it) when changing the ntfy server")
+			return
+		}
 
 		if update.SonarrURL != nil {
 			cfg.SonarrURL = strings.TrimRight(*update.SonarrURL, "/")
@@ -252,7 +281,7 @@ func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedu
 		// so the UI doesn't show a false "Saved" when the DB write didn't stick.
 		if err := db.SetSettings(r.Context(), settingsSnapshot); err != nil {
 			log.Error().Err(err).Msg("failed to persist settings")
-			writeError(w, http.StatusInternalServerError, "failed to persist settings: "+err.Error())
+			writeInternalError(w, err, "failed to persist settings")
 			return
 		}
 
@@ -308,6 +337,10 @@ func handleTestSonarr(cfg *config.Config) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "url and api_key are required")
 			return
 		}
+		if err := netguard.ValidateServiceURL(req.URL); err != nil {
+			writeError(w, http.StatusBadRequest, "Sonarr URL: "+err.Error())
+			return
+		}
 		c := sonarr.New(strings.TrimRight(req.URL, "/"), req.APIKey, 10*time.Second)
 		info, err := c.TestConnection(r.Context())
 		if err != nil {
@@ -354,6 +387,12 @@ func handleTestNtfy(cfg *config.Config) http.HandlerFunc {
 			token = *req.Token
 		}
 
+		if serverURL != "" {
+			if err := netguard.ValidateServiceURL(serverURL); err != nil {
+				writeError(w, http.StatusBadRequest, "ntfy server URL: "+err.Error())
+				return
+			}
+		}
 		n := notifier.New(serverURL, topic, token)
 		if !n.Enabled() {
 			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "ntfy is not configured (missing server URL or topic)"})

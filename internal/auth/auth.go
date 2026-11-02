@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -44,7 +45,6 @@ const (
 )
 
 var (
-	ErrNotConfigured     = errors.New("auth: no password configured")
 	ErrAlreadyConfigured = errors.New("auth: password already configured")
 	ErrInvalidPassword   = errors.New("incorrect password")
 	ErrPasswordTooShort  = fmt.Errorf("password must be at least %d characters", MinPasswordLength)
@@ -56,6 +56,9 @@ var (
 type Store interface {
 	GetSetting(ctx context.Context, key string) (string, error)
 	SetSetting(ctx context.Context, key, value string) error
+	// SetSettingIfEmpty writes only when the key is unset or empty and
+	// reports whether it did, atomically.
+	SetSettingIfEmpty(ctx context.Context, key, value string) (bool, error)
 	CreateSession(ctx context.Context, tokenHash string, expiresAt time.Time) error
 	GetSessionExpiry(ctx context.Context, tokenHash string) (time.Time, error)
 	DeleteSession(ctx context.Context, tokenHash string) error
@@ -67,11 +70,24 @@ type Store interface {
 // state is cached atomically after the first lookup so the request-path
 // middleware doesn't hit SQLite on every call; the only code paths that
 // flip it (SetPassword / ChangePassword) update the cache themselves.
+// A password can be set or changed but never removed: once configured,
+// Mizu stays protected.
 type Manager struct {
 	store      Store
 	configured atomic.Bool
 	checked    atomic.Bool
+
+	// verified caches the last successful VerifyCached check (a SHA-256
+	// over the stored hash and the password) so a metrics scraper sending
+	// the password every few seconds doesn't pay bcrypt each time. Keying
+	// on the stored hash means a password change invalidates it.
+	verifiedMu    sync.Mutex
+	verifiedKey   [32]byte
+	verifiedUntil time.Time
 }
+
+// verifyCacheTTL bounds how long a VerifyCached success is reused.
+const verifyCacheTTL = 10 * time.Minute
 
 func NewManager(store Store) *Manager {
 	return &Manager{store: store}
@@ -109,7 +125,9 @@ func (m *Manager) IsConfigured(ctx context.Context) (bool, error) {
 }
 
 // SetPassword stores the initial password hash. It fails if a password
-// is already configured; use ChangePassword for rotation.
+// is already configured; use ChangePassword for rotation. The write is
+// conditional on no hash being stored, so two concurrent first-run setups
+// can't both win.
 func (m *Manager) SetPassword(ctx context.Context, password string) error {
 	configured, err := m.IsConfigured(ctx)
 	if err != nil {
@@ -118,7 +136,20 @@ func (m *Manager) SetPassword(ctx context.Context, password string) error {
 	if configured {
 		return ErrAlreadyConfigured
 	}
-	return m.storeHash(ctx, password)
+	hash, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	stored, err := m.store.SetSettingIfEmpty(ctx, SettingPasswordHash, hash)
+	if err != nil {
+		return err
+	}
+	m.configured.Store(true)
+	m.checked.Store(true)
+	if !stored {
+		return ErrAlreadyConfigured
+	}
+	return nil
 }
 
 // ChangePassword rotates the password after verifying the current one.
@@ -134,28 +165,33 @@ func (m *Manager) ChangePassword(ctx context.Context, current, next string) erro
 	return m.store.DeleteAllSessions(ctx)
 }
 
-// RemovePassword turns password protection off, returning the dashboard to
-// the open first-run state. Callers must already be authenticated. Existing
-// sessions are revoked so they don't resurface if a password is set again.
-func (m *Manager) RemovePassword(ctx context.Context) error {
-	configured, err := m.IsConfigured(ctx)
-	if err != nil {
-		return err
-	}
-	if !configured {
-		return ErrNotConfigured
-	}
-	if err := m.store.SetSetting(ctx, SettingPasswordHash, ""); err != nil {
-		return err
-	}
-	m.configured.Store(false)
-	m.checked.Store(true)
-	return m.store.DeleteAllSessions(ctx)
-}
-
 // Verify checks a plaintext password against the stored hash.
 func (m *Manager) Verify(ctx context.Context, password string) error {
 	return m.verify(ctx, password)
+}
+
+// VerifyCached is Verify with a short-lived cache of the last success,
+// for callers that present the password on every request (metrics
+// scrapers). Failures are never cached and always cost a bcrypt compare.
+func (m *Manager) VerifyCached(ctx context.Context, password string) error {
+	hash, err := m.store.GetSetting(ctx, SettingPasswordHash)
+	if err != nil {
+		return err
+	}
+	key := sha256.Sum256([]byte(hash + "\x00" + password))
+	m.verifiedMu.Lock()
+	hit := subtle.ConstantTimeCompare(key[:], m.verifiedKey[:]) == 1 && time.Now().Before(m.verifiedUntil)
+	m.verifiedMu.Unlock()
+	if hit && strings.TrimSpace(hash) != "" {
+		return nil
+	}
+	if err := m.verify(ctx, password); err != nil {
+		return err
+	}
+	m.verifiedMu.Lock()
+	m.verifiedKey, m.verifiedUntil = key, time.Now().Add(verifyCacheTTL)
+	m.verifiedMu.Unlock()
+	return nil
 }
 
 func (m *Manager) verify(ctx context.Context, password string) error {
@@ -228,7 +264,9 @@ func (m *Manager) Setup(ctx context.Context, password string) (string, time.Time
 }
 
 // Validate resolves a session token to its expiry, rejecting unknown or
-// expired sessions. Expired rows are swept opportunistically.
+// expired sessions. It never writes: a request carrying a bogus cookie
+// must not cost a database write. Expired rows are removed by
+// SweepExpired, which the server runs periodically.
 func (m *Manager) Validate(ctx context.Context, token string) (time.Time, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -236,8 +274,6 @@ func (m *Manager) Validate(ctx context.Context, token string) (time.Time, error)
 	}
 	expiry, err := m.store.GetSessionExpiry(ctx, TokenHash(token))
 	if err != nil || time.Now().After(expiry) {
-		// Best-effort sweep; the request itself is already rejected.
-		_, _ = m.store.DeleteExpiredSessions(context.WithoutCancel(ctx), time.Now())
 		return time.Time{}, ErrInvalidSession
 	}
 	return expiry, nil

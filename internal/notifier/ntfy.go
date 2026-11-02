@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"mizu/internal/netguard"
 )
 
 // SyncResult holds the data needed to format a notification.
@@ -33,12 +35,10 @@ type Notifier struct {
 // New creates a new ntfy Notifier.
 func New(serverURL, topic, token string) *Notifier {
 	return &Notifier{
-		serverURL: serverURL,
-		topic:     topic,
-		token:     token,
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+		serverURL:  serverURL,
+		topic:      topic,
+		token:      token,
+		httpClient: netguard.NewClient(10*time.Second, true),
 	}
 }
 

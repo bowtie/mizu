@@ -6,6 +6,7 @@ import (
 	stdsync "sync"
 	"time"
 
+	"mizu/internal/auth"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	"mizu/internal/sonarr"
@@ -72,7 +73,10 @@ func handleLiveness(db *database.DB) http.HandlerFunc {
 	}
 }
 
-func handleHealth(cfg *config.Config, db *database.DB, scheduler *schedulerController, engine *syncengine.Engine, statusCache *sonarrStatusCache) http.HandlerFunc {
+// handleHealth reports overall status, Sonarr included. It is public so
+// uptime monitors can poll it, but strangers only learn up or down: the
+// version and sync times are for signed-in callers.
+func handleHealth(cfg *config.Config, db *database.DB, scheduler *schedulerController, engine *syncengine.Engine, statusCache *sonarrStatusCache, mgr *auth.Manager, acc *accessControl) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status := "ok"
 		cfg.RLock()
@@ -85,7 +89,16 @@ func handleHealth(cfg *config.Config, db *database.DB, scheduler *schedulerContr
 			degraded = true
 		}
 
-		payload := map[string]interface{}{"status": status, "version": version}
+		payload := map[string]interface{}{"status": status}
+		if authed, _ := isAuthenticated(r, mgr, acc); !authed {
+			code := http.StatusOK
+			if degraded {
+				code = http.StatusServiceUnavailable
+			}
+			writeJSON(w, code, payload)
+			return
+		}
+		payload["version"] = version
 		if latest, err := db.GetLatestSyncLog(r.Context()); err == nil {
 			payload["last_sync_at"] = latest.CompletedAt
 			interval := scheduler.Interval()

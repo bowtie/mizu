@@ -44,16 +44,9 @@ func TestIsValidSonarrMonitorMode(t *testing.T) {
 	}
 }
 
-func TestLoadMizuAddrOverride(t *testing.T) {
-	t.Setenv("MIZU_ADDR", "0.0.0.0:9000")
+func TestLoadIgnoresEnvironment(t *testing.T) {
+	t.Setenv("MIZU_ADDR", "127.0.0.1:9000")
 	cfg, err := Load()
 	assert.NoError(t, err)
-	assert.Equal(t, "0.0.0.0:9000", cfg.ListenAddr)
-}
-
-func TestLoadDefaultsToLoopback(t *testing.T) {
-	t.Setenv("MIZU_ADDR", "")
-	cfg, err := Load()
-	assert.NoError(t, err)
-	assert.Equal(t, "127.0.0.1:8978", cfg.ListenAddr)
+	assert.Equal(t, ":8978", cfg.ListenAddr)
 }

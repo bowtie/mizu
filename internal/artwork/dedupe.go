@@ -1,6 +1,7 @@
 package artwork
 
 import (
+	"bytes"
 	"context"
 	"image"
 	_ "image/jpeg" // decoders for image.Decode
@@ -19,6 +20,11 @@ const (
 	dedupeFetchTimeout = 10 * time.Second
 	// dedupeMaxBytes caps how much of one image is read for hashing.
 	dedupeMaxBytes = 8 << 20
+	// dedupeMaxPixels caps a thumbnail's decoded size. A small compressed
+	// file can declare enormous dimensions, and decoding allocates
+	// width×height×4 bytes, so the header is checked before decoding.
+	// 40 MP covers any real thumbnail (TMDB originals top out near 24 MP).
+	dedupeMaxPixels = 40_000_000
 	// dedupeMaxDistance is the largest Hamming distance (of 64 bits) at which
 	// two hashes count as the same picture. Re-uploads of one artwork at a
 	// different size or compression land within 0–3; distinct artwork is
@@ -143,13 +149,30 @@ func (m *Manager) imageHash(ctx context.Context, url string) (uint64, bool) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return 0, false
 	}
-	img, _, err := image.Decode(io.LimitReader(resp.Body, dedupeMaxBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, dedupeMaxBytes))
+	if err != nil {
+		return 0, false
+	}
+	if !decodableSize(data) {
+		return 0, false
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return 0, false
 	}
 	h := differenceHash(img)
 	m.hashCache.Store(url, h)
 	return h, true
+}
+
+// decodableSize reports whether data's image header declares dimensions
+// small enough to decode safely.
+func decodableSize(data []byte) bool {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
+		return false
+	}
+	return int64(cfg.Width)*int64(cfg.Height) <= dedupeMaxPixels
 }
 
 // differenceHash is a 64-bit dHash: the picture is reduced to a 9x8 grid of

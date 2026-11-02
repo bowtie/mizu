@@ -111,13 +111,13 @@ func handleAFLSearch(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 		query := r.URL.Query().Get("q")
 		cachedShows, err := loadCachedAFLShows(r.Context(), db)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load cached AFL shows: "+err.Error())
+			writeInternalError(w, err, "failed to load cached AFL shows")
 			return
 		}
 
 		mappings, err := db.GetAllMappings(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
+			writeInternalError(w, err, "failed to load mappings")
 			return
 		}
 
@@ -164,13 +164,13 @@ func handleAFLSuggest(engine *sync.Engine, db *database.DB) http.HandlerFunc {
 
 		cachedShows, err := loadCachedAFLShows(r.Context(), db)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load cached AFL shows: "+err.Error())
+			writeInternalError(w, err, "failed to load cached AFL shows")
 			return
 		}
 
 		mappings, err := db.GetAllMappings(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
+			writeInternalError(w, err, "failed to load mappings")
 			return
 		}
 

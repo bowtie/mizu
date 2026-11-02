@@ -12,6 +12,7 @@ import (
 
 	"mizu/internal/database"
 	"mizu/internal/models"
+	"mizu/internal/netguard"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/rs/zerolog/log"
@@ -58,7 +59,7 @@ func (s *Scraper) SetOnNewShows(fn func(ctx context.Context, shows []models.AFLS
 
 func New(requestTimeout, rateLimitDelay time.Duration, db *database.DB) *Scraper {
 	return &Scraper{
-		client:         &http.Client{Timeout: requestTimeout},
+		client:         netguard.NewClient(requestTimeout, false),
 		rateLimitDelay: rateLimitDelay,
 		db:             db,
 		baseURL:        baseURL,

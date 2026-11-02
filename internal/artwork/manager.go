@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"mizu/internal/database"
+	"mizu/internal/netguard"
 )
 
 // Manager coordinates artwork providers, downloads images to disk, and
@@ -44,14 +45,12 @@ type Manager struct {
 // NewManager creates a Manager that stores images under artDir.
 func NewManager(artDir string, db *database.DB) *Manager {
 	return &Manager{
-		providers: make(map[string]Provider),
-		artDir:    artDir,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		db:       db,
-		mapLocks: make(map[int64]*sync.Mutex),
-		intents:  make(map[int64]int64),
+		providers:  make(map[string]Provider),
+		artDir:     artDir,
+		httpClient: netguard.NewClient(30*time.Second, false),
+		db:         db,
+		mapLocks:   make(map[int64]*sync.Mutex),
+		intents:    make(map[int64]int64),
 	}
 }
 

@@ -18,11 +18,7 @@ import { NotificationsCard } from "../components/settings/NotificationsCard";
 import { BackupCard } from "../components/settings/BackupCard";
 import { InterfaceCard } from "../components/settings/InterfaceCard";
 import { SettingsSkeleton } from "../components/settings/SettingsSkeleton";
-import {
-  SecuritySettingsCard,
-  MIN_PASSWORD_LENGTH,
-  type SecurityIntent,
-} from "../components/SecuritySettingsCard";
+import { SecuritySettingsCard } from "../components/SecuritySettingsCard";
 import {
   refreshAllArtwork,
   testNtfyConnection,
@@ -30,8 +26,6 @@ import {
   exportConfig,
   importConfig,
   errorMessage,
-  setupPassword,
-  removePassword,
 } from "../lib/api";
 import {
   queryKeys,
@@ -60,9 +54,6 @@ export function SettingsPage() {
   const loading = settingsQuery.isPending;
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [securityIntent, setSecurityIntent] = useState<SecurityIntent>(null);
-  const [securityPassword, setSecurityPassword] = useState("");
-  const [securityConfirm, setSecurityConfirm] = useState("");
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [importingConfig, setImportingConfig] = useState(false);
   const importFileRef = useRef<HTMLInputElement | null>(null);
@@ -131,7 +122,7 @@ export function SettingsPage() {
   const formChanged =
     !loading &&
     (formIsDirty || apiKeyDirty || tmdbApiKeyDirty || fanartApiKeyDirty || ntfyTokenDirty);
-  const settingsDirty = formChanged || securityIntent !== null;
+  const settingsDirty = formChanged;
 
   const scheduleReset = (delay = 1800) => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -314,61 +305,13 @@ export function SettingsPage() {
 
   const submitSettings = handleSubmit(onSubmit);
 
-  const resetSecurityIntent = () => {
-    setSecurityIntent(null);
-    setSecurityPassword("");
-    setSecurityConfirm("");
-  };
-
-  const applySecurityIntent = async () => {
-    if (securityIntent === "enable") {
-      await setupPassword(securityPassword);
-      queryClient.setQueryData(["authStatus"], {
-        configured: true,
-        authenticated: true,
-      });
-      addNotification("Password turned on", "success");
-    } else if (securityIntent === "disable") {
-      await removePassword();
-      queryClient.setQueryData(["authStatus"], {
-        configured: false,
-        authenticated: false,
-      });
-      addNotification("Password turned off. The dashboard is now open.", "success");
-    }
-    resetSecurityIntent();
-  };
-
   const handleSave = async () => {
-    if (securityIntent === "enable") {
-      if (securityPassword.length < MIN_PASSWORD_LENGTH) {
-        addNotification(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, "error");
-        return;
-      }
-      if (securityPassword !== securityConfirm) {
-        addNotification("Passwords don't match", "error");
-        return;
-      }
-    }
     if (formChanged) {
       await submitSettings();
-    }
-    if (securityIntent) {
-      setSaving(true);
-      try {
-        await applySecurityIntent();
-        setSavedFlash(true);
-        if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
-        savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
-      } catch (err: unknown) {
-        addNotification("Couldn't update password: " + errorMessage(err), "error");
-      }
-      setSaving(false);
     }
   };
 
   const handleDiscard = () => {
-    resetSecurityIntent();
     applySettings(storeSettings);
   };
 
@@ -437,9 +380,9 @@ export function SettingsPage() {
 
   // ── Config backup ──
 
-  const handleExportConfig = async () => {
+  const handleExportConfig = async (includeSecrets: boolean, password: string) => {
     try {
-      const blob = await exportConfig();
+      const blob = await exportConfig(includeSecrets, password);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -594,15 +537,7 @@ export function SettingsPage() {
         <InterfaceCard control={control} />
 
         {/* Security */}
-        <SecuritySettingsCard
-          intent={securityIntent}
-          onIntentChange={setSecurityIntent}
-          password={securityPassword}
-          confirm={securityConfirm}
-          onPasswordChange={setSecurityPassword}
-          onConfirmChange={setSecurityConfirm}
-          isDisabled={saving}
-        />
+        <SecuritySettingsCard />
 
         {/* Backup */}
         <BackupCard

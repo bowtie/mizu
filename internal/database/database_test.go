@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -223,4 +224,53 @@ func TestNotificationsMutedSurvivesUpsertAndImport(t *testing.T) {
 	got, err = db.GetMappingBySonarrID(ctx, 8)
 	require.NoError(t, err)
 	assert.True(t, got.NotificationsMuted)
+}
+
+func TestNewCreatesOwnerOnlyFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "perm.db")
+	db, err := New(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	require.NoError(t, db.SetSetting(context.Background(), "k", "v"))
+
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		info, err := os.Stat(p)
+		if os.IsNotExist(err) {
+			continue
+		}
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(), p)
+	}
+}
+
+func TestNewTightensExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	require.NoError(t, os.WriteFile(path, nil, 0o644))
+	db, err := New(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+}
+
+func TestSetSettingIfEmpty(t *testing.T) {
+	db, err := New(filepath.Join(t.TempDir(), "s.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	ctx := context.Background()
+
+	ok, err := db.SetSettingIfEmpty(ctx, "k", "first")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	ok, err = db.SetSettingIfEmpty(ctx, "k", "second")
+	require.NoError(t, err)
+	assert.False(t, ok)
+	v, _ := db.GetSetting(ctx, "k")
+	assert.Equal(t, "first", v)
+
+	require.NoError(t, db.SetSetting(ctx, "k", ""))
+	ok, err = db.SetSettingIfEmpty(ctx, "k", "third")
+	require.NoError(t, err)
+	assert.True(t, ok)
 }

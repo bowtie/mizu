@@ -39,7 +39,7 @@ vi.mock("../lib/api", () => ({
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   getArtworkProviders: vi.fn().mockResolvedValue({ providers: [] }),
-  getAuthStatus: vi.fn().mockResolvedValue({ configured: false, authenticated: false }),
+  getAuthStatus: vi.fn().mockResolvedValue({ configured: true, authenticated: true }),
   refreshAflCache: vi.fn(),
   getAflCacheRefreshStatus: vi.fn(),
   refreshAllArtwork: vi.fn(),
@@ -47,9 +47,14 @@ vi.mock("../lib/api", () => ({
   testSonarrConnection: vi.fn(),
   exportConfig: vi.fn(),
   importConfig: vi.fn(),
-  setupPassword: vi.fn(),
-  removePassword: vi.fn(),
   changePassword: vi.fn(),
+  getAccessSettings: vi.fn().mockResolvedValue({
+    mode: "password",
+    trusted_proxies: "",
+    client_address: "127.0.0.1",
+    via_trusted_proxy: true,
+  }),
+  updateAccessSettings: vi.fn(),
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
 

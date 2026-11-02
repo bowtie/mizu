@@ -6,12 +6,47 @@ First public release. Covers everything since 0.2.0.
 
 ### Security
 
-- Selectable auth modes: Mizu's own password, or none when an auth proxy in
-  front handles sign-in. Stored API keys are no longer sent to the browser,
-  and `maskKey` reveals no characters of a key.
-- Works behind reverse proxies and auth proxies: `X-Forwarded-Host` and
-  `X-Forwarded-Proto` handling for the same-origin guard and `Secure`
-  cookies, and `X-Forwarded-For` trusted only from private addresses.
+- A password is required. A fresh install serves only first-run setup until
+  one is set, and it can no longer be switched off from a session. Two
+  simultaneous first-run setups can't both succeed.
+- Sign-in can instead be handed to an auth proxy (Settings → Security). Mizu
+  then answers only requests from the listed trusted proxy addresses, so the
+  proxy can't be bypassed and DNS rebinding gets nowhere. Switching needs the
+  current password.
+- No environment variables: `MIZU_PASSWORD` and `MIZU_ADDR` are gone. Mizu
+  listens on `:8978` (or `-addr`), and all settings, including sign-in mode and
+  trusted proxies, live in the database.
+- Stored API keys never leave the server unasked: changing the Sonarr or ntfy
+  URL requires the key or token again (it was silently sent to the new URL),
+  config imports clear a credential whose URL changed, and exports leave keys
+  out unless requested with the password.
+- `X-Forwarded-For` / `X-Forwarded-Proto` are trusted only from configured
+  proxies (and loopback). Login rate limiting counts only failures, can't be
+  used to lock the owner out, and keeps its memory bounded. Password checks on
+  every endpoint share one budget.
+- Outbound requests refuse link-local, cloud-metadata, multicast and
+  unspecified addresses. Sonarr and ntfy URLs can't carry credentials, query
+  strings or fragments, and redirects to another host are refused (Go would
+  forward the Sonarr API key). Sonarr error bodies are no longer echoed back.
+- Security headers: a Content Security Policy (inline scripts allowed by hash),
+  `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, and HSTS over HTTPS.
+  Session cookies are `Secure` whenever the browser used HTTPS, even behind a
+  proxy that doesn't send `X-Forwarded-Proto`.
+- Mutating API requests must be JSON (multipart only for artwork uploads), on
+  top of the same-origin check.
+- `/metrics` needs sign-in (or basic auth with the dashboard password),
+  `/api/version` needs sign-in, and `/api/health` tells strangers only up or
+  down.
+- Internal errors are logged, not returned. The fanart.tv key no longer
+  appears in logs. A bogus session cookie no longer triggers a database write;
+  expired sessions are swept hourly.
+- `mizu.db` (and its WAL/SHM files) are created owner-only (`0600`), and
+  existing files are tightened.
+- Artwork thumbnails are size-checked before decoding.
+- The offline API cache is cleared whenever a session ends.
+- Releases pin actions to commit SHAs and base images to digests, build
+  without the shared CI cache, and publish signed images with provenance and
+  an SBOM.
 
 ### Notifications
 

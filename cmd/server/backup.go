@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"mizu/internal/artwork"
@@ -13,18 +12,21 @@ import (
 	"mizu/internal/config"
 	"mizu/internal/database"
 	"mizu/internal/models"
+	"mizu/internal/netguard"
 	syncengine "mizu/internal/sync"
 
 	"github.com/rs/zerolog/log"
 )
 
-// Config export/import: a JSON snapshot of all mappings plus the
-// non-auth settings for backup and migrating instances. API keys are
-// included on purpose — a restore that loses the Sonarr key isn't a
-// restore — so, unlike /api/settings (which only returns masked keys),
-// the export is a secret: it lives in the session-protected group and is
-// sent with Cache-Control: no-store so neither the browser nor the service
-// worker keeps a copy.
+// Config export/import: a JSON snapshot of all mappings plus the portable
+// settings for backup and migrating instances.
+//
+// API keys and tokens are left out by default, so having a session isn't
+// enough to read them (the settings API only ever returns masked keys).
+// An export that includes them — a full restore needs the Sonarr key —
+// must be asked for explicitly and re-confirmed with the dashboard
+// password. Exports are sent with Cache-Control: no-store so neither the
+// browser nor the service worker keeps a copy.
 
 const backupFormatVersion = 1
 
@@ -56,6 +58,15 @@ var importableSettings = map[string]struct{}{
 	"ui_sounds_enabled":               {},
 	"afl_show_cache_refreshed_at":     {},
 	"manual_match_pending_series_ids": {},
+}
+
+// secretSettings are the importable settings that hold credentials. They
+// are exported only on request (see handleExportConfig).
+var secretSettings = map[string]struct{}{
+	"sonarr_api_key": {},
+	"tmdb_api_key":   {},
+	"fanart_api_key": {},
+	"ntfy_token":     {},
 }
 
 // validAFLSlug reports whether s contains only the characters the
@@ -134,25 +145,67 @@ func (b mappingBackup) toMapping() models.ShowMapping {
 }
 
 type backupFile struct {
-	Version    int               `json:"version"`
-	ExportedAt time.Time         `json:"exported_at"`
-	Settings   map[string]string `json:"settings"`
-	Mappings   []mappingBackup   `json:"mappings"`
+	Version    int       `json:"version"`
+	ExportedAt time.Time `json:"exported_at"`
+	// IncludesSecrets records whether API keys and tokens were exported.
+	IncludesSecrets bool              `json:"includes_secrets"`
+	Settings        map[string]string `json:"settings"`
+	Mappings        []mappingBackup   `json:"mappings"`
 }
 
-// handleExportConfig streams the full config as a downloadable JSON file.
-func handleExportConfig(db *database.DB) http.HandlerFunc {
+// handleExportConfig streams the config as a downloadable JSON file. GET
+// (or a POST without include_secrets) leaves API keys and tokens out.
+// POST {"include_secrets": true, "password": "..."} includes them after
+// checking the dashboard password; with a sign-in proxy in front, the
+// proxy has already vouched for the caller and no password is asked.
+func handleExportConfig(db *database.DB, mgr *auth.Manager, acc *accessControl) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		settings, err := db.GetAllSettings(r.Context())
+		includeSecrets := false
+		if r.Method == http.MethodPost {
+			var req struct {
+				IncludeSecrets bool   `json:"include_secrets"`
+				Password       string `json:"password"`
+			}
+			if r.ContentLength != 0 {
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					writeError(w, http.StatusBadRequest, "invalid JSON body")
+					return
+				}
+			}
+			if req.IncludeSecrets && !acc.get().External {
+				if err := mgr.Verify(r.Context(), req.Password); err != nil {
+					if err == auth.ErrInvalidPassword {
+						writeError(w, http.StatusUnauthorized, "incorrect password")
+						return
+					}
+					writeInternalError(w, err, "failed to check password")
+					return
+				}
+			}
+			includeSecrets = req.IncludeSecrets
+		}
+
+		all, err := db.GetAllSettings(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load settings: "+err.Error())
+			writeInternalError(w, err, "failed to load settings")
 			return
 		}
-		delete(settings, auth.SettingPasswordHash)
+		// Only portable settings leave the instance: never the password
+		// hash or the sign-in mode, and secrets only when asked for.
+		settings := make(map[string]string, len(importableSettings))
+		for k, v := range all {
+			if _, ok := importableSettings[k]; !ok {
+				continue
+			}
+			if _, secret := secretSettings[k]; secret && !includeSecrets {
+				continue
+			}
+			settings[k] = v
+		}
 
 		mappings, err := db.GetAllMappings(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load mappings: "+err.Error())
+			writeInternalError(w, err, "failed to load mappings")
 			return
 		}
 		exported := make([]mappingBackup, 0, len(mappings))
@@ -164,10 +217,11 @@ func handleExportConfig(db *database.DB) http.HandlerFunc {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, backupFile{
-			Version:    backupFormatVersion,
-			ExportedAt: time.Now().UTC(),
-			Settings:   settings,
-			Mappings:   exported,
+			Version:         backupFormatVersion,
+			ExportedAt:      time.Now().UTC(),
+			IncludesSecrets: includeSecrets,
+			Settings:        settings,
+			Mappings:        exported,
 		})
 	}
 }
@@ -232,13 +286,22 @@ func handleImportConfig(cfg *config.Config, db *database.DB, scheduler *schedule
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		// A saved credential belongs to its server. If the file points
+		// Sonarr or ntfy somewhere else without supplying a credential
+		// (a secret-less export, or a crafted file), clear the saved one
+		// rather than sending it to the new address.
+		cfg.RLock()
+		currentSonarrURL, currentNtfyURL := cfg.SonarrURL, cfg.NtfyServerURL
+		cfg.RUnlock()
+		dropOrphanedCredential(imported, "sonarr_url", "sonarr_api_key", currentSonarrURL)
+		dropOrphanedCredential(imported, "ntfy_server_url", "ntfy_token", currentNtfyURL)
 
 		mappings := make([]models.ShowMapping, 0, len(file.Mappings))
 		for _, mb := range file.Mappings {
 			mappings = append(mappings, mb.toMapping())
 		}
 		if err := db.ImportConfig(r.Context(), imported, mappings); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to import config: "+err.Error())
+			writeInternalError(w, err, "failed to import config")
 			return
 		}
 
@@ -264,6 +327,18 @@ func handleImportConfig(cfg *config.Config, db *database.DB, scheduler *schedule
 			"settings_imported": len(imported),
 			"mappings_imported": len(file.Mappings),
 		})
+	}
+}
+
+// dropOrphanedCredential clears credKey when the import changes urlKey
+// away from current and brings no credential of its own.
+func dropOrphanedCredential(imported map[string]string, urlKey, credKey, current string) {
+	newURL, changes := imported[urlKey]
+	if !changes || sameBaseURL(newURL, current) {
+		return
+	}
+	if _, has := imported[credKey]; !has {
+		imported[credKey] = ""
 	}
 }
 
@@ -302,8 +377,7 @@ func validateImportedSettings(settings map[string]string, artworkMgr *artwork.Ma
 				bad = err != nil || id < 0
 			}
 		case "sonarr_url", "ntfy_server_url":
-			lower := strings.ToLower(value)
-			bad = value != "" && !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://")
+			bad = value != "" && netguard.ValidateServiceURL(value) != nil
 		case "artwork_default_source":
 			if _, ok := knownArtworkSources[value]; !ok {
 				bad = true

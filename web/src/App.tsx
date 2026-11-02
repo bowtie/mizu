@@ -85,14 +85,14 @@ function SoundsPreference() {
 // Gate every content route behind auth. While the status request is in
 // flight we render a neutral fallback rather than flashing the app; once
 // resolved, unauthenticated visitors are bounced to /login with a
-// return path. When no password is configured (fresh install) the app
-// stays open — matching the *arr first-run behavior.
+// return path. A fresh install has no password yet; the login page then
+// asks for one, and nothing else is served until it is set.
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { data: status, isLoading } = useAuthStatus();
   const location = useLocation();
 
   if (isLoading) return <PageFallback />;
-  if (status?.configured && !status.authenticated) {
+  if (!status?.authenticated) {
     const from = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?from=${from}`} replace />;
   }

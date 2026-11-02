@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"mizu/internal/auth"
 	"mizu/internal/config"
 	"mizu/internal/database"
 	"mizu/internal/models"
@@ -39,7 +40,7 @@ func TestHealthOKReturns200AndCachesSonarrProbe(t *testing.T) {
 	scheduler := newSchedulerController(cfg.ScanInterval)
 
 	statusCache := newSonarrStatusCache(healthSonarrTTL)
-	handler := handleHealth(cfg, db, scheduler, engine, statusCache)
+	handler := handleHealth(cfg, db, scheduler, engine, statusCache, auth.NewManager(db), newAccessControl(accessPolicy{}))
 
 	rec := httptest.NewRecorder()
 	handler(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
@@ -69,7 +70,7 @@ func TestHealthDegradedReturns503(t *testing.T) {
 	engine := newSyncRaceEngine(t, cfg.SonarrURL, db)
 
 	rec := httptest.NewRecorder()
-	handleHealth(cfg, db, newSchedulerController(cfg.ScanInterval), engine, newSonarrStatusCache(healthSonarrTTL))(
+	handleHealth(cfg, db, newSchedulerController(cfg.ScanInterval), engine, newSonarrStatusCache(healthSonarrTTL), auth.NewManager(db), newAccessControl(accessPolicy{}))(
 		rec, httptest.NewRequest(http.MethodGet, "/api/health", nil),
 	)
 
@@ -89,7 +90,7 @@ func TestHealthNoSonarrConfiguredIsOK(t *testing.T) {
 	engine := newSyncRaceEngine(t, "", db)
 
 	rec := httptest.NewRecorder()
-	handleHealth(cfg, db, newSchedulerController(cfg.ScanInterval), engine, newSonarrStatusCache(healthSonarrTTL))(
+	handleHealth(cfg, db, newSchedulerController(cfg.ScanInterval), engine, newSonarrStatusCache(healthSonarrTTL), auth.NewManager(db), newAccessControl(accessPolicy{}))(
 		rec, httptest.NewRequest(http.MethodGet, "/api/health", nil),
 	)
 
@@ -196,4 +197,28 @@ func TestLivenessReportsDatabaseDown(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handleLiveness(db)(rec, httptest.NewRequest(http.MethodGet, "/api/health/live", nil))
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestHealthHidesDetailsFromStrangers(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	cfg := config.DefaultConfig()
+	cfg.SonarrURL = ""
+	engine := newSyncRaceEngine(t, "", db)
+	mgr := auth.NewManager(db)
+	h := handleHealth(cfg, db, newSchedulerController(cfg.ScanInterval), engine, newSonarrStatusCache(healthSonarrTTL), mgr, newAccessControl(accessPolicy{}))
+
+	rec := httptest.NewRecorder()
+	h(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"status":"ok"}`, rec.Body.String())
+
+	token, _, err := mgr.Setup(t.Context(), "health-check-pass")
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec = httptest.NewRecorder()
+	h(rec, req)
+	assert.Contains(t, rec.Body.String(), `"version"`)
 }

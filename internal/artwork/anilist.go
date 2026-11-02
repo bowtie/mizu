@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mizu/internal/models"
+	"mizu/internal/netguard"
 )
 
 // AniListProvider fetches artwork from AniList's public GraphQL API.
@@ -20,7 +21,7 @@ func NewAniListProvider(timeout time.Duration) *AniListProvider {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return &AniListProvider{httpClient: &http.Client{Timeout: timeout}}
+	return &AniListProvider{httpClient: netguard.NewClient(timeout, false)}
 }
 
 func (p *AniListProvider) Name() string    { return "anilist" }

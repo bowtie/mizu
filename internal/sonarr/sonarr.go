@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"mizu/internal/models"
+	"mizu/internal/netguard"
 
 	"github.com/rs/zerolog/log"
 )
@@ -60,9 +61,9 @@ func New(baseURL, apiKey string, timeout time.Duration) *Client {
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		// Same-host redirects only: Go forwards X-Api-Key to any
+		// redirect target, so a redirect elsewhere would leak the key.
+		httpClient:       netguard.NewClient(timeout, true),
 		retryMaxAttempts: defaultRetryMaxAttempts,
 		retryBaseBackoff: 500 * time.Millisecond,
 		retryMaxBackoff:  4 * time.Second,
@@ -80,10 +81,11 @@ type httpStatusError struct {
 	Body       string
 }
 
+// Error deliberately leaves out the response body: these errors reach API
+// clients, and echoing whatever the configured URL answered would let a
+// caller read arbitrary internal pages through Mizu. Body is kept for
+// debug logging only.
 func (e *httpStatusError) Error() string {
-	if e.Body != "" {
-		return fmt.Sprintf("%s %s returned %d: %s", e.Method, e.Path, e.Status, e.Body)
-	}
 	return fmt.Sprintf("%s %s returned %d", e.Method, e.Path, e.Status)
 }
 
@@ -199,6 +201,9 @@ func (c *Client) attempt(ctx context.Context, method, path string, payload []byt
 			Path:   path,
 			Status: resp.StatusCode,
 			Body:   strings.TrimSpace(string(errBody)),
+		}
+		if statusErr.Body != "" {
+			log.Debug().Str("method", method).Str("path", path).Int("status", resp.StatusCode).Str("body", statusErr.Body).Msg("sonarr error response")
 		}
 		if ra := resp.Header.Get("Retry-After"); ra != "" {
 			if secs, perr := strconv.Atoi(ra); perr == nil && secs > 0 {

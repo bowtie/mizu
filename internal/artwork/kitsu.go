@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"mizu/internal/models"
+	"mizu/internal/netguard"
 )
 
 // KitsuProvider fetches artwork from Kitsu.io's public API.
@@ -21,7 +22,7 @@ func NewKitsuProvider(timeout time.Duration) *KitsuProvider {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return &KitsuProvider{httpClient: &http.Client{Timeout: timeout}}
+	return &KitsuProvider{httpClient: netguard.NewClient(timeout, false)}
 }
 
 func (p *KitsuProvider) Name() string    { return "kitsu" }

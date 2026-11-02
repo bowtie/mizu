@@ -1,0 +1,27 @@
+# Keeps the pinned versions current: actions are pinned to commit SHAs and
+# base images to digests, so updates arrive as reviewable PRs instead of
+# moving tags.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: bun
+    directory: /web
+    schedule:
+      interval: weekly

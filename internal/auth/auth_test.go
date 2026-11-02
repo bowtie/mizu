@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -173,24 +175,62 @@ func TestTokenHashIsDeterministic(t *testing.T) {
 	assert.NotEqual(t, TokenHash("abc"), TokenHash("abd"))
 }
 
-func TestRemovePassword(t *testing.T) {
+func TestConcurrentSetupHasOneWinner(t *testing.T) {
 	mgr := newTestManager(t)
 	ctx := context.Background()
 
-	assert.ErrorIs(t, mgr.RemovePassword(ctx), ErrNotConfigured)
+	const racers = 8
+	errs := make(chan error, racers)
+	var start sync.WaitGroup
+	start.Add(1)
+	for i := 0; i < racers; i++ {
+		go func(i int) {
+			start.Wait()
+			_, _, err := mgr.Setup(ctx, fmt.Sprintf("password-%d-long", i))
+			errs <- err
+		}(i)
+	}
+	start.Done()
 
-	require.NoError(t, mgr.SetPassword(ctx, "correct horse battery"))
-	token, _, err := mgr.Login(ctx, "correct horse battery")
+	wins := 0
+	for i := 0; i < racers; i++ {
+		err := <-errs
+		if err == nil {
+			wins++
+		} else {
+			assert.ErrorIs(t, err, ErrAlreadyConfigured)
+		}
+	}
+	assert.Equal(t, 1, wins, "exactly one first-run setup may succeed")
+}
+
+func TestValidateDoesNotWriteForBogusTokens(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	require.NoError(t, mgr.SetPassword(ctx, "long-enough-password"))
+
+	db := mgr.store.(*database.DB)
+	require.NoError(t, db.CreateSession(ctx, TokenHash("stale"), time.Now().Add(-time.Minute)))
+
+	_, err := mgr.Validate(ctx, "bogus")
+	assert.ErrorIs(t, err, ErrInvalidSession)
+
+	// The expired row is still there: only SweepExpired removes it.
+	n, err := mgr.SweepExpired(ctx)
 	require.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+}
 
-	require.NoError(t, mgr.RemovePassword(ctx))
-	configured, err := mgr.IsConfigured(ctx)
-	require.NoError(t, err)
-	assert.False(t, configured)
+func TestVerifyCachedFollowsPasswordChanges(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	require.NoError(t, mgr.SetPassword(ctx, "first-password"))
 
-	_, err = mgr.Validate(ctx, token)
-	assert.Error(t, err, "old sessions are revoked")
+	require.NoError(t, mgr.VerifyCached(ctx, "first-password"))
+	require.NoError(t, mgr.VerifyCached(ctx, "first-password"), "cached hit")
+	assert.ErrorIs(t, mgr.VerifyCached(ctx, "wrong-password"), ErrInvalidPassword)
 
-	// A password can be set up again from the open state.
-	require.NoError(t, mgr.SetPassword(ctx, "another good pass"))
+	require.NoError(t, mgr.ChangePassword(ctx, "first-password", "second-password"))
+	assert.ErrorIs(t, mgr.VerifyCached(ctx, "first-password"), ErrInvalidPassword, "old password not served from cache")
+	require.NoError(t, mgr.VerifyCached(ctx, "second-password"))
 }

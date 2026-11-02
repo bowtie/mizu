@@ -10,7 +10,7 @@ func handleGetStats(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		canon, mixed, animeCanon, filler, total, err := db.GetFillerStats(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -35,7 +35,7 @@ func handleGetLogs(db *database.DB) http.HandlerFunc {
 		}
 		logs, err := db.GetSyncLogsPage(r.Context(), limit, offset)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		writeJSON(w, http.StatusOK, logs)

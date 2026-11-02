@@ -112,6 +112,24 @@ export function LoginPage() {
 
   const isSetup = status !== null && !status.configured;
 
+  // Sign-in is handled by a proxy, but this browser reached Mizu without
+  // going through it (or from an address that isn't a trusted proxy).
+  if (status?.external && !status.authenticated) {
+    return (
+      <div className="onboarding-screen" style={{ padding: "var(--spacing-5)" }}>
+        <Card style={{ width: "100%", maxWidth: 400 }}>
+          <VStack gap={3} align="center" style={{ padding: "var(--spacing-5)" }}>
+            <Heading level={1}>Sign in through your proxy</Heading>
+            <Text size="sm" color="secondary" style={{ textAlign: "center" }}>
+              This Mizu is protected by a sign-in proxy and only answers requests that come through
+              it. Open Mizu at your proxy's address instead.
+            </Text>
+          </VStack>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="onboarding-screen" style={{ padding: "var(--spacing-5)" }}>
       <Card style={{ width: "100%", maxWidth: 400 }}>
@@ -182,7 +200,7 @@ export function LoginPage() {
 
           {isSetup && (
             <Text size="xsm" color="secondary" style={{ textAlign: "center" }}>
-              Until a password is set, anyone with network access can change your settings.
+              Mizu stays locked until a password is set.
             </Text>
           )}
         </VStack>

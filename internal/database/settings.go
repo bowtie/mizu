@@ -48,6 +48,24 @@ func (db *DB) SetSettings(ctx context.Context, values map[string]string) error {
 	return tx.Commit()
 }
 
+// SetSettingIfEmpty writes value only when the key is missing or holds
+// an empty string, reporting whether it did. The check and the write are
+// one statement, so two concurrent callers can't both succeed.
+func (db *DB) SetSettingIfEmpty(ctx context.Context, key, value string) (bool, error) {
+	res, err := db.conn.ExecContext(ctx,
+		`INSERT INTO app_settings (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE app_settings.value = ''`,
+		key, value)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (db *DB) SetSetting(ctx context.Context, key, value string) error {
 	return db.q.SetSetting(ctx, sqlcgen.SetSettingParams{
 		Key:   key,

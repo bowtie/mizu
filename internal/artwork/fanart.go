@@ -3,11 +3,14 @@ package artwork
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"mizu/internal/models"
+	"mizu/internal/netguard"
 )
 
 // FanartProvider fetches artwork from Fanart.tv.
@@ -22,7 +25,7 @@ func NewFanartProvider(apiKey string, timeout time.Duration) *FanartProvider {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return &FanartProvider{apiKey: apiKey, httpClient: &http.Client{Timeout: timeout}}
+	return &FanartProvider{apiKey: apiKey, httpClient: netguard.NewClient(timeout, false)}
 }
 
 func (p *FanartProvider) Name() string    { return "fanart" }
@@ -157,18 +160,21 @@ func (p *FanartProvider) fetchResponse(ctx context.Context, series models.Sonarr
 		return nil, nil
 	}
 
-	url := fmt.Sprintf("https://webservice.fanart.tv/v3.2/tv/%s?api_key=%s", tvdbID, p.apiKey)
+	// fanart.tv takes the key in the query string, so the URL is a secret:
+	// errors below must never carry it (Go's transport errors embed the
+	// full request URL, and these errors end up in logs and responses).
+	reqURL := fmt.Sprintf("https://webservice.fanart.tv/v3.2/tv/%s?api_key=%s", tvdbID, url.QueryEscape(p.apiKey))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("fanart.tv: could not build request")
 	}
 	req.Header.Set("User-Agent", "Mizu/1.0")
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, redactURLError(err)
 	}
 	defer resp.Body.Close()
 
@@ -184,6 +190,16 @@ func (p *FanartProvider) fetchResponse(ctx context.Context, series models.Sonarr
 		return nil, err
 	}
 	return &decoded, nil
+}
+
+// redactURLError strips the request URL from a transport error, keeping
+// only the underlying cause (timeout, DNS failure, ...).
+func redactURLError(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		return fmt.Errorf("fanart.tv request failed: %w", uerr.Err)
+	}
+	return err
 }
 
 // atoiLikes converts fanart.tv's string `likes` field to an int, defaulting

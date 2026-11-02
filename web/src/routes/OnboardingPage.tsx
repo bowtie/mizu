@@ -41,8 +41,6 @@ type AflState =
 const AFL_POLL_MS = 1000;
 const AFL_COUNT_ATTEMPTS = 4;
 
-const reachedOverNetwork = !["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
-
 // One-time setup: this page is only reachable until Sonarr is connected
 // (see OnboardingGate in App.tsx); everything here can be changed later in
 // Settings. Nothing is saved until the last step, because saving the API key
@@ -351,13 +349,6 @@ export function OnboardingPage() {
                     </Text>
                   )}
                 </HStack>
-
-                {reachedOverNetwork && (
-                  <Text type="supporting" color="secondary">
-                    You're reaching Mizu over the network and it isn't password protected. Turn on a
-                    password in Settings, Security after setup.
-                  </Text>
-                )}
 
                 {errorLine}
                 <HStack gap={2} justify="between" wrap="wrap">

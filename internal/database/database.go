@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"os"
 	"strings"
 
 	"mizu/internal/database/sqlcgen"
@@ -21,8 +22,38 @@ type DB struct {
 	q    *sqlcgen.Queries
 }
 
+// dbFileMode keeps the database (which stores API keys and tokens)
+// readable by its owner only. SQLite creates the -wal and -shm files with
+// the main file's permissions, so tightening the main file covers them.
+const dbFileMode = 0o600
+
+// restrictPermissions creates the database file owner-only if it doesn't
+// exist yet, and tightens an existing one (and its WAL/SHM siblings) that
+// an older build created world-readable.
+func restrictPermissions(dbPath string) error {
+	if dbPath == "" || dbPath == ":memory:" || strings.HasPrefix(dbPath, "file:") {
+		return nil
+	}
+	f, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE, dbFileMode)
+	if err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	for _, p := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := os.Chmod(p, dbFileMode); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 // New opens or creates a SQLite database at the given path.
 func New(dbPath string) (*DB, error) {
+	if err := restrictPermissions(dbPath); err != nil {
+		return nil, fmt.Errorf("securing database file: %w", err)
+	}
 	conn, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=1")
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)

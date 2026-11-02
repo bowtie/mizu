@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"mizu/internal/models"
+	"mizu/internal/netguard"
 )
 
 // TMDBProvider fetches artwork from The Movie Database.
@@ -22,7 +23,7 @@ func NewTMDBProvider(apiKey string, timeout time.Duration) *TMDBProvider {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return &TMDBProvider{apiKey: apiKey, httpClient: &http.Client{Timeout: timeout}}
+	return &TMDBProvider{apiKey: apiKey, httpClient: netguard.NewClient(timeout, false)}
 }
 
 func (p *TMDBProvider) Name() string    { return "tmdb" }

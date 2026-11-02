@@ -20,7 +20,7 @@ func handleGetMappings(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mappings, err := db.GetAllMappings(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		writeJSON(w, http.StatusOK, mappings)
@@ -36,7 +36,7 @@ func handleGetMapping(db *database.DB) http.HandlerFunc {
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {
@@ -239,7 +239,7 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 			SyncWatermark:    initialWatermark,
 		}
 		if err := db.UpsertMapping(r.Context(), &mapping); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to save mapping: "+err.Error())
+			writeInternalError(w, err, "failed to save mapping")
 			return
 		}
 
@@ -323,7 +323,7 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {
@@ -422,12 +422,12 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 			syncEngine.BumpMappingEpoch(id)
 		}
 		if err := db.UpsertMapping(r.Context(), mapping); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to update mapping: "+err.Error())
+			writeInternalError(w, err, "failed to update mapping")
 			return
 		}
 		if update.NotificationsMuted != nil {
 			if err := db.SetNotificationsMuted(r.Context(), mapping.ID, mapping.NotificationsMuted); err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to update mapping: "+err.Error())
+				writeInternalError(w, err, "failed to update mapping")
 				return
 			}
 		}
@@ -453,7 +453,7 @@ func handleDeleteMapping(db *database.DB, mgr *artwork.Manager) http.HandlerFunc
 			return
 		}
 		if err := db.DeleteMapping(r.Context(), id); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to delete mapping: "+err.Error())
+			writeInternalError(w, err, "failed to delete mapping")
 			return
 		}
 		// Clean up downloaded artwork files

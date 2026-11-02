@@ -19,7 +19,11 @@ import (
 )
 
 func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, scheduler *schedulerController, appCtx context.Context, bgWG *stdsync.WaitGroup) http.Handler {
+	authMgr := auth.NewManager(db)
+	acc := newAccessControl(loadAccessPolicy(appCtx, db))
+
 	r := chi.NewRouter()
+	r.Use(securityHeaders(acc))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
@@ -36,7 +40,6 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 		})
 	})
 
-	authMgr := auth.NewManager(db)
 	registerBuildInfo()
 
 	// Artwork manager — "sonarr" (default) uses Sonarr images directly;
@@ -47,9 +50,16 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 	artworkMgr.Register(artwork.NewFanartProvider(cfg.FanartAPIKey, cfg.RequestTimeout))
 	artworkMgr.Register(artwork.NewKitsuProvider(cfg.RequestTimeout))
 
-	// Prometheus-style metrics. Public by convention; exposes only
-	// counters/gauges, never request payloads.
-	r.Handle("/metrics", metrics.Handler())
+	// One failure budget for every endpoint that checks the dashboard
+	// password, so guesses can't be spread across them.
+	authLimiter := newRateLimiter()
+	wrapLimited := func(h http.HandlerFunc) http.HandlerFunc {
+		return limitMiddleware(authLimiter, acc, h).ServeHTTP
+	}
+
+	// Prometheus-style metrics: signed-in browsers, or Basic auth with the
+	// dashboard password for scrapers (see metricsAuth).
+	r.Handle("/metrics", metricsAuth(authMgr, acc, authLimiter, metrics.Handler()))
 
 	r.Route("/api", func(r chi.Router) {
 		// Unknown API paths get a JSON 404 instead of falling through to
@@ -63,35 +73,27 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 
 		// ── Public: monitoring + authentication ──
 		sonarrStatus := newSonarrStatusCache(healthSonarrTTL)
-		r.Get("/health", handleHealth(cfg, db, scheduler, syncEngine, sonarrStatus))
+		r.Get("/health", handleHealth(cfg, db, scheduler, syncEngine, sonarrStatus, authMgr, acc))
 		r.Get("/health/live", handleLiveness(db))
 
-		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, http.StatusOK, map[string]interface{}{"version": version, "commit": commit, "build_date": buildDate})
-		})
-
 		r.Route("/auth", func(r chi.Router) {
-			r.Get("/status", handleAuthStatus(authMgr))
-			// Login and setup are the password-guessing surfaces — bound
-			// by a per-source and a global fixed window so neither a
-			// single client nor a key-rotating one can brute-force freely.
-			authLimiter := newRateLimiter()
-			wrapLimited := func(h http.HandlerFunc) http.HandlerFunc {
-				return func(w http.ResponseWriter, r *http.Request) {
-					limitMiddleware(authLimiter, h).ServeHTTP(w, r)
-				}
-			}
-			r.Post("/setup", wrapLimited(handleAuthSetup(authMgr)))
-			r.Post("/login", wrapLimited(handleAuthLogin(authMgr)))
-			r.Post("/logout", handleAuthLogout(authMgr))
+			r.Get("/status", handleAuthStatus(authMgr, acc))
+			r.Post("/setup", wrapLimited(handleAuthSetup(authMgr, acc)))
+			r.Post("/login", wrapLimited(handleAuthLogin(authMgr, acc)))
+			r.Post("/logout", handleAuthLogout(authMgr, acc))
 		})
 
-		// ── Protected: everything below requires a valid session ──
+		// ── Protected: everything below requires sign-in ──
 		r.Group(func(r chi.Router) {
-			r.Use(requireAuth(authMgr))
+			r.Use(requireAuth(authMgr, acc))
 
-			r.Post("/auth/change-password", handleAuthChangePassword(authMgr))
-			r.Post("/auth/remove-password", handleAuthRemovePassword(authMgr))
+			r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"version": version, "commit": commit, "build_date": buildDate})
+			})
+
+			r.Post("/auth/change-password", wrapLimited(handleAuthChangePassword(authMgr, acc)))
+			r.Get("/auth/access", handleGetAccessSettings(acc))
+			r.Put("/auth/access", wrapLimited(handleUpdateAccessSettings(authMgr, acc, db)))
 
 			r.Get("/stats", handleGetStats(db))
 
@@ -140,13 +142,36 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			r.Get("/afl/search", handleAFLSearch(syncEngine, db))
 			r.Get("/afl/suggest", handleAFLSuggest(syncEngine, db))
 
-			// Config backup — session-protected like the settings endpoints
-			// it mirrors (the export includes API keys by design).
-			r.Get("/backup/export", handleExportConfig(db))
+			// Config backup. A plain export leaves secrets out; including
+			// them takes the dashboard password (see handleExportConfig).
+			r.Get("/backup/export", handleExportConfig(db, authMgr, acc))
+			r.Post("/backup/export", wrapLimited(handleExportConfig(db, authMgr, acc)))
 			r.Post("/backup/import", handleImportConfig(cfg, db, scheduler, syncEngine, artworkMgr))
 		})
 	})
 
 	r.NotFound(web.SPAHandler().ServeHTTP)
 	return r
+}
+
+// securityHeaders sets browser hardening headers on every response:
+// no framing (clickjacking), no MIME sniffing, a strict Content Security
+// Policy for the app, and HSTS once the browser is on HTTPS. Handlers may
+// override (artwork is served with its own sandbox CSP).
+func securityHeaders(acc *accessControl) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			h.Set("Content-Security-Policy", web.CSP)
+			h.Set("X-Frame-Options", "DENY")
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("Referrer-Policy", "same-origin")
+			h.Set("Cross-Origin-Opener-Policy", "same-origin")
+			h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+			if acc.get().isHTTPS(r) {
+				h.Set("Strict-Transport-Security", "max-age=31536000")
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

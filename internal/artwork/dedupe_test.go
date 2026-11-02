@@ -3,9 +3,11 @@ package artwork
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"image"
 	"image/color"
 	"image/jpeg"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -141,4 +143,20 @@ type failingTransport struct{}
 
 func (failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, assert.AnError
+}
+
+func TestDecodableSizeRejectsHugeDimensions(t *testing.T) {
+	// A valid PNG header declaring 100000×100000 pixels: tiny on the wire,
+	// ~40 GB if decoded.
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, image.NewGray(image.Rect(0, 0, 1, 1))))
+	data := buf.Bytes()
+	binary.BigEndian.PutUint32(data[16:20], 100000) // IHDR width
+	binary.BigEndian.PutUint32(data[20:24], 100000) // IHDR height
+	assert.False(t, decodableSize(data))
+
+	buf.Reset()
+	require.NoError(t, png.Encode(&buf, image.NewGray(image.Rect(0, 0, 300, 450))))
+	assert.True(t, decodableSize(buf.Bytes()))
+	assert.False(t, decodableSize([]byte("not an image")))
 }

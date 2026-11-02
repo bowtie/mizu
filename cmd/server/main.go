@@ -30,6 +30,7 @@ var (
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
+	listenAddr := flag.String("addr", "", "listen address (default \":8978\", all interfaces)")
 	flag.Parse()
 
 	if *showVersion {
@@ -43,6 +44,9 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load configuration")
+	}
+	if *listenAddr != "" {
+		cfg.ListenAddr = *listenAddr
 	}
 
 	level, err := zerolog.ParseLevel(cfg.LogLevel)
@@ -61,7 +65,7 @@ func main() {
 	log.Info().Str("path", cfg.DBPath).Msg("database initialized")
 
 	applyRuntimeSettings(context.Background(), db, cfg)
-	seedAuthFromEnv(db)
+	startupMaintenance(db)
 	scheduler := newSchedulerController(cfg.ScanInterval)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -79,6 +83,7 @@ func main() {
 	}
 
 	go startScheduler(ctx, cfg, scheduler, syncEngine)
+	go sweepSessions(ctx, auth.NewManager(db))
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -190,7 +195,8 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	}
 }
 
-func seedAuthFromEnv(db *database.DB) {
+// startupMaintenance clears state a previous run left behind.
+func startupMaintenance(db *database.DB) {
 	ctx := context.Background()
 
 	// Drop sessions that expired while the server was down.
@@ -203,26 +209,28 @@ func seedAuthFromEnv(db *database.DB) {
 	if n, err := db.SweepStaleRunningSyncLogs(ctx); err == nil && n > 0 {
 		log.Info().Int64("count", n).Msg("marked interrupted sync logs as failed")
 	}
+}
 
-	envPassword := os.Getenv("MIZU_PASSWORD")
-	if envPassword == "" {
-		return
+// sessionSweepInterval is how often expired sessions are deleted. Request
+// handling never deletes them (a bogus cookie must not cost a write), so
+// this is the only cleanup besides the one at startup.
+const sessionSweepInterval = time.Hour
+
+func sweepSessions(ctx context.Context, mgr *auth.Manager) {
+	ticker := time.NewTicker(sessionSweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if n, err := mgr.SweepExpired(ctx); err != nil {
+				log.Warn().Err(err).Msg("failed to sweep expired sessions")
+			} else if n > 0 {
+				log.Debug().Int64("count", n).Msg("removed expired sessions")
+			}
+		}
 	}
-	mgr := auth.NewManager(db)
-	configured, err := mgr.IsConfigured(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to check auth configuration; skipping MIZU_PASSWORD seeding")
-		return
-	}
-	if configured {
-		log.Info().Msg("MIZU_PASSWORD set but a password is already configured; ignoring")
-		return
-	}
-	if _, _, err := mgr.Setup(ctx, envPassword); err != nil {
-		log.Error().Err(err).Msg("failed to seed password from MIZU_PASSWORD")
-		return
-	}
-	log.Info().Msg("initial dashboard password seeded from MIZU_PASSWORD")
 }
 
 func startScheduler(ctx context.Context, cfg *config.Config, scheduler *schedulerController, syncEngine *syncengine.Engine) {

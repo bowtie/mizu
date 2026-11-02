@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,4 +74,16 @@ func TestAddSeriesPostsConfiguredPayload(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 42, created.ID)
+}
+
+func TestStatusErrorDoesNotEchoResponseBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("INTERNAL-ONLY-PAGE-CONTENT"))
+	}))
+	defer srv.Close()
+	_, err := New(srv.URL, "k", 2*time.Second).TestConnection(context.Background())
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "INTERNAL-ONLY-PAGE-CONTENT")
+	assert.Contains(t, err.Error(), "returned 400")
 }

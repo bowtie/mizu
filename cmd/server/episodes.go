@@ -39,7 +39,8 @@ func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine) http.HandlerFun
 func loadEpisodes(ctx context.Context, db *database.DB, syncEngine *sync.Engine, id int64, mapping *models.ShowMapping) ([]models.EpisodeInfo, *httpError) {
 	dbEpisodes, err := db.GetEpisodes(ctx, id)
 	if err != nil {
-		return nil, &httpError{http.StatusInternalServerError, "failed to load episodes: " + err.Error()}
+		log.Error().Err(err).Int64("mapping_id", id).Msg("failed to load episodes")
+		return nil, &httpError{http.StatusInternalServerError, "failed to load episodes"}
 	}
 	if len(dbEpisodes) > 0 && hasSonarrEpisodeIDs(dbEpisodes) {
 		return dbEpisodes, nil
@@ -171,7 +172,7 @@ func handleGetSonarrEpisodes(db *database.DB, syncEngine *sync.Engine) http.Hand
 		}
 		mapping, err := db.GetMappingByID(r.Context(), id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, err, "")
 			return
 		}
 		if mapping == nil {

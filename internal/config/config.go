@@ -2,15 +2,14 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"time"
 )
 
 // Config holds all application configuration.
 // Runtime values are loaded from SQLite (app_settings table) and overlaid
-// onto DefaultConfig() at startup. Only deployment-level settings (listen
-// address) come from environment variables.
+// onto DefaultConfig() at startup. Mizu reads no environment variables:
+// everything is configured in the web UI and stored in the database.
 // The RWMutex protects fields from concurrent reads (HTTP handlers) and
 // writes (handleUpdateSettings). Callers must hold RLock before reading
 // and Lock before writing when running in a concurrent context.
@@ -93,7 +92,7 @@ func DefaultConfig() *Config {
 		SonarrURL:                 "http://localhost:8989",
 		SonarrAPIKey:              "",
 		ScanInterval:              6 * time.Hour,
-		ListenAddr:                "127.0.0.1:8978",
+		ListenAddr:                ":8978",
 		BaseURL:                   "/",
 		DBPath:                    "mizu.db",
 		CacheTTL:                  24 * time.Hour,
@@ -119,18 +118,15 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Load returns configuration with defaults applied. The MIZU_ADDR
-// environment variable overrides the listen address — the 127.0.0.1
-// default stays safe for bare processes behind a same-host proxy, while
-// containers set MIZU_ADDR=0.0.0.0:8978 (a loopback bind inside a
-// container is unreachable through published ports or reverse proxies).
-// Runtime values are overlaid from the SQLite database by the caller
-// (see applyRuntimeSettings in cmd/server/main.go).
+// Load returns the default configuration, validated. Runtime values are
+// overlaid from the SQLite database by the caller (see
+// applyRuntimeSettings in cmd/server/main.go).
+//
+// The default listen address is every interface on port 8978: inside a
+// container a loopback bind would be unreachable, and a password is
+// required before anything but first-run setup is served.
 func Load() (*Config, error) {
 	cfg := DefaultConfig()
-	if addr := os.Getenv("MIZU_ADDR"); addr != "" {
-		cfg.ListenAddr = addr
-	}
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}
