@@ -967,6 +967,13 @@ body {
   white-space: nowrap;
 }
 
+/* Episode monitor toggle — filled in both states so unmonitored rows keep a
+   visible button; the Eye/EyeOff icon carries the state instead. */
+.episode-monitor-toggle:not([aria-pressed="true"]) {
+  background-color: var(--color-overlay-pressed);
+  color: var(--color-icon-secondary);
+}
+
 /* Season card hover */
 .season-card {
   transition: border-color var(--duration-fast) var(--ease-standard);

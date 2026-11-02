@@ -77,8 +77,9 @@ const VirtualEpisodeRow = memo(function VirtualEpisodeRow({
           label={monitored ? "Unmonitor episode" : "Monitor episode"}
           isIconOnly
           size="sm"
-          icon={<Eye size={14} />}
-          pressedIcon={<EyeOff size={14} />}
+          icon={<EyeOff size={14} />}
+          pressedIcon={<Eye size={14} />}
+          className="episode-monitor-toggle"
           isPressed={monitored}
           isDisabled={isSyncing || !ep.sonarr_episode_id}
           isLoading={isSyncing}
