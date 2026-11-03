@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
 import { TabList, Tab } from "@astryxdesign/core/TabList";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
-import { Divider } from "@astryxdesign/core/Divider";
 import { VStack } from "@astryxdesign/core/VStack";
 import { Text } from "@astryxdesign/core/Text";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -251,205 +251,226 @@ export function ArtworkPickerDialog({
       maxHeight="85vh"
       purpose="info"
     >
-      <VStack gap={4} className="artwork-picker-dialog">
-        <DialogHeader
-          title="Artwork"
-          subtitle="Pick an image for each slot. Changes save right away."
-          onOpenChange={onOpenChange}
-        />
-        <HStack gap={3} align="center" wrap="wrap" hAlign="between">
-          <TabList
-            value={activeSlot}
-            onChange={(v) => setActiveSlot(v as ArtworkSlot)}
-            aria-label="Artwork type"
-          >
-            {SLOT_META.map((m) => (
-              <Tab key={m.slot} value={m.slot} label={m.label} />
-            ))}
-          </TabList>
-          {sources.length > 1 && (
-            <SegmentedControl
-              label="Image source"
-              size="md"
-              value={activeSource}
-              onChange={setSelectedSource}
-            >
-              {sources.map((s) => (
-                <SegmentedControlItem key={s.id} value={s.id} label={s.label} />
-              ))}
-            </SegmentedControl>
-          )}
-        </HStack>
-        {sources.length === 0 && (
-          <Text type="supporting" color="secondary">
-            Add a TMDB or Fanart key in Settings to use them.
-          </Text>
-        )}
-        {loading && (
-          <div
-            className="artwork-picker-sections"
-            role="status"
-            aria-busy="true"
-            aria-label="Loading candidates"
-          >
-            <Grid
-              columns={{
-                minWidth: isMobile && activeSlot === "poster" ? 100 : activeMeta.minWidth,
-              }}
-              gap={2}
-            >
-              {Array.from({ length: activeSlot === "poster" ? 10 : 6 }, (_, i) => (
-                <AspectRatio key={i} ratio={activeMeta.ratio}>
-                  <Skeleton index={i} />
-                </AspectRatio>
-              ))}
-            </Grid>
-          </div>
-        )}
-        {error && (
-          <Text type="supporting" color="secondary">
-            {error}
-          </Text>
-        )}
-        {!loading && !error && options && !allEmpty && (
-          <>
-            <div className="artwork-picker-sections">
-              {items.length > 0 ? (
-                <Grid
-                  columns={{
-                    minWidth: isMobile && activeSlot === "poster" ? 100 : activeMeta.minWidth,
-                  }}
-                  gap={2}
+      <Layout
+        className="artwork-picker-dialog"
+        height={isMobile ? "fill" : "auto"}
+        header={
+          <DialogHeader
+            title="Artwork"
+            subtitle="Pick an image for each slot. Changes save right away."
+            onOpenChange={onOpenChange}
+          />
+        }
+        content={
+          <LayoutContent isScrollable={isMobile}>
+            <VStack gap={4}>
+              <HStack gap={3} align="center" wrap="wrap" hAlign="between">
+                <TabList
+                  value={activeSlot}
+                  onChange={(v) => setActiveSlot(v as ArtworkSlot)}
+                  aria-label="Artwork type"
                 >
-                  {items.map((opt: ArtworkOption, i: number) => {
-                    const meta = [
-                      opt.lang ? `language: ${opt.lang}` : "",
-                      opt.likes ? `${opt.likes} likes` : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ");
-                    // A merged duplicate may be the copy the show already uses.
-                    const isCurrent =
-                      currentUrl !== undefined &&
-                      (opt.url === currentUrl || !!opt.alt_urls?.includes(currentUrl));
-                    return (
-                      <ClickableCard
-                        key={opt.url}
-                        label={`${activeMeta.label} ${i + 1}${meta ? ` (${meta})` : ""}`}
-                        onClick={() => void pick(activeSource, activeSlot, opt.url)}
-                        isDisabled={refreshing}
-                        padding={0}
-                        className={`artwork-picker-item${isCurrent ? " is-selected" : ""}${savingUrl === opt.url ? " is-saving" : ""}`}
-                        data-slot={activeSlot}
-                        data-selected={isCurrent || undefined}
-                        aria-pressed={isCurrent || undefined}
-                      >
-                        <AspectRatio ratio={activeMeta.ratio} fit={activeMeta.fit}>
-                          <ArtworkThumb
-                            src={opt.thumb_url || opt.url}
-                            alt={`${activeMeta.label} ${i + 1}`}
-                            index={i}
-                            className={activeSlot === "logo" ? "artwork-picker-logo" : undefined}
-                          />
-                        </AspectRatio>
-                        {savingUrl === opt.url && (
-                          <span className="artwork-picker-saving">
-                            <Spinner size="lg" aria-label="Saving" />
-                          </span>
-                        )}
-                        {isCurrent && (
-                          <span className="artwork-picker-check" aria-hidden="true">
-                            ✓
-                          </span>
-                        )}
-                      </ClickableCard>
-                    );
-                  })}
-                </Grid>
-              ) : (
+                  {SLOT_META.map((m) => (
+                    <Tab key={m.slot} value={m.slot} label={m.label} />
+                  ))}
+                </TabList>
+                {sources.length > 1 && (
+                  <SegmentedControl
+                    label="Image source"
+                    size="md"
+                    value={activeSource}
+                    onChange={setSelectedSource}
+                  >
+                    {sources.map((s) => (
+                      <SegmentedControlItem key={s.id} value={s.id} label={s.label} />
+                    ))}
+                  </SegmentedControl>
+                )}
+              </HStack>
+              {sources.length === 0 && (
                 <Text type="supporting" color="secondary">
-                  {activeMeta.emptyLabel}
+                  Add a TMDB or Fanart key in Settings to use them.
                 </Text>
               )}
-            </div>
-          </>
-        )}
-        {!loading && !error && allEmpty && (
-          <Text type="supporting" color="secondary">
-            This source has no images.
-          </Text>
-        )}
-        <Divider />
-        <HStack gap={3} align="center" wrap="wrap" hAlign="between">
-          <HStack gap={2} align="center" wrap="wrap">
-            <Selector
-              label="Automatic artwork source"
-              value={artworkSource}
-              options={artworkSourceOptions}
-              onChange={(v) => onArtworkSourceChange(v as string)}
-              isLabelHidden
-              isDisabled={refreshing}
-              width={200}
-            />
-            <Button
-              label={refreshing ? "Refreshing..." : "Refresh"}
-              variant="secondary"
-              size="md"
-              icon={<RefreshCw size={14} />}
-              onClick={() => onRefresh()}
-              isLoading={refreshing}
-              data-cuelume-press
-            />
-          </HStack>
-          <HStack gap={2} align="center" wrap="wrap">
-            {activeSlotIsCustom && (
-              <>
-                <Badge variant="info" label="Your image is in use" />
+              {loading && (
+                <div
+                  className="artwork-picker-sections"
+                  role="status"
+                  aria-busy="true"
+                  aria-label="Loading candidates"
+                >
+                  <Grid
+                    columns={{
+                      minWidth: isMobile && activeSlot === "poster" ? 100 : activeMeta.minWidth,
+                    }}
+                    gap={2}
+                  >
+                    {Array.from({ length: activeSlot === "poster" ? 10 : 6 }, (_, i) => (
+                      <AspectRatio key={i} ratio={activeMeta.ratio}>
+                        <Skeleton index={i} />
+                      </AspectRatio>
+                    ))}
+                  </Grid>
+                </div>
+              )}
+              {error && (
+                <Text type="supporting" color="secondary">
+                  {error}
+                </Text>
+              )}
+              {!loading && !error && options && !allEmpty && (
+                <>
+                  <div className="artwork-picker-sections">
+                    {items.length > 0 ? (
+                      <Grid
+                        columns={{
+                          minWidth: isMobile && activeSlot === "poster" ? 100 : activeMeta.minWidth,
+                        }}
+                        gap={2}
+                      >
+                        {items.map((opt: ArtworkOption, i: number) => {
+                          const meta = [
+                            opt.lang ? `language: ${opt.lang}` : "",
+                            opt.likes ? `${opt.likes} likes` : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ");
+                          // A merged duplicate may be the copy the show already uses.
+                          const isCurrent =
+                            currentUrl !== undefined &&
+                            (opt.url === currentUrl || !!opt.alt_urls?.includes(currentUrl));
+                          return (
+                            <ClickableCard
+                              key={opt.url}
+                              label={`${activeMeta.label} ${i + 1}${meta ? ` (${meta})` : ""}`}
+                              onClick={() => void pick(activeSource, activeSlot, opt.url)}
+                              isDisabled={refreshing}
+                              padding={0}
+                              className={`artwork-picker-item${isCurrent ? " is-selected" : ""}${savingUrl === opt.url ? " is-saving" : ""}`}
+                              data-slot={activeSlot}
+                              data-selected={isCurrent || undefined}
+                              aria-pressed={isCurrent || undefined}
+                            >
+                              <AspectRatio ratio={activeMeta.ratio} fit={activeMeta.fit}>
+                                <ArtworkThumb
+                                  src={opt.thumb_url || opt.url}
+                                  alt={`${activeMeta.label} ${i + 1}`}
+                                  index={i}
+                                  className={
+                                    activeSlot === "logo" ? "artwork-picker-logo" : undefined
+                                  }
+                                />
+                              </AspectRatio>
+                              {savingUrl === opt.url && (
+                                <span className="artwork-picker-saving">
+                                  <Spinner size="lg" aria-label="Saving" />
+                                </span>
+                              )}
+                              {isCurrent && (
+                                <span className="artwork-picker-check" aria-hidden="true">
+                                  ✓
+                                </span>
+                              )}
+                            </ClickableCard>
+                          );
+                        })}
+                      </Grid>
+                    ) : (
+                      <Text type="supporting" color="secondary">
+                        {activeMeta.emptyLabel}
+                      </Text>
+                    )}
+                  </div>
+                </>
+              )}
+              {!loading && !error && allEmpty && (
+                <Text type="supporting" color="secondary">
+                  This source has no images.
+                </Text>
+              )}
+            </VStack>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter hasDivider>
+            <HStack
+              gap={3}
+              align="center"
+              wrap="wrap"
+              hAlign="between"
+              className="artwork-picker-footer"
+            >
+              <HStack gap={2} align="center" wrap="nowrap" className="artwork-picker-footer-source">
+                <Selector
+                  label="Automatic artwork source"
+                  value={artworkSource}
+                  options={artworkSourceOptions}
+                  onChange={(v) => onArtworkSourceChange(v as string)}
+                  isLabelHidden
+                  isDisabled={refreshing}
+                  width={200}
+                />
                 <Button
-                  label="Remove"
-                  variant="ghost"
+                  label={refreshing ? "Refreshing..." : "Refresh"}
+                  variant="secondary"
                   size="md"
-                  icon={<Trash2 size={14} />}
-                  isDisabled={refreshing || uploading}
-                  onClick={() => void onRemoveCustom(activeSlot)}
+                  icon={<RefreshCw size={14} />}
+                  onClick={() => onRefresh()}
+                  isLoading={refreshing}
                   data-cuelume-press
                 />
-              </>
-            )}
-            <Button
-              label={`Upload ${activeSlot}`}
-              tooltip="JPG, PNG, GIF or WebP, up to 10 MB"
-              variant="secondary"
-              size="md"
-              icon={<Upload size={14} />}
-              isLoading={uploading}
-              isDisabled={refreshing}
-              onClick={() => fileInputRef.current?.click()}
-              data-cuelume-press
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              hidden
-              data-testid="artwork-upload-input"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                // Reset so picking the same file again still fires onChange.
-                e.target.value = "";
-                if (file) void upload(activeSlot, file);
-              }}
-            />
-            <Button
-              label="Done"
-              variant="primary"
-              size="md"
-              onClick={() => onOpenChange(false)}
-              data-cuelume-press
-            />
-          </HStack>
-        </HStack>
-      </VStack>
+              </HStack>
+              <HStack gap={2} align="center" wrap="wrap" className="artwork-picker-footer-actions">
+                {activeSlotIsCustom && (
+                  <>
+                    <Badge variant="info" label="Your image is in use" />
+                    <Button
+                      label="Remove"
+                      variant="ghost"
+                      size="md"
+                      icon={<Trash2 size={14} />}
+                      isDisabled={refreshing || uploading}
+                      onClick={() => void onRemoveCustom(activeSlot)}
+                      data-cuelume-press
+                    />
+                  </>
+                )}
+                <Button
+                  label={`Upload ${activeSlot}`}
+                  tooltip="JPG, PNG, GIF or WebP, up to 10 MB"
+                  variant="secondary"
+                  size="md"
+                  icon={<Upload size={14} />}
+                  isLoading={uploading}
+                  isDisabled={refreshing}
+                  onClick={() => fileInputRef.current?.click()}
+                  data-cuelume-press
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  hidden
+                  data-testid="artwork-upload-input"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    // Reset so picking the same file again still fires onChange.
+                    e.target.value = "";
+                    if (file) void upload(activeSlot, file);
+                  }}
+                />
+                <Button
+                  label="Done"
+                  variant="primary"
+                  size="md"
+                  onClick={() => onOpenChange(false)}
+                  data-cuelume-press
+                />
+              </HStack>
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }

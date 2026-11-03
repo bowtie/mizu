@@ -1163,6 +1163,24 @@ body {
   .artwork-picker-dialog .astryx-tab-list::-webkit-scrollbar {
     display: none;
   }
+  /* The whole sheet scrolls on phones; a second scroll box inside it would
+     leave a few thumbnails in a small window. */
+  .artwork-picker-dialog .artwork-picker-sections {
+    max-height: none;
+    overflow-y: visible;
+  }
+  /* Footer: source picker and Refresh on one row, the actions on the next. */
+  .artwork-picker-footer-source,
+  .artwork-picker-footer-actions {
+    flex: 1 1 100%;
+  }
+  .artwork-picker-footer-source .astryx-field {
+    flex: 1;
+    width: auto !important;
+  }
+  .artwork-picker-footer-actions {
+    justify-content: flex-end;
+  }
 }
 
 /* Show hero title + badge — center-align the badge with the title text. */
@@ -1438,6 +1456,16 @@ body {
   }
   .settings-row-label {
     max-width: none;
+  }
+  /* A switch is small enough to stay beside its label. */
+  .settings-row:has(.astryx-switch-field) {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+  .settings-row:has(.astryx-switch-field) .settings-row-label {
+    flex: 1;
+    min-width: 0;
   }
   /* Let fixed-width inputs shrink to container on narrow screens */
   .settings-row .astryx-text-input,

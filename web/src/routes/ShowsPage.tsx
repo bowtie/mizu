@@ -566,6 +566,8 @@ export function ShowsPage() {
           dispatch({ type: "SET", payload: { showAddModal: v } });
         }}
         variant={isMobile ? "fullscreen" : "standard"}
+        // The wizard pads itself; the dialog's padding on top wastes a phone's width.
+        padding={isMobile ? 0 : undefined}
         width={640}
         maxHeight="85vh"
         purpose="form"
