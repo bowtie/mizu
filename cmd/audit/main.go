@@ -4,6 +4,7 @@
 // database, and nothing is written to Sonarr or to the database.
 //
 //	go run ./cmd/audit -db mizu.db > audit.md
+//	go run ./cmd/audit -db mizu.db -numbers pokemon
 package main
 
 import (
@@ -28,10 +29,11 @@ import (
 
 func main() {
 	dbPath := flag.String("db", "mizu.db", "Mizu database to read mappings and the Sonarr connection from")
+	numbersFor := flag.String("numbers", "", "AFL slug of one show: print its episode numbering instead of the report")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 
-	if err := run(context.Background(), *dbPath, os.Stdout); err != nil {
+	if err := run(context.Background(), *dbPath, *numbersFor, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "audit:", err)
 		os.Exit(1)
 	}
@@ -67,7 +69,7 @@ type seasonStats struct {
 	wrongType, noEntry                         int
 }
 
-func run(ctx context.Context, dbPath string, out io.Writer) error {
+func run(ctx context.Context, dbPath, numbersFor string, out io.Writer) error {
 	db, err := database.New(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
@@ -89,6 +91,14 @@ func run(ctx context.Context, dbPath string, out io.Writer) error {
 		return fmt.Errorf("reading mappings: %w", err)
 	}
 	sort.Slice(mappings, func(i, j int) bool { return mappings[i].SonarrTitle < mappings[j].SonarrTitle })
+	if numbersFor != "" {
+		for _, m := range mappings {
+			if m.AFLSlug == numbersFor {
+				return printNumbers(ctx, sc, afl, m, out)
+			}
+		}
+		return fmt.Errorf("no mapped show with AFL slug %q", numbersFor)
+	}
 
 	fmt.Fprintf(out, "# Matching audit\n\n%d mapped shows, %s.\n\n", len(mappings), time.Now().Format("2006-01-02 15:04"))
 	fmt.Fprintln(out, "| Show | Sonarr eps | AFL eps | Agree | Similar | Differ | Misnumbered | Wrong type | Not on AFL | Unlisted | Offsets |")
