@@ -34,7 +34,7 @@ const VirtualEpisodeRow = memo(function VirtualEpisodeRow({
   isSyncing: boolean;
   onToggleMonitor: (groupSeason: number, ep: Episode) => void;
 }) {
-  const badge = episodeBadgeInfo(ep.type, ep.held);
+  const badge = episodeBadgeInfo(ep.type, ep.held, ep.not_on_afl);
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const airDate = formatAirDate(ep.air_date);
   return (

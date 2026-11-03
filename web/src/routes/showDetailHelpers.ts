@@ -26,14 +26,11 @@ export function displayEpisodeNumber(ep: Episode): number {
 }
 /**
  * The number line under an episode's title. An episode AnimeFillerList
- * doesn't count has no AFL number of its own, so it goes by its Sonarr
- * season and episode ("S01E18") rather than a number its neighbour has.
+ * doesn't count (a banned one, say) has no AFL number, and any number
+ * shown for it would repeat its neighbour's, so it gets none.
  */
 export function episodeNumberText(ep: Episode): string {
-  if (ep.not_on_afl && !isSpecialSeasonNumber(ep.season_number) && ep.sonarr_episode_number) {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `S${pad(ep.season_number ?? 0)}E${pad(ep.sonarr_episode_number)}`;
-  }
+  if (ep.not_on_afl) return "Not listed";
   return `Episode ${displayEpisodeNumber(ep)}`;
 }
 export function episodeLabel(ep: Episode): string {
@@ -60,11 +57,13 @@ export function resolveSonarrEpisode(ep: Episode) {
 export function episodeBadgeInfo(
   type: string | undefined | null,
   held = false,
+  notOnAFL = false,
 ): {
   label: string;
   variant: "neutral" | "blue" | "purple" | "yellow" | "red";
 } {
   if (held) return { label: "Waiting", variant: "neutral" };
+  if (notOnAFL) return { label: "—", variant: "neutral" };
   switch (type) {
     case "canon":
       return { label: "Manga", variant: "blue" };
