@@ -43,6 +43,25 @@
   held. Downloaded episodes and specials never are. Activity shows
   "holding N for AnimeFillerList" while a show has held episodes.
 
+### Phones
+
+- Show page: the actions bar tucks behind the banner on touch screens;
+  tap the banner (the chevron hints at it) to slide it out and again to
+  put it away. It stays out while changes are unsaved, so Save is always
+  in reach. Remove and Save get their own row with labels.
+- Episode rows put the air date under the title instead of squeezing
+  titles to a few characters, and badges show whole. Episode and Activity
+  filters are dropdowns instead of tabs that ran off screen.
+- Tracking rules are compact stacked rows.
+- Library, Activity and Settings fit more on screen: icon buttons for Add
+  anime, sort and Sync now, search sharing a row with its controls,
+  shorter banner cards, two posters a row, and single buttons beside
+  their labels in Settings.
+- Add anime, the artwork picker and the filler files dialog open
+  fullscreen with even padding; the Add anime list uses the spare height,
+  and switches stay beside their labels.
+- The episode number field fits its number and centers it.
+
 ## [0.4.0] - 2026-11-03
 
 Security pass on 0.3.0. Every setting lives in the database, sign-in is a
