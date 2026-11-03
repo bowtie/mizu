@@ -1726,21 +1726,18 @@ body {
     aspect-ratio: 2/1;
   }
 
-  /* Tracking rules: three compact tiles in one row instead of three
-     full-width cards; the descriptions are spelled out on wider screens. */
+  /* Add anime: the series list takes the sheet's spare height instead of
+     a fixed 400px that left the bottom of the screen empty. */
+  .wizard-list {
+    max-height: max(240px, calc(100dvh - 300px));
+  }
+
+  /* Tracking rules: stacked rows with less padding and gap than the
+     wide-screen cards. */
   .tracking-rules-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     gap: var(--spacing-2) !important;
   }
   .tracking-rules-grid .tracking-rule-card {
-    padding: var(--spacing-3) !important;
-  }
-  .tracking-rules-grid .tracking-rule-card > .astryx-stack {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-2);
-  }
-  .tracking-rules-grid .tracking-rule-description {
-    display: none;
+    padding: var(--spacing-2) var(--spacing-3) !important;
   }
 }

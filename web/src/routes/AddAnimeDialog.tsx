@@ -33,6 +33,7 @@ import { FallbackAflStep } from "../components/addAnime/FallbackAflStep";
 import { FallbackSonarrStep } from "../components/addAnime/FallbackSonarrStep";
 import { MatchStep } from "../components/addAnime/MatchStep";
 import { PostAddStep } from "../components/addAnime/PostAddStep";
+import { useIsMobile } from "../lib/useIsMobile";
 
 // ── Props ──
 
@@ -398,10 +399,12 @@ export function AddAnimeDialog(props: AddAnimeDialogProps) {
     return `Match ${w.selectedSonarr?.title || ""} with the correct AnimeFillerList entry.`;
   };
 
+  const isMobile = useIsMobile();
+
   // ── Render ──
 
   return (
-    <VStack gap={4} padding={6} isScrollable height="100%">
+    <VStack gap={isMobile ? 3 : 4} padding={isMobile ? 4 : 6} isScrollable height="100%">
       <HStack justify="between" align="center">
         <Heading level={2}>Add anime</Heading>
         <Button
