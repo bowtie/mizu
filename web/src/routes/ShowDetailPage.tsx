@@ -420,7 +420,7 @@ export function ShowDetailPage() {
       for (const key of Object.keys(latest) as (keyof RulesForm)[]) {
         if (latest[key] !== rules[key]) setRule(key, latest[key]);
       }
-      addNotification(`Saved tracking rules for ${show?.sonarr_title || "anime"}`, "success");
+      addNotification(`Saved ${show?.sonarr_title || "anime"}`, "success");
     } catch (err: unknown) {
       addNotification("Couldn't save anime: " + errorMessage(err), "error");
     }

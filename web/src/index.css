@@ -749,7 +749,7 @@ body {
 }
 
 /* Touch devices (no hover) — tapping the hero slides the actions bar out
-   and back (ShowHero's controlsToggle); unsaved changes keep it out. */
+   and back (ShowHero's controlsToggle). */
 @media (hover: none) {
   .show-shell .controls-reveal {
     grid-template-rows: 0fr;
@@ -764,14 +764,17 @@ body {
     transform: translateY(-100%);
   }
 
+  /* Slower and evener than the desktop hover reveal, which waits 300ms
+     first; a tap starts the motion at once, and the standard curve would
+     finish it before it reads as a slide. */
   .show-shell.is-settled .controls-reveal {
     transition:
-      grid-template-rows 220ms var(--ease-standard),
-      margin-bottom 220ms var(--ease-standard);
+      grid-template-rows 320ms cubic-bezier(0.33, 1, 0.68, 1),
+      margin-bottom 320ms cubic-bezier(0.33, 1, 0.68, 1);
   }
 
   .show-shell.is-settled .show-actions-bar {
-    transition: transform 220ms var(--ease-standard);
+    transition: transform 320ms cubic-bezier(0.33, 1, 0.68, 1);
   }
 
   .show-shell.controls-open .controls-reveal,
@@ -1719,6 +1722,26 @@ body {
   /* Icon-only buttons render a single child (the icon wrapper). */
   .astryx-button:has(> span:only-child) {
     min-width: 44px;
+  }
+
+  /* The episode stepper matches the 44px buttons beside it; its own +/-
+     buttons are already 44px and would otherwise overhang a 32px field. */
+  .show-actions-bar .astryx-input-group,
+  .show-actions-bar .astryx-input-group-text,
+  .show-actions-bar .astryx-number-input {
+    height: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  .show-actions-bar .episode-step-btn {
+    height: 42px;
+    min-height: 42px;
+  }
+  .show-actions-bar .astryx-input-group-text:first-child {
+    border-radius: 10px 0 0 10px;
+  }
+  .show-actions-bar .astryx-input-group-text:last-child {
+    border-radius: 0 10px 10px 0;
   }
 }
 

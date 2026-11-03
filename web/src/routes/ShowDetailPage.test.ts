@@ -281,7 +281,7 @@ describe("ShowDetailPage", () => {
       expect.objectContaining({ watermark_mode: "manual" }),
     );
     expect(addNotificationMock).toHaveBeenCalledWith(
-      expect.stringContaining("Saved tracking rules"),
+      expect.stringContaining("Saved Naruto"),
       "success",
     );
   });
