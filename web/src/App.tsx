@@ -192,7 +192,7 @@ export function App() {
           }
         />
         <Route
-          path="/shows/:id"
+          path="/shows/:ref"
           element={
             <RequireAuth>
               <Suspense fallback={<PageFallback />}>

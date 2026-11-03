@@ -42,6 +42,10 @@
 - Only episodes airing within the hold window (or without an air date) are
   held. Downloaded episodes and specials never are. Activity shows
   "holding N for AnimeFillerList" while a show has held episodes.
+- "Until AFL lists them" holds new episodes with no time limit. It starts
+  holding only episodes from the last 14 days, so switching it on doesn't
+  hold years of episodes AFL never covered.
+- Held episodes show a "Waiting" badge in the show's episode list.
 
 ### Matching
 
@@ -51,8 +55,15 @@
   is 77-98 in Sonarr but 72-93 on AFL, so each episode got the type of
   one five places away and the last five were "unknown". The shift is used
   when at least three exact title matches in the season agree on it.
+- Specials that match an AFL episode are listed with the show's episodes
+  (Cardcaptor Sakura's Clear Card prologue, AFL episode 71). They were
+  already synced; only the list left them out.
 
 ### Show page
+
+- Show pages have readable URLs from the Sonarr title
+  (/shows/cardcaptor-sakura). Old /shows/67 links still work and switch to
+  the slug; titles that would clash get the show's id appended.
 
 - Tracking rule toggles save at once, like the mute bell and artwork
   picks already did. Auto/Manual and the episode marker wait for a Save

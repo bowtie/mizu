@@ -64,7 +64,7 @@ const EpisodeListItem = memo(function EpisodeListItem({
   isSyncing: boolean;
   onToggleMonitor: (groupSeason: number, ep: Episode) => void;
 }) {
-  const badge = episodeBadgeInfo(ep.type);
+  const badge = episodeBadgeInfo(ep.type, ep.held);
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const epNum = displayEpisodeNumber(ep);
   const airDate = formatAirDate(ep.air_date);

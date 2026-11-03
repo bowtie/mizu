@@ -142,7 +142,9 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 			result.AnimeCanonFound++
 		}
 
-		if !isSpecialSeason(ep.SeasonNumber) {
+		// Specials are listed only when they match an AFL episode, like the
+		// Clear Card prologue that AFL counts as episode 71.
+		if !isSpecialSeason(ep.SeasonNumber) || found {
 			airDate := ep.AirDateUTC
 			airDateOnly := models.DateOnly(airDate)
 			dbEpisodes = append(dbEpisodes, models.EpisodeInfo{

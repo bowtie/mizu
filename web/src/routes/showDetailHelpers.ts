@@ -43,10 +43,16 @@ export function resolveSonarrEpisode(ep: Episode) {
 
 /** Combined badge info for an episode type — avoids two separate
  *  lookups (episodeTypeBadge + badgeVariantForType) per item. */
-export function episodeBadgeInfo(type: string | undefined | null): {
+/** The type badge of an episode row. An episode Mizu holds for
+ *  AnimeFillerList shows "Waiting" until it is listed. */
+export function episodeBadgeInfo(
+  type: string | undefined | null,
+  held = false,
+): {
   label: string;
   variant: "neutral" | "blue" | "purple" | "yellow" | "red";
 } {
+  if (held) return { label: "Waiting", variant: "neutral" };
   switch (type) {
     case "canon":
       return { label: "Manga", variant: "blue" };

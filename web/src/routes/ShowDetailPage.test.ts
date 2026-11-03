@@ -122,6 +122,7 @@ vi.mock("../components/ArtworkPickerDialog", () => ({
 
 import {
   getShow,
+  getShows,
   getEpisodes,
   updateShow,
   setEpisodeMonitor,
@@ -223,7 +224,7 @@ async function renderPage() {
           createElement(
             Routes,
             null,
-            createElement(Route, { path: "/shows/:id", element: createElement(ShowDetailPage) }),
+            createElement(Route, { path: "/shows/:ref", element: createElement(ShowDetailPage) }),
           ),
         ),
       ),
@@ -319,6 +320,7 @@ describe("ShowDetailPage", () => {
 
   it("renders the library's copy of the show before its own request resolves", async () => {
     queryClient.setQueryData(["shows"], [SHOW]);
+    vi.mocked(getShows).mockResolvedValue([SHOW]);
     mockedGetShow.mockReturnValue(new Promise(() => {}));
     mockedGetEpisodes.mockResolvedValue([EPISODE]);
     await renderPage();

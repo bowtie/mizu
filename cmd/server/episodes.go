@@ -29,6 +29,13 @@ func handleGetEpisodes(db *database.DB, syncEngine *sync.Engine) http.HandlerFun
 			writeError(w, herr.code, herr.message)
 			return
 		}
+		held, err := db.GetHeldEpisodes(r.Context(), id)
+		if err != nil {
+			log.Warn().Err(err).Int64("mapping_id", id).Msg("failed to load held episodes")
+		}
+		for i := range episodes {
+			_, episodes[i].Held = held[episodes[i].SonarrEpisodeID]
+		}
 		writeJSONWithETag(w, r, episodes)
 	}
 }

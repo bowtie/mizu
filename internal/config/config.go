@@ -64,7 +64,8 @@ type Config struct {
 
 	// HoldUnclassified is how long a new episode AnimeFillerList hasn't
 	// classified yet stays unmonitored, waiting for it: "3d", "7d", "14d",
-	// or "off" (default; such episodes are monitored like canon).
+	// "listed" (until AFL lists it, however long), or "off" (default; such
+	// episodes are monitored like canon).
 	HoldUnclassified string
 
 	// Artwork
@@ -235,7 +236,13 @@ var holdUnclassifiedPeriods = map[string]time.Duration{
 	"3d":  3 * 24 * time.Hour,
 	"7d":  7 * 24 * time.Hour,
 	"14d": 14 * 24 * time.Hour,
+	// Negative: no time limit (see HoldUnclassifiedDuration).
+	"listed": HoldUntilListed,
 }
+
+// HoldUntilListed is the HoldUnclassifiedDuration of "listed": held episodes
+// wait for AnimeFillerList with no time limit.
+const HoldUntilListed time.Duration = -1
 
 // IsValidHoldUnclassified reports whether v is a supported HoldUnclassified.
 func IsValidHoldUnclassified(v string) bool {
@@ -244,7 +251,7 @@ func IsValidHoldUnclassified(v string) bool {
 }
 
 // HoldUnclassifiedDuration is how long an unclassified episode is held
-// under v, or zero when holding is off.
+// under v: zero when holding is off, HoldUntilListed for no time limit.
 func HoldUnclassifiedDuration(v string) time.Duration {
 	return holdUnclassifiedPeriods[v]
 }

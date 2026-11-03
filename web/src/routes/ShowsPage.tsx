@@ -50,6 +50,7 @@ import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { syncStateBadge } from "../lib/fox";
 import { isUnsafeMatch } from "../components/addAnime/matchHelpers";
 import { useIsMobile } from "../lib/useIsMobile";
+import { showPath } from "../lib/slug";
 import {
   addWizardReducer,
   INITIAL_WIZARD,
@@ -336,9 +337,9 @@ export function ShowsPage() {
 
   const openShow = useCallback(
     (showId: string | number) => {
-      navigate(`/shows/${showId}`);
+      navigate(showPath(showId, queryClient.getQueryData<Show[]>(queryKeys.shows)));
     },
-    [navigate],
+    [navigate, queryClient],
   );
 
   const handleCardHover = useCallback(

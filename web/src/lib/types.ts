@@ -113,6 +113,8 @@ export interface Episode {
   type?: string;
   monitored?: boolean;
   air_date?: string;
+  /** Waits unmonitored for AnimeFillerList to list it. */
+  held?: boolean;
   [key: string]: unknown;
 }
 

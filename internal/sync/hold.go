@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"mizu/internal/config"
 	"mizu/internal/models"
 
 	"github.com/rs/zerolog/log"
@@ -20,16 +21,22 @@ const (
 	holdRelease                 // stop waiting; monitor it again
 )
 
+// untilListedWindow is how recently an episode must have aired to be held
+// under config.HoldUntilListed, so switching it on doesn't hold years of
+// episodes AFL never covered.
+const untilListedWindow = 14 * 24 * time.Hour
+
 // holdFor decides an unclassified episode's hold. New episodes (airing in
 // the future, without an air date, or aired within the hold period) wait
 // unmonitored for AnimeFillerList, so Sonarr can't grab a filler before it
 // is listed. A held episode is released once the period has passed since
-// it was held, when holding is turned off, or when someone monitored it
-// again. Episodes that are already downloaded, and specials, are never
-// held.
+// it was held (never under config.HoldUntilListed), when holding is turned
+// off, or when someone monitored it again. Episodes that are already
+// downloaded, and specials, are never held.
 func holdFor(ep models.SonarrEpisode, heldAt time.Time, isHeld bool, hold time.Duration, now time.Time) holdStep {
+	forever := hold == config.HoldUntilListed
 	if isHeld {
-		if hold == 0 || ep.Monitored || now.Sub(heldAt) >= hold {
+		if hold == 0 || ep.Monitored || (!forever && now.Sub(heldAt) >= hold) {
 			return holdRelease
 		}
 		return holdKeep
@@ -37,7 +44,11 @@ func holdFor(ep models.SonarrEpisode, heldAt time.Time, isHeld bool, hold time.D
 	if hold == 0 || ep.HasFile || isSpecialSeason(ep.SeasonNumber) {
 		return holdNone
 	}
-	if ep.AirDateUTC.IsZero() || ep.AirDateUTC.After(now.Add(-hold)) {
+	window := hold
+	if forever {
+		window = untilListedWindow
+	}
+	if ep.AirDateUTC.IsZero() || ep.AirDateUTC.After(now.Add(-window)) {
 		return holdStart
 	}
 	return holdNone

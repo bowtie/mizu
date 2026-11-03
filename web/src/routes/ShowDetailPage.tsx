@@ -9,10 +9,12 @@ import {
   Suspense,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useForm } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { VStack } from "@astryxdesign/core/VStack";
 import { Section } from "@astryxdesign/core/Section";
+import { Button } from "@astryxdesign/core/Button";
 const AlertDialog = lazy(() =>
   import("@astryxdesign/core/AlertDialog").then((m) => ({ default: m.AlertDialog })),
 );
@@ -25,6 +27,7 @@ import {
   useEpisodes,
   useSetEpisodeMonitor,
   useShow,
+  useShows,
   useSonarrSeries,
   useSettings,
   useUpdateShow,
@@ -65,6 +68,7 @@ import { ShowActionsBar } from "../components/ShowActionsBar";
 import { useIsMobile, useIsTouch } from "../lib/useIsMobile";
 import { FillerFilesDialog, useFillerFiles } from "../components/FillerFilesDialog";
 import { ShowDetailSkeleton } from "../components/ShowDetailSkeleton";
+import { resolveShowRef, showPath } from "../lib/slug";
 import { TrackingRulesSection } from "../components/TrackingRulesSection";
 
 const NO_EPISODES: Episode[] = [];
@@ -121,7 +125,12 @@ function episodeStats(episodes: Episode[]) {
 }
 
 export function ShowDetailPage() {
-  const { id: showId } = useParams<{ id: string }>();
+  // The URL names the show by slug ("/shows/cardcaptor-sakura"); an old
+  // numeric link still works and is swapped for the slug below.
+  const { ref } = useParams<{ ref: string }>();
+  const showsListQuery = useShows();
+  const showId = resolveShowRef(ref, showsListQuery.data);
+  const showNotFound = !showId && !!ref && showsListQuery.isSuccess;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const addNotification = useNotificationStore((s) => s.addNotification);
@@ -199,6 +208,13 @@ export function ShowDetailPage() {
     const frame = requestAnimationFrame(() => setSettledShowId(showId));
     return () => cancelAnimationFrame(frame);
   }, [hasShow, showId]);
+
+  // Swap an id link for the slug once the library list knows the show.
+  useEffect(() => {
+    if (!ref || !/^\d+$/.test(ref) || !showsListQuery.data) return;
+    const path = showPath(ref, showsListQuery.data);
+    if (path !== `/shows/${ref}`) navigate(path, { replace: true });
+  }, [ref, showsListQuery.data, navigate]);
 
   // A different show starts with a clean hero.
   useEffect(() => {
@@ -510,6 +526,20 @@ export function ShowDetailPage() {
   );
 
   const retryEpisodes = useCallback(() => void episodesQuery.refetch(), [episodesQuery]);
+
+  if (showNotFound) {
+    return (
+      <Section padding={4} maxWidth={900} className="section-centered page-enter">
+        <EmptyState
+          title="Anime not found"
+          description="It may have been removed from Mizu."
+          actions={
+            <Button label="Back to library" variant="secondary" onClick={() => navigate("/")} />
+          }
+        />
+      </Section>
+    );
+  }
 
   return (
     <>

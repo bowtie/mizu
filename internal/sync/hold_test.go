@@ -48,6 +48,9 @@ func TestHoldFor(t *testing.T) {
 		"waited long enough":      {ep: ep(func(e *models.SonarrEpisode) { e.Monitored = false }), heldAt: now.Add(-week), isHeld: true, hold: week, want: holdRelease},
 		"holding turned off":      {ep: ep(func(e *models.SonarrEpisode) { e.Monitored = false }), heldAt: now, isHeld: true, hold: 0, want: holdRelease},
 		"monitored again by hand": {ep: ep(nil), heldAt: now, isHeld: true, hold: week, want: holdRelease},
+		"until listed: still waiting after a year": {ep: ep(func(e *models.SonarrEpisode) { e.Monitored = false }), heldAt: now.Add(-365 * 24 * time.Hour), isHeld: true, hold: config.HoldUntilListed, want: holdKeep},
+		"until listed: new episode":                {ep: ep(nil), hold: config.HoldUntilListed, want: holdStart},
+		"until listed: old episode":                {ep: ep(func(e *models.SonarrEpisode) { e.AirDateUTC = now.Add(-30 * 24 * time.Hour) }), hold: config.HoldUntilListed, want: holdNone},
 	} {
 		assert.Equal(t, tc.want, holdFor(tc.ep, tc.heldAt, tc.isHeld, tc.hold, now), name)
 	}

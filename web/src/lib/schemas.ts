@@ -28,7 +28,7 @@ export const SettingsSchema = v.object({
   ntfy_notify_on: v.optional(v.picklist(["always", "changes", "failures"])),
   ntfy_notify_new_titles: v.optional(v.boolean()),
   afl_refresh_interval: v.optional(v.picklist(["1d", "7d", "30d", "off"])),
-  hold_unclassified: v.optional(v.picklist(["off", "3d", "7d", "14d"])),
+  hold_unclassified: v.optional(v.picklist(["off", "3d", "7d", "14d", "listed"])),
   ui_sounds_enabled: v.optional(v.boolean()),
 });
 
@@ -104,6 +104,8 @@ export const EpisodeSchema = v.object({
   type: v.optional(v.string()),
   monitored: v.optional(v.boolean()),
   air_date: v.optional(v.string()),
+  /** Waits unmonitored for AnimeFillerList to list it. */
+  held: v.optional(v.boolean()),
 });
 
 // ── SonarrSeries ──

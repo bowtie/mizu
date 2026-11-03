@@ -7,7 +7,7 @@ import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { Eye, EyeOff } from "lucide-react";
 import { memo } from "react";
 import type { Episode } from "../lib/types";
-import { formatAirDate } from "../routes/showDetailHelpers";
+import { episodeBadgeInfo, formatAirDate } from "../routes/showDetailHelpers";
 
 // ── Helpers (duplicated from ShowDetailPage to keep this self-contained) ──
 
@@ -17,26 +17,6 @@ function isSpecialSeasonNumber(num: number | undefined): boolean {
 function displayEpisodeNumber(ep: Episode): number {
   if (isSpecialSeasonNumber(ep.season_number)) return ep.sonarr_episode_number ?? 0;
   return ep.absolute_episode_number ?? ep.episode_num ?? ep.sonarr_episode_number ?? 0;
-}
-function episodeBadgeInfo(type: string | undefined | null): {
-  label: string;
-  variant: "neutral" | "blue" | "purple" | "yellow" | "red";
-} {
-  switch (type) {
-    case "canon":
-      return { label: "Manga", variant: "blue" };
-    case "anime_canon":
-      return { label: "Anime", variant: "purple" };
-    case "mixed_canon":
-    case "mixed":
-      return { label: "Mixed", variant: "yellow" };
-    case "filler":
-      return { label: "Filler", variant: "red" };
-    case "special":
-      return { label: "Special", variant: "neutral" };
-    default:
-      return { label: "Unknown", variant: "neutral" };
-  }
 }
 
 // ── Virtualized row — renders the same content as EpisodeListItem but as a
@@ -54,7 +34,7 @@ const VirtualEpisodeRow = memo(function VirtualEpisodeRow({
   isSyncing: boolean;
   onToggleMonitor: (groupSeason: number, ep: Episode) => void;
 }) {
-  const badge = episodeBadgeInfo(ep.type);
+  const badge = episodeBadgeInfo(ep.type, ep.held);
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const epNum = displayEpisodeNumber(ep);
   const airDate = formatAirDate(ep.air_date);

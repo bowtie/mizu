@@ -39,6 +39,7 @@ export const holdUnclassifiedOptions: SelectOption[] = [
   { value: "3d", label: "Up to 3 days" },
   { value: "7d", label: "Up to 7 days" },
   { value: "14d", label: "Up to 14 days" },
+  { value: "listed", label: "Until AFL lists them" },
 ];
 
 interface SyncCardProps {
