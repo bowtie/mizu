@@ -204,3 +204,24 @@ func TestNewShowsHookSkipsFirstFillAndReportsLaterAdditions(t *testing.T) {
 	require.Len(t, got[0], 1)
 	assert.Equal(t, "frieren", got[0][0].Slug)
 }
+
+func TestGetShowEpisodesReadsAirDates(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<!DOCTYPE html><html><body>
+		<span property="dc:title" content="Naruto"></span>
+		<table class="EpisodeList"><tbody>
+		<tr><td class="Number">1</td><td class="Title"><a href="#">Enter: Naruto Uzumaki!</a></td><td class="Type"><span>Manga Canon</span></td><td class="Date">2002-10-03</td></tr>
+		<tr><td class="Number">2</td><td class="Title"><a href="#">My Name is Konohamaru!</a></td><td class="Type"><span>Manga Canon</span></td><td class="Date"></td></tr>
+		</tbody></table>
+		</body></html>`))
+	}))
+	defer srv.Close()
+
+	s := newTestScraper(t, srv)
+	_, episodes, err := s.GetShowEpisodes(context.Background(), "naruto")
+	require.NoError(t, err)
+	require.Len(t, episodes, 2)
+	assert.Equal(t, time.Date(2002, 10, 3, 0, 0, 0, 0, time.UTC), episodes[0].AirDate)
+	assert.True(t, episodes[1].AirDate.IsZero(), "a missing date is left empty")
+}

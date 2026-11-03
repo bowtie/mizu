@@ -2,6 +2,7 @@ package sync
 
 import (
 	"sort"
+	"time"
 
 	matcherpkg "mizu/internal/matcher"
 	"mizu/internal/models"
@@ -27,7 +28,10 @@ const (
 // then gives an episode the type of a neighbour.
 //
 // Within each mainline season, an episode whose title matches a unique AFL
-// title exactly is an anchor: it takes that AFL number. Anchors count only
+// title exactly is an anchor: it takes that AFL number. A season whose
+// titles can't settle it (translated too differently) may also anchor by
+// date: an episode that aired within a day of exactly one AFL episode, and
+// alone that day. Anchors count only
 // when they keep AFL's order, agree with a neighbouring anchor, and the
 // season has at least minAnchors of them, so a coincidental title match
 // can't move a season. Every other episode takes the shift of the nearest
@@ -44,6 +48,34 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 	for _, ep := range episodes {
 		sonarrTitleCount[norm.Normalize(ep.Title)]++
 	}
+	aflByDay := make(map[int][]int) // day number → AFL episode numbers
+	for _, a := range aflEpisodes {
+		if d, ok := dayNumber(a.AirDate); ok {
+			aflByDay[d] = append(aflByDay[d], a.Number)
+		}
+	}
+	sonarrDayCount := make(map[int]int)
+	for _, ep := range episodes {
+		if d, ok := dayNumber(ep.AirDateUTC); ok && !isSpecialSeason(ep.SeasonNumber) {
+			sonarrDayCount[d]++
+		}
+	}
+	// dateMatch is the one AFL episode that aired within a day of ep, when
+	// exactly one did and ep is the only Sonarr episode that day.
+	dateMatch := func(ep models.SonarrEpisode) (int, bool) {
+		d, ok := dayNumber(ep.AirDateUTC)
+		if !ok || sonarrDayCount[d] != 1 {
+			return 0, false
+		}
+		var near []int
+		for _, day := range []int{d - 1, d, d + 1} {
+			near = append(near, aflByDay[day]...)
+		}
+		if len(near) != 1 {
+			return 0, false
+		}
+		return near[0], true
+	}
 
 	// Mainline episodes with an absolute number, by season and order.
 	seasons := make(map[int][]int)
@@ -54,7 +86,10 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 		seasons[ep.SeasonNumber] = append(seasons[ep.SeasonNumber], i)
 	}
 
-	type anchor struct{ pos, abs, afl int }
+	type anchor struct {
+		pos, abs, afl int
+		byTitle       bool
+	}
 	type season struct {
 		idxs    []int    // episode indices in order
 		anchors []anchor // in AFL's order and backed by a neighbour
@@ -67,14 +102,28 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 
 	for _, idxs := range seasons {
 		sort.Slice(idxs, func(a, b int) bool { return episodes[idxs[a]].EpisodeNumber < episodes[idxs[b]].EpisodeNumber })
-		var cands []anchor
+		var titleCands, mixedCands []anchor
 		for pos, i := range idxs {
+			abs := *episodes[i].AbsoluteEpisodeNumber
 			t := norm.Normalize(episodes[i].Title)
 			if num, ok := aflByTitle[t]; ok && t != "" && sonarrTitleCount[t] == 1 {
-				cands = append(cands, anchor{pos: pos, abs: *episodes[i].AbsoluteEpisodeNumber, afl: num})
+				a := anchor{pos: pos, abs: abs, afl: num, byTitle: true}
+				titleCands = append(titleCands, a)
+				mixedCands = append(mixedCands, a)
+			} else if num, ok := dateMatch(episodes[i]); ok {
+				mixedCands = append(mixedCands, anchor{pos: pos, abs: abs, afl: num})
 			}
 		}
-		anchors := backedAnchors(increasing(cands, func(a anchor) int { return a.afl }), func(a anchor) int { return a.afl - a.abs })
+		pick := func(cands []anchor) []anchor {
+			return backedAnchors(increasing(cands, func(a anchor) int { return a.afl }), func(a anchor) int { return a.afl - a.abs })
+		}
+		// Titles decide where they can. Dates are sometimes a week off, so
+		// they only help a season whose titles, translated differently,
+		// can't settle it.
+		cands, anchors := titleCands, pick(titleCands)
+		if len(anchors) < minAnchors {
+			cands, anchors = mixedCands, pick(commonShift(mixedCands, func(a anchor) (int, bool) { return a.afl - a.abs, a.byTitle }))
+		}
 		if len(anchors) < minAnchors {
 			continue
 		}
@@ -100,7 +149,9 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 	for _, s := range pending {
 		for _, c := range s.cands {
 			i := s.idxs[c.pos]
-			if !isAnchor[i] && !claimed[c.afl] {
+			// Dates are sometimes a week off, so only a title says an
+			// episode aired out of order.
+			if c.byTitle && !isAnchor[i] && !claimed[c.afl] {
 				target[i] = c.afl
 				isAnchor[i] = true
 				claimed[c.afl] = true
@@ -202,6 +253,40 @@ func backedAnchors[T any](anchors []T, shift func(T) int) []T {
 		}
 		if near(i-1) || near(i+1) {
 			kept = append(kept, a)
+		}
+	}
+	return kept
+}
+
+// dayNumber is t's calendar date as a day count, for comparing dates a day
+// apart; false for a missing or placeholder date.
+func dayNumber(t time.Time) (int, bool) {
+	if t.IsZero() || t.Year() < 1900 {
+		return 0, false
+	}
+	return int(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix() / 86400), true
+}
+
+// commonShift keeps the title anchors and the date anchors whose shift is
+// the most common one among all of them. A run of dates a week off (a moved
+// broadcast) is a minority and drops out; a season shifted by specials
+// keeps its dates.
+func commonShift[T any](cands []T, shift func(T) (int, bool)) []T {
+	count := make(map[int]int)
+	for _, c := range cands {
+		d, _ := shift(c)
+		count[d]++
+	}
+	best, bestCount := 0, -1
+	for d, n := range count {
+		if n > bestCount || (n == bestCount && d == 0) {
+			best, bestCount = d, n
+		}
+	}
+	var kept []T
+	for _, c := range cands {
+		if d, byTitle := shift(c); byTitle || d == best {
+			kept = append(kept, c)
 		}
 	}
 	return kept

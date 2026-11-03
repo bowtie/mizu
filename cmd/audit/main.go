@@ -50,6 +50,9 @@ const (
 	misnumbered                // another AFL episode has this exact title
 	unlisted                   // no AFL episode for its number
 	noEntry                    // AFL doesn't count it (e.g. a banned episode)
+
+	// dateOffVerdict only selects rows for the "dates apart" listing.
+	dateOffVerdict verdict = -1
 )
 
 type row struct {
@@ -60,6 +63,10 @@ type row struct {
 	verdict verdict
 	// better is the AFL episode whose title matches exactly, for misnumbered.
 	better models.AFLEpisode
+	// dateDiff is Sonarr's air date minus AFL's, in days; dated is false
+	// when either side has none.
+	dateDiff int
+	dated    bool
 }
 
 type seasonStats struct {
@@ -67,6 +74,7 @@ type seasonStats struct {
 	offset                                     int
 	total, agree, similar, differ, misnum, unl int
 	wrongType, noEntry                         int
+	dateSame, dateOff, dateNone                int
 }
 
 func run(ctx context.Context, dbPath, numbersFor string, out io.Writer) error {
@@ -101,8 +109,8 @@ func run(ctx context.Context, dbPath, numbersFor string, out io.Writer) error {
 	}
 
 	fmt.Fprintf(out, "# Matching audit\n\n%d mapped shows, %s.\n\n", len(mappings), time.Now().Format("2006-01-02 15:04"))
-	fmt.Fprintln(out, "| Show | Sonarr eps | AFL eps | Agree | Similar | Differ | Misnumbered | Wrong type | Not on AFL | Unlisted | Offsets |")
-	fmt.Fprintln(out, "|---|---|---|---|---|---|---|---|---|---|---|")
+	fmt.Fprintln(out, "| Show | Sonarr eps | AFL eps | Agree | Similar | Differ | Misnumbered | Wrong type | Not on AFL | Unlisted | Same date | Date off | No date | Offsets |")
+	fmt.Fprintln(out, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 
 	var details strings.Builder
 	for _, m := range mappings {
@@ -122,12 +130,15 @@ func run(ctx context.Context, dbPath, numbersFor string, out io.Writer) error {
 			t.wrongType += s.wrongType
 			t.unl += s.unl
 			t.noEntry += s.noEntry
+			t.dateSame += s.dateSame
+			t.dateOff += s.dateOff
+			t.dateNone += s.dateNone
 			if s.offset != 0 {
 				offsets = append(offsets, fmt.Sprintf("S%d %+d", s.season, s.offset))
 			}
 		}
-		fmt.Fprintf(out, "| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s |\n",
-			m.SonarrTitle, t.total, aflCount, t.agree, t.similar, t.differ, t.misnum, t.wrongType, t.noEntry, t.unl, strings.Join(offsets, ", "))
+		fmt.Fprintf(out, "| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s |\n",
+			m.SonarrTitle, t.total, aflCount, t.agree, t.similar, t.differ, t.misnum, t.wrongType, t.noEntry, t.unl, t.dateSame, t.dateOff, t.dateNone, strings.Join(offsets, ", "))
 		writeDetails(&details, m, rows, stats)
 	}
 	fmt.Fprintln(out)
@@ -183,6 +194,18 @@ func auditShow(ctx context.Context, sc *sonarr.Client, afl *scraper.Scraper, m m
 		s.total++
 
 		r := row{ep: ep, aflNum: num, afl: aflEp, found: found}
+		if found {
+			if d, ok := dayDiff(ep.AirDateUTC, aflEp.AirDate); ok {
+				r.dateDiff, r.dated = d, true
+				if d >= -1 && d <= 1 {
+					s.dateSame++
+				} else {
+					s.dateOff++
+				}
+			} else {
+				s.dateNone++
+			}
+		}
 		title := norm.Normalize(ep.Title)
 		switch {
 		case noAFLEntry[ep.ID]:
@@ -263,7 +286,8 @@ func writeDetails(b *strings.Builder, m models.ShowMapping, rows []row, stats []
 	show := func(heading string, v verdict, limit int) {
 		var picked []row
 		for _, r := range rows {
-			if r.verdict == v {
+			off := r.dated && (r.dateDiff < -1 || r.dateDiff > 1)
+			if (v == dateOffVerdict && off) || (v != dateOffVerdict && r.verdict == v) {
 				picked = append(picked, r)
 			}
 		}
@@ -292,12 +316,26 @@ func writeDetails(b *strings.Builder, m models.ShowMapping, rows []row, stats []
 			case noEntry:
 				line += " → left unclassified"
 			}
+			if r.dated {
+				line += fmt.Sprintf(" [dates %+dd]", r.dateDiff)
+			}
 			fmt.Fprintln(b, line)
 		}
 		fmt.Fprintln(b)
 	}
+	show("Dates more than a day apart", dateOffVerdict, 25)
 	show("Misnumbered", misnumbered, 40)
 	show("Titles differ", differ, 25)
 	show("Not on AFL", noEntry, 30)
 	show("Unlisted", unlisted, 15)
+}
+
+// dayDiff is a minus b in whole days, comparing calendar dates.
+func dayDiff(a, b time.Time) (int, bool) {
+	if a.IsZero() || b.IsZero() || a.Year() < 1900 || b.Year() < 1900 {
+		return 0, false
+	}
+	da := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
+	db := time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, time.UTC)
+	return int(da.Sub(db).Hours() / 24), true
 }

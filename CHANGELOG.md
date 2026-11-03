@@ -57,6 +57,10 @@
   type: 118 Pokémon episodes had the wrong one. Episodes whose titles match
   AFL exactly anchor the numbering, the rest follow the nearest anchor,
   and an episode AFL leaves out is left unclassified (so monitored).
+- AFL's air dates are read too. A season whose titles are translated too
+  differently to settle it can anchor by date instead (within a day, to
+  allow for time zones). Dates are sometimes a week off where a broadcast
+  moved, so only the season's common shift counts and titles always win.
 - Specials that match an AFL episode are listed with the show's episodes
   (Cardcaptor Sakura's Clear Card prologue, AFL episode 71). They were
   already synced; only the list left them out.

@@ -3,6 +3,7 @@ package sync
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -165,4 +166,44 @@ func TestAlignToAFLKeepsSwappedEpisodes(t *testing.T) {
 	assert.Equal(t, 7, got["Episode 7"])
 	assert.Equal(t, 6, got["Episode 6"])
 	assert.Equal(t, 10, got["Episode 10"])
+}
+
+// A season whose titles never match (translated differently) but whose
+// air dates do is still lined up, by date.
+func TestAlignToAFLAnchorsByDateWhenTitlesDiffer(t *testing.T) {
+	start := time.Date(2010, 1, 3, 0, 0, 0, 0, time.UTC)
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	for n := 1; n <= 10; n++ {
+		aired := start.AddDate(0, 0, 7*(n-1))
+		afl = append(afl, models.AFLEpisode{Number: n, Title: fmt.Sprintf("AFL wording %d", n), Type: models.EpisodeCanon, AirDate: aired})
+		// Sonarr counts three specials first; its UTC time is the evening
+		// before the Japanese date AFL lists.
+		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n + 3), Title: fmt.Sprintf("TVDB wording %d", n), AirDateUTC: aired.Add(-6 * time.Hour)})
+	}
+	aligned, noEntry := AlignToAFL(sonarr, afl)
+	assert.Empty(t, noEntry)
+	for _, ep := range aligned {
+		assert.Equal(t, ep.ID, *ep.AbsoluteEpisodeNumber)
+	}
+}
+
+// Two dates a week off (a moved broadcast) don't shift episodes onto their
+// neighbours when the rest of the season lines up.
+func TestAlignToAFLIgnoresAWeekOffRun(t *testing.T) {
+	start := time.Date(2010, 1, 3, 0, 0, 0, 0, time.UTC)
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	for n := 1; n <= 12; n++ {
+		aired := start.AddDate(0, 0, 7*(n-1))
+		afl = append(afl, models.AFLEpisode{Number: n, Title: fmt.Sprintf("AFL wording %d", n), Type: models.EpisodeCanon, AirDate: aired})
+		sonarrAired := aired
+		if n == 6 || n == 7 {
+			sonarrAired = aired.AddDate(0, 0, -7)
+		}
+		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n), Title: fmt.Sprintf("TVDB wording %d", n), AirDateUTC: sonarrAired})
+	}
+	aligned, noEntry := AlignToAFL(sonarr, afl)
+	assert.Empty(t, noEntry)
+	assert.Equal(t, sonarr, aligned)
 }

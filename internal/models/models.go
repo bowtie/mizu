@@ -258,4 +258,7 @@ type AFLEpisode struct {
 	Number int         `json:"number"`
 	Title  string      `json:"title"`
 	Type   EpisodeType `json:"type"`
+	// AirDate is the original air date AFL lists (date only, UTC midnight);
+	// zero when the row has none.
+	AirDate time.Time `json:"air_date,omitempty"`
 }

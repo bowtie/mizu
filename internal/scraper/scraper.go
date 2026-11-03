@@ -293,7 +293,9 @@ func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []m
 
 		typeStr := strings.TrimSpace(sel.Find("td.Type span").Text())
 		epType := parseEpisodeType(typeStr)
-		episodes = append(episodes, models.AFLEpisode{Number: num, Title: title, Type: epType})
+		// A missing or odd date is fine: it only helps line episodes up.
+		aired, _ := time.Parse(time.DateOnly, strings.TrimSpace(sel.Find("td.Date").Text()))
+		episodes = append(episodes, models.AFLEpisode{Number: num, Title: title, Type: epType, AirDate: aired})
 	})
 
 	// A missing EpisodeList table means structural breakage (redesign,
