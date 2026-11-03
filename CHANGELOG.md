@@ -72,6 +72,12 @@
   (Cardcaptor Sakura's Clear Card prologue, AFL episode 71). They were
   already synced; only the list left them out.
 
+- AFL shows whose address has an accent, apostrophe or symbol can be
+  added and synced. AFL percent-encodes those (pok%C3%A9mon-advanced-
+  generation, kuroko%E2%80%99s-basketball, ranma-%C2%BD) and Mizu refused
+  them as invalid, so 15 shows, among them Kuroko's Basketball, Hell's
+  Paradise, Ranma ½ and two Pokémon series, couldn't be fetched at all.
+
 ### Engineering
 
 - `go run ./cmd/audit -db mizu.db` reports, per mapped show, where Sonarr

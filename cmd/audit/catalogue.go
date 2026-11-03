@@ -211,6 +211,16 @@ func writeCatalogue(out io.Writer, results []catalogueResult) {
 		fmt.Fprintf(out, "- %s: %d\n", reason, n)
 	}
 	fmt.Fprintln(out)
+	// The skips worth a look: pages that failed and shows with no match.
+	fmt.Fprintln(out, "| Skipped AFL show | Slug | Reason |")
+	fmt.Fprintln(out, "|---|---|---|")
+	for _, r := range results {
+		if r.skipped == "" || r.skipped == "film, OVA or special" || r.skipped == "no filler or mixed episodes" {
+			continue
+		}
+		fmt.Fprintf(out, "| %s | %s | %s |\n", r.afl.Title, r.afl.Slug, strings.ReplaceAll(r.skipped, "|", "/"))
+	}
+	fmt.Fprintln(out)
 	fmt.Fprintln(out, "| AFL show | TVDB series | TVDB eps | AFL eps | Agree | Similar | Differ | Misnumbered | Wrong type | Not on AFL | Unlisted | Same date | Date off |")
 	fmt.Fprintln(out, "|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, a := range audited {

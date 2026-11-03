@@ -225,3 +225,33 @@ func TestGetShowEpisodesReadsAirDates(t *testing.T) {
 	assert.Equal(t, time.Date(2002, 10, 3, 0, 0, 0, 0, time.UTC), episodes[0].AirDate)
 	assert.True(t, episodes[1].AirDate.IsZero(), "a missing date is left empty")
 }
+
+func TestValidSlug(t *testing.T) {
+	for _, s := range []string{"naruto", "hunter-x-hunter-2011", "pok%C3%A9mon-advanced-generation", "kuroko%E2%80%99s-basketball", "ranma-%C2%BD"} {
+		assert.True(t, ValidSlug(s), s)
+	}
+	for _, s := range []string{"", "../admin", "a/b", "%2e%2e", "a%2Fb", "a%5Cb", "a%3Fq", "a%23f", "bad%zz", "trailing%2", "space here"} {
+		assert.False(t, ValidSlug(s), s)
+	}
+}
+
+// AFL writes slugs with accents percent-encoded; they reach the right page.
+func TestGetShowEpisodesWithEncodedSlug(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body><span property="dc:title" content="Ranma ½"></span>
+		<table class="EpisodeList"><tbody>
+		<tr><td class="Number">1</td><td class="Title"><a href="#">Ep 1</a></td><td class="Type"><span>Filler</span></td></tr>
+		</tbody></table></body></html>`))
+	}))
+	defer srv.Close()
+
+	s := newTestScraper(t, srv)
+	title, episodes, err := s.GetShowEpisodes(context.Background(), "ranma-%C2%BD")
+	require.NoError(t, err)
+	assert.Equal(t, "Ranma ½", title)
+	assert.Len(t, episodes, 1)
+	assert.Equal(t, "/shows/ranma-%C2%BD", gotPath)
+}

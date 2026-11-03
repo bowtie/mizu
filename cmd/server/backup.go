@@ -13,6 +13,7 @@ import (
 	"mizu/internal/database"
 	"mizu/internal/models"
 	"mizu/internal/netguard"
+	"mizu/internal/scraper"
 	syncengine "mizu/internal/sync"
 
 	"github.com/rs/zerolog/log"
@@ -71,15 +72,10 @@ var secretSettings = map[string]struct{}{
 	"ntfy_token":     {},
 }
 
-// validAFLSlug reports whether s contains only the characters the
-// scraper URL builder and mapping handlers accept.
+// validAFLSlug reports whether s is a slug the scraper's URL builder
+// accepts.
 func validAFLSlug(s string) bool {
-	for _, ch := range s {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
-			return false
-		}
-	}
-	return true
+	return scraper.ValidSlug(s)
 }
 
 // mappingBackup mirrors every show_mappings column so a backup file

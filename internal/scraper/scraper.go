@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -252,12 +253,39 @@ func showsBySlug(shows []models.AFLShow, slugs []string) []models.AFLShow {
 	return out
 }
 
+// ValidSlug reports whether s is safe to put in an AFL show URL: letters,
+// digits, "-", "_" and percent-encoded bytes, as AFL writes slugs with
+// accents or apostrophes ("pok%C3%A9mon-journeys", "ranma-%C2%BD"). What it
+// decodes to may not contain a path separator, query, fragment or "..".
+func ValidSlug(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_':
+		case ch == '%' && i+2 < len(s) && isHex(s[i+1]) && isHex(s[i+2]):
+			i += 2
+		default:
+			return false
+		}
+	}
+	decoded, err := url.PathUnescape(s)
+	if err != nil {
+		return false
+	}
+	return !strings.ContainsAny(decoded, "/\\?#") && !strings.Contains(decoded, "..")
+}
+
+func isHex(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
 func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []models.AFLEpisode, error) {
 	// Validate slug to prevent path traversal in the URL.
-	for _, ch := range slug {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
-			return "", nil, fmt.Errorf("invalid slug: %s", slug)
-		}
+	if !ValidSlug(slug) {
+		return "", nil, fmt.Errorf("invalid slug: %s", slug)
 	}
 	url := fmt.Sprintf("%s/shows/%s", s.baseURL, slug)
 	log.Info().Str("slug", slug).Str("url", url).Msg("fetching episode data")
