@@ -16,6 +16,7 @@ vi.mock("../lib/api", () => ({
   getShow: vi.fn(),
   getShows: vi.fn().mockResolvedValue([]),
   getEpisodes: vi.fn(),
+  getFillerFiles: vi.fn().mockResolvedValue({ files: [] }),
   getSettings: vi.fn().mockRejectedValue(new Error("not needed")),
   getSonarrSeries: vi.fn().mockResolvedValue([]),
   getArtworkProviders: vi.fn().mockResolvedValue({ providers: [] }),

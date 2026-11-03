@@ -31,6 +31,16 @@ function describe(file: FillerFile): string {
   return `Episode ${nums}${title}`;
 }
 
+/** The show's deletable filler files, shared by the toolbar button (shown
+ *  only when there are some) and the dialog. */
+export function useFillerFiles(showId: string | undefined) {
+  return useQuery({
+    queryKey: ["fillerFiles", showId],
+    queryFn: () => getFillerFiles(showId!),
+    enabled: !!showId,
+  });
+}
+
 interface FillerFilesDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,12 +58,12 @@ export function FillerFilesDialog({
 }: FillerFilesDialogProps) {
   const queryClient = useQueryClient();
   const addNotification = useNotificationStore((s) => s.addNotification);
-  const query = useQuery({
-    queryKey: ["fillerFiles", showId],
-    queryFn: () => getFillerFiles(showId),
-    enabled: isOpen,
-    staleTime: 0,
-  });
+  const query = useFillerFiles(showId);
+  const { refetch } = query;
+  // Files change outside Mizu, so look again each time it opens.
+  useEffect(() => {
+    if (isOpen) void refetch();
+  }, [isOpen, refetch]);
   const files = useMemo(() => query.data?.files ?? [], [query.data]);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);

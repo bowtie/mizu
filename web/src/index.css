@@ -889,10 +889,12 @@ body {
 /* Disabled InputGroup already fades the whole group; prevent double opacity on the input */
 .show-actions-bar .astryx-number-input {
   opacity: 1;
-  width: 5.5rem;
+  /* Room for a five-digit episode plus the wrapper's padding. */
+  width: calc(5ch + 16px);
 }
 
-.show-actions-bar .astryx-number-input input[type="number"] {
+/* NumberInput renders a text input, so match any input type. */
+.show-actions-bar .astryx-number-input input {
   text-align: center;
 }
 

@@ -19,7 +19,8 @@
 
 ### Filler cleanup
 
-- A show's toolbar has a Delete filler files button. It lists the
+- A show's toolbar has a Delete filler files button, shown only when
+  there is something to delete. It lists the
   downloaded files that only hold episodes the show's rules skip, with
   their size, and deletes the picked ones from disk through Sonarr.
 - Files are picked by default unless one of their episodes was monitored

@@ -31,6 +31,8 @@ interface ShowActionsBarProps {
   onToggleAuto: () => void;
   onToggleMuted: () => void;
   onEditArtwork: () => void;
+  /** Whether the show has filler files to delete; the button shows only then. */
+  hasFillerFiles: boolean;
   onFillerFiles: () => void;
   onRemove: () => void;
   onSave: () => void;
@@ -53,6 +55,7 @@ export function ShowActionsBar({
   onToggleAuto,
   onToggleMuted,
   onEditArtwork,
+  hasFillerFiles,
   onFillerFiles,
   onRemove,
   onSave,
@@ -127,16 +130,18 @@ export function ShowActionsBar({
               onClick={() => onEditArtwork()}
               data-cuelume-press
             />
-            <Button
-              label="Delete filler files"
-              tooltip="Delete filler files"
-              variant="secondary"
-              size="md"
-              isIconOnly
-              icon={<HardDrive size={16} />}
-              onClick={() => onFillerFiles()}
-              data-cuelume-press
-            />
+            {hasFillerFiles && (
+              <Button
+                label="Delete filler files"
+                tooltip="Delete filler files"
+                variant="secondary"
+                size="md"
+                isIconOnly
+                icon={<HardDrive size={16} />}
+                onClick={() => onFillerFiles()}
+                data-cuelume-press
+              />
+            )}
             <Button
               label={notificationsMuted ? "Notifications muted" : "Notifications on"}
               variant="secondary"
