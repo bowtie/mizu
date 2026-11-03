@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Sonarr webhook
+
+- Sonarr can call Mizu the moment it grabs an episode or adds a series
+  (Settings → Sonarr webhook has the URL and password for Sonarr's
+  Connect → Webhook). A mapped show is resynced right away instead of at
+  the next scheduled sync, waiting for a running one to finish.
+- A grabbed episode that was monitored and that the resync unmonitors is
+  cancelled: the download is removed from the queue and the download
+  client, without blocklisting. Episodes grabbed by hand while unmonitored
+  are left alone.
+- Webhook runs show in Activity as "Sonarr webhook".
+- The webhook checks its own password (Basic auth or `X-Api-Key`) in every
+  sign-in mode, so it also answers under a container name with sign-in off.
+  The password isn't part of config exports.
+
 ## [0.4.0] - 2026-11-03
 
 Security pass on 0.3.0. Every setting lives in the database, sign-in is a

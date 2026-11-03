@@ -430,3 +430,15 @@ export function errorMessage(err: unknown): string {
   }
   return String(err);
 }
+
+export interface WebhookSettings {
+  token: string;
+}
+
+export function getWebhookSettings(): Promise<WebhookSettings> {
+  return request<WebhookSettings>("GET", "/settings/webhook");
+}
+
+export function regenerateWebhookToken(): Promise<WebhookSettings> {
+  return request<WebhookSettings>("POST", "/settings/webhook/regenerate");
+}

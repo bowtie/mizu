@@ -75,6 +75,9 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			r.Post("/logout", handleAuthLogout(authMgr, acc))
 		})
 
+		// Sonarr's webhook carries its own token (see handleSonarrWebhook).
+		r.Post("/webhook/sonarr", handleSonarrWebhook(db, syncEngine, appCtx, bgWG))
+
 		// ── Protected: everything below requires sign-in ──
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth(authMgr, acc))
@@ -123,6 +126,8 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 			r.Put("/settings", handleUpdateSettings(cfg, db, scheduler, syncEngine, artworkMgr))
 			r.Post("/settings/afl-cache/refresh", handleRefreshAFLCache(syncEngine, db, appCtx, bgWG))
 			r.Get("/settings/afl-cache/status", handleAFLCacheRefreshStatus)
+			r.Get("/settings/webhook", handleGetWebhook(db))
+			r.Post("/settings/webhook/regenerate", handleRegenerateWebhook(db))
 			r.Get("/sonarr/series", handleGetSonarrSeries(db, syncEngine))
 			r.Get("/sonarr/series/{id}", handleGetSonarrSeriesByID(db, syncEngine))
 			r.Post("/sonarr/series", handleAddSonarrSeries(cfg, syncEngine))

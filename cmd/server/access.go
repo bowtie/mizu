@@ -203,11 +203,13 @@ func (p *accessPolicy) keepAnswering(host string) {
 }
 
 // hostGuard refuses requests addressed to a hostname open mode doesn't
-// allow.
+// allow. The Sonarr webhook is exempt: it checks its own token, which a
+// rebinding page can't know, and Sonarr often reaches Mizu by a container
+// name nobody would think to list.
 func hostGuard(acc *accessControl) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !acc.get().allowsHost(r.Host) {
+			if r.URL.Path != sonarrWebhookPath && !acc.get().allowsHost(r.Host) {
 				writeError(w, http.StatusMisdirectedRequest,
 					"Mizu doesn't answer to "+hostOnly(r.Host)+". Add it under Settings > Security > Allowed hostnames")
 				return

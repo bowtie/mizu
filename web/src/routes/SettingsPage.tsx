@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { applySoundsEnabled } from "../lib/sounds";
 import { ConnectionCard } from "../components/settings/ConnectionCard";
 import { SyncCard } from "../components/settings/SyncCard";
+import { WebhookCard } from "../components/settings/WebhookCard";
 import { NotificationsCard } from "../components/settings/NotificationsCard";
 import { BackupCard } from "../components/settings/BackupCard";
 import { InterfaceCard } from "../components/settings/InterfaceCard";
@@ -524,6 +525,9 @@ export function SettingsPage() {
           refreshingCache={refreshingCache}
           handleRefreshCache={handleRefreshCache}
         />
+
+        {/* Sonarr webhook */}
+        <WebhookCard />
 
         {/* Notifications */}
         <NotificationsCard

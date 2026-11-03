@@ -52,6 +52,8 @@ vi.mock("../lib/api", () => ({
   exportConfig: vi.fn(),
   importConfig: vi.fn(),
   changePassword: vi.fn(),
+  getWebhookSettings: vi.fn().mockResolvedValue({ token: "webhook-token" }),
+  regenerateWebhookToken: vi.fn(),
   getAccessSettings: vi.fn().mockResolvedValue({
     mode: "password",
     trusted_proxies: "",

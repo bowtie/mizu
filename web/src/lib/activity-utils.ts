@@ -16,6 +16,7 @@ export function formatTrigger(trigger: string | undefined): string {
   if (trigger === "manual") return "Manual";
   if (trigger === "scheduled") return "Scheduled";
   if (trigger === "afl_cache_refresh") return "AFL cache refresh";
+  if (trigger === "webhook") return "Sonarr webhook";
   return trigger;
 }
 

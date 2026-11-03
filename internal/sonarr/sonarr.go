@@ -405,3 +405,40 @@ func (c *Client) BulkSetEpisodesMonitored(ctx context.Context, episodeIDs []int,
 
 	return nil
 }
+
+// --- Queue ---
+
+// QueueItem is one entry in Sonarr's download queue. A multi-episode
+// release shows up once per episode, all sharing a DownloadID.
+type QueueItem struct {
+	ID         int    `json:"id"`
+	EpisodeID  int    `json:"episodeId"`
+	DownloadID string `json:"downloadId"`
+}
+
+// GetQueueForSeries returns the download queue entries of one series.
+func (c *Client) GetQueueForSeries(ctx context.Context, seriesID int) ([]QueueItem, error) {
+	path := fmt.Sprintf("/queue/details?seriesId=%d", seriesID)
+	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]QueueItem](resp)
+}
+
+// RemoveQueueItem removes a queue entry and its download from the download
+// client, without blocklisting the release. An entry that is already gone
+// (removing one episode of a pack removes them all) is not an error.
+func (c *Client) RemoveQueueItem(ctx context.Context, queueID int) error {
+	path := fmt.Sprintf("/queue/%d?removeFromClient=true&blocklist=false", queueID)
+	resp, err := c.doRequest(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		var statusErr *httpStatusError
+		if errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound {
+			return nil
+		}
+		return fmt.Errorf("removing queue item %d: %w", queueID, err)
+	}
+	resp.Body.Close()
+	return nil
+}
