@@ -71,6 +71,7 @@ func (db *DB) ReplaceEpisodesForMapping(ctx context.Context, mappingID int64, ep
 			AbsoluteEpisodeNumber: absNum,
 			Monitored:             boolToInt(e.Monitored),
 			AirDate:               airDate,
+			NotOnAfl:              boolToInt(e.NotOnAFL),
 		}); err != nil {
 			return err
 		}

@@ -114,6 +114,8 @@ export interface Episode {
   monitored?: boolean;
   air_date?: string;
   /** Waits unmonitored for AnimeFillerList to list it. */
+  /** AnimeFillerList doesn't count this episode (a banned one, say). */
+  not_on_afl?: boolean;
   held?: boolean;
   [key: string]: unknown;
 }

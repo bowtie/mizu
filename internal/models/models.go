@@ -100,6 +100,9 @@ type EpisodeInfo struct {
 	AbsoluteEpisodeNumber *int        `json:"absolute_episode_number,omitempty"`
 	AirDate               *DateOnly   `json:"air_date,omitempty"`
 	Monitored             bool        `json:"monitored,omitempty"`
+	// NotOnAFL is set for an episode AnimeFillerList doesn't count (a
+	// banned one, say); its EpisodeNum is Sonarr's, not an AFL number.
+	NotOnAFL bool `json:"not_on_afl,omitempty"`
 	// Held is set when the episode waits unmonitored for AnimeFillerList
 	// to list it (the Unlisted episodes setting). Not stored with the row.
 	Held bool `json:"held,omitempty"`

@@ -7,7 +7,7 @@ import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { Eye, EyeOff } from "lucide-react";
 import { memo } from "react";
 import type { Episode } from "../lib/types";
-import { episodeBadgeInfo, formatAirDate } from "../routes/showDetailHelpers";
+import { episodeBadgeInfo, episodeNumberText, formatAirDate } from "../routes/showDetailHelpers";
 
 // ── Helpers (duplicated from ShowDetailPage to keep this self-contained) ──
 
@@ -36,14 +36,13 @@ const VirtualEpisodeRow = memo(function VirtualEpisodeRow({
 }) {
   const badge = episodeBadgeInfo(ep.type, ep.held);
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
-  const epNum = displayEpisodeNumber(ep);
   const airDate = formatAirDate(ep.air_date);
   return (
     <div className="virtual-episode-row" role="listitem">
       <div className="virtual-episode-row-content">
         <span className="virtual-episode-label">{ep.title || "Untitled"}</span>
         <span className="virtual-episode-desc">
-          Episode {epNum}
+          {episodeNumberText(ep)}
           {airDate && (
             <span className="episode-date-inline"> · {formatAirDate(ep.air_date, true)}</span>
           )}

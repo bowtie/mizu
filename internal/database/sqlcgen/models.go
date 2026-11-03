@@ -39,6 +39,7 @@ type EpisodeInfo struct {
 	AbsoluteEpisodeNumber *int64
 	Monitored             int64
 	AirDate               *time.Time
+	NotOnAfl              int64
 }
 
 type HeldEpisode struct {

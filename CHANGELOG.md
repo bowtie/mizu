@@ -57,6 +57,8 @@
   type: 118 Pokémon episodes had the wrong one. Episodes whose titles match
   AFL exactly anchor the numbering, the rest follow the nearest anchor,
   and an episode AFL leaves out is left unclassified (so monitored).
+  The show page labels it by its Sonarr season and episode (S01E18), so
+  it no longer shows the same number as the episode AFL gives it to.
 - AFL's air dates are read too. A season whose titles are translated too
   differently to settle it can anchor by date instead (within a day, to
   allow for time zones). Dates are sometimes a week off where a broadcast

@@ -16,6 +16,7 @@ sql:
       - "internal/database/migrations/004_notifications_muted.sql"
       - "internal/database/migrations/005_artwork_custom_slots.sql"
       - "internal/database/migrations/006_held_episodes.sql"
+      - "internal/database/migrations/007_episode_not_on_afl.sql"
     gen:
       go:
         package: "sqlcgen"

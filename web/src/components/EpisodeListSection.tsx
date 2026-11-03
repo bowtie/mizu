@@ -27,6 +27,7 @@ import type { Episode } from "../lib/types";
 import {
   displayEpisodeNumber,
   episodeBadgeInfo,
+  episodeNumberText,
   epSyncKey,
   formatAirDate,
   seasonLabel,
@@ -74,7 +75,7 @@ const EpisodeListItem = memo(function EpisodeListItem({
       label={ep.title || "Untitled"}
       description={
         <>
-          Episode {epNum}
+          {episodeNumberText(ep)}
           {airDate && (
             <span className="episode-date-inline"> · {formatAirDate(ep.air_date, true)}</span>
           )}

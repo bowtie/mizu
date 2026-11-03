@@ -166,6 +166,7 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 			AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
 			AirDate:               &airDateOnly,
 			Monitored:             ep.Monitored,
+			NotOnAFL:              noAFLEntry[ep.ID],
 		})
 	}
 

@@ -160,6 +160,7 @@ func sqlcEpisodeToModel(s sqlcgen.GetEpisodesByMappingRow) models.EpisodeInfo {
 		SeasonNumber:        int(s.SeasonNumber),
 		SonarrEpisodeNumber: int(s.SonarrEpisodeNumber),
 		Monitored:           s.Monitored != 0,
+		NotOnAFL:            s.NotOnAfl != 0,
 	}
 	if s.AbsoluteEpisodeNumber != nil {
 		val := int(*s.AbsoluteEpisodeNumber)

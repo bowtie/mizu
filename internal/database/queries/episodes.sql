@@ -2,7 +2,7 @@
 SELECT
     episode_num, title, type,
     sonarr_episode_id, season_number, sonarr_episode_number,
-    absolute_episode_number, monitored, air_date
+    absolute_episode_number, monitored, air_date, not_on_afl
 FROM episode_info
 WHERE mapping_id = ?
 ORDER BY episode_num ASC;
@@ -22,8 +22,8 @@ DELETE FROM episode_info WHERE mapping_id = ?;
 INSERT INTO episode_info (
     mapping_id, episode_num, title, type, last_scraped,
     sonarr_episode_id, season_number, sonarr_episode_number,
-    absolute_episode_number, monitored, air_date
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    absolute_episode_number, monitored, air_date, not_on_afl
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateEpisodeMonitor :exec
 UPDATE episode_info SET monitored = ? WHERE mapping_id = ? AND sonarr_episode_id = ?;

@@ -105,6 +105,7 @@ export const EpisodeSchema = v.object({
   monitored: v.optional(v.boolean()),
   air_date: v.optional(v.string()),
   /** Waits unmonitored for AnimeFillerList to list it. */
+  not_on_afl: v.optional(v.boolean()),
   held: v.optional(v.boolean()),
 });
 

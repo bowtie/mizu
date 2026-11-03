@@ -45,7 +45,7 @@ const getEpisodesByMapping = `-- name: GetEpisodesByMapping :many
 SELECT
     episode_num, title, type,
     sonarr_episode_id, season_number, sonarr_episode_number,
-    absolute_episode_number, monitored, air_date
+    absolute_episode_number, monitored, air_date, not_on_afl
 FROM episode_info
 WHERE mapping_id = ?
 ORDER BY episode_num ASC
@@ -61,6 +61,7 @@ type GetEpisodesByMappingRow struct {
 	AbsoluteEpisodeNumber *int64
 	Monitored             int64
 	AirDate               *time.Time
+	NotOnAfl              int64
 }
 
 func (q *Queries) GetEpisodesByMapping(ctx context.Context, mappingID int64) ([]GetEpisodesByMappingRow, error) {
@@ -82,6 +83,7 @@ func (q *Queries) GetEpisodesByMapping(ctx context.Context, mappingID int64) ([]
 			&i.AbsoluteEpisodeNumber,
 			&i.Monitored,
 			&i.AirDate,
+			&i.NotOnAfl,
 		); err != nil {
 			return nil, err
 		}
@@ -131,8 +133,8 @@ const insertEpisode = `-- name: InsertEpisode :exec
 INSERT INTO episode_info (
     mapping_id, episode_num, title, type, last_scraped,
     sonarr_episode_id, season_number, sonarr_episode_number,
-    absolute_episode_number, monitored, air_date
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    absolute_episode_number, monitored, air_date, not_on_afl
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertEpisodeParams struct {
@@ -147,6 +149,7 @@ type InsertEpisodeParams struct {
 	AbsoluteEpisodeNumber *int64
 	Monitored             int64
 	AirDate               *time.Time
+	NotOnAfl              int64
 }
 
 func (q *Queries) InsertEpisode(ctx context.Context, arg InsertEpisodeParams) error {
@@ -162,6 +165,7 @@ func (q *Queries) InsertEpisode(ctx context.Context, arg InsertEpisodeParams) er
 		arg.AbsoluteEpisodeNumber,
 		arg.Monitored,
 		arg.AirDate,
+		arg.NotOnAfl,
 	)
 	return err
 }

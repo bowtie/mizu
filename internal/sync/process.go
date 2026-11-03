@@ -163,6 +163,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 				AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
 				AirDate:               &airDateOnly,
 				Monitored:             ep.Monitored,
+				NotOnAFL:              noAFLEntry[ep.ID],
 			})
 		}
 

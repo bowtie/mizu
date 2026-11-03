@@ -24,6 +24,18 @@ export function displayEpisodeNumber(ep: Episode): number {
   if (isSpecialSeasonNumber(ep.season_number)) return ep.sonarr_episode_number ?? 0;
   return ep.absolute_episode_number ?? ep.episode_num ?? ep.sonarr_episode_number ?? 0;
 }
+/**
+ * The number line under an episode's title. An episode AnimeFillerList
+ * doesn't count has no AFL number of its own, so it goes by its Sonarr
+ * season and episode ("S01E18") rather than a number its neighbour has.
+ */
+export function episodeNumberText(ep: Episode): string {
+  if (ep.not_on_afl && !isSpecialSeasonNumber(ep.season_number) && ep.sonarr_episode_number) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `S${pad(ep.season_number ?? 0)}E${pad(ep.sonarr_episode_number)}`;
+  }
+  return `Episode ${displayEpisodeNumber(ep)}`;
+}
 export function episodeLabel(ep: Episode): string {
   return isSpecialSeasonNumber(ep.season_number)
     ? `Special ${displayEpisodeNumber(ep)}`
