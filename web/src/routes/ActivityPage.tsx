@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Selector } from "@astryxdesign/core/Selector";
+import { Stack } from "@astryxdesign/core/Stack";
 import { useIsMobile } from "../lib/useIsMobile";
 import { useNotificationStore } from "../lib/store";
 import { queryKeys, useSyncLogPages, useTriggerSync } from "../lib/queries";
@@ -158,7 +159,7 @@ export function ActivityPage() {
     <Section padding={4} maxWidth={900} className="section-centered page-enter">
       <VStack gap={6}>
         {/* Header */}
-        <HStack justify="between" align="center" wrap="wrap" gap={3}>
+        <HStack justify="between" align="center" wrap="nowrap" gap={3}>
           <VStack gap={1}>
             <Heading level={1}>Activity</Heading>
             <Text type="supporting" color="secondary">
@@ -169,6 +170,7 @@ export function ActivityPage() {
             label={syncing ? "Syncing..." : "Sync now"}
             variant="primary"
             icon={<RefreshCw size={16} />}
+            isIconOnly={isMobile}
             onClick={handleSync}
             isLoading={syncing}
             data-cuelume-press
@@ -220,7 +222,7 @@ export function ActivityPage() {
         ) : (
           <>
             {/* Filters */}
-            <VStack gap={3} width="100%">
+            <Stack direction={isMobile ? "horizontal" : "vertical"} gap={3} width="100%">
               {/* A dropdown on phones, where five tabs don't fit. */}
               {isMobile ? (
                 <Selector
@@ -229,7 +231,7 @@ export function ActivityPage() {
                   value={statusFilter}
                   options={statusOptions}
                   onChange={(v) => setStatusFilter(v as string)}
-                  width="100%"
+                  width={130}
                 />
               ) : (
                 <SegmentedControl
@@ -253,7 +255,7 @@ export function ActivityPage() {
                 isLabelHidden
                 width="100%"
               />
-            </VStack>
+            </Stack>
 
             {filteredLogs.length === 0 ? (
               <EmptyState

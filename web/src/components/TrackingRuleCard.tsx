@@ -65,7 +65,12 @@ export const TrackingRuleCard = memo(function TrackingRuleCard({
           <Text type="body" weight="semibold" display="block">
             {label}
           </Text>
-          <Text type="supporting" color="primary" display="block">
+          <Text
+            type="supporting"
+            color="primary"
+            display="block"
+            className="tracking-rule-description"
+          >
             {description}
           </Text>
         </VStack>

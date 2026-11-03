@@ -362,7 +362,7 @@ export function ShowsPage() {
 
   return (
     <Section padding={4} maxWidth={900} className="section-centered page-enter">
-      <VStack gap={6}>
+      <VStack gap={isMobile ? 4 : 6}>
         {/* Row 1: title + supporting text left, add right */}
         <HStack justify="between" align="center" wrap="wrap" gap={4}>
           <VStack gap={1}>
@@ -383,6 +383,7 @@ export function ShowsPage() {
               label="Add anime"
               variant="primary"
               icon={<Plus size={16} />}
+              isIconOnly={isMobile}
               onClick={openAddModal}
               onMouseEnter={prefetchAddDialogChunk}
               data-cuelume-press
@@ -408,6 +409,7 @@ export function ShowsPage() {
               button={{
                 label: sortOptions.find((o) => o.value === sortBy)?.label ?? "Sort",
                 size: "md",
+                isIconOnly: isMobile,
                 icon: <ArrowDownUp size={16} />,
               }}
               items={sortOptions.map((o) => ({
@@ -486,7 +488,13 @@ export function ShowsPage() {
           />
         ) : (
           <VStack gap={4}>
-            <Grid columns={viewMode === "poster" ? { minWidth: 180 } : { minWidth: 320 }} gap={4}>
+            <Grid
+              columns={
+                // Two posters a row on phones; 180px would leave one huge one.
+                viewMode === "poster" ? { minWidth: isMobile ? 140 : 180 } : { minWidth: 320 }
+              }
+              gap={isMobile ? 3 : 4}
+            >
               {filteredShows.map(
                 (show: Show & { poster?: string; banner?: string; logo?: string }) => {
                   const badge = syncStateBadge(show.enabled);

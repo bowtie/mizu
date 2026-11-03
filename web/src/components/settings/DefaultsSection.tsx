@@ -20,7 +20,12 @@ export function DefaultsSection({ control }: DefaultsSectionProps) {
         </Text>
       </VStack>
 
-      <Grid columns={{ minWidth: 240, max: 3 }} gap={4} align="start">
+      <Grid
+        columns={{ minWidth: 240, max: 3 }}
+        gap={4}
+        align="start"
+        className="tracking-rules-grid"
+      >
         <Controller
           control={control}
           name="trackAnimeCanonDefault"

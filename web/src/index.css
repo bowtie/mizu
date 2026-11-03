@@ -1457,12 +1457,14 @@ body {
   .settings-row-label {
     max-width: none;
   }
-  /* A switch is small enough to stay beside its label. */
+  /* A switch or a single button is small enough to stay beside its label. */
+  .settings-row:has(> .astryx-button),
   .settings-row:has(.astryx-switch-field) {
     flex-direction: row;
     align-items: center;
     flex-wrap: nowrap;
   }
+  .settings-row:has(> .astryx-button) .settings-row-label,
   .settings-row:has(.astryx-switch-field) .settings-row-label {
     flex: 1;
     min-width: 0;
@@ -1704,8 +1706,41 @@ body {
     justify-content: flex-end;
   }
 
-  /* Library: search gets its own full-width row above sort and view toggle. */
-  .library-toolbar .library-search {
-    flex: 1 1 100%;
+  /* Webhook URL and password fill the row beside their copy icon. */
+  .webhook-field-row {
+    flex-wrap: nowrap !important;
+  }
+  .webhook-field-row .astryx-field {
+    flex: 1;
+    min-width: 0;
+    width: auto !important;
+  }
+
+  /* Library: search shares a row with the icon-only sort and view buttons. */
+  .library-toolbar {
+    flex-wrap: nowrap !important;
+  }
+
+  /* Banner cards: wider than 16:9 so more shows fit on screen. */
+  .mizu-card:not(.mizu-card-poster) .mizu-card-img-wrap {
+    aspect-ratio: 2/1;
+  }
+
+  /* Tracking rules: three compact tiles in one row instead of three
+     full-width cards; the descriptions are spelled out on wider screens. */
+  .tracking-rules-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: var(--spacing-2) !important;
+  }
+  .tracking-rules-grid .tracking-rule-card {
+    padding: var(--spacing-3) !important;
+  }
+  .tracking-rules-grid .tracking-rule-card > .astryx-stack {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+  }
+  .tracking-rules-grid .tracking-rule-description {
+    display: none;
   }
 }

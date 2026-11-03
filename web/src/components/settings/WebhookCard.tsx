@@ -11,6 +11,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { Copy, RefreshCw } from "lucide-react";
 import { useNotificationStore } from "../../lib/store";
 import { errorMessage, getWebhookSettings, regenerateWebhookToken } from "../../lib/api";
+import { useIsMobile } from "../../lib/useIsMobile";
 
 const webhookQueryKey = ["webhookSettings"];
 // Wide enough for a LAN URL, narrow enough to fit a phone.
@@ -23,6 +24,7 @@ export function WebhookCard() {
   const queryClient = useQueryClient();
   const addNotification = useNotificationStore((s) => s.addNotification);
   const [regenerating, setRegenerating] = useState(false);
+  const isMobile = useIsMobile();
   const url = `${window.location.origin}/api/webhook/sonarr`;
   // The clipboard API only exists on HTTPS and localhost; elsewhere the
   // read-only fields can still be selected and copied by hand.
@@ -54,11 +56,23 @@ export function WebhookCard() {
       <Button
         variant="secondary"
         label="Copy"
+        isIconOnly={isMobile}
         icon={<Copy size={16} />}
         isDisabled={!value}
         onClick={() => void copy(value, what)}
       />
     );
+
+  const newPasswordButton = (
+    <Button
+      variant="ghost"
+      label="New password"
+      icon={<RefreshCw size={16} />}
+      isLoading={regenerating}
+      isDisabled={regenerating || !data}
+      onClick={() => void regenerate()}
+    />
+  );
 
   return (
     <Card variant="muted" padding={4}>
@@ -66,27 +80,22 @@ export function WebhookCard() {
         <Heading level={2}>Sonarr webhook</Heading>
         <Divider />
         <Text type="supporting" color="secondary" display="block">
-          Sonarr tells Mizu the moment it adds a show or grabs an episode, so filler is unmonitored
-          right away and a filler download is cancelled. In Sonarr, go to Settings → Connect, add a
-          Webhook, turn on On Grab and On Series Add, and paste these in (any username). If Sonarr
-          reaches Mizu by another address, like http://mizu:8978, use that in the URL.
+          Sonarr tells Mizu when it adds a show or grabs an episode, so filler is caught right away.
+          In Sonarr, add a Webhook under Settings → Connect with On Grab and On Series Add, and
+          paste these in (any username). Use the address Sonarr reaches Mizu at, like
+          http://mizu:8978.
         </Text>
-        <HStack gap={2} vAlign="end" wrap="wrap">
+        <HStack gap={2} vAlign="end" wrap="wrap" className="webhook-field-row">
           <TextInput label="URL" value={url} isReadOnly width={fieldWidth} />
           {copyButton(url, "URL")}
         </HStack>
-        <HStack gap={2} vAlign="end" wrap="wrap">
+        <HStack gap={2} vAlign="end" wrap="wrap" className="webhook-field-row">
           <TextInput label="Password" value={data?.token ?? ""} isReadOnly width={fieldWidth} />
           {copyButton(data?.token ?? "", "Password")}
-          <Button
-            variant="ghost"
-            label="New password"
-            icon={<RefreshCw size={16} />}
-            isLoading={regenerating}
-            isDisabled={regenerating || !data}
-            onClick={() => void regenerate()}
-          />
+          {!isMobile && newPasswordButton}
         </HStack>
+        {/* No room beside the field on a phone. */}
+        {isMobile && <HStack gap={2}>{newPasswordButton}</HStack>}
       </VStack>
     </Card>
   );

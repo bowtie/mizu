@@ -32,7 +32,7 @@ export function TrackingRulesSection({
         {rulesDirty && <Badge variant="warning" label="Unsaved changes" />}
       </HStack>
 
-      <Grid columns={{ minWidth: 240 }} gap={4} align="start">
+      <Grid columns={{ minWidth: 240 }} gap={4} align="start" className="tracking-rules-grid">
         <TrackingRuleCard
           variant="green"
           label="Canon"
