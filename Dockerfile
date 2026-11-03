@@ -8,7 +8,7 @@
 # Bun installs, but the build tools must run under Node: the StyleX media-query
 # parser fails when Vite runs on the Bun runtime, which is what the plain
 # oven/bun image falls back to because it ships no Node.
-FROM node:24-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS frontend
+FROM node:26-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS frontend
 COPY --from=oven/bun:1.4.2@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1630f0546895 /usr/local/bin/bun /usr/local/bin/bun
 
 WORKDIR /frontend
