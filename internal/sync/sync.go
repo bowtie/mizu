@@ -52,6 +52,8 @@ type processSeriesResult struct {
 	FillerFound      int
 	MixedCanonFound  int
 	AnimeCanonFound  int
+	// HeldCount is how many episodes wait unmonitored for AnimeFillerList.
+	HeldCount int
 }
 
 func New(cfg *config.Config, db *database.DB) *Engine {

@@ -82,3 +82,20 @@ func TestAFLRefreshIntervalSetting(t *testing.T) {
 	require.NoError(t, json.Unmarshal(doJSON(t, handler, http.MethodGet, "/api/settings", "", cookie).Body.Bytes(), &got))
 	assert.Equal(t, "30d", got["afl_refresh_interval"])
 }
+
+func TestHoldUnclassifiedSetting(t *testing.T) {
+	handler, db := newAuthTestRouter(t)
+	cookie := signIn(t, handler)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(doJSON(t, handler, http.MethodGet, "/api/settings", "", cookie).Body.Bytes(), &got))
+	assert.Equal(t, "off", got["hold_unclassified"])
+
+	rec := doJSON(t, handler, http.MethodPut, "/api/settings", `{"hold_unclassified":"forever"}`, cookie)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	rec = doJSON(t, handler, http.MethodPut, "/api/settings", `{"hold_unclassified":"7d"}`, cookie)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	stored, _ := db.GetSetting(t.Context(), "hold_unclassified")
+	assert.Equal(t, "7d", stored)
+}

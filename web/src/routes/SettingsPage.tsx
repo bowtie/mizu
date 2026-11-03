@@ -103,6 +103,7 @@ export function SettingsPage() {
       sonarrApiKey: "",
       syncInterval: "6h",
       aflRefreshInterval: "7d",
+      holdUnclassified: "off",
       artworkDefaultSource: "sonarr",
       tmdbApiKey: "",
       fanartApiKey: "",
@@ -166,6 +167,7 @@ export function SettingsPage() {
         sonarrApiKey: "",
         syncInterval: data.sync_interval || "6h",
         aflRefreshInterval: data.afl_refresh_interval || "7d",
+        holdUnclassified: data.hold_unclassified || "off",
         artworkDefaultSource: data.artwork_default_source || "sonarr",
         tmdbApiKey: "",
         fanartApiKey: "",
@@ -261,6 +263,7 @@ export function SettingsPage() {
         default_anime_canon_action: trackedToAction(formData.trackAnimeCanonDefault),
         sync_interval: formData.syncInterval,
         afl_refresh_interval: formData.aflRefreshInterval,
+        hold_unclassified: formData.holdUnclassified,
         artwork_default_source: formData.artworkDefaultSource,
       };
       if (apiKeyDirty && formData.sonarrApiKey) {

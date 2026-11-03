@@ -34,6 +34,13 @@ export const aflRefreshIntervalOptions: SelectOption[] = [
   { value: "off", label: "Manual only" },
 ];
 
+export const holdUnclassifiedOptions: SelectOption[] = [
+  { value: "off", label: "Don't wait" },
+  { value: "3d", label: "Up to 3 days" },
+  { value: "7d", label: "Up to 7 days" },
+  { value: "14d", label: "Up to 14 days" },
+];
+
 interface SyncCardProps {
   control: Control<SettingsForm>;
   artworkSourceOptions: SelectOption[];
@@ -156,6 +163,27 @@ export function SyncCard({
                 label="AFL refresh"
                 value={field.value}
                 options={aflRefreshIntervalOptions}
+                onChange={(v) => field.onChange(v as string)}
+                isLabelHidden
+                width={180}
+              />
+            )}
+          />
+        </SettingsRow>
+        <Divider />
+
+        <SettingsRow
+          label="Unlisted episodes"
+          description="Keep new episodes unmonitored until AnimeFillerList lists them, so filler isn't grabbed first."
+        >
+          <Controller
+            control={control}
+            name="holdUnclassified"
+            render={({ field }) => (
+              <Selector
+                label="Unlisted episodes"
+                value={field.value}
+                options={holdUnclassifiedOptions}
                 onChange={(v) => field.onChange(v as string)}
                 isLabelHidden
                 width={180}

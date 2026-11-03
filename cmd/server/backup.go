@@ -53,6 +53,7 @@ var importableSettings = map[string]struct{}{
 	"ntfy_notify_on":                  {},
 	"ntfy_notify_new_titles":          {},
 	"afl_refresh_interval":            {},
+	"hold_unclassified":               {},
 	"artwork_default_source":          {},
 	"tmdb_api_key":                    {},
 	"fanart_api_key":                  {},
@@ -373,6 +374,8 @@ func validateImportedSettings(settings map[string]string, artworkMgr *artwork.Ma
 			bad = value != "" && !config.IsValidNtfyNotifyOn(value)
 		case "afl_refresh_interval":
 			bad = value != "" && !config.IsValidAFLRefreshInterval(value)
+		case "hold_unclassified":
+			bad = value != "" && !config.IsValidHoldUnclassified(value)
 		case "ntfy_enabled", "sonarr_add_season_folder", "ui_sounds_enabled":
 			bad = value != "" && value != "true" && value != "false"
 		case "sonarr_add_quality_profile_id":

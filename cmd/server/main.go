@@ -185,6 +185,9 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 	if value, ok := settings["afl_refresh_interval"]; ok && config.IsValidAFLRefreshInterval(value) {
 		cfg.AFLRefreshInterval = value
 	}
+	if value, ok := settings["hold_unclassified"]; ok && config.IsValidHoldUnclassified(value) {
+		cfg.HoldUnclassified = value
+	}
 	if value, ok := settings["artwork_default_source"]; ok && value != "" {
 		cfg.ArtworkDefaultSource = value
 	}

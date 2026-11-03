@@ -28,6 +28,20 @@
 - Deleted episodes are unmonitored so Sonarr doesn't download them again.
   Each cleanup shows in Activity as "Filler cleanup" with the space freed.
 
+### Unlisted episodes
+
+- New setting, Settings → Sync → Unlisted episodes: new episodes that
+  AnimeFillerList hasn't listed yet can stay unmonitored for up to 3, 7 or
+  14 days, so Sonarr doesn't grab a filler before it's listed. Off by
+  default, which keeps monitoring them like canon.
+- Once AnimeFillerList lists a held episode, the show's rules decide as
+  usual. If it's still unlisted when the time is up, it's monitored again.
+  Turning the setting off, or monitoring a held episode by hand, releases
+  it too.
+- Only episodes airing within the hold window (or without an air date) are
+  held. Downloaded episodes and specials never are. Activity shows
+  "holding N for AnimeFillerList" while a show has held episodes.
+
 ## [0.4.0] - 2026-11-03
 
 Security pass on 0.3.0. Every setting lives in the database, sign-in is a

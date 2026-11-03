@@ -62,6 +62,11 @@ type Config struct {
 	// Settings button refreshes it).
 	AFLRefreshInterval string
 
+	// HoldUnclassified is how long a new episode AnimeFillerList hasn't
+	// classified yet stays unmonitored, waiting for it: "3d", "7d", "14d",
+	// or "off" (default; such episodes are monitored like canon).
+	HoldUnclassified string
+
 	// Artwork
 	ArtworkDefaultSource string // "sonarr" (default), "anilist", "tmdb", "fanart", "kitsu"
 	TMDBAPIKey           string
@@ -114,6 +119,7 @@ func DefaultConfig() *Config {
 		NtfyServerURL:             "https://ntfy.sh",
 		NtfyTopic:                 "",
 		AFLRefreshInterval:        "7d",
+		HoldUnclassified:          "off",
 		NtfyToken:                 "",
 		NtfyNotifyOn:              "always",
 		ArtworkDefaultSource:      "sonarr",
@@ -220,6 +226,27 @@ var aflRefreshIntervals = map[string]time.Duration{
 func IsValidAFLRefreshInterval(v string) bool {
 	_, ok := aflRefreshIntervals[v]
 	return ok
+}
+
+// holdUnclassifiedPeriods maps each HoldUnclassified value to how long an
+// episode is held; "off" is zero.
+var holdUnclassifiedPeriods = map[string]time.Duration{
+	"off": 0,
+	"3d":  3 * 24 * time.Hour,
+	"7d":  7 * 24 * time.Hour,
+	"14d": 14 * 24 * time.Hour,
+}
+
+// IsValidHoldUnclassified reports whether v is a supported HoldUnclassified.
+func IsValidHoldUnclassified(v string) bool {
+	_, ok := holdUnclassifiedPeriods[v]
+	return ok
+}
+
+// HoldUnclassifiedDuration is how long an unclassified episode is held
+// under v, or zero when holding is off.
+func HoldUnclassifiedDuration(v string) time.Duration {
+	return holdUnclassifiedPeriods[v]
 }
 
 // AFLRefreshDuration is how old the show list may get under v before it

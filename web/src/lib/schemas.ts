@@ -28,6 +28,7 @@ export const SettingsSchema = v.object({
   ntfy_notify_on: v.optional(v.picklist(["always", "changes", "failures"])),
   ntfy_notify_new_titles: v.optional(v.boolean()),
   afl_refresh_interval: v.optional(v.picklist(["1d", "7d", "30d", "off"])),
+  hold_unclassified: v.optional(v.picklist(["off", "3d", "7d", "14d"])),
   ui_sounds_enabled: v.optional(v.boolean()),
 });
 
@@ -44,6 +45,7 @@ export const SettingsFormSchema = v.object({
   sonarrApiKey: v.string(),
   syncInterval: v.string(),
   aflRefreshInterval: v.string(),
+  holdUnclassified: v.string(),
   artworkDefaultSource: v.string(),
   tmdbApiKey: v.string(),
   fanartApiKey: v.string(),

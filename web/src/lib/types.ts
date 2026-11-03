@@ -24,6 +24,7 @@ export interface Settings {
   ntfy_notify_on?: string;
   ntfy_notify_new_titles?: boolean;
   afl_refresh_interval?: string;
+  hold_unclassified?: string;
   ui_sounds_enabled?: boolean;
   [key: string]: unknown;
 }

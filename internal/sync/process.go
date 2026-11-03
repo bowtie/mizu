@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"mizu/internal/config"
 	"mizu/internal/models"
 
 	"github.com/rs/zerolog/log"
@@ -68,12 +70,27 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		log.Info().Str("series", series.Title).Int("watermark", effectiveWatermark).Str("mode", string(mapping.WatermarkMode)).Msg("updated sync watermark")
 	}
 
+	e.cfg.RLock()
+	hold := config.HoldUnclassifiedDuration(e.cfg.HoldUnclassified)
+	e.cfg.RUnlock()
+	held, err := e.db.GetHeldEpisodes(ctx, mapping.ID)
+	if err != nil {
+		return processSeriesResult{}, fmt.Errorf("loading held episodes: %w", err)
+	}
+	now := time.Now()
+
 	var toUnmonitor []int
 	var toMonitor []int
+	// toHold and toRelease update held_episodes once Sonarr has applied
+	// the monitor changes they come with.
+	var toHold, toRelease []int
+	seen := make(map[int]bool, len(sonarrEpisodes))
 	dbEpisodes := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
 	result := processSeriesResult{}
 
 	for _, ep := range sonarrEpisodes {
+		seen[ep.ID] = true
+		heldAt, isHeld := held[ep.ID]
 		aflNum, aflEpisode, found := SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
 		if !IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
 			continue
@@ -146,6 +163,26 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 				toUnmonitor = append(toUnmonitor, ep.ID)
 			}
 			continue
+		}
+
+		// An episode AnimeFillerList hasn't listed yet may wait unmonitored
+		// for it; once released (or never held) the rules below apply.
+		if !found {
+			switch holdFor(ep, heldAt, isHeld, hold, now) {
+			case holdStart:
+				toHold = append(toHold, ep.ID)
+				if ep.Monitored {
+					toUnmonitor = append(toUnmonitor, ep.ID)
+				}
+				continue
+			case holdKeep:
+				result.HeldCount++
+				continue
+			case holdRelease:
+				toRelease = append(toRelease, ep.ID)
+			}
+		} else if isHeld {
+			toRelease = append(toRelease, ep.ID)
 		}
 
 		if e.shouldMonitor(epType, mapping) {
@@ -241,6 +278,21 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 
+	for id := range held {
+		if !seen[id] {
+			toRelease = append(toRelease, id)
+		}
+	}
+	// A hold only counts once Sonarr unmonitored the episode, and a release
+	// once it monitored it again; otherwise the next sync tries anew.
+	if unmonitorSucceeded || len(toUnmonitor) == 0 {
+		e.recordHeld(ctx, mapping.ID, toHold, true)
+		result.HeldCount += len(toHold)
+	}
+	if monitorSucceeded || len(toMonitor) == 0 {
+		e.recordHeld(ctx, mapping.ID, toRelease, false)
+	}
+
 	if resyncAll && mapping.WatermarkMode == models.WatermarkModeAuto {
 		log.Debug().Str("series", series.Title).Int("watermark", effectiveWatermark).Msg("resync respected auto watermark boundary")
 	}
@@ -255,6 +307,9 @@ func summarizeProcessResult(result processSeriesResult) string {
 	}
 	if result.UnmonitoredCount > 0 {
 		parts = append(parts, fmt.Sprintf("unmonitored %d", result.UnmonitoredCount))
+	}
+	if result.HeldCount > 0 {
+		parts = append(parts, fmt.Sprintf("holding %d for AnimeFillerList", result.HeldCount))
 	}
 	if result.EpisodesUpdated == 0 {
 		parts = append(parts, "no monitor changes")

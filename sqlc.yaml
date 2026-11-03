@@ -8,12 +8,14 @@ sql:
       - "internal/database/queries/sync_logs.sql"
       - "internal/database/queries/cache.sql"
       - "internal/database/queries/auth.sql"
+      - "internal/database/queries/held_episodes.sql"
     schema:
       - "internal/database/migrations/001_initial_schema.sql"
       - "internal/database/migrations/002_artwork_urls.sql"
       - "internal/database/migrations/003_auth_sessions.sql"
       - "internal/database/migrations/004_notifications_muted.sql"
       - "internal/database/migrations/005_artwork_custom_slots.sql"
+      - "internal/database/migrations/006_held_episodes.sql"
     gen:
       go:
         package: "sqlcgen"

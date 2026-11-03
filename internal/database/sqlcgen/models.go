@@ -41,6 +41,12 @@ type EpisodeInfo struct {
 	AirDate               *time.Time
 }
 
+type HeldEpisode struct {
+	MappingID       int64
+	SonarrEpisodeID int64
+	HeldAt          time.Time
+}
+
 type ShowMapping struct {
 	ID                 int64
 	SonarrSeriesID     int64
