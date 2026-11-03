@@ -207,3 +207,21 @@ func TestAlignToAFLIgnoresAWeekOffRun(t *testing.T) {
 	assert.Empty(t, noEntry)
 	assert.Equal(t, sonarr, aligned)
 }
+
+// Dates that disagree across most of a season (Saint Seiya's TVDB dates
+// run a week or two off AFL's) can't shift it, even if a few line up.
+func TestAlignToAFLIgnoresDatesThatMostlyDisagree(t *testing.T) {
+	start := time.Date(1987, 1, 4, 0, 0, 0, 0, time.UTC)
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	for n := 1; n <= 20; n++ {
+		aired := start.AddDate(0, 0, 7*(n-1))
+		afl = append(afl, models.AFLEpisode{Number: n, Title: fmt.Sprintf("AFL wording %d", n), Type: models.EpisodeFiller, AirDate: aired})
+		// Sonarr's dates are two weeks early, so most land on the AFL
+		// episode two before, and the shift those dates agree on is -2.
+		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n), Title: fmt.Sprintf("TVDB wording %d", n), AirDateUTC: aired.AddDate(0, 0, -14*(n%3))})
+	}
+	aligned, noEntry := AlignToAFL(sonarr, afl)
+	assert.Empty(t, noEntry)
+	assert.Equal(t, sonarr, aligned)
+}

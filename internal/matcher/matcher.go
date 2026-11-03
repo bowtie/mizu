@@ -2,7 +2,9 @@ package matcher
 
 import (
 	"context"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -54,6 +56,11 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 
 	for _, na := range normAFLShows {
 		best := MatchResult{AFLShow: na.show}
+		// An AFL entry for another year is another series (the 1981
+		// Urusei Yatsura isn't the 2022 remake), however alike the names.
+		if yearsConflict(na.show.Title, series) {
+			continue
+		}
 
 		for _, sonarrTitle := range sonarrTitles {
 			if strings.EqualFold(sonarrTitle, na.show.Title) {
@@ -74,7 +81,15 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 				continue
 			}
 
-			containScore := ContainmentScore(normSonarr, na.norm)
+			// A word the Sonarr title has and the AFL one doesn't ("Wing",
+			// "II", "Brotherhood", "Kai") usually names another series of the
+			// same franchise, so such a match stays below the threshold.
+			ceiling := 1.0
+			if hasDistinguishingWord(normSonarr, na.norm) {
+				ceiling = distinguishedCeiling
+			}
+
+			containScore := min(ContainmentScore(normSonarr, na.norm), ceiling)
 			if containScore > best.Confidence {
 				best = MatchResult{AFLShow: na.show, Confidence: containScore, Method: "containment"}
 			}
@@ -86,8 +101,8 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 			}
 
 			jw := jaroWinkler(normSonarr, na.norm)
-			if jw >= 0.88 && jw > best.Confidence {
-				best = MatchResult{AFLShow: na.show, Confidence: jw, Method: "fuzzy"}
+			if jw >= 0.88 && min(jw, ceiling) > best.Confidence {
+				best = MatchResult{AFLShow: na.show, Confidence: min(jw, ceiling), Method: "fuzzy"}
 			}
 		}
 
@@ -349,4 +364,64 @@ func sortResults(results []MatchResult) {
 	sort.SliceStable(results, func(i, j int) bool {
 		return results[i].Confidence > results[j].Confidence
 	})
+}
+
+// distinguishedCeiling caps a match whose Sonarr title has a word the AFL
+// title lacks, below the 0.82 the sync engine auto-matches at.
+const distinguishedCeiling = 0.8
+
+// yearPattern finds a year in a title, as in "Urusei Yatsura (1981)".
+var yearPattern = regexp.MustCompile(`\b(19[5-9]\d|20\d\d)\b`)
+
+// yearsConflict reports whether the AFL title names years and the series
+// is from none of them (a year either way is allowed for late or early
+// listings).
+func yearsConflict(aflTitle string, series models.SonarrSeries) bool {
+	aflYears := yearPattern.FindAllString(aflTitle, -1)
+	if len(aflYears) == 0 {
+		return false
+	}
+	seriesYears := []int{}
+	if series.Year > 0 {
+		seriesYears = append(seriesYears, series.Year)
+	}
+	for _, y := range yearPattern.FindAllString(series.Title, -1) {
+		n, _ := strconv.Atoi(y)
+		seriesYears = append(seriesYears, n)
+	}
+	if len(seriesYears) == 0 {
+		return false
+	}
+	for _, a := range aflYears {
+		ay, _ := strconv.Atoi(a)
+		for _, sy := range seriesYears {
+			if ay-sy <= 1 && sy-ay <= 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// hasDistinguishingWord reports whether the normalized Sonarr title has a
+// word (other than a year) that the normalized AFL title has nothing close
+// to; a spelling variant ("shippuuden", "shippuden") doesn't count.
+func hasDistinguishingWord(sonarrNorm, aflNorm string) bool {
+	aflWords := strings.Fields(aflNorm)
+	for _, w := range strings.Fields(sonarrNorm) {
+		if yearPattern.MatchString(w) {
+			continue
+		}
+		near := false
+		for _, a := range aflWords {
+			if a == w || jaroWinkler(a, w) >= 0.9 {
+				near = true
+				break
+			}
+		}
+		if !near {
+			return true
+		}
+	}
+	return false
 }

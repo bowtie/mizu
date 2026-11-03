@@ -73,3 +73,28 @@ func TestFindMatchesRejectsSingleSharedFranchiseTokenFalsePositive(t *testing.T)
 	matches := m.FindMatches(context.Background(), series, aflShows)
 	assert.Empty(t, matches)
 }
+
+// A remake, sequel or spin-off isn't matched to the AFL list of the series
+// it borrows its name from.
+func TestMatcherKeepsRelatedSeriesApart(t *testing.T) {
+	m := New(0.82)
+	afl := []models.AFLShow{
+		{Title: "Urusei Yatsura (1981)", Slug: "urusei-yatsura-1981"},
+		{Title: "Mobile Suit Gundam (Kidou Senshi Gundam)", Slug: "mobile-suit-gundam"},
+		{Title: "The Prince of Tennis (Tenisu no Ōjisama)", Slug: "prince-tennis"},
+		{Title: "Fullmetal Alchemist", Slug: "fullmetal-alchemist"},
+	}
+	for _, s := range []models.SonarrSeries{
+		{Title: "Urusei Yatsura (2022)", Year: 2022},
+		{Title: "Mobile Suit Gundam Wing", Year: 1995},
+		{Title: "The Prince of Tennis II", Year: 2012},
+		{Title: "Fullmetal Alchemist: Brotherhood", Year: 2009},
+	} {
+		assert.Nil(t, m.BestMatch(context.Background(), s, afl), s.Title)
+	}
+
+	// The series themselves still match.
+	for title, year := range map[string]int{"Urusei Yatsura": 1981, "Mobile Suit Gundam": 1979, "The Prince of Tennis": 2001} {
+		assert.NotNil(t, m.BestMatch(context.Background(), models.SonarrSeries{Title: title, Year: year}, afl), title)
+	}
+}

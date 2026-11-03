@@ -5,6 +5,7 @@
 //
 //	go run ./cmd/audit -db mizu.db > audit.md
 //	go run ./cmd/audit -db mizu.db -numbers pokemon
+//	go run ./cmd/audit -db mizu.db -catalogue > catalogue.md
 package main
 
 import (
@@ -30,10 +31,11 @@ import (
 func main() {
 	dbPath := flag.String("db", "mizu.db", "Mizu database to read mappings and the Sonarr connection from")
 	numbersFor := flag.String("numbers", "", "AFL slug of one show: print its episode numbering instead of the report")
+	catalogue := flag.Bool("catalogue", false, "audit every AFL show with filler, using TVDB's episodes from Sonarr's metadata service")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 
-	if err := run(context.Background(), *dbPath, *numbersFor, os.Stdout); err != nil {
+	if err := run(context.Background(), *dbPath, *numbersFor, *catalogue, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "audit:", err)
 		os.Exit(1)
 	}
@@ -77,7 +79,7 @@ type seasonStats struct {
 	dateSame, dateOff, dateNone                int
 }
 
-func run(ctx context.Context, dbPath, numbersFor string, out io.Writer) error {
+func run(ctx context.Context, dbPath, numbersFor string, catalogue bool, out io.Writer) error {
 	db, err := database.New(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
@@ -93,6 +95,9 @@ func run(ctx context.Context, dbPath, numbersFor string, out io.Writer) error {
 	}
 	sc := sonarr.New(strings.TrimRight(settings["sonarr_url"], "/"), settings["sonarr_api_key"], 30*time.Second)
 	afl := scraper.New(30*time.Second, 1500*time.Millisecond, db)
+	if catalogue {
+		return runCatalogue(ctx, sc, afl, out)
+	}
 
 	mappings, err := db.GetAllMappings(ctx)
 	if err != nil {
@@ -155,6 +160,13 @@ func auditShow(ctx context.Context, sc *sonarr.Client, afl *scraper.Scraper, m m
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("fetching Sonarr episodes: %w", err)
 	}
+	rows, stats := analyze(original, aflEps)
+	return rows, stats, len(aflEps), nil
+}
+
+// analyze pairs a show's Sonarr (TVDB) episodes with AFL's the way sync
+// does and grades each pairing.
+func analyze(original []models.SonarrEpisode, aflEps []models.AFLEpisode) ([]row, []seasonStats) {
 	aligned, noAFLEntry := syncpkg.AlignToAFL(original, aflEps)
 	byNumber, preferred := syncpkg.BuildAFLEpisodeLookup(aflEps)
 	coverage := syncpkg.AFLCoverageMaxEpisodeNumber(aflEps)
@@ -241,7 +253,7 @@ func auditShow(ctx context.Context, sc *sonarr.Client, afl *scraper.Scraper, m m
 		stats = append(stats, *s)
 	}
 	sort.Slice(stats, func(i, j int) bool { return stats[i].season < stats[j].season })
-	return rows, stats, len(aflEps), nil
+	return rows, stats
 }
 
 func titlesAgree(a, b string) bool {

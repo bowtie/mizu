@@ -60,7 +60,14 @@
 - AFL's air dates are read too. A season whose titles are translated too
   differently to settle it can anchor by date instead (within a day, to
   allow for time zones). Dates are sometimes a week off where a broadcast
-  moved, so only the season's common shift counts and titles always win.
+  moved, so only the season's common shift counts, those dates must cover
+  at least half the season, and titles always win.
+- Add anime no longer suggests the AFL list of a different series with a
+  similar name: an AFL title naming another year (Urusei Yatsura (1981)
+  for the 2022 remake) isn't a match, and a Sonarr title with a word the
+  AFL title lacks (Gundam Wing, Prince of Tennis II, Fullmetal Alchemist:
+  Brotherhood) drops below the auto-match threshold. These used to match
+  at over 90%.
 - Specials that match an AFL episode are listed with the show's episodes
   (Cardcaptor Sakura's Clear Card prologue, AFL episode 71). They were
   already synced; only the list left them out.
@@ -68,7 +75,9 @@
 ### Engineering
 
 - `go run ./cmd/audit -db mizu.db` reports, per mapped show, where Sonarr
-  and AFL disagree under Mizu's matching. It only reads.
+  and AFL disagree under Mizu's matching; `-catalogue` does the same for
+  every AFL show with filler, using TVDB's episodes from Sonarr's metadata
+  service; `-numbers <slug>` previews a show's numbering. It only reads.
 
 ### Show page
 

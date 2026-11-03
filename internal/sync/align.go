@@ -122,7 +122,14 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 		// can't settle it.
 		cands, anchors := titleCands, pick(titleCands)
 		if len(anchors) < minAnchors {
-			cands, anchors = mixedCands, pick(commonShift(mixedCands, func(a anchor) (int, bool) { return a.afl - a.abs, a.byTitle }))
+			dated := pick(commonShift(mixedCands, func(a anchor) (int, bool) { return a.afl - a.abs, a.byTitle }))
+			// Dates must line up most of the season. A show whose sources
+			// disagree on dates throughout (moved broadcasts, a different
+			// country's dates) produces a few coincidental matches that
+			// say nothing about the numbering.
+			if len(dated)*2 >= len(idxs) {
+				cands, anchors = mixedCands, dated
+			}
 		}
 		if len(anchors) < minAnchors {
 			continue
