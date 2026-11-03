@@ -7,6 +7,7 @@ import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { Eye, EyeOff } from "lucide-react";
 import { memo } from "react";
 import type { Episode } from "../lib/types";
+import { formatAirDate } from "../routes/showDetailHelpers";
 
 // ── Helpers (duplicated from ShowDetailPage to keep this self-contained) ──
 
@@ -56,20 +57,22 @@ const VirtualEpisodeRow = memo(function VirtualEpisodeRow({
   const badge = episodeBadgeInfo(ep.type);
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const epNum = displayEpisodeNumber(ep);
+  const airDate = formatAirDate(ep.air_date);
   return (
     <div className="virtual-episode-row" role="listitem">
       <div className="virtual-episode-row-content">
         <span className="virtual-episode-label">{ep.title || "Untitled"}</span>
-        <span className="virtual-episode-desc">Episode {epNum}</span>
+        <span className="virtual-episode-desc">
+          Episode {epNum}
+          {airDate && (
+            <span className="episode-date-inline"> · {formatAirDate(ep.air_date, true)}</span>
+          )}
+        </span>
       </div>
-      <HStack gap={4} align="center">
-        {ep.air_date && (
-          <Text type="supporting" size="sm" color="secondary">
-            {new Date(ep.air_date).toLocaleDateString(undefined, {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })}
+      <HStack gap={4} align="center" className="episode-row-end">
+        {airDate && (
+          <Text type="supporting" size="sm" color="secondary" className="episode-date-end">
+            {airDate}
           </Text>
         )}
         <Badge variant={badge.variant} label={badge.label} />

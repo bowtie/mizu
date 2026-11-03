@@ -160,7 +160,6 @@ export function ShowActionsBar({
               variant="destructive"
               size="md"
               icon={<Trash2 size={16} />}
-              isIconOnly={isMobile}
               onClick={() => onRemove()}
               isDisabled={deleting}
               data-cuelume-press
@@ -172,7 +171,6 @@ export function ShowActionsBar({
               icon={
                 savedFlash ? <Check size={14} color="var(--color-success)" /> : <Save size={14} />
               }
-              isIconOnly={isMobile}
               onClick={onSave}
               isDisabled={saving || !rulesDirty}
               isLoading={saving}

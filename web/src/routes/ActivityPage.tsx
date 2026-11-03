@@ -23,6 +23,8 @@ import {
   CircleDot,
 } from "lucide-react";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { Selector } from "@astryxdesign/core/Selector";
+import { useIsMobile } from "../lib/useIsMobile";
 import { useNotificationStore } from "../lib/store";
 import { queryKeys, useSyncLogPages, useTriggerSync } from "../lib/queries";
 import { errorMessage } from "../lib/api";
@@ -35,6 +37,14 @@ import {
 } from "../lib/activity-utils";
 
 const PAGE_SIZE = 8;
+
+const statusOptions = [
+  { value: "all", label: "All" },
+  { value: "running", label: "Running" },
+  { value: "success", label: "Success" },
+  { value: "partial", label: "Partial" },
+  { value: "failed", label: "Failed" },
+];
 
 // After "Sync now", keep polling this long even before the run's log row
 // appears (the server creates it just after accepting the trigger).
@@ -85,6 +95,7 @@ export function ActivityPage() {
   const [syncing, setSyncing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | number | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredLogs = useMemo(
@@ -210,19 +221,29 @@ export function ActivityPage() {
           <>
             {/* Filters */}
             <VStack gap={3} width="100%">
-              <SegmentedControl
-                value={statusFilter}
-                onChange={setStatusFilter}
-                label="Status filter"
-                layout="fill"
-                size="md"
-              >
-                <SegmentedControlItem value="all" label="All" />
-                <SegmentedControlItem value="running" label="Running" />
-                <SegmentedControlItem value="success" label="Success" />
-                <SegmentedControlItem value="partial" label="Partial" />
-                <SegmentedControlItem value="failed" label="Failed" />
-              </SegmentedControl>
+              {/* A dropdown on phones, where five tabs don't fit. */}
+              {isMobile ? (
+                <Selector
+                  label="Status filter"
+                  isLabelHidden
+                  value={statusFilter}
+                  options={statusOptions}
+                  onChange={(v) => setStatusFilter(v as string)}
+                  width="100%"
+                />
+              ) : (
+                <SegmentedControl
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  label="Status filter"
+                  layout="fill"
+                  size="md"
+                >
+                  {statusOptions.map((o) => (
+                    <SegmentedControlItem key={o.value} value={o.value} label={o.label} />
+                  ))}
+                </SegmentedControl>
+              )}
               <TextInput
                 label="Search logs"
                 value={searchQuery}
@@ -315,6 +336,7 @@ export function ActivityPage() {
                             {hasDetails(log) && (
                               <Button
                                 label="Details"
+                                isIconOnly={isMobile}
                                 variant="ghost"
                                 size="sm"
                                 icon={

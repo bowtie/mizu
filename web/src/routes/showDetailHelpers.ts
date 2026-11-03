@@ -74,3 +74,16 @@ export interface SeasonGroup {
   episodes: Episode[];
   index: number;
 }
+
+/** An episode's air date as shown in the list, e.g. "7 Nov 2026". The
+ *  short form leaves out the current year, for the narrow phone layout. */
+export function formatAirDate(airDate: string | undefined | null, short = false): string {
+  if (!airDate) return "";
+  const date = new Date(airDate);
+  const thisYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString(undefined, {
+    year: short && thisYear ? undefined : "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}

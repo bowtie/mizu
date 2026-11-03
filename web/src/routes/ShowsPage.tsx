@@ -49,6 +49,7 @@ import type { SelectOption, Settings, Show, SonarrSeries } from "../lib/types";
 import { resolveSonarrImageUrl } from "../lib/sonarr-images";
 import { syncStateBadge } from "../lib/fox";
 import { isUnsafeMatch } from "../components/addAnime/matchHelpers";
+import { useIsMobile } from "../lib/useIsMobile";
 import {
   addWizardReducer,
   INITIAL_WIZARD,
@@ -78,6 +79,7 @@ export function ShowsPage() {
   const navigate = useNavigate();
   const addNotification = useNotificationStore((s) => s.addNotification);
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   // ── Data from TanStack Query ──
   const showsQuery = useShows();
@@ -563,6 +565,7 @@ export function ShowsPage() {
         onOpenChange={(v) => {
           dispatch({ type: "SET", payload: { showAddModal: v } });
         }}
+        variant={isMobile ? "fullscreen" : "standard"}
         width={640}
         maxHeight="85vh"
         purpose="form"

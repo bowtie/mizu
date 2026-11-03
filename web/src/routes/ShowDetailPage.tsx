@@ -62,6 +62,7 @@ import {
 import { EpisodeListSection } from "../components/EpisodeListSection";
 import { ShowHero } from "../components/ShowHero";
 import { ShowActionsBar } from "../components/ShowActionsBar";
+import { useIsMobile } from "../lib/useIsMobile";
 import { FillerFilesDialog, useFillerFiles } from "../components/FillerFilesDialog";
 import { ShowDetailSkeleton } from "../components/ShowDetailSkeleton";
 import { TrackingRulesSection } from "../components/TrackingRulesSection";
@@ -183,7 +184,7 @@ export function ShowDetailPage() {
   const [heroImgError, setHeroImgError] = useState(false);
   const [heroFallbackFailed, setHeroFallbackFailed] = useState(false);
   const [activeTypeFilter, setActiveTypeFilter] = useState<string>("all");
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile();
   const [syncingEps, setSyncingEps] = useState<Record<string, boolean>>({});
   // The actions bar animates in only after the first frame with show data,
   // so it doesn't slide in on every navigation.
@@ -202,13 +203,6 @@ export function ShowDetailPage() {
     setHeroImgError(false);
     setHeroFallbackFailed(false);
   }, [showId]);
-
-  useEffect(() => {
-    const updateViewport = () => setIsMobile(window.innerWidth <= 600);
-    updateViewport();
-    window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
-  }, []);
 
   useEffect(() => {
     if (isMobile && activeTypeFilter === "anime_canon") {

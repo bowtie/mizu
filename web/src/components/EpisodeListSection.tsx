@@ -5,6 +5,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Badge } from "@astryxdesign/core/Badge";
+import { Selector } from "@astryxdesign/core/Selector";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Card } from "@astryxdesign/core/Card";
@@ -27,6 +28,7 @@ import {
   displayEpisodeNumber,
   episodeBadgeInfo,
   epSyncKey,
+  formatAirDate,
   seasonLabel,
   type SeasonGroup,
 } from "../routes/showDetailHelpers";
@@ -65,20 +67,24 @@ const EpisodeListItem = memo(function EpisodeListItem({
   const badge = episodeBadgeInfo(ep.type);
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const epNum = displayEpisodeNumber(ep);
+  const airDate = formatAirDate(ep.air_date);
   return (
     <ListItem
       key={`${groupSeason}-${epNum}`}
       label={ep.title || "Untitled"}
-      description={`Episode ${epNum}`}
+      description={
+        <>
+          Episode {epNum}
+          {airDate && (
+            <span className="episode-date-inline"> · {formatAirDate(ep.air_date, true)}</span>
+          )}
+        </>
+      }
       endContent={
-        <HStack gap={4} align="center">
-          {ep.air_date && (
-            <Text type="supporting" size="sm" color="secondary">
-              {new Date(ep.air_date).toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })}
+        <HStack gap={4} align="center" className="episode-row-end">
+          {airDate && (
+            <Text type="supporting" size="sm" color="secondary" className="episode-date-end">
+              {airDate}
             </Text>
           )}
           <Badge variant={badge.variant} label={badge.label} />
@@ -193,16 +199,30 @@ export const EpisodeListSection = memo(function EpisodeListSection({
         <div style={{ flex: 1 }} />
       </HStack>
 
-      {/* Episode filters */}
-      <SegmentedControl
-        value={activeTypeFilter}
-        onChange={onFilterChange}
-        label="Episode type filter"
-        layout="fill"
-        size="lg"
-      >
-        {filterItems}
-      </SegmentedControl>
+      {/* Episode filters: a dropdown on phones, where five tabs don't fit. */}
+      {isMobile ? (
+        <Selector
+          label="Episode type filter"
+          isLabelHidden
+          value={activeTypeFilter}
+          options={[
+            { value: "all", label: `All (${epStats.total})` },
+            ...typeTabs.map((tab) => ({ value: tab.value, label: `${tab.label} (${tab.count})` })),
+          ]}
+          onChange={(v) => onFilterChange(v as string)}
+          width="100%"
+        />
+      ) : (
+        <SegmentedControl
+          value={activeTypeFilter}
+          onChange={onFilterChange}
+          label="Episode type filter"
+          layout="fill"
+          size="lg"
+        >
+          {filterItems}
+        </SegmentedControl>
+      )}
 
       {/* Episodes by season — keep skeleton visible while useDeferredValue
           catches up to avoid a flash of "No episodes" empty state. */}

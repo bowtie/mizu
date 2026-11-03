@@ -10,6 +10,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Badge } from "@astryxdesign/core/Badge";
 import { RefreshCw, Upload, Trash2 } from "lucide-react";
+import { useIsMobile } from "../lib/useIsMobile";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Grid } from "@astryxdesign/core/Grid";
@@ -188,14 +189,8 @@ export function ArtworkPickerDialog({
 
   // On phones the picker renders as a full-screen sheet (variant="fullscreen")
   // so the source/slot tabs and thumbnails get room instead of being squeezed
-  // into a 90vw centered box. Mirrors ShowDetailPage's viewport check.
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const updateViewport = () => setIsMobile(window.innerWidth <= 600);
-    updateViewport();
-    window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
-  }, []);
+  // into a 90vw centered box.
+  const isMobile = useIsMobile();
 
   const activeSource =
     selectedSource && sources.some((s) => s.id === selectedSource)

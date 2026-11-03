@@ -861,6 +861,29 @@ body {
   justify-content: center;
 }
 
+/* Episode rows — the air date sits in the end column on wide screens and
+   under the title on phones, where the title needs the room. */
+.episode-date-inline {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .episode-date-end {
+    display: none;
+  }
+  .episode-date-inline {
+    display: inline;
+  }
+  .episode-row-end {
+    gap: 8px;
+  }
+  /* Touch sizing makes badge text larger; keep "Manga" whole. */
+  .astryx-list .astryx-list-item .astryx-badge,
+  .virtual-episode-row .astryx-badge {
+    width: 64px;
+  }
+}
+
 /* Episode input — use the adjacent +/- controls instead of native spinners */
 .astryx-number-input input[type="number"] {
   appearance: textfield;
@@ -1645,6 +1668,12 @@ body {
   .show-actions-bar {
     flex-wrap: wrap;
     overflow-x: visible;
+  }
+
+  /* Remove and Save get their own full row, right-aligned with labels. */
+  .show-actions-bar .show-actions-bar-end {
+    flex: 1 1 100%;
+    justify-content: flex-end;
   }
 
   /* Library: search gets its own full-width row above sort and view toggle. */
