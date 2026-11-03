@@ -94,7 +94,22 @@ func TestMatcherKeepsRelatedSeriesApart(t *testing.T) {
 	}
 
 	// The series themselves still match.
-	for title, year := range map[string]int{"Urusei Yatsura": 1981, "Mobile Suit Gundam": 1979, "The Prince of Tennis": 2001} {
+	afl = append(afl, models.AFLShow{Title: "Hunter × Hunter (2011)", Slug: "hunter-x-hunter"})
+	for title, year := range map[string]int{"Urusei Yatsura": 1981, "Mobile Suit Gundam": 1979, "The Prince of Tennis": 2001, "Hunter x Hunter (2011)": 2011} {
 		assert.NotNil(t, m.BestMatch(context.Background(), models.SonarrSeries{Title: title, Year: year}, afl), title)
+	}
+}
+
+// AFL adds an alternate name in brackets; the main name alone still matches.
+func TestMatcherIgnoresBracketedAlternateNames(t *testing.T) {
+	m := New(0.82)
+	for afl, sonarr := range map[string]string{
+		"Fire Force (Enen no Shouboutai)":           "Fire Force",
+		"Sgt. Frog (Keroro Gunsou)":                 "Sgt. Frog",
+		"Sailor Moon (Bishoujo Senshi Sailor Moon)": "Sailor Moon",
+		"Kamisama Kiss (Kamisama Hajimemashita)":    "Kamisama Kiss",
+	} {
+		r := m.BestMatch(context.Background(), models.SonarrSeries{Title: sonarr}, []models.AFLShow{{Title: afl, Slug: "x"}})
+		assert.NotNil(t, r, afl)
 	}
 }

@@ -48,10 +48,14 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 	type normAFL struct {
 		show models.AFLShow
 		norm string
+		// names are the full title, the title without its bracketed
+		// alternate name, and that name: AFL writes "Fire Force (Enen no
+		// Shouboutai)", Sonarr "Fire Force".
+		names []string
 	}
 	normAFLShows := make([]normAFL, len(aflShows))
 	for i, s := range aflShows {
-		normAFLShows[i] = normAFL{show: s, norm: normalize(s.Title)}
+		normAFLShows[i] = normAFL{show: s, norm: normalize(s.Title), names: titleNames(s.Title)}
 	}
 
 	for _, na := range normAFLShows {
@@ -69,40 +73,42 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 			}
 
 			normSonarr := normalize(sonarrTitle)
-			if normSonarr == na.norm {
-				if best.Confidence < 0.95 {
-					best = MatchResult{AFLShow: na.show, Confidence: 0.95, Method: "normalized"}
+			for _, name := range na.names {
+				if normSonarr == name {
+					if best.Confidence < 0.95 {
+						best = MatchResult{AFLShow: na.show, Confidence: 0.95, Method: "normalized"}
+					}
+					continue
 				}
-				continue
-			}
 
-			sharedTokens := SharedTokenCount(normSonarr, na.norm)
-			if sharedTokens == 0 {
-				continue
-			}
+				sharedTokens := SharedTokenCount(normSonarr, name)
+				if sharedTokens == 0 {
+					continue
+				}
 
-			// A word the Sonarr title has and the AFL one doesn't ("Wing",
-			// "II", "Brotherhood", "Kai") usually names another series of the
-			// same franchise, so such a match stays below the threshold.
-			ceiling := 1.0
-			if hasDistinguishingWord(normSonarr, na.norm) {
-				ceiling = distinguishedCeiling
-			}
+				// A word the Sonarr title has and the AFL one doesn't ("Wing",
+				// "II", "Brotherhood", "Kai") usually names another series of the
+				// same franchise, so such a match stays below the threshold.
+				ceiling := 1.0
+				if hasDistinguishingWord(normSonarr, na.norm) {
+					ceiling = distinguishedCeiling
+				}
 
-			containScore := min(ContainmentScore(normSonarr, na.norm), ceiling)
-			if containScore > best.Confidence {
-				best = MatchResult{AFLShow: na.show, Confidence: containScore, Method: "containment"}
-			}
+				containScore := min(ContainmentScore(normSonarr, name), ceiling)
+				if containScore > best.Confidence {
+					best = MatchResult{AFLShow: na.show, Confidence: containScore, Method: "containment"}
+				}
 
-			// One shared franchise token like "Digimon" is too weak unless the
-			// remaining tokens are also strongly aligned (for example typos).
-			if !hasStrongFuzzyTokenAgreement(normSonarr, na.norm, sharedTokens) {
-				continue
-			}
+				// One shared franchise token like "Digimon" is too weak unless the
+				// remaining tokens are also strongly aligned (for example typos).
+				if !hasStrongFuzzyTokenAgreement(normSonarr, name, sharedTokens) {
+					continue
+				}
 
-			jw := jaroWinkler(normSonarr, na.norm)
-			if jw >= 0.88 && min(jw, ceiling) > best.Confidence {
-				best = MatchResult{AFLShow: na.show, Confidence: min(jw, ceiling), Method: "fuzzy"}
+				jw := jaroWinkler(normSonarr, name)
+				if jw >= 0.88 && min(jw, ceiling) > best.Confidence {
+					best = MatchResult{AFLShow: na.show, Confidence: min(jw, ceiling), Method: "fuzzy"}
+				}
 			}
 		}
 
@@ -409,7 +415,9 @@ func yearsConflict(aflTitle string, series models.SonarrSeries) bool {
 func hasDistinguishingWord(sonarrNorm, aflNorm string) bool {
 	aflWords := strings.Fields(aflNorm)
 	for _, w := range strings.Fields(sonarrNorm) {
-		if yearPattern.MatchString(w) {
+		// One-letter words ("x" in Hunter x Hunter, whose AFL title has
+		// "×") and years say nothing about which series it is.
+		if len(w) < 2 || yearPattern.MatchString(w) {
 			continue
 		}
 		near := false
@@ -424,4 +432,20 @@ func hasDistinguishingWord(sonarrNorm, aflNorm string) bool {
 		}
 	}
 	return false
+}
+
+// titleNames is a title's normalized forms: whole, without a bracketed
+// alternate name, and the alternate name alone.
+func titleNames(title string) []string {
+	names := []string{normalize(title)}
+	if i := strings.Index(title, "("); i > 0 {
+		if j := strings.LastIndex(title, ")"); j > i+1 {
+			for _, n := range []string{normalize(title[:i]), normalize(title[i+1 : j])} {
+				if n != "" && !yearPattern.MatchString(n) {
+					names = append(names, n)
+				}
+			}
+		}
+	}
+	return names
 }

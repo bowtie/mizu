@@ -38,13 +38,26 @@ type catalogueResult struct {
 // runCatalogue audits every AFL show with filler or mixed episodes,
 // looking each up in Sonarr and fetching TVDB's episodes from Sonarr's
 // metadata service. Progress goes to stderr.
-func runCatalogue(ctx context.Context, sc *sonarr.Client, afl *scraper.Scraper, out io.Writer) error {
+func runCatalogue(ctx context.Context, sc *sonarr.Client, afl *scraper.Scraper, only string, out io.Writer) error {
 	shows, err := afl.GetAllShows(ctx)
 	if err != nil {
 		return fmt.Errorf("reading AFL's show list: %w", err)
 	}
+	if only != "" {
+		want := map[string]bool{}
+		for _, slug := range strings.Split(only, ",") {
+			want[strings.TrimSpace(slug)] = true
+		}
+		kept := shows[:0]
+		for _, s := range shows {
+			if want[s.Slug] {
+				kept = append(kept, s)
+			}
+		}
+		shows = kept
+	}
 	sort.Slice(shows, func(i, j int) bool { return shows[i].Title < shows[j].Title })
-	norm := matcherpkg.New(0)
+	norm := matcherpkg.New(0.82) // the sync engine's threshold
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 
 	var results []catalogueResult
@@ -68,9 +81,9 @@ func runCatalogue(ctx context.Context, sc *sonarr.Client, afl *scraper.Scraper, 
 			results = append(results, res)
 			continue
 		}
-		series, ok := lookupSeries(ctx, sc, norm, show)
+		series, ok, near := lookupSeries(ctx, sc, norm, show)
 		if !ok {
-			res.skipped = "no confident TVDB match"
+			res.skipped = "no confident TVDB match: " + near
 			results = append(results, res)
 			continue
 		}
@@ -99,24 +112,71 @@ func hasSkippable(eps []models.AFLEpisode) bool {
 	return false
 }
 
-// lookupSeries searches Sonarr for the AFL show and keeps the result
-// Mizu's matcher is most confident matches it.
-func lookupSeries(ctx context.Context, sc *sonarr.Client, m *matcherpkg.Matcher, show models.AFLShow) (models.SonarrSeries, bool) {
-	candidates, err := sc.LookupSeries(ctx, show.Title)
-	if err != nil {
-		return models.SonarrSeries{}, false
-	}
-	var best models.SonarrSeries
-	bestConf := 0.0
-	for _, c := range candidates {
-		if c.TVDBID == 0 {
+// lookupSeries searches Sonarr for the AFL show, under its full title, its
+// title without the bracketed alternate name, and that alternate name, and
+// keeps the result Mizu's matcher is most confident matches it. When none
+// matches, near describes the closest candidates for the report.
+func lookupSeries(ctx context.Context, sc *sonarr.Client, m *matcherpkg.Matcher, show models.AFLShow) (best models.SonarrSeries, ok bool, near string) {
+	seen := map[int]models.SonarrSeries{}
+	for _, term := range searchTerms(show.Title) {
+		candidates, err := sc.LookupSeries(ctx, term)
+		if err != nil {
 			continue
 		}
+		for _, c := range candidates {
+			if c.TVDBID != 0 {
+				seen[c.TVDBID] = c
+			}
+		}
+	}
+	bestConf := 0.0
+	loose := matcherpkg.New(0.01) // to score the near misses too
+	type scored struct {
+		s    models.SonarrSeries
+		conf float64
+	}
+	var all []scored
+	for _, c := range seen {
 		if r := m.BestMatch(ctx, c, []models.AFLShow{show}); r != nil && r.Confidence > bestConf {
 			best, bestConf = c, r.Confidence
 		}
+		conf := 0.0
+		if r := loose.BestMatch(ctx, c, []models.AFLShow{show}); r != nil {
+			conf = r.Confidence
+		}
+		all = append(all, scored{c, conf})
 	}
-	return best, bestConf > 0
+	if bestConf > 0 {
+		return best, true, ""
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].conf > all[j].conf })
+	var parts []string
+	for i, a := range all {
+		if i == 3 {
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%s (%d) %.2f", a.s.Title, a.s.Year, a.conf))
+	}
+	if len(parts) == 0 {
+		return best, false, "Sonarr found nothing"
+	}
+	return best, false, strings.Join(parts, "; ")
+}
+
+// searchTerms is an AFL title, then the title without its bracketed
+// alternate name, then that name: "Berserk (Berserk Kenpuden)" searches for
+// all three.
+func searchTerms(title string) []string {
+	terms := []string{title}
+	if i := strings.Index(title, "("); i > 0 {
+		if main := strings.TrimSpace(title[:i]); main != "" {
+			terms = append(terms, main)
+		}
+		if j := strings.LastIndex(title, ")"); j > i+1 {
+			terms = append(terms, strings.TrimSpace(title[i+1:j]))
+		}
+	}
+	return terms
 }
 
 type skyhookShow struct {

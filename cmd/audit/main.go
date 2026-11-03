@@ -32,10 +32,11 @@ func main() {
 	dbPath := flag.String("db", "mizu.db", "Mizu database to read mappings and the Sonarr connection from")
 	numbersFor := flag.String("numbers", "", "AFL slug of one show: print its episode numbering instead of the report")
 	catalogue := flag.Bool("catalogue", false, "audit every AFL show with filler, using TVDB's episodes from Sonarr's metadata service")
+	only := flag.String("only", "", "with -catalogue: comma-separated AFL slugs to audit instead of all")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 
-	if err := run(context.Background(), *dbPath, *numbersFor, *catalogue, os.Stdout); err != nil {
+	if err := run(context.Background(), *dbPath, *numbersFor, *catalogue, *only, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "audit:", err)
 		os.Exit(1)
 	}
@@ -79,7 +80,7 @@ type seasonStats struct {
 	dateSame, dateOff, dateNone                int
 }
 
-func run(ctx context.Context, dbPath, numbersFor string, catalogue bool, out io.Writer) error {
+func run(ctx context.Context, dbPath, numbersFor string, catalogue bool, only string, out io.Writer) error {
 	db, err := database.New(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
@@ -96,7 +97,7 @@ func run(ctx context.Context, dbPath, numbersFor string, catalogue bool, out io.
 	sc := sonarr.New(strings.TrimRight(settings["sonarr_url"], "/"), settings["sonarr_api_key"], 30*time.Second)
 	afl := scraper.New(30*time.Second, 1500*time.Millisecond, db)
 	if catalogue {
-		return runCatalogue(ctx, sc, afl, out)
+		return runCatalogue(ctx, sc, afl, only, out)
 	}
 
 	mappings, err := db.GetAllMappings(ctx)

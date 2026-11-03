@@ -331,6 +331,11 @@ func (s *Scraper) GetShowEpisodes(ctx context.Context, slug string) (string, []m
 	// episode types survive. A table that parses to zero rows is left
 	// alone; that's unusual but not structurally impossible.
 	if doc.Find("table.EpisodeList").Length() == 0 {
+		// A show page AFL hasn't filled in yet has its heading and the
+		// condensed summary block but no table.
+		if doc.Find("#Condensed").Length() > 0 && strings.HasSuffix(strings.TrimSpace(doc.Find("h1").First().Text()), "Filler List") {
+			return "", nil, fmt.Errorf("AnimeFillerList doesn't list any episodes for %s yet", slug)
+		}
 		return "", nil, fmt.Errorf("episode list table not found for %s (AnimeFillerList's layout may have changed)", slug)
 	}
 

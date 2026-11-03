@@ -78,6 +78,13 @@
   them as invalid, so 15 shows, among them Kuroko's Basketball, Hell's
   Paradise, Ranma ½ and two Pokémon series, couldn't be fetched at all.
 
+- Add anime matches AFL titles that carry a bracketed alternate name:
+  "Fire Force (Enen no Shouboutai)" now matches Sonarr's "Fire Force" (it
+  scored 0.31), likewise Sailor Moon, Sgt. Frog, Kamisama Kiss and others.
+  Hunter x Hunter still matches AFL's "Hunter × Hunter".
+- An AFL page with no episodes listed yet says so instead of suggesting
+  AFL's layout changed.
+
 ### Engineering
 
 - `go run ./cmd/audit -db mizu.db` reports, per mapped show, where Sonarr
