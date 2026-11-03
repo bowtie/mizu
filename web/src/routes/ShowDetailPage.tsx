@@ -62,7 +62,7 @@ import {
 import { EpisodeListSection } from "../components/EpisodeListSection";
 import { ShowHero } from "../components/ShowHero";
 import { ShowActionsBar } from "../components/ShowActionsBar";
-import { useIsMobile } from "../lib/useIsMobile";
+import { useIsMobile, useIsTouch } from "../lib/useIsMobile";
 import { FillerFilesDialog, useFillerFiles } from "../components/FillerFilesDialog";
 import { ShowDetailSkeleton } from "../components/ShowDetailSkeleton";
 import { TrackingRulesSection } from "../components/TrackingRulesSection";
@@ -185,6 +185,11 @@ export function ShowDetailPage() {
   const [heroFallbackFailed, setHeroFallbackFailed] = useState(false);
   const [activeTypeFilter, setActiveTypeFilter] = useState<string>("all");
   const isMobile = useIsMobile();
+  const isTouch = useIsTouch();
+  // Touch screens can't hover the hero to reveal the actions bar; a tap
+  // toggles it. Unsaved rule changes keep it out so Save stays reachable.
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const controlsShown = controlsOpen || rulesDirty;
   const [syncingEps, setSyncingEps] = useState<Record<string, boolean>>({});
   // The actions bar animates in only after the first frame with show data,
   // so it doesn't slide in on every navigation.
@@ -489,11 +494,23 @@ export function ShowDetailPage() {
         className="section-centered page-enter"
       >
         <VStack gap={6}>
-          <div className={`show-shell${pageSettled ? " is-settled" : ""}`}>
+          <div
+            className={`show-shell${pageSettled ? " is-settled" : ""}${controlsShown ? " controls-open" : ""}`}
+          >
             <ShowHero
               show={show}
               backdropUrl={heroFallbackFailed ? "" : backdropUrl}
               imageKey={`${showId}-${artworkVersion}-${heroImgError ? "fallback" : "local"}`}
+              controlsToggle={
+                isTouch
+                  ? {
+                      isOpen: controlsShown,
+                      // While changes are unsaved the bar is held out; a tap
+                      // keeps it there rather than flipping a hidden state.
+                      onToggle: () => setControlsOpen((open) => rulesDirty || !open),
+                    }
+                  : undefined
+              }
               onImageError={() => {
                 if (heroImgError) {
                   setHeroFallbackFailed(true);

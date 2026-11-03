@@ -748,16 +748,67 @@ body {
   }
 }
 
-/* Touch devices (no hover) — always show the actions bar since hover-reveal doesn't work */
+/* Touch devices (no hover) — tapping the hero slides the actions bar out
+   and back (ShowHero's controlsToggle); unsaved changes keep it out. */
 @media (hover: none) {
   .show-shell .controls-reveal {
+    grid-template-rows: 0fr;
+  }
+
+  .show-shell .controls-reveal > .controls-reveal-inner {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .show-shell .show-actions-bar {
+    transform: translateY(-100%);
+  }
+
+  .show-shell.is-settled .controls-reveal {
+    transition:
+      grid-template-rows 220ms var(--ease-standard),
+      margin-bottom 220ms var(--ease-standard);
+  }
+
+  .show-shell.is-settled .show-actions-bar {
+    transition: transform 220ms var(--ease-standard);
+  }
+
+  .show-shell.controls-open .controls-reveal,
+  .show-shell .controls-reveal:focus-within {
     grid-template-rows: 1fr;
     margin-bottom: 0;
   }
 
-  .show-shell .show-actions-bar {
+  .show-shell.controls-open .show-actions-bar,
+  .show-shell .controls-reveal:focus-within .show-actions-bar {
     transform: translateY(0);
   }
+
+  .show-hero[role="button"] {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Chevron on the hero that says it can be tapped for the actions bar. */
+.show-hero-toggle {
+  position: absolute;
+  right: var(--spacing-3);
+  bottom: var(--spacing-3);
+  z-index: 2;
+  display: flex;
+  color: color-mix(in srgb, var(--color-on-dark) 80%, transparent);
+  transition: transform 220ms var(--ease-standard);
+}
+
+.show-hero-toggle.is-open {
+  transform: rotate(180deg);
+}
+
+/* Keep the overview clear of the chevron. */
+.show-hero:has(.show-hero-toggle) .show-hero-content {
+  padding-right: calc(var(--spacing-3) + 28px);
 }
 
 @media (prefers-reduced-motion: reduce) {

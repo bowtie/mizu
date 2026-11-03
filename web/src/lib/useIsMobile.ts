@@ -14,3 +14,17 @@ export function useIsMobile(): boolean {
   }, []);
   return isMobile;
 }
+
+/** Whether the main input can't hover (a touch screen), so hover-only
+ *  affordances need a tap instead. */
+export function useIsTouch(): boolean {
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(hover: none)");
+    const update = () => setIsTouch(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return isTouch;
+}
