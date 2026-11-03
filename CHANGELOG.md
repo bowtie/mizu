@@ -49,15 +49,22 @@
 
 ### Matching
 
-- A Sonarr season whose absolute numbers run ahead of or behind
-  AnimeFillerList's is lined up by title. TVDB often files specials under
-  absolute numbers AFL counts differently: Cardcaptor Sakura's Clear Card
-  is 77-98 in Sonarr but 72-93 on AFL, so each episode got the type of
-  one five places away and the last five were "unknown". The shift is used
-  when at least three exact title matches in the season agree on it.
+- Sonarr episodes are lined up with AnimeFillerList's numbering by title,
+  episode by episode. TVDB often counts episodes AFL doesn't: specials
+  filed under absolute numbers (Cardcaptor Sakura's Clear Card is 77-98 in
+  Sonarr, 72-93 on AFL) or banned episodes kept in place (Pokémon drifts
+  one further with each). Matching by number gave episodes a neighbour's
+  type: 118 Pokémon episodes had the wrong one. Episodes whose titles match
+  AFL exactly anchor the numbering, the rest follow the nearest anchor,
+  and an episode AFL leaves out is left unclassified (so monitored).
 - Specials that match an AFL episode are listed with the show's episodes
   (Cardcaptor Sakura's Clear Card prologue, AFL episode 71). They were
   already synced; only the list left them out.
+
+### Engineering
+
+- `go run ./cmd/audit -db mizu.db` reports, per mapped show, where Sonarr
+  and AFL disagree under Mizu's matching. It only reads.
 
 ### Show page
 

@@ -122,12 +122,15 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 		return nil, &httpError{http.StatusBadGateway, "failed to fetch AFL episodes: " + err.Error()}
 	}
 
-	sonarrEpisodes = sync.AlignToAFL(sonarrEpisodes, aflEpisodes)
+	sonarrEpisodes, noAFLEntry := sync.AlignToAFL(sonarrEpisodes, aflEpisodes)
 	aflByNumber, aflPreferred := sync.BuildAFLEpisodeLookup(aflEpisodes)
 	coverageMax := sync.AFLCoverageMaxEpisodeNumber(aflEpisodes)
 	enriched := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
 	for _, ep := range sonarrEpisodes {
 		aflNum, aflEpisode, found := sync.SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
+		if noAFLEntry[ep.ID] {
+			aflEpisode, found = models.AFLEpisode{}, false
+		}
 		if !sync.IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
 			continue
 		}

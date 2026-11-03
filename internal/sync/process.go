@@ -55,7 +55,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 	if err != nil {
 		return processSeriesResult{}, fmt.Errorf("fetching Sonarr episodes: %w", err)
 	}
-	sonarrEpisodes = AlignToAFL(sonarrEpisodes, aflEpisodes)
+	sonarrEpisodes, noAFLEntry := AlignToAFL(sonarrEpisodes, aflEpisodes)
 
 	// Supersede guard (post-fetch): a user write may have landed while the
 	// Sonarr episode fetch was in flight. Check again before the watermark
@@ -93,6 +93,11 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		seen[ep.ID] = true
 		heldAt, isHeld := held[ep.ID]
 		aflNum, aflEpisode, found := SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
+		if noAFLEntry[ep.ID] {
+			// An episode AFL doesn't count (a banned one, say): left
+			// unclassified rather than given a neighbour's type.
+			aflEpisode, found = models.AFLEpisode{}, false
+		}
 		if !IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
 			continue
 		}
