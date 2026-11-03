@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - 2026-11-02
+## [0.4.0] - 2026-11-03
 
 Security pass on 0.3.0. Every setting lives in the database, sign-in is a
 choice made at first run, and stored secrets stay on the server.
@@ -18,10 +18,14 @@ choice made at first run, and stored secrets stay on the server.
 - With sign-in off, Mizu only answers requests addressed to an IP address,
   localhost or a listed hostname (Settings → Security → Allowed hostnames),
   so a DNS-rebinding page can't drive it through a LAN browser. The hostname
-  setup was opened under stays allowed, and a change that would lock out the
-  current hostname is refused.
+  setup was opened under stays allowed, and turning sign-in off in Settings
+  keeps answering to the hostname it was done from.
 - Sign-in proxy mode answers only requests from the listed trusted proxy
   addresses, so the proxy can't be bypassed and DNS rebinding gets nowhere.
+- Settings → Security shows only what the chosen sign-in mode needs. A
+  sign-in proxy's address is filled in from the request it forwarded, and
+  password sign-in tucks trusted proxies under "Behind a reverse proxy?".
+  `/api/auth/status` reports `mode` instead of `external` / `open`.
 - No environment variables: `MIZU_PASSWORD` and `MIZU_ADDR` are gone. Mizu
   listens on `:8978` (or `-addr`), and all settings, including sign-in mode,
   trusted proxies and allowed hostnames, live in the database.
