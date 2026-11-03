@@ -242,32 +242,36 @@ describe("ShowDetailPage", () => {
     expect(container.textContent).toContain("Filler");
   });
 
-  it("keeps Save disabled until a tracking rule changes, then persists via updateShow", async () => {
+  it("saves a tracking change by itself, once, shortly after it's made", async () => {
     mockedGetShow.mockResolvedValue(SHOW);
     mockedGetEpisodes.mockResolvedValue([EPISODE]);
     mockedUpdateShow.mockResolvedValue({ ...SHOW, watermark_mode: "manual" });
     await renderPage();
 
-    // Nothing is dirty yet — clicking Save must not persist anything.
+    // Nothing changed yet: nothing is saved.
     await act(async () => {
-      findButton("Save")?.click();
+      await new Promise((r) => setTimeout(r, 900));
     });
     expect(mockedUpdateShow).not.toHaveBeenCalled();
+    expect(findButton("Save")).toBeUndefined();
 
-    // Toggle the watermark mode Auto -> Manual. This is a real change to the
-    // show's tracking rules, so the Save button becomes enabled and the
-    // "Unsaved changes" badge appears.
-    const autoToggle = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Using Sonarr progress"]',
-    );
-    expect(autoToggle).not.toBeNull();
+    // Toggle the watermark mode Auto -> Manual and back to Manual again in
+    // quick succession: the changes settle into a single save.
+    const autoToggle = () =>
+      container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Using Sonarr progress"], button[aria-label="Using manual episode"]',
+      );
     await act(async () => {
-      autoToggle!.click();
+      autoToggle()!.click();
     });
-    expect(container.textContent).toContain("Unsaved changes");
-
     await act(async () => {
-      findButton("Save")?.click();
+      autoToggle()!.click();
+    });
+    await act(async () => {
+      autoToggle()!.click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 900));
     });
     await flush(3);
 
@@ -280,8 +284,6 @@ describe("ShowDetailPage", () => {
       expect.stringContaining("Saved tracking rules"),
       "success",
     );
-    // The saved rules become the new baseline: nothing is dirty any more.
-    expect(container.textContent).not.toContain("Unsaved changes");
   });
 
   it("renders the library's copy of the show before its own request resolves", async () => {

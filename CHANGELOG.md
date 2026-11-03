@@ -43,13 +43,17 @@
   held. Downloaded episodes and specials never are. Activity shows
   "holding N for AnimeFillerList" while a show has held episodes.
 
+### Show page
+
+- Tracking rules and the episode marker save themselves, a moment after
+  the last change; the Save button and "Unsaved changes" badge are gone.
+
 ### Phones
 
 - Show page: the actions bar tucks behind the banner on touch screens;
   tap the banner (the chevron hints at it) to slide it out and again to
-  put it away. With unsaved changes, Save also shows beside the "Unsaved
-  changes" badge under Tracking rules. Remove and Save get their own row
-  with labels.
+  put it away. On phones it is one row: the episode stepper, Auto, and a
+  ⋯ menu with Artwork, Mute notifications, Delete filler files and Remove.
 - Navigation is a bottom tab bar (Library, Activity, Settings) instead of
   a hamburger drawer; the Settings save bar and toasts sit above it.
 - Episode rows put the air date under the title instead of squeezing

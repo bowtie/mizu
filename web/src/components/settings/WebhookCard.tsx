@@ -80,10 +80,8 @@ export function WebhookCard() {
         <Heading level={2}>Sonarr webhook</Heading>
         <Divider />
         <Text type="supporting" color="secondary" display="block">
-          Sonarr tells Mizu when it adds a show or grabs an episode, so filler is caught right away.
-          In Sonarr, add a Webhook under Settings → Connect with On Grab and On Series Add, and
-          paste these in (any username). Use the address Sonarr reaches Mizu at, like
-          http://mizu:8978.
+          Add a Webhook in Sonarr under Settings → Connect, turn on On Grab and On Series Add, and
+          paste these in.
         </Text>
         <HStack gap={2} vAlign="end" wrap="wrap" className="webhook-field-row">
           <TextInput label="URL" value={url} isReadOnly width={fieldWidth} />

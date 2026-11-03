@@ -6,6 +6,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Eye, EyeOff } from "lucide-react";
 import type { SettingsForm } from "../../lib/schemas";
+import { useIsMobile } from "../../lib/useIsMobile";
 
 type SecretFieldName = "sonarrApiKey" | "tmdbApiKey" | "fanartApiKey" | "ntfyToken";
 
@@ -45,6 +46,7 @@ export function SecretField({
 }: SecretFieldProps) {
   const [replacing, setReplacing] = useState(false);
   const [visible, setVisible] = useState(false);
+  const isMobile = useIsMobile();
 
   // A save or discard resets `dirty`; drop back to the masked display with it.
   useEffect(() => {
@@ -61,10 +63,20 @@ export function SecretField({
       render={({ field }) => {
         if (isSet && !replacing && !dirty) {
           return (
-            <HStack gap={2} align="center">
-              <Text type="supporting" color="secondary" style={{ fontFamily: "var(--font-mono)" }}>
-                {savedMasked || "Saved"}
-              </Text>
+            <HStack gap={2} align="center" className="secret-field">
+              {isMobile ? (
+                // A full-width field reads better on a phone than a short row
+                // of dots above a lone button.
+                <TextInput label={label} value={savedMasked || "Saved"} isReadOnly isLabelHidden />
+              ) : (
+                <Text
+                  type="supporting"
+                  color="secondary"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  {savedMasked || "Saved"}
+                </Text>
+              )}
               <Button
                 label="Replace"
                 variant="secondary"
@@ -76,7 +88,7 @@ export function SecretField({
           );
         }
         return (
-          <HStack gap={2} align="center">
+          <HStack gap={2} align="center" className="secret-field">
             <TextInput
               label={label}
               type={visible ? "text" : "password"}

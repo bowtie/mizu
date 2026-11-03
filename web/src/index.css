@@ -1751,10 +1751,25 @@ body {
     overflow-x: visible;
   }
 
-  /* Remove and Save get their own full row, right-aligned with labels. */
-  .show-actions-bar .show-actions-bar-end {
-    flex: 1 1 100%;
-    justify-content: flex-end;
+  /* Phone bar: one row of stepper, Auto and the ⋯ menu at the end. */
+  .show-actions-bar.show-actions-bar-mobile {
+    flex-wrap: nowrap;
+    gap: var(--spacing-2) !important;
+  }
+  /* The ⋯ trigger; the menu's popup is rendered after it. */
+  .show-actions-bar-mobile > :nth-child(3) {
+    margin-left: auto;
+  }
+
+  /* API keys: the field fills the row beside its buttons. */
+  .secret-field {
+    width: 100%;
+    flex-wrap: nowrap !important;
+  }
+  .secret-field .astryx-field {
+    flex: 1;
+    min-width: 0;
+    width: auto !important;
   }
 
   /* Webhook URL and password fill the row beside their copy icon. */
@@ -1781,15 +1796,6 @@ body {
      a fixed 400px that left the bottom of the screen empty. */
   .wizard-list {
     max-height: max(240px, calc(100dvh - 300px));
-  }
-
-  /* Unsaved rules: the Save button says enough, and the heading keeps
-     its one line. */
-  .tracking-rules-unsaved {
-    display: none;
-  }
-  .tracking-rules-save {
-    flex-shrink: 0;
   }
 
   /* Tracking rules: stacked rows with less padding and gap than the

@@ -69,6 +69,9 @@ import { TrackingRulesSection } from "../components/TrackingRulesSection";
 
 const NO_EPISODES: Episode[] = [];
 
+/** How long after the last rule or marker change it is saved. */
+const AUTOSAVE_DELAY_MS = 700;
+
 /** The show's tracking rules as edited on this page. */
 interface RulesForm {
   trackFiller: boolean;
@@ -173,8 +176,6 @@ export function ShowDetailPage() {
   );
 
   // ── View state ──
-  const [savedFlash, setSavedFlash] = useState(false);
-  const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fillerFilesOpen, setFillerFilesOpen] = useState(false);
   const fillerFilesQuery = useFillerFiles(showId);
@@ -213,12 +214,6 @@ export function ShowDetailPage() {
       setActiveTypeFilter("canon");
     }
   }, [isMobile, activeTypeFilter]);
-
-  useEffect(() => {
-    return () => {
-      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
-    };
-  }, []);
 
   // ── Episode list ──
   const filteredEpisodes = useMemo(() => {
@@ -401,8 +396,12 @@ export function ShowDetailPage() {
 
   // ── Save / delete ──
 
-  const handleSave = form.handleSubmit(async (rules) => {
-    if (!showId) return;
+  // Rule and marker changes save themselves, AUTOSAVE_DELAY_MS after the
+  // last one, so five taps on + are one save. Saving only updates Mizu's
+  // record of the show; Sonarr follows at the next sync.
+  const saveRules = async () => {
+    if (!showId || !rulesDirty) return;
+    const rules = form.getValues();
     const payload: ShowUpdate = {
       filler_action: trackedToAction(rules.trackFiller),
       mixed_action: trackedToAction(rules.trackMixed),
@@ -414,17 +413,35 @@ export function ShowDetailPage() {
     }
     try {
       const saved = await updateShowMutation.mutateAsync({ id: showId, data: payload });
-      // Mark the saved rules as the new baseline. reset() inherits the
-      // form's keepDirtyValues option, which would keep the dirty flags.
+      // A change made while the save was in flight stays dirty, so it is
+      // saved next instead of being reset away.
+      const latest = form.getValues();
       form.reset(rulesFromShow(saved, maxEpisode), { keepDirtyValues: false });
+      for (const key of Object.keys(latest) as (keyof RulesForm)[]) {
+        if (latest[key] !== rules[key]) setRule(key, latest[key]);
+      }
       addNotification(`Saved tracking rules for ${show?.sonarr_title || "anime"}`, "success");
-      setSavedFlash(true);
-      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
-      savedFlashRef.current = setTimeout(() => setSavedFlash(false), 1500);
     } catch (err: unknown) {
       addNotification("Couldn't save anime: " + errorMessage(err), "error");
     }
-  });
+  };
+  const saveRulesRef = useRef(saveRules);
+  saveRulesRef.current = saveRules;
+  const saving = updateShowMutation.isPending;
+  useEffect(() => {
+    if (!rulesDirty || saving) return;
+    const timer = setTimeout(() => void saveRulesRef.current(), AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [rulesDirty, saving, trackFiller, trackMixed, trackAnimeCanon, watermarkAuto, markerValue]);
+  // Leaving the page with a save still waiting sends it right away.
+  const rulesDirtyRef = useRef(rulesDirty);
+  rulesDirtyRef.current = rulesDirty;
+  useEffect(
+    () => () => {
+      if (rulesDirtyRef.current) void saveRulesRef.current();
+    },
+    [],
+  );
 
   const handleMuteChange = async (muted: boolean) => {
     if (!showId) return;
@@ -524,9 +541,6 @@ export function ShowDetailPage() {
                 maxEpisode={maxEpisode}
                 isMobile={isMobile}
                 deleting={deleteShowMutation.isPending}
-                saving={updateShowMutation.isPending}
-                savedFlash={savedFlash}
-                rulesDirty={rulesDirty}
                 onMarkerChange={(value) => setRule("markerValue", clampMarkerValue(value))}
                 onToggleAuto={() => setRule("watermarkAuto", !watermarkAuto)}
                 notificationsMuted={!!show.notifications_muted}
@@ -536,9 +550,6 @@ export function ShowDetailPage() {
                 hasFillerFiles={(fillerFilesQuery.data?.files.length ?? 0) > 0}
                 onFillerFiles={() => setFillerFilesOpen(true)}
                 onRemove={() => setShowDeleteDialog(true)}
-                onSave={() => {
-                  if (rulesDirty) void handleSave();
-                }}
               />
             )}
           </div>
@@ -550,15 +561,12 @@ export function ShowDetailPage() {
           ) : (
             <>
               <TrackingRulesSection
-                rulesDirty={rulesDirty}
                 trackAnimeCanon={trackAnimeCanon}
                 trackMixed={trackMixed}
                 trackFiller={trackFiller}
                 onAnimeCanonChange={(value) => setRule("trackAnimeCanon", value)}
                 onMixedChange={(value) => setRule("trackMixed", value)}
                 onFillerChange={(value) => setRule("trackFiller", value)}
-                saving={updateShowMutation.isPending}
-                onSave={() => void handleSave()}
               />
             </>
           )}
