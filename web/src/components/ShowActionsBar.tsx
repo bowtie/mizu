@@ -130,18 +130,6 @@ export function ShowActionsBar({
               onClick={() => onEditArtwork()}
               data-cuelume-press
             />
-            {hasFillerFiles && (
-              <Button
-                label="Delete filler files"
-                tooltip="Delete filler files"
-                variant="secondary"
-                size="md"
-                isIconOnly
-                icon={<HardDrive size={16} />}
-                onClick={() => onFillerFiles()}
-                data-cuelume-press
-              />
-            )}
             <Button
               label={notificationsMuted ? "Notifications muted" : "Notifications on"}
               variant="secondary"
@@ -155,6 +143,18 @@ export function ShowActionsBar({
             />
           </HStack>
           <HStack gap={2} align="center" wrap="nowrap" className="show-actions-bar-end">
+            {hasFillerFiles && (
+              <Button
+                label="Delete filler files"
+                tooltip="Delete filler files"
+                variant="secondary"
+                size="md"
+                isIconOnly
+                icon={<HardDrive size={16} />}
+                onClick={() => onFillerFiles()}
+                data-cuelume-press
+              />
+            )}
             <Button
               label="Remove"
               variant="destructive"
