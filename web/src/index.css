@@ -1783,6 +1783,15 @@ body {
     max-height: max(240px, calc(100dvh - 300px));
   }
 
+  /* Unsaved rules: the Save button says enough, and the heading keeps
+     its one line. */
+  .tracking-rules-unsaved {
+    display: none;
+  }
+  .tracking-rules-save {
+    flex-shrink: 0;
+  }
+
   /* Tracking rules: stacked rows with less padding and gap than the
      wide-screen cards. */
   .tracking-rules-grid {

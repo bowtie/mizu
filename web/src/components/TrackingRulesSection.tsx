@@ -39,7 +39,7 @@ export function TrackingRulesSection({
         <div style={{ flex: 1 }} />
         {rulesDirty && (
           <>
-            <Badge variant="warning" label="Unsaved changes" />
+            <Badge variant="warning" label="Unsaved changes" className="tracking-rules-unsaved" />
             <Button
               label="Save"
               variant="primary"
@@ -48,6 +48,7 @@ export function TrackingRulesSection({
               isLoading={saving}
               isDisabled={saving}
               onClick={onSave}
+              className="tracking-rules-save"
               data-cuelume-press
             />
           </>
