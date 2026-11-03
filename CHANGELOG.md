@@ -43,6 +43,15 @@
   held. Downloaded episodes and specials never are. Activity shows
   "holding N for AnimeFillerList" while a show has held episodes.
 
+### Matching
+
+- A Sonarr season whose absolute numbers run ahead of or behind
+  AnimeFillerList's is lined up by title. TVDB often files specials under
+  absolute numbers AFL counts differently: Cardcaptor Sakura's Clear Card
+  is 77-98 in Sonarr but 72-93 on AFL, so each episode got the type of
+  one five places away and the last five were "unknown". The shift is used
+  when at least three exact title matches in the season agree on it.
+
 ### Show page
 
 - Tracking rule toggles save at once, like the mute bell and artwork

@@ -55,6 +55,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 	if err != nil {
 		return processSeriesResult{}, fmt.Errorf("fetching Sonarr episodes: %w", err)
 	}
+	sonarrEpisodes = AlignToAFL(sonarrEpisodes, aflEpisodes)
 
 	// Supersede guard (post-fetch): a user write may have landed while the
 	// Sonarr episode fetch was in flight. Check again before the watermark

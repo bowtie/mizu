@@ -243,3 +243,84 @@ func pluralize(count int) string {
 	}
 	return "s"
 }
+
+// minOffsetVotes is how many title-matched episodes must agree before a
+// season's numbering is shifted to AnimeFillerList's.
+const minOffsetVotes = 3
+
+// AlignToAFL shifts each mainline season's absolute numbers onto
+// AnimeFillerList's numbering where the two disagree, and returns the
+// adjusted copies. TVDB often files specials (a prologue, movies) under
+// absolute numbers that AFL counts differently or not at all, so a later
+// season can run several numbers ahead of AFL: Cardcaptor Sakura's Clear
+// Card is absolute 77-98 in Sonarr but 72-93 on AFL. A season's offset
+// comes from its episodes whose titles match an AFL title exactly, and is
+// used only when at least minOffsetVotes of them agree and they are most
+// of the matches.
+func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode) []models.SonarrEpisode {
+	offsets := seasonOffsets(episodes, aflEpisodes)
+	if len(offsets) == 0 {
+		return episodes
+	}
+	aligned := make([]models.SonarrEpisode, len(episodes))
+	copy(aligned, episodes)
+	for i := range aligned {
+		ep := &aligned[i]
+		offset, ok := offsets[ep.SeasonNumber]
+		if !ok || ep.AbsoluteEpisodeNumber == nil {
+			continue
+		}
+		if shifted := *ep.AbsoluteEpisodeNumber + offset; shifted > 0 {
+			ep.AbsoluteEpisodeNumber = &shifted
+		}
+	}
+	return aligned
+}
+
+func seasonOffsets(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode) map[int]int {
+	normalizer := matcherpkg.New(0)
+	// Titles that appear once on AFL; a repeated title says nothing.
+	byTitle := make(map[string]int, len(aflEpisodes))
+	repeated := make(map[string]bool)
+	for _, a := range aflEpisodes {
+		t := normalizer.Normalize(a.Title)
+		if t == "" {
+			continue
+		}
+		if _, seen := byTitle[t]; seen {
+			repeated[t] = true
+		}
+		byTitle[t] = a.Number
+	}
+
+	votes := make(map[int]map[int]int)
+	for _, ep := range episodes {
+		if isSpecialSeason(ep.SeasonNumber) || ep.AbsoluteEpisodeNumber == nil {
+			continue
+		}
+		t := normalizer.Normalize(ep.Title)
+		num, ok := byTitle[t]
+		if t == "" || !ok || repeated[t] {
+			continue
+		}
+		if votes[ep.SeasonNumber] == nil {
+			votes[ep.SeasonNumber] = make(map[int]int)
+		}
+		votes[ep.SeasonNumber][num-*ep.AbsoluteEpisodeNumber]++
+	}
+
+	offsets := make(map[int]int)
+	for season, deltas := range votes {
+		best, bestCount, total := 0, 0, 0
+		for delta, count := range deltas {
+			total += count
+			if count > bestCount || (count == bestCount && delta == 0) {
+				best, bestCount = delta, count
+			}
+		}
+		if best != 0 && bestCount >= minOffsetVotes && bestCount*2 > total {
+			offsets[season] = best
+		}
+	}
+	return offsets
+}
