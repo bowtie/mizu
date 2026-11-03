@@ -17,6 +17,17 @@
   sign-in mode, so it also answers under a container name with sign-in off.
   The password isn't part of config exports.
 
+### Filler cleanup
+
+- A show's toolbar has a Delete filler files button. It lists the
+  downloaded files that only hold episodes the show's rules skip, with
+  their size, and deletes the picked ones from disk through Sonarr.
+- Files are picked by default unless one of their episodes was monitored
+  again. A file shared with a kept or unclassified episode (a double
+  episode, say) is never offered.
+- Deleted episodes are unmonitored so Sonarr doesn't download them again.
+  Each cleanup shows in Activity as "Filler cleanup" with the space freed.
+
 ## [0.4.0] - 2026-11-03
 
 Security pass on 0.3.0. Every setting lives in the database, sign-in is a

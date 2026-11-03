@@ -117,6 +117,8 @@ func setupRouter(cfg *config.Config, db *database.DB, syncEngine *sync.Engine, s
 					r.Get("/episodes/sonarr", handleGetSonarrEpisodes(db, syncEngine))
 					r.Put("/episodes/{epId}/monitor", handleSetEpisodeMonitor(db, syncEngine))
 					r.Post("/resync", handleResyncMapping(syncEngine, appCtx, bgWG))
+					r.Get("/filler-files", handleGetFillerFiles(syncEngine))
+					r.Post("/filler-files/delete", handleDeleteFillerFiles(syncEngine))
 				})
 			})
 

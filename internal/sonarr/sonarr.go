@@ -442,3 +442,38 @@ func (c *Client) RemoveQueueItem(ctx context.Context, queueID int) error {
 	resp.Body.Close()
 	return nil
 }
+
+// --- Episode files ---
+
+// EpisodeFile is a downloaded file Sonarr tracks. A multi-episode file
+// backs several episodes.
+type EpisodeFile struct {
+	ID           int    `json:"id"`
+	RelativePath string `json:"relativePath"`
+	Size         int64  `json:"size"`
+}
+
+// GetEpisodeFiles returns the downloaded files of one series.
+func (c *Client) GetEpisodeFiles(ctx context.Context, seriesID int) ([]EpisodeFile, error) {
+	path := fmt.Sprintf("/episodefile?seriesId=%d", seriesID)
+	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResponse[[]EpisodeFile](resp)
+}
+
+// DeleteEpisodeFile deletes a file from disk through Sonarr. A file that is
+// already gone is not an error.
+func (c *Client) DeleteEpisodeFile(ctx context.Context, fileID int) error {
+	resp, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/episodefile/%d", fileID), nil)
+	if err != nil {
+		var statusErr *httpStatusError
+		if errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound {
+			return nil
+		}
+		return fmt.Errorf("deleting episode file %d: %w", fileID, err)
+	}
+	resp.Body.Close()
+	return nil
+}

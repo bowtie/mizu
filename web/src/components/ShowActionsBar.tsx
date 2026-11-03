@@ -2,7 +2,18 @@ import { HStack } from "@astryxdesign/core/HStack";
 import { Button } from "@astryxdesign/core/Button";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { InputGroup, InputGroupText } from "@astryxdesign/core/InputGroup";
-import { Trash2, Save, Check, Bot, Minus, Plus, Bell, BellOff, Palette } from "lucide-react";
+import {
+  Trash2,
+  Save,
+  Check,
+  Bot,
+  Minus,
+  Plus,
+  Bell,
+  BellOff,
+  Palette,
+  HardDrive,
+} from "lucide-react";
 
 interface ShowActionsBarProps {
   watermarkAuto: boolean;
@@ -20,6 +31,7 @@ interface ShowActionsBarProps {
   onToggleAuto: () => void;
   onToggleMuted: () => void;
   onEditArtwork: () => void;
+  onFillerFiles: () => void;
   onRemove: () => void;
   onSave: () => void;
 }
@@ -41,6 +53,7 @@ export function ShowActionsBar({
   onToggleAuto,
   onToggleMuted,
   onEditArtwork,
+  onFillerFiles,
   onRemove,
   onSave,
 }: ShowActionsBarProps) {
@@ -112,6 +125,16 @@ export function ShowActionsBar({
               isIconOnly
               icon={<Palette size={16} />}
               onClick={() => onEditArtwork()}
+              data-cuelume-press
+            />
+            <Button
+              label="Delete filler files"
+              tooltip="Delete filler files"
+              variant="secondary"
+              size="md"
+              isIconOnly
+              icon={<HardDrive size={16} />}
+              onClick={() => onFillerFiles()}
               data-cuelume-press
             />
             <Button

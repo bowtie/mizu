@@ -62,6 +62,7 @@ import {
 import { EpisodeListSection } from "../components/EpisodeListSection";
 import { ShowHero } from "../components/ShowHero";
 import { ShowActionsBar } from "../components/ShowActionsBar";
+import { FillerFilesDialog } from "../components/FillerFilesDialog";
 import { ShowDetailSkeleton } from "../components/ShowDetailSkeleton";
 import { TrackingRulesSection } from "../components/TrackingRulesSection";
 
@@ -174,6 +175,7 @@ export function ShowDetailPage() {
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [fillerFilesOpen, setFillerFilesOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [artworkRefreshing, setArtworkRefreshing] = useState(false);
   const [artworkVersion, setArtworkVersion] = useState(0);
@@ -522,6 +524,7 @@ export function ShowDetailPage() {
                 notificationsSaving={updateShowMutation.isPending}
                 onToggleMuted={() => void handleMuteChange(!show.notifications_muted)}
                 onEditArtwork={() => setPickerOpen(true)}
+                onFillerFiles={() => setFillerFilesOpen(true)}
                 onRemove={() => setShowDeleteDialog(true)}
                 onSave={() => {
                   if (rulesDirty) void handleSave();
@@ -581,6 +584,15 @@ export function ShowDetailPage() {
             onAction={() => void handleDelete()}
           />
         </Suspense>
+      )}
+
+      {showId && (
+        <FillerFilesDialog
+          isOpen={fillerFilesOpen}
+          onOpenChange={setFillerFilesOpen}
+          showId={showId}
+          isMobile={isMobile}
+        />
       )}
 
       {showId && (

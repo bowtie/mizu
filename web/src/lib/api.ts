@@ -442,3 +442,25 @@ export function getWebhookSettings(): Promise<WebhookSettings> {
 export function regenerateWebhookToken(): Promise<WebhookSettings> {
   return request<WebhookSettings>("POST", "/settings/webhook/regenerate");
 }
+
+export interface FillerFile {
+  episode_file_id: number;
+  path: string;
+  size: number;
+  episodes: { sonarr_episode_id: number; episode_num: number; title: string; type: string }[];
+  /** One of its episodes is monitored anyway, usually to keep it. */
+  monitored: boolean;
+}
+
+export function getFillerFiles(showId: string | number): Promise<{ files: FillerFile[] }> {
+  return request<{ files: FillerFile[] }>("GET", "/mappings/" + showId + "/filler-files");
+}
+
+export function deleteFillerFiles(
+  showId: string | number,
+  episodeFileIds: number[],
+): Promise<{ deleted: number; freed_bytes: number; error?: string }> {
+  return request("POST", "/mappings/" + showId + "/filler-files/delete", {
+    episode_file_ids: episodeFileIds,
+  });
+}

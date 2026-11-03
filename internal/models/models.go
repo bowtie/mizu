@@ -208,6 +208,7 @@ type SonarrEpisode struct {
 	Title                 string    `json:"title"`
 	Monitored             bool      `json:"monitored"`
 	HasFile               bool      `json:"hasFile"`
+	EpisodeFileID         int       `json:"episodeFileId"`
 	AirDateUTC            time.Time `json:"airDateUtc"`
 }
 
