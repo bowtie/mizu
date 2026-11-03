@@ -47,8 +47,11 @@
 
 - Show page: the actions bar tucks behind the banner on touch screens;
   tap the banner (the chevron hints at it) to slide it out and again to
-  put it away. It stays out while changes are unsaved, so Save is always
-  in reach. Remove and Save get their own row with labels.
+  put it away. With unsaved changes, Save also shows beside the "Unsaved
+  changes" badge under Tracking rules. Remove and Save get their own row
+  with labels.
+- Navigation is a bottom tab bar (Library, Activity, Settings) instead of
+  a hamburger drawer; the Settings save bar and toasts sit above it.
 - Episode rows put the air date under the title instead of squeezing
   titles to a few characters, and badges show whole. Episode and Activity
   filters are dropdowns instead of tabs that ran off screen.

@@ -187,9 +187,8 @@ export function ShowDetailPage() {
   const isMobile = useIsMobile();
   const isTouch = useIsTouch();
   // Touch screens can't hover the hero to reveal the actions bar; a tap
-  // toggles it. Unsaved rule changes keep it out so Save stays reachable.
+  // toggles it.
   const [controlsOpen, setControlsOpen] = useState(false);
-  const controlsShown = controlsOpen || rulesDirty;
   const [syncingEps, setSyncingEps] = useState<Record<string, boolean>>({});
   // The actions bar animates in only after the first frame with show data,
   // so it doesn't slide in on every navigation.
@@ -495,7 +494,7 @@ export function ShowDetailPage() {
       >
         <VStack gap={6}>
           <div
-            className={`show-shell${pageSettled ? " is-settled" : ""}${controlsShown ? " controls-open" : ""}`}
+            className={`show-shell${pageSettled ? " is-settled" : ""}${controlsOpen ? " controls-open" : ""}`}
           >
             <ShowHero
               show={show}
@@ -504,10 +503,8 @@ export function ShowDetailPage() {
               controlsToggle={
                 isTouch
                   ? {
-                      isOpen: controlsShown,
-                      // While changes are unsaved the bar is held out; a tap
-                      // keeps it there rather than flipping a hidden state.
-                      onToggle: () => setControlsOpen((open) => rulesDirty || !open),
+                      isOpen: controlsOpen,
+                      onToggle: () => setControlsOpen((open) => !open),
                     }
                   : undefined
               }
@@ -560,6 +557,8 @@ export function ShowDetailPage() {
                 onAnimeCanonChange={(value) => setRule("trackAnimeCanon", value)}
                 onMixedChange={(value) => setRule("trackMixed", value)}
                 onFillerChange={(value) => setRule("trackFiller", value)}
+                saving={updateShowMutation.isPending}
+                onSave={() => void handleSave()}
               />
             </>
           )}

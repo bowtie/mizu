@@ -15,7 +15,8 @@ import { TopNavItem } from "@astryxdesign/core/TopNav";
 import { NavIcon } from "@astryxdesign/core/NavIcon";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack } from "@astryxdesign/core/HStack";
-import { Check, Palette, LogOut } from "lucide-react";
+import { Check, Palette, LogOut, Library, Activity, Settings } from "lucide-react";
+import { useIsMobile } from "./lib/useIsMobile";
 import { BrowserRouter, useLocation, useNavigate, Link } from "react-router-dom";
 
 // Lazy-load DropdownMenu — it pulls in usePopover, useListFocus,
@@ -165,13 +166,59 @@ function LogoutButton() {
   );
 }
 
-function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
-  const location = useLocation();
-  const currentPath = location.pathname;
-  const isShows =
-    currentPath === "/" || currentPath === "/shows" || currentPath.startsWith("/shows/");
-  const isActivity = currentPath === "/activity";
-  const isSettings = currentPath === "/settings";
+/** Which top-level page the path belongs to. */
+function usePage(): "shows" | "activity" | "settings" | null {
+  const { pathname } = useLocation();
+  if (pathname === "/" || pathname === "/shows" || pathname.startsWith("/shows/")) return "shows";
+  if (pathname === "/activity") return "activity";
+  if (pathname === "/settings") return "settings";
+  return null;
+}
+
+/** Phone navigation: the three pages as tabs along the bottom, in place of
+ *  a hamburger drawer that would hold just three links. */
+function BottomNav() {
+  const page = usePage();
+  const tabs = [
+    { page: "shows", label: "Library", href: "/", icon: Library },
+    {
+      page: "activity",
+      label: "Activity",
+      href: "/activity",
+      icon: Activity,
+      prefetch: prefetchActivityChunk,
+    },
+    {
+      page: "settings",
+      label: "Settings",
+      href: "/settings",
+      icon: Settings,
+      prefetch: prefetchSettingsChunk,
+    },
+  ] as const;
+  return (
+    <nav className="bottom-nav" aria-label="Mizu navigation">
+      {tabs.map((t) => (
+        <Link
+          key={t.page}
+          to={t.href}
+          className="bottom-nav-item"
+          aria-current={page === t.page ? "page" : undefined}
+          onTouchStart={"prefetch" in t ? t.prefetch : undefined}
+        >
+          <t.icon size={20} aria-hidden="true" />
+          <span>{t.label}</span>
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+function Nav({ themeMenu, showItems }: { themeMenu: React.ReactNode; showItems: boolean }) {
+  const page = usePage();
+  const isShows = page === "shows";
+  const isActivity = page === "activity";
+  const isSettings = page === "settings";
 
   return (
     <TopNav
@@ -185,23 +232,25 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
         />
       }
       centerContent={
-        <>
-          <TopNavItem label="Library" href="/" isSelected={isShows} as={Link} />
-          <TopNavItem
-            label="Activity"
-            href="/activity"
-            isSelected={isActivity}
-            as={Link}
-            onMouseEnter={prefetchActivityChunk}
-          />
-          <TopNavItem
-            label="Settings"
-            href="/settings"
-            isSelected={isSettings}
-            as={Link}
-            onMouseEnter={prefetchSettingsChunk}
-          />
-        </>
+        showItems && (
+          <>
+            <TopNavItem label="Library" href="/" isSelected={isShows} as={Link} />
+            <TopNavItem
+              label="Activity"
+              href="/activity"
+              isSelected={isActivity}
+              as={Link}
+              onMouseEnter={prefetchActivityChunk}
+            />
+            <TopNavItem
+              label="Settings"
+              href="/settings"
+              isSelected={isSettings}
+              as={Link}
+              onMouseEnter={prefetchSettingsChunk}
+            />
+          </>
+        )
       }
       endContent={
         <HStack gap={2} align="center">
@@ -218,15 +267,24 @@ function Nav({ themeMenu }: { themeMenu: React.ReactNode }) {
 function Shell({ themeMenu }: { themeMenu: React.ReactNode }) {
   const { pathname } = useLocation();
   const standalone = pathname === "/welcome" || pathname === "/login";
+  const isMobile = useIsMobile();
   return (
     <AppShell
       variant="surface"
       height="auto"
-      topNav={standalone ? undefined : <Nav themeMenu={themeMenu} />}
+      topNav={standalone ? undefined : <Nav themeMenu={themeMenu} showItems={!isMobile} />}
+      // Phones get BottomNav instead of AppShell's drawer.
+      mobileNav={false}
     >
       <RouteBoundary>
         <App />
       </RouteBoundary>
+      {isMobile && !standalone && (
+        <>
+          <div className="bottom-nav-spacer" aria-hidden="true" />
+          <BottomNav />
+        </>
+      )}
     </AppShell>
   );
 }
