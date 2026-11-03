@@ -187,7 +187,7 @@ func newExportTestDB(t *testing.T) (*database.DB, *auth.Manager) {
 		"tmdb_api_key":    "tmdb-secret",
 		"fanart_api_key":  "fanart-secret",
 		"ntfy_token":      "ntfy-secret",
-		settingAuthMode:   authModePassword,
+		settingAuthMode:   string(authModePassword),
 		"trusted_proxies": "10.0.0.2",
 	}))
 	mgr := auth.NewManager(db)

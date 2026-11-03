@@ -29,6 +29,7 @@ import {
   setupOpen,
   setupPassword,
   testSonarrConnection,
+  type AuthStatus,
 } from "../lib/api";
 import { trackedToAction } from "./addWizardHelpers";
 
@@ -179,14 +180,18 @@ export function OnboardingPage() {
       }
       if (signIn === "skip") {
         await setupOpen();
-        queryClient.setQueryData(queryKeys.authStatus, {
+        queryClient.setQueryData<AuthStatus>(queryKeys.authStatus, {
           configured: true,
           authenticated: true,
-          open: true,
+          mode: "open",
         });
       } else if (signIn) {
         await setupPassword(signIn.password);
-        queryClient.setQueryData(queryKeys.authStatus, { configured: true, authenticated: true });
+        queryClient.setQueryData<AuthStatus>(queryKeys.authStatus, {
+          configured: true,
+          authenticated: true,
+          mode: "password",
+        });
       }
       navigate("/", { replace: true });
     } catch (err) {

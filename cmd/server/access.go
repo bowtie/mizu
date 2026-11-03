@@ -23,27 +23,40 @@ const (
 	settingAuthMode       = "auth_mode"
 	settingTrustedProxies = "trusted_proxies"
 	settingAllowedHosts   = "allowed_hosts"
+)
 
+// authMode is how Mizu decides who may use it.
+type authMode string
+
+const (
 	// authModePassword (the default) makes Mizu ask for its own password.
-	authModePassword = "password"
+	authModePassword authMode = "password"
 	// authModeExternal hands sign-in to a reverse proxy in front of Mizu
 	// (tinyauth, Authelia, Authentik, ...). Mizu then serves only requests
 	// that arrive from a trusted proxy address, so the proxy can't be
 	// bypassed by connecting to Mizu directly — and a DNS-rebinding page,
 	// which reaches Mizu from the victim's own address, is refused too.
-	authModeExternal = "external"
+	authModeExternal authMode = "external"
 	// authModeOpen turns sign-in off, for a Mizu that something else
 	// already protects (a VPN, a tailnet, a LAN nobody else is on). With
 	// nothing to authenticate, DNS rebinding is stopped by the Host check
 	// instead (see allowsHost).
-	authModeOpen = "open"
+	authModeOpen authMode = "open"
 )
+
+// parseAuthMode maps a stored or requested mode to a known one.
+func parseAuthMode(s string) (authMode, bool) {
+	switch m := authMode(s); m {
+	case authModePassword, authModeExternal, authModeOpen:
+		return m, true
+	}
+	return authModePassword, false
+}
 
 // accessPolicy is the effective sign-in configuration.
 type accessPolicy struct {
-	External bool
-	// Open means no sign-in at all.
-	Open bool
+	// Mode is the sign-in mode; the zero value means password sign-in.
+	Mode authMode
 	// TrustedProxies are the addresses (or networks) of reverse proxies
 	// in front of Mizu. Their X-Forwarded-For / X-Forwarded-Proto headers
 	// are believed, and in external mode only they may connect. Loopback
@@ -56,15 +69,15 @@ type accessPolicy struct {
 	AllowedHosts []string
 }
 
-// mode is the sign-in mode's setting value.
-func (p accessPolicy) mode() string {
-	switch {
-	case p.External:
-		return authModeExternal
-	case p.Open:
-		return authModeOpen
+func (p accessPolicy) external() bool { return p.Mode == authModeExternal }
+func (p accessPolicy) open() bool     { return p.Mode == authModeOpen }
+
+// mode is the sign-in mode, with the zero value spelled out.
+func (p accessPolicy) mode() authMode {
+	if p.Mode == "" {
+		return authModePassword
 	}
-	return authModePassword
+	return p.Mode
 }
 
 // accessControl holds the current policy; handlers read it per request
@@ -90,9 +103,9 @@ func loadAccessPolicy(ctx context.Context, db *database.DB) accessPolicy {
 		log.Warn().Err(err).Msg("failed to load sign-in settings; using password sign-in")
 		return accessPolicy{}
 	}
+	mode, _ := parseAuthMode(settings[settingAuthMode])
 	p := accessPolicy{
-		External:     settings[settingAuthMode] == authModeExternal,
-		Open:         settings[settingAuthMode] == authModeOpen,
+		Mode:         mode,
 		AllowedHosts: parseAllowedHosts(settings[settingAllowedHosts]),
 	}
 	prefixes, normalized, perr := parseTrustedProxies(settings[settingTrustedProxies])
@@ -162,7 +175,7 @@ func hostOnly(host string) string {
 // listed. X-Forwarded-Host is ignored, since a rebound page is same-origin
 // and may set any header it likes.
 func (p accessPolicy) allowsHost(host string) bool {
-	if !p.Open {
+	if !p.open() {
 		return true
 	}
 	host = hostOnly(host)
@@ -178,6 +191,15 @@ func (p accessPolicy) allowsHost(host string) bool {
 		}
 	}
 	return false
+}
+
+// keepAnswering adds host to the allowed hostnames if open mode would
+// otherwise refuse it, so turning sign-in off never cuts off the browser
+// that did it.
+func (p *accessPolicy) keepAnswering(host string) {
+	if !p.allowsHost(host) {
+		p.AllowedHosts = append(p.AllowedHosts, hostOnly(host))
+	}
 }
 
 // hostGuard refuses requests addressed to a hostname open mode doesn't
@@ -203,6 +225,17 @@ func peerIP(r *http.Request) netip.Addr {
 	}
 	ip, _ := netip.ParseAddr(host)
 	return ip.Unmap()
+}
+
+// forwarded reports whether a proxy says it passed the request on, so the
+// sign-in settings can offer to trust the peer it came from.
+func forwarded(r *http.Request) bool {
+	for _, h := range []string{"X-Forwarded-For", "X-Forwarded-Proto", "X-Forwarded-Host", "X-Real-IP", "Forwarded"} {
+		if r.Header.Get(h) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // trusts reports whether ip is a trusted proxy (loopback always is).

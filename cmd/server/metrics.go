@@ -58,7 +58,7 @@ func metricsAuth(mgr *auth.Manager, acc *accessControl, limiter *rateLimiter, ne
 			next.ServeHTTP(w, r)
 			return
 		}
-		if acc.get().External {
+		if acc.get().external() {
 			writeError(w, http.StatusForbidden, "Mizu only accepts requests through your sign-in proxy")
 			return
 		}

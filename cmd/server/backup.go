@@ -174,7 +174,7 @@ func handleExportConfig(db *database.DB, mgr *auth.Manager, acc *accessControl) 
 					return
 				}
 			}
-			if pol := acc.get(); req.IncludeSecrets && !pol.External && !pol.Open {
+			if pol := acc.get(); req.IncludeSecrets && pol.mode() == authModePassword {
 				if err := mgr.Verify(r.Context(), req.Password); err != nil {
 					if err == auth.ErrInvalidPassword {
 						writeError(w, http.StatusUnauthorized, "incorrect password")

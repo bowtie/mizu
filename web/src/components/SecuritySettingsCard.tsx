@@ -6,30 +6,66 @@ import { HStack } from "@astryxdesign/core/HStack";
 import { Card } from "@astryxdesign/core/Card";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Button } from "@astryxdesign/core/Button";
-import { Selector } from "@astryxdesign/core/Selector";
+import { Collapsible } from "@astryxdesign/core/Collapsible";
+import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Divider } from "@astryxdesign/core/Divider";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
-import { useAuthStatus } from "../lib/queries";
+import { queryKeys, useAuthStatus } from "../lib/queries";
 import {
   changePassword,
   errorMessage,
   getAccessSettings,
   updateAccessSettings,
+  type AccessSettings,
   type AuthMode,
 } from "../lib/api";
-import type { SelectOption } from "../lib/types";
 import { SettingsRow } from "./SettingsRow";
 
 const MIN_PASSWORD_LENGTH = 8;
 
-const modeOptions: SelectOption[] = [
-  { value: "password", label: "Mizu password" },
-  { value: "external", label: "Sign-in proxy" },
-  { value: "open", label: "No sign-in" },
-];
+const modes: Record<AuthMode, { label: string; description: string; summary: string }> = {
+  password: {
+    label: "Mizu password",
+    description: "Mizu asks for its own password.",
+    summary: "Mizu asks for its own password.",
+  },
+  external: {
+    label: "Sign-in proxy",
+    description: "tinyauth, Authelia, Authentik or similar already protects Mizu.",
+    summary: "Handled by your sign-in proxy.",
+  },
+  open: {
+    label: "No sign-in",
+    description: "Something else keeps strangers out, like a VPN or a private network.",
+    summary: "Off. Anyone who can reach Mizu can use it.",
+  },
+};
+
+const savedMessage: Record<AuthMode, string> = {
+  password: "Password sign-in is on",
+  external: "Your proxy now handles sign-in",
+  open: "Sign-in is off",
+};
+
+/** The address to suggest trusting: the peer, when it forwarded the request
+ *  and isn't trusted yet. */
+function suggestedProxy(access: AccessSettings): string | null {
+  return access.forwarded && !access.via_trusted_proxy ? access.client_address : null;
+}
+
+/** Whether host is a name open mode has to list, rather than an IP address
+ *  or localhost, which it always answers. */
+function isNamedHost(host: string): boolean {
+  return !(
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.includes(":") ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(host)
+  );
+}
 
 type Panel = "change" | "access" | null;
 
@@ -37,7 +73,7 @@ type Panel = "change" | "access" | null;
  *  have their own confirm buttons), not through the page's save bar. */
 export function SecuritySettingsCard() {
   const { data: status } = useAuthStatus();
-  const { data: access, refetch: refetchAccess } = useQuery({
+  const { data: access } = useQuery({
     queryKey: ["authAccess"],
     queryFn: getAccessSettings,
     enabled: !!status?.authenticated,
@@ -68,12 +104,26 @@ export function SecuritySettingsCard() {
   }, [panel, access]);
 
   if (!status) return null;
-  const external = !!status.external;
-  const open = !!status.open;
+  const savedMode = status.mode;
   // The server asks for the password while one exists, except with
   // sign-in off; switching to password sign-in without one sets a new one.
-  const needsCurrentPassword = !!access?.password_set && !open;
+  const needsCurrentPassword = !!access?.password_set && savedMode !== "open";
   const needsNewPassword = mode === "password" && !access?.password_set;
+  const suggestion = access ? suggestedProxy(access) : null;
+
+  const chooseMode = (next: AuthMode) => {
+    setMode(next);
+    // A sign-in proxy has to be trusted; offer the one this browser came
+    // through rather than asking for its address.
+    if (next === "external" && !trustedProxies.trim() && suggestion) {
+      setTrustedProxies(suggestion);
+    }
+  };
+
+  const trustSuggestion = () => {
+    if (!suggestion) return;
+    setTrustedProxies((prev) => (prev.trim() ? `${prev.trim()}, ${suggestion}` : suggestion));
+  };
 
   const run = async (action: () => Promise<void>, failure: string) => {
     if (submitting) return;
@@ -111,40 +161,23 @@ export function SecuritySettingsCard() {
   const handleAccess = () =>
     run(async () => {
       if (needsNewPassword && !checkNewPassword()) return;
-      await updateAccessSettings({
+      const { status: nextStatus, ...saved } = await updateAccessSettings({
         mode,
         trusted_proxies: trustedProxies,
-        allowed_hosts: allowedHosts,
+        allowed_hosts: mode === "open" ? allowedHosts : (access?.allowed_hosts ?? ""),
         current_password: currentPassword,
         new_password: needsNewPassword ? newPassword : "",
       });
       setPanel(null);
-      void refetchAccess();
-      if (mode === "external") {
-        queryClient.setQueryData(["authStatus"], {
-          configured: true,
-          authenticated: true,
-          external: true,
-        });
-        addNotification("Your proxy now handles sign-in", "success");
-      } else if (mode === "open") {
-        queryClient.setQueryData(["authStatus"], {
-          configured: true,
-          authenticated: true,
-          open: true,
-        });
-        addNotification(open ? "Allowed hostnames saved" : "Sign-in is off", "success");
-      } else if (needsNewPassword) {
-        // The server signed this browser in with the new password.
-        queryClient.setQueryData(["authStatus"], { configured: true, authenticated: true });
-        addNotification("Password set.", "success");
-      } else if (external) {
-        addNotification("Password sign-in is on. Sign in again.", "success");
+      if (!nextStatus.authenticated) {
+        addNotification(`${savedMessage[mode]}. Sign in again.`, "success");
         queryClient.clear();
         navigate("/login", { replace: true });
-      } else {
-        addNotification("Trusted proxies saved", "success");
+        return;
       }
+      queryClient.setQueryData(queryKeys.authStatus, nextStatus);
+      queryClient.setQueryData(["authAccess"], saved);
+      addNotification(mode === savedMode ? "Sign-in saved" : savedMessage[mode], "success");
     }, "Couldn't update sign-in");
 
   const cancel = (
@@ -181,11 +214,82 @@ export function SecuritySettingsCard() {
     </>
   );
 
-  const signInDescription = external
-    ? "Handled by your sign-in proxy. Mizu only answers requests from the trusted proxy addresses."
-    : open
-      ? "Off: anyone who can reach Mizu can use it. It only answers IP addresses, localhost and the allowed hostnames."
-      : "Mizu's own password. If a sign-in proxy (tinyauth, Authelia, Authentik…) already protects Mizu, it can take over, or sign-in can be turned off.";
+  const trustedProxiesField = (label: string) => (
+    <VStack gap={2}>
+      <TextInput
+        label={label}
+        value={trustedProxies}
+        onChange={setTrustedProxies}
+        placeholder="e.g. 172.18.0.5 or 172.18.0.0/16"
+        isDisabled={submitting}
+      />
+      {suggestion && !trustedProxies.split(/[\s,]+/).includes(suggestion) && (
+        <HStack gap={2} vAlign="center" wrap="wrap">
+          <Text type="supporting" color="secondary">
+            You're coming through a proxy at {suggestion}.
+          </Text>
+          <Button
+            variant="ghost"
+            size="sm"
+            label="Trust it"
+            isDisabled={submitting}
+            onClick={trustSuggestion}
+          />
+        </HStack>
+      )}
+    </VStack>
+  );
+
+  // Each mode shows only what it needs.
+  const modeFields = access && {
+    password: (
+      <>
+        {needsNewPassword && newPasswordFields}
+        <Collapsible
+          trigger={<Text type="supporting">Behind a reverse proxy?</Text>}
+          defaultIsOpen={!!access.trusted_proxies || !!suggestion}
+        >
+          <VStack gap={2}>
+            <Text type="supporting" color="secondary">
+              Trust it so Mizu sees real client addresses and knows when you're on HTTPS.
+            </Text>
+            {trustedProxiesField("Trusted proxies")}
+          </VStack>
+        </Collapsible>
+      </>
+    ),
+    external: (
+      <>
+        {!access.forwarded && !access.via_trusted_proxy && (
+          <Text type="supporting" color="secondary">
+            This browser isn't reaching Mizu through a proxy. Open Mizu at your sign-in proxy's
+            address, then switch.
+          </Text>
+        )}
+        {trustedProxiesField("Sign-in proxy address")}
+        <Text type="supporting" color="secondary">
+          Mizu will only answer requests from this address.
+        </Text>
+      </>
+    ),
+    open: (
+      <>
+        <Text type="supporting" color="secondary">
+          Mizu keeps answering at
+          {isNamedHost(access.host) && ` ${access.host},`} its IP address and localhost.
+          {savedMode !== "open" && access.password_set && " Your password will be removed."}
+        </Text>
+        <TextInput
+          label="Other hostnames"
+          value={allowedHosts}
+          onChange={setAllowedHosts}
+          placeholder="e.g. mizu.lan, nas.local"
+          isOptional
+          isDisabled={submitting}
+        />
+      </>
+    ),
+  };
 
   return (
     <Card variant="muted" padding={4}>
@@ -193,17 +297,69 @@ export function SecuritySettingsCard() {
         <Heading level={2}>Security</Heading>
         <Divider />
 
-        {!external && !open && (
-          <SettingsRow label="Password" description="Needed to open Mizu.">
-            <Button
-              variant="secondary"
-              label="Change password"
-              icon={<KeyRound size={16} />}
-              isDisabled={panel === "change" || submitting}
-              onClick={() => setPanel("change")}
-              data-cuelume-press
-            />
-          </SettingsRow>
+        <SettingsRow label="Sign-in" description={modes[savedMode].summary}>
+          <Button
+            variant="secondary"
+            label="Change"
+            icon={<ShieldCheck size={16} />}
+            isDisabled={panel === "access" || submitting || !access}
+            onClick={() => setPanel("access")}
+            data-cuelume-press
+          />
+        </SettingsRow>
+
+        {panel === "access" && access && modeFields && (
+          <VStack gap={3} maxWidth={480}>
+            <RadioList
+              label="Sign-in method"
+              isLabelHidden
+              value={mode}
+              onChange={(v) => chooseMode(v as AuthMode)}
+              isDisabled={submitting}
+            >
+              {(Object.keys(modes) as AuthMode[]).map((m) => (
+                <RadioListItem
+                  key={m}
+                  value={m}
+                  label={modes[m].label}
+                  description={modes[m].description}
+                />
+              ))}
+            </RadioList>
+            {modeFields[mode]}
+            {needsCurrentPassword && currentPasswordField}
+            <HStack gap={2}>
+              <Button
+                variant="primary"
+                label="Save"
+                isLoading={submitting}
+                isDisabled={
+                  submitting ||
+                  (needsCurrentPassword && !currentPassword) ||
+                  (needsNewPassword && (!newPassword || !confirmPassword)) ||
+                  (mode === "external" && !trustedProxies.trim())
+                }
+                onClick={() => void handleAccess()}
+              />
+              {cancel}
+            </HStack>
+          </VStack>
+        )}
+
+        {savedMode === "password" && (
+          <>
+            <Divider />
+            <SettingsRow label="Password" description="Needed to open Mizu.">
+              <Button
+                variant="secondary"
+                label="Change password"
+                icon={<KeyRound size={16} />}
+                isDisabled={panel === "change" || submitting}
+                onClick={() => setPanel("change")}
+                data-cuelume-press
+              />
+            </SettingsRow>
+          </>
         )}
 
         {panel === "change" && (
@@ -217,76 +373,6 @@ export function SecuritySettingsCard() {
                 isLoading={submitting}
                 isDisabled={submitting || !currentPassword || !newPassword || !confirmPassword}
                 onClick={() => void handleChange()}
-              />
-              {cancel}
-            </HStack>
-          </VStack>
-        )}
-
-        {!external && !open && <Divider />}
-
-        <SettingsRow label="Sign-in" description={signInDescription}>
-          <Button
-            variant="secondary"
-            label="Change"
-            icon={<ShieldCheck size={16} />}
-            isDisabled={panel === "access" || submitting || !access}
-            onClick={() => setPanel("access")}
-            data-cuelume-press
-          />
-        </SettingsRow>
-
-        {panel === "access" && access && (
-          <VStack gap={3} maxWidth={480}>
-            <Selector
-              label="Sign-in method"
-              value={mode}
-              options={modeOptions}
-              onChange={(v) => setMode(v as AuthMode)}
-              isDisabled={submitting}
-            />
-            {mode === "open" && (
-              <>
-                <TextInput
-                  label="Allowed hostnames"
-                  value={allowedHosts}
-                  onChange={setAllowedHosts}
-                  placeholder="e.g. mizu.lan, nas.local"
-                  isDisabled={submitting}
-                />
-                <Text type="supporting" color="secondary">
-                  With sign-in off, Mizu only answers on its IP address, localhost or these names,
-                  so other sites can't reach it through your browser.
-                  {!open && " Turning sign-in off removes the password."}
-                </Text>
-              </>
-            )}
-            <TextInput
-              label="Trusted proxy addresses"
-              value={trustedProxies}
-              onChange={setTrustedProxies}
-              placeholder="e.g. 172.18.0.5, 172.18.0.0/16"
-              isDisabled={submitting}
-            />
-            <Text type="supporting" color="secondary">
-              IP addresses or networks of proxies in front of Mizu. Mizu trusts the addresses they
-              forward; with a sign-in proxy it answers only them. You're connecting from{" "}
-              {access.client_address}
-              {access.via_trusted_proxy ? ", a trusted proxy." : "."}
-            </Text>
-            {needsNewPassword && newPasswordFields}
-            {needsCurrentPassword && currentPasswordField}
-            <HStack gap={2}>
-              <Button
-                variant="primary"
-                label="Save sign-in"
-                isLoading={submitting}
-                isDisabled={
-                  submitting ||
-                  (needsCurrentPassword && !currentPassword) ||
-                  (needsNewPassword && (!newPassword || !confirmPassword))
-                }
-                onClick={() => void handleAccess()}
               />
               {cancel}
             </HStack>

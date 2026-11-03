@@ -46,7 +46,7 @@ export function LoginPage() {
   // Already signed in, or nothing to sign in to yet: skip the form.
   useEffect(() => {
     if (!status) return;
-    if (!status.configured && !status.external) navigate("/welcome", { replace: true });
+    if (!status.configured) navigate("/welcome", { replace: true });
     else if (status.authenticated) navigate(takeReturnPath(), { replace: true });
   }, [status, navigate]);
 
@@ -59,9 +59,10 @@ export function LoginPage() {
       setError(null);
       try {
         await login(password);
-        queryClient.setQueryData(["authStatus"], {
+        queryClient.setQueryData<AuthStatus>(["authStatus"], {
           configured: true,
           authenticated: true,
+          mode: "password",
         });
         navigate(takeReturnPath(), { replace: true });
       } catch (err) {
@@ -94,7 +95,7 @@ export function LoginPage() {
 
   // Sign-in is handled by a proxy, but this browser reached Mizu without
   // going through it (or from an address that isn't a trusted proxy).
-  if (status?.external && !status.authenticated) {
+  if (status?.mode === "external" && !status.authenticated) {
     return (
       <div className="onboarding-screen" style={{ padding: "var(--spacing-5)" }}>
         <Card style={{ width: "100%", maxWidth: 400 }}>

@@ -27,10 +27,10 @@ import (
 // nothing more.
 func isAuthenticated(r *http.Request, mgr *auth.Manager, acc *accessControl) (bool, error) {
 	pol := acc.get()
-	if pol.External {
+	switch pol.mode() {
+	case authModeExternal:
 		return pol.trusts(peerIP(r)), nil
-	}
-	if pol.Open {
+	case authModeOpen:
 		return true, nil
 	}
 	configured, err := mgr.IsConfigured(r.Context())
@@ -59,7 +59,7 @@ func requireAuth(mgr *auth.Manager, acc *accessControl) func(http.Handler) http.
 				next.ServeHTTP(w, r)
 				return
 			}
-			if acc.get().External {
+			if acc.get().external() {
 				writeError(w, http.StatusForbidden, "Mizu only accepts requests through your sign-in proxy")
 				return
 			}
@@ -152,12 +152,19 @@ func isOwnHost(r *http.Request, host string) bool {
 // ── Handlers ──
 
 type authStatusResponse struct {
-	Configured    bool `json:"configured"`
-	Authenticated bool `json:"authenticated"`
-	// External is true when sign-in is handled by a reverse proxy.
-	External bool `json:"external"`
-	// Open is true when sign-in is turned off.
-	Open bool `json:"open"`
+	// Configured is false only on a fresh install, before the welcome flow
+	// has picked a password or another sign-in mode.
+	Configured    bool     `json:"configured"`
+	Authenticated bool     `json:"authenticated"`
+	Mode          authMode `json:"mode"`
+}
+
+func authStatus(pol accessPolicy, passwordSet, authenticated bool) authStatusResponse {
+	return authStatusResponse{
+		Configured:    passwordSet || pol.mode() != authModePassword,
+		Authenticated: authenticated,
+		Mode:          pol.mode(),
+	}
 }
 
 func handleAuthStatus(mgr *auth.Manager, acc *accessControl) http.HandlerFunc {
@@ -172,13 +179,7 @@ func handleAuthStatus(mgr *auth.Manager, acc *accessControl) http.HandlerFunc {
 			writeInternalError(w, err, "")
 			return
 		}
-		pol := acc.get()
-		writeJSON(w, http.StatusOK, authStatusResponse{
-			Configured:    configured || pol.External || pol.Open,
-			Authenticated: authenticated,
-			External:      pol.External,
-			Open:          pol.Open,
-		})
+		writeJSON(w, http.StatusOK, authStatus(acc.get(), configured, authenticated))
 	}
 }
 
@@ -206,11 +207,11 @@ func handleAuthSetup(mgr *auth.Manager, acc *accessControl, db *database.DB) htt
 		setupMu.Lock()
 		defer setupMu.Unlock()
 		pol := acc.get()
-		if pol.External {
+		switch pol.mode() {
+		case authModeExternal:
 			writeError(w, http.StatusConflict, errExternalSignIn)
 			return
-		}
-		if pol.Open {
+		case authModeOpen:
 			writeError(w, http.StatusConflict, "sign-in is already off")
 			return
 		}
@@ -225,12 +226,10 @@ func handleAuthSetup(mgr *auth.Manager, acc *accessControl, db *database.DB) htt
 				return
 			}
 			// Keep answering to the hostname setup was opened under.
-			pol.Open = true
-			if !pol.allowsHost(r.Host) {
-				pol.AllowedHosts = append(pol.AllowedHosts, hostOnly(r.Host))
-			}
+			pol.Mode = authModeOpen
+			pol.keepAnswering(r.Host)
 			if err := db.SetSettings(r.Context(), map[string]string{
-				settingAuthMode:     authModeOpen,
+				settingAuthMode:     string(authModeOpen),
 				settingAllowedHosts: strings.Join(pol.AllowedHosts, ", "),
 			}); err != nil {
 				writeInternalError(w, err, "failed to save sign-in settings")
@@ -261,7 +260,7 @@ func handleAuthSetup(mgr *auth.Manager, acc *accessControl, db *database.DB) htt
 
 func handleAuthLogin(mgr *auth.Manager, acc *accessControl) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if acc.get().External {
+		if acc.get().external() {
 			writeError(w, http.StatusConflict, errExternalSignIn)
 			return
 		}
@@ -325,13 +324,19 @@ func handleAuthChangePassword(mgr *auth.Manager, acc *accessControl) http.Handle
 }
 
 type accessSettingsResponse struct {
-	Mode           string `json:"mode"`
-	TrustedProxies string `json:"trusted_proxies"`
-	// ClientAddress is the TCP peer this request came from, so the UI can
-	// show which address a proxy connects from.
+	Mode           authMode `json:"mode"`
+	TrustedProxies string   `json:"trusted_proxies"`
+	// ClientAddress is the TCP peer this request came from: the proxy's
+	// address when Forwarded is set.
 	ClientAddress string `json:"client_address"`
 	// ViaTrustedProxy reports whether that address is trusted.
 	ViaTrustedProxy bool `json:"via_trusted_proxy"`
+	// Forwarded reports whether the request carries proxy headers, i.e.
+	// ClientAddress is most likely a reverse proxy.
+	Forwarded bool `json:"forwarded"`
+	// Host is the hostname this browser uses for Mizu. Turning sign-in off
+	// keeps answering to it.
+	Host string `json:"host"`
 	// AllowedHosts are the extra hostnames answered in open mode.
 	AllowedHosts string `json:"allowed_hosts"`
 	// PasswordSet reports whether a Mizu password exists. Switching to
@@ -346,6 +351,8 @@ func accessSettings(r *http.Request, pol accessPolicy, passwordSet bool) accessS
 		TrustedProxies:  pol.TrustedRaw,
 		ClientAddress:   peer.String(),
 		ViaTrustedProxy: pol.trusts(peer),
+		Forwarded:       forwarded(r),
+		Host:            hostOnly(r.Host),
 		AllowedHosts:    strings.Join(pol.AllowedHosts, ", "),
 		PasswordSet:     passwordSet,
 	}
@@ -360,6 +367,13 @@ func handleGetAccessSettings(mgr *auth.Manager, acc *accessControl) http.Handler
 		}
 		writeJSON(w, http.StatusOK, accessSettings(r, acc.get(), configured))
 	}
+}
+
+// accessUpdateResponse is the saved settings plus the auth status this
+// browser now has, so the UI doesn't have to work out the consequences.
+type accessUpdateResponse struct {
+	accessSettingsResponse
+	Status authStatusResponse `json:"status"`
 }
 
 // handleUpdateAccessSettings switches between Mizu's own password, an
@@ -384,7 +398,8 @@ func handleUpdateAccessSettings(mgr *auth.Manager, acc *accessControl, db *datab
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if req.Mode != authModePassword && req.Mode != authModeExternal && req.Mode != authModeOpen {
+		mode, ok := parseAuthMode(req.Mode)
+		if !ok {
 			writeError(w, http.StatusBadRequest, "mode must be \"password\", \"external\" or \"open\"")
 			return
 		}
@@ -398,7 +413,7 @@ func handleUpdateAccessSettings(mgr *auth.Manager, acc *accessControl, db *datab
 			writeInternalError(w, err, "")
 			return
 		}
-		if configured && !acc.get().Open {
+		if configured && !acc.get().open() {
 			if err := mgr.Verify(r.Context(), req.CurrentPassword); err != nil {
 				if err == auth.ErrInvalidPassword {
 					writeError(w, http.StatusUnauthorized, "incorrect password")
@@ -409,27 +424,23 @@ func handleUpdateAccessSettings(mgr *auth.Manager, acc *accessControl, db *datab
 			}
 		}
 		next := accessPolicy{
-			External:       req.Mode == authModeExternal,
-			Open:           req.Mode == authModeOpen,
+			Mode:           mode,
 			TrustedProxies: prefixes,
 			TrustedRaw:     normalized,
 			AllowedHosts:   parseAllowedHosts(req.AllowedHosts),
 		}
-		// Refuse a change that would lock the caller out: in external mode
-		// only trusted proxies may connect, so this request must already
-		// be coming through one; in open mode it must use an allowed host.
-		if next.External && !next.trusts(peerIP(r)) {
+		// In external mode only trusted proxies may connect, so refuse a
+		// switch that doesn't already come through one: it would lock the
+		// caller out. In open mode, keep answering to this browser's host.
+		if next.external() && !next.trusts(peerIP(r)) {
 			writeError(w, http.StatusBadRequest,
 				"this request came from "+peerIP(r).String()+", which isn't a trusted proxy. "+
 					"Open Mizu through your sign-in proxy, and list the proxy's address, before switching")
 			return
 		}
-		if !next.allowsHost(r.Host) {
-			writeError(w, http.StatusBadRequest,
-				"add "+hostOnly(r.Host)+" to the allowed hostnames, or Mizu would stop answering this browser")
-			return
-		}
-		if req.Mode == authModePassword && !configured {
+		next.keepAnswering(r.Host)
+		freshSession := false
+		if mode == authModePassword && !configured {
 			token, expiresAt, err := mgr.Setup(r.Context(), req.NewPassword)
 			if err != nil {
 				switch err {
@@ -441,31 +452,50 @@ func handleUpdateAccessSettings(mgr *auth.Manager, acc *accessControl, db *datab
 				return
 			}
 			setSessionCookie(w, r, acc, token, expiresAt)
+			freshSession = true
 		}
 		allowed := strings.Join(next.AllowedHosts, ", ")
 		if err := db.SetSettings(r.Context(), map[string]string{
-			settingAuthMode:       req.Mode,
+			settingAuthMode:       string(mode),
 			settingTrustedProxies: normalized,
 			settingAllowedHosts:   allowed,
 		}); err != nil {
+			// Don't leave a password behind that the saved mode ignores:
+			// a retry would find it set and refuse to set another.
+			if freshSession {
+				if cerr := mgr.ClearPassword(r.Context()); cerr != nil {
+					log.Error().Err(cerr).Msg("failed to roll back new password")
+				}
+				clearSessionCookie(w, r, acc)
+			}
 			writeInternalError(w, err, "failed to save sign-in settings")
 			return
 		}
 		acc.set(next)
-		if next.Open && configured {
+		if next.open() && configured {
 			if err := mgr.ClearPassword(r.Context()); err != nil {
 				writeInternalError(w, err, "failed to remove password")
 				return
 			}
 			clearSessionCookie(w, r, acc)
 		}
-		log.Info().Str("mode", req.Mode).Str("trusted_proxies", normalized).Str("allowed_hosts", allowed).Msg("sign-in settings updated")
+		log.Info().Str("mode", string(mode)).Str("trusted_proxies", normalized).Str("allowed_hosts", allowed).Msg("sign-in settings updated")
 		passwordSet, err := mgr.IsConfigured(r.Context())
 		if err != nil {
 			writeInternalError(w, err, "")
 			return
 		}
-		writeJSON(w, http.StatusOK, accessSettings(r, next, passwordSet))
+		authenticated := freshSession
+		if !authenticated {
+			if authenticated, err = isAuthenticated(r, mgr, acc); err != nil {
+				writeInternalError(w, err, "")
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, accessUpdateResponse{
+			accessSettingsResponse: accessSettings(r, next, passwordSet),
+			Status:                 authStatus(next, passwordSet, authenticated),
+		})
 	}
 }
 

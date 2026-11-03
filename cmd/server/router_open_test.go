@@ -35,16 +35,14 @@ func TestFirstRunCanTurnSignInOff(t *testing.T) {
 	rec := doHost(handler, http.MethodPost, "/api/auth/setup", lanHost, `{"open":true}`, nil)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	mode, _ := db.GetSetting(t.Context(), settingAuthMode)
-	assert.Equal(t, authModeOpen, mode)
+	assert.Equal(t, string(authModeOpen), mode)
 
 	assert.Equal(t, http.StatusOK, doHost(handler, http.MethodGet, "/api/mappings", lanHost, "", nil).Code)
 	assert.Equal(t, http.StatusOK, doHost(handler, http.MethodGet, "/metrics", lanHost, "", nil).Code)
 
-	var st struct {
-		Configured, Authenticated, Open bool
-	}
+	var st authStatusResponse
 	require.NoError(t, json.Unmarshal(doHost(handler, http.MethodGet, "/api/auth/status", lanHost, "", nil).Body.Bytes(), &st))
-	assert.True(t, st.Configured && st.Authenticated && st.Open)
+	assert.Equal(t, authStatusResponse{Configured: true, Authenticated: true, Mode: authModeOpen}, st)
 
 	// Setup can't run twice, either way.
 	rec = doHost(handler, http.MethodPost, "/api/auth/setup", lanHost, `{"password":"hunter2hunter2"}`, nil)
@@ -86,14 +84,12 @@ func TestSwitchingSignInOffAndBackOn(t *testing.T) {
 	// Turning it off needs the current password.
 	rec := doHost(handler, http.MethodPut, "/api/auth/access", lanHost, `{"mode":"open","current_password":"wrong-password"}`, cookie)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	// And must not lock out the hostname this browser uses.
-	rec = doHost(handler, http.MethodPut, "/api/auth/access", "mizu.lan", `{"mode":"open","current_password":"hunter2hunter2"}`, cookie)
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "mizu.lan")
-
-	rec = doHost(handler, http.MethodPut, "/api/auth/access", "mizu.lan", `{"mode":"open","allowed_hosts":"mizu.lan","current_password":"hunter2hunter2"}`, cookie)
+	// The hostname this browser uses is kept answering without listing it.
+	rec = doHost(handler, http.MethodPut, "/api/auth/access", "mizu.lan", `{"mode":"open","allowed_hosts":"nas.local","current_password":"hunter2hunter2"}`, cookie)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Contains(t, rec.Body.String(), `"password_set":false`)
+	assert.Contains(t, rec.Body.String(), `"allowed_hosts":"nas.local, mizu.lan"`)
+	assert.Equal(t, authStatusResponse{Configured: true, Authenticated: true, Mode: authModeOpen}, accessUpdateStatus(t, rec))
 	hash, _ := db.GetSetting(t.Context(), "auth_password_hash")
 	assert.Empty(t, hash, "turning sign-in off removes the password")
 	assert.Equal(t, http.StatusOK, doHost(handler, http.MethodGet, "/api/mappings", "mizu.lan", "", nil).Code)
@@ -109,6 +105,7 @@ func TestSwitchingSignInOffAndBackOn(t *testing.T) {
 	rec = doHost(handler, http.MethodPut, "/api/auth/access", lanHost, `{"mode":"password","new_password":"correct-horse"}`, nil)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	newCookie := sessionCookie(t, rec)
+	assert.Equal(t, authStatusResponse{Configured: true, Authenticated: true, Mode: authModePassword}, accessUpdateStatus(t, rec))
 
 	assert.Equal(t, http.StatusUnauthorized, doHost(handler, http.MethodGet, "/api/mappings", lanHost, "", nil).Code)
 	assert.Equal(t, http.StatusOK, doHost(handler, http.MethodGet, "/api/mappings", lanHost, "", newCookie).Code)
@@ -118,9 +115,8 @@ func TestSwitchingSignInOffAndBackOn(t *testing.T) {
 
 func TestOpenModeSurvivesRestart(t *testing.T) {
 	_, db := newAuthTestRouter(t)
-	require.NoError(t, db.SetSettings(t.Context(), map[string]string{settingAuthMode: authModeOpen, settingAllowedHosts: "Mizu.lan:80, nas.local"}))
+	require.NoError(t, db.SetSettings(t.Context(), map[string]string{settingAuthMode: string(authModeOpen), settingAllowedHosts: "Mizu.lan:80, nas.local"}))
 	p := loadAccessPolicy(t.Context(), db)
-	assert.True(t, p.Open)
-	assert.False(t, p.External)
+	assert.Equal(t, authModeOpen, p.Mode)
 	assert.Equal(t, []string{"mizu.lan", "nas.local"}, p.AllowedHosts)
 }

@@ -327,23 +327,28 @@ export function testNtfyConnection(data: {
 
 // ── Auth ──
 
+/** How Mizu decides who may use it: its own password, a sign-in proxy in
+ *  front of it, or no sign-in at all. */
+export type AuthMode = "password" | "external" | "open";
+
 export interface AuthStatus {
+  /** False only on a fresh install, before the welcome flow picks sign-in. */
   configured: boolean;
   authenticated: boolean;
-  /** Sign-in is handled by a reverse proxy in front of Mizu. */
-  external?: boolean;
-  /** Sign-in is turned off. */
-  open?: boolean;
+  mode: AuthMode;
 }
-
-export type AuthMode = "password" | "external" | "open";
 
 export interface AccessSettings {
   mode: AuthMode;
   trusted_proxies: string;
-  /** The address this browser's requests reach Mizu from. */
+  /** The address this browser's requests reach Mizu from: the proxy's,
+   *  when `forwarded`. */
   client_address: string;
   via_trusted_proxy: boolean;
+  /** The request carried proxy headers, so client_address is a proxy. */
+  forwarded: boolean;
+  /** The hostname this browser uses; sign-in off keeps answering to it. */
+  host: string;
   /** Hostnames Mizu answers to with sign-in off, besides IPs and localhost. */
   allowed_hosts: string;
   /** Whether a Mizu password exists; without one, switching to password
@@ -361,8 +366,8 @@ export function updateAccessSettings(data: {
   allowed_hosts: string;
   current_password: string;
   new_password: string;
-}): Promise<AccessSettings> {
-  return request<AccessSettings>("PUT", "/auth/access", data);
+}): Promise<AccessSettings & { status: AuthStatus }> {
+  return request<AccessSettings & { status: AuthStatus }>("PUT", "/auth/access", data);
 }
 
 export function getAuthStatus(): Promise<AuthStatus> {

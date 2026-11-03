@@ -29,7 +29,7 @@ export function BackupCard({
   // Behind a sign-in proxy the proxy vouches for the user, and with
   // sign-in off there is no password; otherwise exporting secrets takes
   // the dashboard password.
-  const needsPassword = !status?.external && !status?.open;
+  const needsPassword = status?.mode === "password";
   const [includeSecrets, setIncludeSecrets] = useState(false);
   const [password, setPassword] = useState("");
   const [exporting, setExporting] = useState(false);

@@ -73,13 +73,7 @@ func signIn(t *testing.T, handler http.Handler) *http.Cookie {
 	return sessionCookie(t, rec)
 }
 
-type authStatus struct {
-	Configured    bool `json:"configured"`
-	Authenticated bool `json:"authenticated"`
-	External      bool `json:"external"`
-}
-
-func getStatus(t *testing.T, handler http.Handler, remote string) authStatus {
+func getStatus(t *testing.T, handler http.Handler, remote string) authStatusResponse {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
 	if remote != "" {
@@ -88,7 +82,7 @@ func getStatus(t *testing.T, handler http.Handler, remote string) authStatus {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
-	var st authStatus
+	var st authStatusResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &st))
 	return st
 }
@@ -103,7 +97,7 @@ func TestFreshInstallIsOpenUntilSignInIsChosen(t *testing.T) {
 		rec := doJSON(t, handler, http.MethodGet, path, "", nil)
 		assert.Equal(t, http.StatusOK, rec.Code, path)
 	}
-	assert.Equal(t, authStatus{Authenticated: true}, getStatus(t, handler, ""))
+	assert.Equal(t, authStatusResponse{Authenticated: true, Mode: authModePassword}, getStatus(t, handler, ""))
 
 	cookie := signIn(t, handler)
 	for _, path := range []string{"/api/mappings", "/api/settings", "/api/backup/export", "/api/version"} {
@@ -306,11 +300,12 @@ func TestExternalSignInMode(t *testing.T) {
 	rec = putAccess(t, handler, cookie, proxy, `{"mode":"external","trusted_proxies":"172.20.0.0/16","current_password":"hunter2hunter2"}`)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	mode, _ := db.GetSetting(t.Context(), settingAuthMode)
-	assert.Equal(t, authModeExternal, mode)
+	assert.Equal(t, string(authModeExternal), mode)
+	assert.Equal(t, authStatusResponse{Configured: true, Authenticated: true, Mode: authModeExternal}, accessUpdateStatus(t, rec))
 
 	// Through the proxy: no Mizu session needed.
 	assert.Equal(t, http.StatusOK, getFrom(handler, "/api/mappings", proxy).Code)
-	assert.Equal(t, authStatus{Configured: true, Authenticated: true, External: true}, getStatus(t, handler, proxy))
+	assert.Equal(t, authStatusResponse{Configured: true, Authenticated: true, Mode: authModeExternal}, getStatus(t, handler, proxy))
 	assert.Equal(t, http.StatusOK, getFrom(handler, "/metrics", proxy).Code)
 
 	// Directly (bypassing the proxy, or a DNS-rebinding page running in a
@@ -327,9 +322,11 @@ func TestExternalSignInMode(t *testing.T) {
 	rec = doJSON(t, handler, http.MethodPost, "/api/auth/login", `{"password":"hunter2hunter2"}`, nil)
 	assert.Equal(t, http.StatusConflict, rec.Code)
 
-	// Switching back needs the password again; then a session is required.
+	// Switching back needs the password again; then a session is required,
+	// and the response says this browser has to sign in.
 	rec = putAccess(t, handler, nil, proxy, `{"mode":"password","trusted_proxies":"","current_password":"hunter2hunter2"}`)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, authStatusResponse{Configured: true, Authenticated: false, Mode: authModePassword}, accessUpdateStatus(t, rec))
 	assert.Equal(t, http.StatusUnauthorized, getFrom(handler, "/api/mappings", proxy).Code)
 }
 
@@ -337,10 +334,49 @@ func TestAccessPolicySurvivesRestart(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "p.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	require.NoError(t, db.SetSettings(t.Context(), map[string]string{settingAuthMode: authModeExternal, settingTrustedProxies: "10.0.0.0/8, 172.20.0.5"}))
+	require.NoError(t, db.SetSettings(t.Context(), map[string]string{settingAuthMode: string(authModeExternal), settingTrustedProxies: "10.0.0.0/8, 172.20.0.5"}))
 	p := loadAccessPolicy(t.Context(), db)
-	assert.True(t, p.External)
+	assert.Equal(t, authModeExternal, p.Mode)
 	assert.Equal(t, "10.0.0.0/8, 172.20.0.5", p.TrustedRaw)
+}
+
+func accessUpdateStatus(t *testing.T, rec *httptest.ResponseRecorder) authStatusResponse {
+	t.Helper()
+	var body accessUpdateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	return body.Status
+}
+
+// The access settings tell the UI when a proxy forwarded the request, so
+// it can offer to trust that address instead of asking for one.
+func TestAccessSettingsReportForwardingProxy(t *testing.T) {
+	handler, _ := newAuthTestRouter(t)
+	cookie := signIn(t, handler)
+
+	get := func(forwardedFor string) accessSettingsResponse {
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/access", nil)
+		req.RemoteAddr = "172.20.0.5:40000"
+		req.Host = "mizu.example.com"
+		if forwardedFor != "" {
+			req.Header.Set("X-Forwarded-For", forwardedFor)
+		}
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		var body accessSettingsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		return body
+	}
+
+	direct := get("")
+	assert.False(t, direct.Forwarded)
+	assert.Equal(t, "mizu.example.com", direct.Host)
+
+	proxied := get("203.0.113.7")
+	assert.True(t, proxied.Forwarded)
+	assert.Equal(t, "172.20.0.5", proxied.ClientAddress)
+	assert.False(t, proxied.ViaTrustedProxy)
 }
 
 func TestSettingsRequireKeyWhenURLChanges(t *testing.T) {
