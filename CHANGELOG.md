@@ -45,15 +45,19 @@
 
 ### Show page
 
-- Tracking rules and the episode marker save themselves, a moment after
-  the last change; the Save button and "Unsaved changes" badge are gone.
+- Tracking rule toggles save at once, like the mute bell and artwork
+  picks already did. Auto/Manual and the episode marker wait for a Save
+  that shows on the toolbar only while one of them has a change (on
+  phones, the ⋯ button turns into a ✓). The "Unsaved changes" badge and
+  the always-there Save button are gone.
 
 ### Phones
 
 - Show page: the actions bar tucks behind the banner on touch screens;
   tap the banner (the chevron hints at it) to slide it out and again to
   put it away. On phones it is one row: the episode stepper, Auto, and a
-  ⋯ menu with Artwork, Mute notifications, Delete filler files and Remove.
+  ⋯ menu with Artwork, Mute notifications, Delete filler files and Remove;
+  the stepper matches the buttons' height.
 - Navigation is a bottom tab bar (Library, Activity, Settings) instead of
   a hamburger drawer; the Settings save bar and toasts sit above it.
 - Episode rows put the air date under the title instead of squeezing

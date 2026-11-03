@@ -45,8 +45,22 @@ vi.mock("../components/VirtualizedEpisodeList", () => ({
   VirtualizedEpisodeList: () => null,
 }));
 
+// Stub each rule card as a plain toggle button named after its switch.
 vi.mock("../components/TrackingRuleCard", () => ({
-  TrackingRuleCard: () => null,
+  TrackingRuleCard: ({
+    switchLabel,
+    value,
+    onChange,
+  }: {
+    switchLabel: string;
+    value: boolean;
+    onChange: (v: boolean) => void;
+  }) =>
+    createElement(
+      "button",
+      { type: "button", "aria-label": switchLabel, onClick: () => onChange(!value) },
+      switchLabel,
+    ),
 }));
 
 // Stub the picker dialog: render a button that emits a poster pick when the
@@ -242,36 +256,51 @@ describe("ShowDetailPage", () => {
     expect(container.textContent).toContain("Filler");
   });
 
-  it("saves a tracking change by itself, once, shortly after it's made", async () => {
+  it("saves a tracking toggle at once, with only the tracking rules", async () => {
+    mockedGetShow.mockResolvedValue(SHOW);
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    mockedUpdateShow.mockResolvedValue({ ...SHOW, filler_action: "monitor" });
+    await renderPage();
+
+    const fillerToggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Track filler"]',
+    );
+    await act(async () => {
+      fillerToggle!.click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 300));
+    });
+    await flush(3);
+
+    expect(mockedUpdateShow).toHaveBeenCalledTimes(1);
+    const payload = mockedUpdateShow.mock.calls[0][1];
+    expect(payload).toEqual(expect.objectContaining({ filler_action: "monitor" }));
+    expect(payload).not.toHaveProperty("watermark_mode");
+    expect(findButton("Save")).toBeUndefined();
+  });
+
+  it("holds Auto/Manual for Save, shown only while it has a change", async () => {
     mockedGetShow.mockResolvedValue(SHOW);
     mockedGetEpisodes.mockResolvedValue([EPISODE]);
     mockedUpdateShow.mockResolvedValue({ ...SHOW, watermark_mode: "manual" });
     await renderPage();
-
-    // Nothing changed yet: nothing is saved.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 900));
-    });
-    expect(mockedUpdateShow).not.toHaveBeenCalled();
     expect(findButton("Save")).toBeUndefined();
 
-    // Toggle the watermark mode Auto -> Manual and back to Manual again in
-    // quick succession: the changes settle into a single save.
-    const autoToggle = () =>
-      container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Using Sonarr progress"], button[aria-label="Using manual episode"]',
-      );
+    const autoToggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Using Sonarr progress"]',
+    );
     await act(async () => {
-      autoToggle()!.click();
+      autoToggle!.click();
     });
     await act(async () => {
-      autoToggle()!.click();
+      await new Promise((r) => setTimeout(r, 300));
     });
+    // Not saved by itself.
+    expect(mockedUpdateShow).not.toHaveBeenCalled();
+
     await act(async () => {
-      autoToggle()!.click();
-    });
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 900));
+      findButton("Save")!.click();
     });
     await flush(3);
 
@@ -284,6 +313,8 @@ describe("ShowDetailPage", () => {
       expect.stringContaining("Saved Naruto"),
       "success",
     );
+    // Saved: the button goes away again.
+    expect(findButton("Save")).toBeUndefined();
   });
 
   it("renders the library's copy of the show before its own request resolves", async () => {

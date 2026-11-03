@@ -13,6 +13,8 @@ import {
   Palette,
   HardDrive,
   MoreHorizontal,
+  Check,
+  Save,
 } from "lucide-react";
 
 interface ShowActionsBarProps {
@@ -32,11 +34,16 @@ interface ShowActionsBarProps {
   hasFillerFiles: boolean;
   onFillerFiles: () => void;
   onRemove: () => void;
+  /** Auto/Manual or the episode marker changed and isn't saved yet. */
+  watermarkDirty: boolean;
+  savingWatermark: boolean;
+  onSaveWatermark: () => void;
 }
 
 /** Watermark stepper and the show's actions, revealed once show data is in.
- *  Changes save themselves (see ShowDetailPage), so there is no Save button.
- *  Phones get one row: the stepper, Auto, and the rest in a ⋯ menu. */
+ *  A Save shows only while Auto/Manual or the episode marker has a change.
+ *  Phones get one row: the stepper, Auto, and the rest in a ⋯ menu, which
+ *  turns into the ✓ that saves while there is a change. */
 export function ShowActionsBar({
   watermarkAuto,
   markerValue,
@@ -52,6 +59,9 @@ export function ShowActionsBar({
   hasFillerFiles,
   onFillerFiles,
   onRemove,
+  watermarkDirty,
+  savingWatermark,
+  onSaveWatermark,
 }: ShowActionsBarProps) {
   const stepper = (
     <InputGroup
@@ -120,41 +130,55 @@ export function ShowActionsBar({
           <div className="show-actions-bar show-actions-bar-mobile">
             {stepper}
             {autoToggle}
-            <DropdownMenu
-              button={{
-                label: "More actions",
-                variant: "secondary",
-                size: "md",
-                isIconOnly: true,
-                icon: <MoreHorizontal size={16} />,
-              }}
-              items={[
-                { label: "Artwork", icon: <Palette size={16} />, onClick: onEditArtwork },
-                {
-                  label: notificationsMuted ? "Unmute notifications" : "Mute notifications",
-                  icon: notificationsMuted ? <Bell size={16} /> : <BellOff size={16} />,
-                  isDisabled: notificationsSaving,
-                  onClick: onToggleMuted,
-                },
-                ...(hasFillerFiles
-                  ? [
-                      {
-                        label: "Delete filler files",
-                        icon: <HardDrive size={16} />,
-                        onClick: onFillerFiles,
-                      },
-                    ]
-                  : []),
-                { type: "divider" as const },
-                {
-                  label: "Remove from Mizu",
-                  icon: <Trash2 size={16} />,
-                  variant: "destructive" as const,
-                  isDisabled: deleting,
-                  onClick: onRemove,
-                },
-              ]}
-            />
+            {watermarkDirty ? (
+              <Button
+                label="Save episode"
+                variant="primary"
+                size="md"
+                isIconOnly
+                icon={<Check size={18} />}
+                isLoading={savingWatermark}
+                isDisabled={savingWatermark}
+                onClick={onSaveWatermark}
+                data-cuelume-press
+              />
+            ) : (
+              <DropdownMenu
+                button={{
+                  label: "More actions",
+                  variant: "secondary",
+                  size: "md",
+                  isIconOnly: true,
+                  icon: <MoreHorizontal size={16} />,
+                }}
+                items={[
+                  { label: "Artwork", icon: <Palette size={16} />, onClick: onEditArtwork },
+                  {
+                    label: notificationsMuted ? "Unmute notifications" : "Mute notifications",
+                    icon: notificationsMuted ? <Bell size={16} /> : <BellOff size={16} />,
+                    isDisabled: notificationsSaving,
+                    onClick: onToggleMuted,
+                  },
+                  ...(hasFillerFiles
+                    ? [
+                        {
+                          label: "Delete filler files",
+                          icon: <HardDrive size={16} />,
+                          onClick: onFillerFiles,
+                        },
+                      ]
+                    : []),
+                  { type: "divider" as const },
+                  {
+                    label: "Remove from Mizu",
+                    icon: <Trash2 size={16} />,
+                    variant: "destructive" as const,
+                    isDisabled: deleting,
+                    onClick: onRemove,
+                  },
+                ]}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -212,6 +236,18 @@ export function ShowActionsBar({
               isDisabled={deleting}
               data-cuelume-press
             />
+            {watermarkDirty && (
+              <Button
+                label="Save"
+                variant="primary"
+                size="md"
+                icon={<Save size={14} />}
+                isLoading={savingWatermark}
+                isDisabled={savingWatermark}
+                onClick={onSaveWatermark}
+                data-cuelume-press
+              />
+            )}
           </HStack>
         </div>
       </div>

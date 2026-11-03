@@ -69,8 +69,9 @@ import { TrackingRulesSection } from "../components/TrackingRulesSection";
 
 const NO_EPISODES: Episode[] = [];
 
-/** How long after the last rule or marker change it is saved. */
-const AUTOSAVE_DELAY_MS = 700;
+/** A tracking toggle saves this long after it changes, so a quick double
+ *  flip is one save. */
+const TRACKING_SAVE_DELAY_MS = 150;
 
 /** The show's tracking rules as edited on this page. */
 interface RulesForm {
@@ -156,17 +157,13 @@ export function ShowDetailPage() {
   });
   const { trackFiller, trackMixed, trackAnimeCanon, watermarkAuto, markerValue } = form.watch();
   const { dirtyFields } = form.formState;
-  // The marker only matters in manual mode, so an edited marker doesn't
-  // count as a change once the show is back on auto.
-  const rulesDirty =
-    !!show &&
-    !!(
-      dirtyFields.trackFiller ||
-      dirtyFields.trackMixed ||
-      dirtyFields.trackAnimeCanon ||
-      dirtyFields.watermarkAuto ||
-      (!watermarkAuto && dirtyFields.markerValue)
-    );
+  // Tracking rules save the moment they change; Auto/Manual and the
+  // episode marker wait for the toolbar's Save. The marker only matters in
+  // manual mode, so an edited marker doesn't count once back on auto.
+  const trackingDirty =
+    !!show && !!(dirtyFields.trackFiller || dirtyFields.trackMixed || dirtyFields.trackAnimeCanon);
+  const watermarkDirty =
+    !!show && !!(dirtyFields.watermarkAuto || (!watermarkAuto && dirtyFields.markerValue));
   const setRule = <K extends keyof RulesForm>(name: K, value: RulesForm[K]) =>
     form.setValue(name, value as never, { shouldDirty: true });
 
@@ -396,49 +393,62 @@ export function ShowDetailPage() {
 
   // ── Save / delete ──
 
-  // Rule and marker changes save themselves, AUTOSAVE_DELAY_MS after the
-  // last one, so five taps on + are one save. Saving only updates Mizu's
-  // record of the show; Sonarr follows at the next sync.
-  const saveRules = async () => {
-    if (!showId || !rulesDirty) return;
+  // Saves the given fields, then takes the saved record as the baseline.
+  // Anything the save didn't cover stays unsaved rather than reset away.
+  const saveFields = async (keys: (keyof RulesForm)[], payload: ShowUpdate) => {
+    if (!showId) return false;
+    const sent = form.getValues();
+    try {
+      const saved = await updateShowMutation.mutateAsync({ id: showId, data: payload });
+      const latest = form.getValues();
+      // Changes this save didn't cover: other fields still unsaved, and
+      // these fields changed again while it was in flight.
+      const pending = (Object.keys(latest) as (keyof RulesForm)[]).filter((key) =>
+        keys.includes(key) ? latest[key] !== sent[key] : form.getFieldState(key).isDirty,
+      );
+      form.reset(rulesFromShow(saved, maxEpisode), { keepDirtyValues: false });
+      for (const key of pending) setRule(key, latest[key]);
+      addNotification(`Saved ${show?.sonarr_title || "anime"}`, "success");
+      return true;
+    } catch (err: unknown) {
+      addNotification("Couldn't save anime: " + errorMessage(err), "error");
+      return false;
+    }
+  };
+
+  const saveTracking = () => {
     const rules = form.getValues();
-    const payload: ShowUpdate = {
+    return saveFields(["trackFiller", "trackMixed", "trackAnimeCanon"], {
       filler_action: trackedToAction(rules.trackFiller),
       mixed_action: trackedToAction(rules.trackMixed),
       anime_canon_action: trackedToAction(rules.trackAnimeCanon),
+    });
+  };
+
+  const saveWatermark = () => {
+    const rules = form.getValues();
+    const payload: ShowUpdate = {
       watermark_mode: rules.watermarkAuto ? WATERMARK_AUTO : WATERMARK_MANUAL,
     };
-    if (!rules.watermarkAuto) {
-      payload.sync_watermark = clampMarkerValue(rules.markerValue);
-    }
-    try {
-      const saved = await updateShowMutation.mutateAsync({ id: showId, data: payload });
-      // A change made while the save was in flight stays dirty, so it is
-      // saved next instead of being reset away.
-      const latest = form.getValues();
-      form.reset(rulesFromShow(saved, maxEpisode), { keepDirtyValues: false });
-      for (const key of Object.keys(latest) as (keyof RulesForm)[]) {
-        if (latest[key] !== rules[key]) setRule(key, latest[key]);
-      }
-      addNotification(`Saved ${show?.sonarr_title || "anime"}`, "success");
-    } catch (err: unknown) {
-      addNotification("Couldn't save anime: " + errorMessage(err), "error");
-    }
+    if (!rules.watermarkAuto) payload.sync_watermark = clampMarkerValue(rules.markerValue);
+    return saveFields(["watermarkAuto", "markerValue"], payload);
   };
-  const saveRulesRef = useRef(saveRules);
-  saveRulesRef.current = saveRules;
+
+  // A tracking toggle saves at once (after any save already running).
+  const saveTrackingRef = useRef(saveTracking);
+  saveTrackingRef.current = saveTracking;
   const saving = updateShowMutation.isPending;
   useEffect(() => {
-    if (!rulesDirty || saving) return;
-    const timer = setTimeout(() => void saveRulesRef.current(), AUTOSAVE_DELAY_MS);
+    if (!trackingDirty || saving) return;
+    const timer = setTimeout(() => void saveTrackingRef.current(), TRACKING_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [rulesDirty, saving, trackFiller, trackMixed, trackAnimeCanon, watermarkAuto, markerValue]);
-  // Leaving the page with a save still waiting sends it right away.
-  const rulesDirtyRef = useRef(rulesDirty);
-  rulesDirtyRef.current = rulesDirty;
+  }, [trackingDirty, saving, trackFiller, trackMixed, trackAnimeCanon]);
+  // Leaving the page right after a toggle still sends it.
+  const trackingDirtyRef = useRef(trackingDirty);
+  trackingDirtyRef.current = trackingDirty;
   useEffect(
     () => () => {
-      if (rulesDirtyRef.current) void saveRulesRef.current();
+      if (trackingDirtyRef.current) void saveTrackingRef.current();
     },
     [],
   );
@@ -550,6 +560,9 @@ export function ShowDetailPage() {
                 hasFillerFiles={(fillerFilesQuery.data?.files.length ?? 0) > 0}
                 onFillerFiles={() => setFillerFilesOpen(true)}
                 onRemove={() => setShowDeleteDialog(true)}
+                watermarkDirty={watermarkDirty}
+                savingWatermark={saving}
+                onSaveWatermark={() => void saveWatermark()}
               />
             )}
           </div>
