@@ -95,7 +95,7 @@ describe("FillerFilesDialog", () => {
     const boxes = [...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
     expect(boxes.map((b) => b.checked)).toEqual([true, false]);
     expect(container.textContent).toContain("Monitored");
-    expect(deleteButton()?.textContent).toContain("Delete 1 file (1.0 GiB)");
+    expect(deleteButton()?.textContent).toContain("Delete 1 (1.0 GiB)");
   });
 
   it("deletes the picked files and closes", async () => {
@@ -110,10 +110,8 @@ describe("FillerFilesDialog", () => {
     getFillerFilesMock.mockResolvedValue({ files: [] });
     await render();
     expect(container.textContent).toContain("No downloaded files hold only skipped episodes.");
-    expect(
-      deleteButton()?.hasAttribute("disabled") ||
-        deleteButton()?.getAttribute("aria-disabled") === "true",
-    ).toBe(true);
+    expect(deleteButton()).toBeUndefined();
+    expect([...container.querySelectorAll("button")].map((b) => b.textContent)).toContain("Close");
   });
 });
 

@@ -5,7 +5,7 @@ import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
-import { Badge } from "@astryxdesign/core/Badge";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { Trash2 } from "lucide-react";
 import { useNotificationStore } from "../lib/store";
@@ -120,55 +120,67 @@ export function FillerFilesDialog({
     body = <Text color="secondary">No downloaded files hold only skipped episodes.</Text>;
   } else {
     body = (
-      <VStack gap={2}>
+      <VStack gap={3}>
         {files.map((f) => (
-          <HStack key={f.episode_file_id} gap={2} vAlign="center" hAlign="between" wrap="wrap">
-            <CheckboxInput
-              label={describe(f)}
-              description={`${f.path} · ${formatBytes(f.size)}`}
-              value={picked.has(f.episode_file_id)}
-              onChange={(on) => toggle(f.episode_file_id, on)}
-              isDisabled={deleting}
-            />
-            {f.monitored && <Badge label="Monitored" />}
-          </HStack>
+          <CheckboxInput
+            key={f.episode_file_id}
+            label={describe(f)}
+            description={`${formatBytes(f.size)}${f.monitored ? " · Monitored" : ""}`}
+            value={picked.has(f.episode_file_id)}
+            onChange={(on) => toggle(f.episode_file_id, on)}
+            isDisabled={deleting}
+          />
         ))}
       </VStack>
     );
   }
 
+  const close = () => onOpenChange(false);
   return (
     <Dialog
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       variant={isMobile ? "fullscreen" : "standard"}
-      width={640}
+      width={560}
       maxHeight="85vh"
       purpose="info"
     >
-      <VStack gap={4}>
-        <DialogHeader
-          title="Delete filler files"
-          subtitle="Files holding only episodes this show skips. Sonarr deletes them from disk and they stay unmonitored. This can't be undone."
-          onOpenChange={onOpenChange}
-        />
-        {body}
-        <HStack gap={2} hAlign="end">
-          <Button label="Cancel" variant="ghost" onClick={() => onOpenChange(false)} />
-          <Button
-            label={
-              picked.size > 0
-                ? `Delete ${picked.size} file${picked.size === 1 ? "" : "s"} (${formatBytes(pickedSize)})`
-                : "Delete"
-            }
-            variant="destructive"
-            icon={<Trash2 size={16} />}
-            isLoading={deleting}
-            isDisabled={deleting || picked.size === 0}
-            onClick={() => void remove()}
+      <Layout
+        height={isMobile ? "fill" : "auto"}
+        header={
+          <DialogHeader
+            title="Delete filler files"
+            subtitle="Files with only episodes this show skips. Sonarr deletes them and they stay unmonitored."
+            onOpenChange={onOpenChange}
           />
-        </HStack>
-      </VStack>
+        }
+        content={<LayoutContent isScrollable>{body}</LayoutContent>}
+        footer={
+          <LayoutFooter hasDivider>
+            <HStack gap={2} hAlign="end" width="100%">
+              {files.length > 0 ? (
+                <>
+                  <Button label="Cancel" variant="ghost" onClick={close} />
+                  <Button
+                    label={
+                      picked.size > 0
+                        ? `Delete ${picked.size} (${formatBytes(pickedSize)})`
+                        : "Delete"
+                    }
+                    variant="destructive"
+                    icon={<Trash2 size={16} />}
+                    isLoading={deleting}
+                    isDisabled={deleting || picked.size === 0}
+                    onClick={() => void remove()}
+                  />
+                </>
+              ) : (
+                <Button label="Close" variant="secondary" onClick={close} />
+              )}
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }
