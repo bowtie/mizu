@@ -49,20 +49,26 @@ func (m *Matcher) FindMatches(ctx context.Context, series models.SonarrSeries, a
 		show models.AFLShow
 		norm string
 		// names are the full title, the title without its bracketed
-		// alternate name, and that name: AFL writes "Fire Force (Enen no
-		// Shouboutai)", Sonarr "Fire Force".
+		// alternate name, that name (AFL writes "Fire Force (Enen no
+		// Shouboutai)", Sonarr "Fire Force"), and the slug, which often
+		// spells out more than the title ("Magi" is magi-labyrinth-magic).
+		// norm holds every word of them, for the distinguishing-word check.
 		names []string
 	}
 	normAFLShows := make([]normAFL, len(aflShows))
 	for i, s := range aflShows {
-		normAFLShows[i] = normAFL{show: s, norm: normalize(s.Title), names: titleNames(s.Title)}
+		names := titleNames(s.Title)
+		if n := slugName(s.Slug); n != "" {
+			names = append(names, n)
+		}
+		normAFLShows[i] = normAFL{show: s, norm: strings.Join(names, " "), names: names}
 	}
 
 	for _, na := range normAFLShows {
 		best := MatchResult{AFLShow: na.show}
 		// An AFL entry for another year is another series (the 1981
 		// Urusei Yatsura isn't the 2022 remake), however alike the names.
-		if yearsConflict(na.show.Title, series) {
+		if yearsConflict(na.show.Title+" "+na.show.Slug, series) {
 			continue
 		}
 
@@ -163,6 +169,9 @@ func JaroWinkler(s1, s2 string) float64 {
 
 func normalize(s string) string {
 	s = strings.ToLower(s)
+	// "Hunter × Hunter", "High School D×D": the multiplication sign is how
+	// AFL and TVDB write an "x" some of the time.
+	s = strings.ReplaceAll(s, "×", "x")
 
 	for _, sep := range []string{"-", "_", ":", "~", ".", ",", "!", "?", "'", "\"", "(", ")"} {
 		s = strings.ReplaceAll(s, sep, " ")
@@ -417,7 +426,7 @@ func hasDistinguishingWord(sonarrNorm, aflNorm string) bool {
 	for _, w := range strings.Fields(sonarrNorm) {
 		// One-letter words ("x" in Hunter x Hunter, whose AFL title has
 		// "×") and years say nothing about which series it is.
-		if len(w) < 2 || yearPattern.MatchString(w) {
+		if len(w) < 2 || yearPattern.MatchString(w) || connectingWords[w] {
 			continue
 		}
 		near := false
@@ -448,4 +457,27 @@ func titleNames(title string) []string {
 		}
 	}
 	return names
+}
+
+// slugName is an AFL slug read as a title: "magi-labyrinth-magic" is
+// "magi labyrinth magic". AFL's numeric suffix for a repeated slug
+// ("one-piece-0") is dropped, and an encoded slug gives nothing.
+func slugName(slug string) string {
+	if slug == "" || strings.Contains(slug, "%") {
+		return ""
+	}
+	if i := strings.LastIndex(slug, "-"); i > 0 {
+		if _, err := strconv.Atoi(slug[i+1:]); err == nil && len(slug)-i <= 3 {
+			slug = slug[:i]
+		}
+	}
+	return normalize(slug)
+}
+
+// connectingWords join a title's words without naming anything, in English
+// and romanized Japanese, so one missing from the AFL title or slug doesn't
+// mark another series.
+var connectingWords = map[string]bool{
+	"of": true, "and": true, "to": true, "in": true, "on": true, "for": true,
+	"no": true, "wa": true, "ga": true, "wo": true, "ni": true, "de": true,
 }

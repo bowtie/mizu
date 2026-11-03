@@ -82,6 +82,13 @@
   "Fire Force (Enen no Shouboutai)" now matches Sonarr's "Fire Force" (it
   scored 0.31), likewise Sailor Moon, Sgt. Frog, Kamisama Kiss and others.
   Hunter x Hunter still matches AFL's "Hunter × Hunter".
+- Titles written with "×" match ones with "x" (Hunter × Hunter, High
+  School D×D), AFL's slug counts as another name for a show (AFL's
+  "Magi" is magi-labyrinth-magic) and as a source of its year, and small
+  connecting words ("of", "no") don't mark a title as another series.
+- A season is no longer moved onto AFL's numbers by dates alone when its
+  titles fit better unmoved: Saint Seiya's Asgard arc, whose TVDB dates run
+  seven weeks behind AFL's, had been shifted onto the wrong episodes.
 - An AFL page with no episodes listed yet says so instead of suggesting
   AFL's layout changed.
 

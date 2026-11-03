@@ -113,3 +113,27 @@ func TestMatcherIgnoresBracketedAlternateNames(t *testing.T) {
 		assert.NotNil(t, r, afl)
 	}
 }
+
+// "×" reads as "x", and AFL's slug counts as a name and as a year.
+func TestMatcherReadsMultiplicationSignAndSlugs(t *testing.T) {
+	m := New(0.82)
+	hxh1999 := models.AFLShow{Title: "Hunter × Hunter", Slug: "hunter-x-hunter-1999"}
+	hxh2011 := models.AFLShow{Title: "Hunter × Hunter (2011)", Slug: "hunter-x-hunter"}
+	dxd := models.AFLShow{Title: "Highschool DxD", Slug: "high-school-dxd"}
+	magi := models.AFLShow{Title: "Magi", Slug: "magi-labyrinth-magic"}
+
+	for _, c := range []struct {
+		series models.SonarrSeries
+		want   string
+	}{
+		{models.SonarrSeries{Title: "Hunter x Hunter (1999)", Year: 1999}, "hunter-x-hunter-1999"},
+		{models.SonarrSeries{Title: "Hunter x Hunter (2011)", Year: 2011}, "hunter-x-hunter"},
+		{models.SonarrSeries{Title: "High School D×D", Year: 2012}, "high-school-dxd"},
+		{models.SonarrSeries{Title: "Magi: The Labyrinth of Magic", Year: 2012}, "magi-labyrinth-magic"},
+	} {
+		r := m.BestMatch(context.Background(), c.series, []models.AFLShow{hxh1999, hxh2011, dxd, magi})
+		if assert.NotNil(t, r, c.series.Title) {
+			assert.Equal(t, c.want, r.AFLShow.Slug, c.series.Title)
+		}
+	}
+}

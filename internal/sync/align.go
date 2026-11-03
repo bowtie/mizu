@@ -2,6 +2,7 @@ package sync
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	matcherpkg "mizu/internal/matcher"
@@ -86,6 +87,23 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 		seasons[ep.SeasonNumber] = append(seasons[ep.SeasonNumber], i)
 	}
 
+	aflTitleByNum := make(map[int]string, len(aflEpisodes))
+	for _, a := range aflEpisodes {
+		aflTitleByNum[a.Number] = norm.Normalize(a.Title)
+	}
+	// titleFit counts the season's episodes whose title shares most of its
+	// words with the AFL episode at their absolute number plus shift.
+	titleFit := func(idxs []int, shift int) int {
+		n := 0
+		for _, i := range idxs {
+			t := aflTitleByNum[*episodes[i].AbsoluteEpisodeNumber+shift]
+			if t != "" && mostWordsShared(norm.Normalize(episodes[i].Title), t) {
+				n++
+			}
+		}
+		return n
+	}
+
 	type anchor struct {
 		pos, abs, afl int
 		byTitle       bool
@@ -127,8 +145,22 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 			// disagree on dates throughout (moved broadcasts, a different
 			// country's dates) produces a few coincidental matches that
 			// say nothing about the numbering.
-			if len(dated)*2 >= len(idxs) {
-				cands, anchors = mixedCands, dated
+			//
+			// And the shift may not fit the titles worse than no shift.
+			// Saint Seiya's TVDB dates run seven weeks behind AFL's through
+			// the Asgard arc, consistently enough to pass the above, while
+			// its translated titles still share their words unshifted.
+			if len(dated)*2 >= len(idxs) && len(dated) > 0 {
+				shift := dated[0].afl - dated[0].abs
+				for _, a := range dated {
+					if !a.byTitle {
+						shift = a.afl - a.abs
+						break
+					}
+				}
+				if titleFit(idxs, shift) >= titleFit(idxs, 0) {
+					cands, anchors = mixedCands, dated
+				}
 			}
 		}
 		if len(anchors) < minAnchors {
@@ -297,4 +329,36 @@ func commonShift[T any](cands []T, shift func(T) (int, bool)) []T {
 		}
 	}
 	return kept
+}
+
+// mostWordsShared reports whether at least half of the shorter title's
+// words (of two letters or more) appear in the other.
+func mostWordsShared(a, b string) bool {
+	words := func(s string) []string {
+		var out []string
+		for _, w := range strings.Fields(s) {
+			if len(w) >= 2 {
+				out = append(out, w)
+			}
+		}
+		return out
+	}
+	aw, bw := words(a), words(b)
+	if len(aw) == 0 || len(bw) == 0 {
+		return false
+	}
+	if len(aw) > len(bw) {
+		aw, bw = bw, aw
+	}
+	set := make(map[string]bool, len(bw))
+	for _, w := range bw {
+		set[w] = true
+	}
+	shared := 0
+	for _, w := range aw {
+		if set[w] {
+			shared++
+		}
+	}
+	return shared*2 >= len(aw)
 }

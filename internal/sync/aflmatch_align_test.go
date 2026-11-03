@@ -225,3 +225,19 @@ func TestAlignToAFLIgnoresDatesThatMostlyDisagree(t *testing.T) {
 	assert.Empty(t, noEntry)
 	assert.Equal(t, sonarr, aligned)
 }
+
+// Saint Seiya's Asgard arc: TVDB's dates run seven episodes behind AFL's
+// throughout, consistently enough to look like a shift, but the translated
+// titles still share their words at the unshifted numbers, so nothing moves.
+func TestAlignToAFLDatesCantOverruleMatchingTitles(t *testing.T) {
+	start := time.Date(1988, 3, 5, 0, 0, 0, 0, time.UTC)
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	for n := 1; n <= 26; n++ {
+		afl = append(afl, models.AFLEpisode{Number: 73 + n, Title: fmt.Sprintf("Enemies of the North part %d", n), Type: models.EpisodeFiller, AirDate: start.AddDate(0, 0, 7*(n+6))})
+		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 2, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(73 + n), Title: fmt.Sprintf("Enemies in the Far North chapter %d", n), AirDateUTC: start.AddDate(0, 0, 7*(n-1))})
+	}
+	aligned, noEntry := AlignToAFL(sonarr, afl)
+	assert.Empty(t, noEntry)
+	assert.Equal(t, sonarr, aligned)
+}

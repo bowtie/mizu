@@ -33,10 +33,11 @@ func main() {
 	numbersFor := flag.String("numbers", "", "AFL slug of one show: print its episode numbering instead of the report")
 	catalogue := flag.Bool("catalogue", false, "audit every AFL show with filler, using TVDB's episodes from Sonarr's metadata service")
 	only := flag.String("only", "", "with -catalogue: comma-separated AFL slugs to audit instead of all")
+	season := flag.Int("season", 0, "with -numbers: also list each episode of this season")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 
-	if err := run(context.Background(), *dbPath, *numbersFor, *catalogue, *only, os.Stdout); err != nil {
+	if err := run(context.Background(), *dbPath, *numbersFor, *catalogue, *only, *season, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "audit:", err)
 		os.Exit(1)
 	}
@@ -80,7 +81,7 @@ type seasonStats struct {
 	dateSame, dateOff, dateNone                int
 }
 
-func run(ctx context.Context, dbPath, numbersFor string, catalogue bool, only string, out io.Writer) error {
+func run(ctx context.Context, dbPath, numbersFor string, catalogue bool, only string, season int, out io.Writer) error {
 	db, err := database.New(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
@@ -108,10 +109,10 @@ func run(ctx context.Context, dbPath, numbersFor string, catalogue bool, only st
 	if numbersFor != "" {
 		for _, m := range mappings {
 			if m.AFLSlug == numbersFor {
-				return printNumbers(ctx, sc, afl, m, out)
+				return printNumbers(ctx, sc, afl, m, season, out)
 			}
 		}
-		return fmt.Errorf("no mapped show with AFL slug %q", numbersFor)
+		return printCatalogueNumbers(ctx, sc, afl, numbersFor, season, out)
 	}
 
 	fmt.Fprintf(out, "# Matching audit\n\n%d mapped shows, %s.\n\n", len(mappings), time.Now().Format("2006-01-02 15:04"))
