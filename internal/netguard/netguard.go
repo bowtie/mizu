@@ -36,9 +36,17 @@ var metadataAddrs = map[netip.Addr]bool{
 
 var broadcast = netip.AddrFrom4([4]byte{255, 255, 255, 255})
 
+// nat64 is the well-known NAT64 prefix (RFC 6052): a NAT64 gateway turns
+// 64:ff9b::a9fe:a9fe into a connection to 169.254.169.254.
+var nat64 = netip.MustParsePrefix("64:ff9b::/96")
+
 // Blocked reports whether ip must never be dialled.
 func Blocked(ip netip.Addr) bool {
 	ip = ip.Unmap()
+	if nat64.Contains(ip) {
+		b := ip.As16()
+		ip = netip.AddrFrom4([4]byte(b[12:]))
+	}
 	return !ip.IsValid() ||
 		ip.IsUnspecified() ||
 		ip.IsLinkLocalUnicast() ||
@@ -48,6 +56,10 @@ func Blocked(ip netip.Addr) bool {
 		ip == broadcast ||
 		metadataAddrs[ip]
 }
+
+// proxyFromEnvironment picks the HTTP proxy, as http.DefaultTransport
+// does; a variable so tests can stand one up.
+var proxyFromEnvironment = http.ProxyFromEnvironment
 
 func control(_, address string, _ syscall.RawConn) error {
 	host, _, err := net.SplitHostPort(address)
@@ -65,11 +77,13 @@ func control(_, address string, _ syscall.RawConn) error {
 }
 
 // Transport returns an http.Transport whose dialer refuses blocked
-// addresses. Proxy settings and other defaults match http.DefaultTransport.
+// addresses. It uses the environment's proxy, as http.DefaultTransport does,
+// and checks the target before handing a request to it.
 func Transport() *http.Transport {
 	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: control}
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.DialContext = dialer.DialContext
+	t.Proxy = guardedProxy
 	return t
 }
 
@@ -146,4 +160,28 @@ func ValidateServiceURL(raw string) error {
 		return errors.New("that address is not allowed")
 	}
 	return nil
+}
+
+// guardedProxy picks the proxy, and refuses a target the dial check would
+// have refused: through a proxy, that check only sees the proxy's address.
+// A name that doesn't resolve here is left to the proxy, since some
+// networks resolve names only there.
+func guardedProxy(req *http.Request) (*url.URL, error) {
+	proxy, err := proxyFromEnvironment(req)
+	if err != nil || proxy == nil {
+		return proxy, err
+	}
+	host := req.URL.Hostname()
+	addrs := []netip.Addr{}
+	if ip, err := netip.ParseAddr(host); err == nil {
+		addrs = append(addrs, ip)
+	} else if resolved, err := net.DefaultResolver.LookupNetIP(req.Context(), "ip", host); err == nil {
+		addrs = resolved
+	}
+	for _, ip := range addrs {
+		if Blocked(ip) {
+			return nil, fmt.Errorf("%w: %s", ErrBlockedAddress, ip)
+		}
+	}
+	return proxy, nil
 }
