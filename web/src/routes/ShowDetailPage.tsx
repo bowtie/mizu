@@ -125,6 +125,15 @@ function episodeStats(episodes: Episode[]) {
 }
 
 export function ShowDetailPage() {
+  const { ref } = useParams<{ ref: string }>();
+  const { data: shows } = useShows();
+  // Each show gets its own page state: a rule edited but not saved on one
+  // show must not carry over to the next. Swapping an id link for the slug
+  // keeps the same show, so it keeps the page.
+  return <ShowDetail key={resolveShowRef(ref, shows) ?? ref} />;
+}
+
+function ShowDetail() {
   // The URL names the show by slug ("/shows/cardcaptor-sakura"); an old
   // numeric link still works and is swapped for the slug below.
   const { ref } = useParams<{ ref: string }>();

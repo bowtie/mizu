@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useNavigate, type NavigateFunction } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── Module mocks ──
@@ -349,6 +349,52 @@ describe("ShowDetailPage", () => {
       "success",
     );
     // Saved: the button goes away again.
+    expect(findButton("Save")).toBeUndefined();
+  });
+
+  it("starts another show with that show's saved rules, not unsaved edits", async () => {
+    const OTHER: Show = { ...SHOW, id: 2, sonarr_series_id: 8, sonarr_title: "Bleach" };
+    mockedGetShow.mockImplementation(async (id) => (String(id) === "2" ? OTHER : SHOW));
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    let navigate: NavigateFunction | undefined;
+    const Navigator = () => {
+      navigate = useNavigate();
+      return null;
+    };
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(
+            MemoryRouter,
+            { initialEntries: ["/shows/1"] },
+            createElement(Navigator),
+            createElement(
+              Routes,
+              null,
+              createElement(Route, { path: "/shows/:ref", element: createElement(ShowDetailPage) }),
+            ),
+          ),
+        ),
+      );
+    });
+    await flush();
+
+    // An Auto/Manual change on Naruto waits for Save...
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Using Sonarr progress"]')!
+        .click();
+    });
+    expect(findButton("Save")).toBeDefined();
+
+    // ...and doesn't follow the user to Bleach.
+    await act(async () => {
+      navigate!("/shows/2");
+    });
+    await flush();
+    expect(container.textContent).toContain("Bleach");
     expect(findButton("Save")).toBeUndefined();
   });
 
