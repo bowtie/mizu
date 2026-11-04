@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-04
+
+Fixes from a review of the whole app: sync unmonitors less of what you
+haven't watched yet, settings stick across restarts, and a few edits on the
+show page no longer go astray.
+
+### Matching and sync
+
+- A new show's starting watermark uses AnimeFillerList's numbering. On a
+  show Sonarr numbers differently (Cardcaptor Sakura's Clear Card, say) it
+  started a few episodes too high and unmonitored episodes not yet watched.
+- Seasons are lined up with AnimeFillerList the same way on every sync.
+- Episodes AnimeFillerList doesn't count, such as banned ones, are placed
+  by the episode after them: behind the watermark once you're past them,
+  never raising it, and never held waiting for a listing. Episodes held
+  that way are released.
+- A new show's episode list shows the same titles and numbers before its
+  first sync as after it.
+- A filler grab is cancelled even when another sync unmonitored it while
+  the webhook waited, as when Sonarr grabs several fillers in a row.
+- Stopping Mizu waits for a running sync before closing the database.
+
+### Settings
+
+- Clearing the Sonarr URL, the ntfy server, the Sonarr monitor mode or the
+  artwork source now survives a restart.
+- Importing a backup rejects values Settings would reject. Save errors name
+  the field.
+
+### Show page
+
+- A tracking toggle that can't be saved turns back after one try instead of
+  retrying with an error every moment.
+- A change waiting for Save stays with its show instead of following you to
+  the next one.
+
+### Security
+
+- Outbound requests through an HTTP proxy are checked against blocked
+  addresses too, and NAT64 addresses are unwrapped before the check.
+- golang.org/x/net 0.62.0 (GO-2026-6860, reachable from the AnimeFillerList
+  scraper).
+- Release images are built only after CI passes on the tagged commit.
+
 ## [0.5.0] - 2026-11-04
 
 Sonarr can tell Mizu about new episodes the moment it grabs them, filler
