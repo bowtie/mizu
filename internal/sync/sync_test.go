@@ -24,7 +24,7 @@ func TestInitialWatermarkForEpisodes(t *testing.T) {
 		{SeasonNumber: 2, EpisodeNumber: 1, AbsoluteEpisodeNumber: &absolute, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	assert.Equal(t, 14, initialWatermarkForEpisodes(episodes, now))
+	assert.Equal(t, 14, initialWatermarkForEpisodes(Place(episodes, nil), now))
 }
 
 func TestInitialWatermarkForEpisodesIgnoresMonitoredOnlyEpisodes(t *testing.T) {
@@ -36,7 +36,7 @@ func TestInitialWatermarkForEpisodesIgnoresMonitoredOnlyEpisodes(t *testing.T) {
 		{SeasonNumber: 2, EpisodeNumber: 1, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	assert.Equal(t, 0, initialWatermarkForEpisodes(episodes, now))
+	assert.Equal(t, 0, initialWatermarkForEpisodes(Place(episodes, nil), now))
 }
 
 func TestInitialWatermarkForEpisodesIgnoresFutureAndSpecialDownloads(t *testing.T) {
@@ -50,7 +50,7 @@ func TestInitialWatermarkForEpisodesIgnoresFutureAndSpecialDownloads(t *testing.
 		{SeasonNumber: 1, EpisodeNumber: 5, AbsoluteEpisodeNumber: &downloaded, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	assert.Equal(t, 5, initialWatermarkForEpisodes(episodes, now))
+	assert.Equal(t, 5, initialWatermarkForEpisodes(Place(episodes, nil), now))
 }
 
 // A mainline episode without an absolute number must not contribute its
@@ -65,7 +65,7 @@ func TestInitialWatermarkForEpisodesSkipsMissingAbsoluteNumbers(t *testing.T) {
 		{SeasonNumber: 23, EpisodeNumber: 16, AbsoluteEpisodeNumber: &watched, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	assert.Equal(t, 1116, initialWatermarkForEpisodes(episodes, now))
+	assert.Equal(t, 1116, initialWatermarkForEpisodes(Place(episodes, nil), now))
 }
 
 func TestNormalizeWatermarkModeDefaults(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNextAutoWatermarkNeverShrinks(t *testing.T) {
 		{SeasonNumber: 1, EpisodeNumber: 7, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	assert.Equal(t, 24, nextAutoWatermark(24, episodes, now))
+	assert.Equal(t, 24, nextAutoWatermark(24, Place(episodes, nil), now))
 }
 
 func TestNextAutoWatermarkAdvances(t *testing.T) {
@@ -89,7 +89,7 @@ func TestNextAutoWatermarkAdvances(t *testing.T) {
 		{SeasonNumber: 1, EpisodeNumber: 12, AbsoluteEpisodeNumber: &absolute, HasFile: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	assert.Equal(t, 12, nextAutoWatermark(5, episodes, now))
+	assert.Equal(t, 12, nextAutoWatermark(5, Place(episodes, nil), now))
 }
 
 func TestNextAutoWatermarkDoesNotAdvanceFromMonitoredOnlyEpisodes(t *testing.T) {
@@ -99,7 +99,7 @@ func TestNextAutoWatermarkDoesNotAdvanceFromMonitoredOnlyEpisodes(t *testing.T) 
 		{SeasonNumber: 1, EpisodeNumber: 12, Monitored: true, AirDateUTC: now.Add(-time.Hour)},
 	}
 
-	assert.Equal(t, 0, nextAutoWatermark(0, episodes, now))
+	assert.Equal(t, 0, nextAutoWatermark(0, Place(episodes, nil), now))
 }
 
 func TestIsBelowOrAtWatermark(t *testing.T) {
@@ -123,7 +123,7 @@ func TestMatchSpecialAFLEpisodeByTitlePrefersExactTitle(t *testing.T) {
 		{Number: 1076, Title: "Police Academy Arc Wild Police Story CASE. Rei Furuya", Type: models.EpisodeFiller},
 	}
 
-	got, ok := matchAFLEpisodeByTitle("Police Academy Arc Wild Police Story CASE. Rei Furuya", candidates)
+	got, ok := matchAFLEpisodeByTitle("Police Academy Arc Wild Police Story CASE. Rei Furuya", candidates, true)
 	assert.True(t, ok)
 	assert.Equal(t, candidates[1].Title, got.Title)
 }
@@ -143,7 +143,7 @@ func TestSelectAFLEpisodeForSonarrIncludesMatchedSpecial(t *testing.T) {
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	aflNum, got, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.True(t, ok)
 	assert.Equal(t, 1076, aflNum)
 	assert.Equal(t, models.EpisodeMixedCanon, got.Type)
@@ -164,7 +164,7 @@ func TestSelectAFLEpisodeForSonarrPrefersTitleMatchedMainlineDuplicate(t *testin
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	aflNum, got, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.True(t, ok)
 	assert.Equal(t, 1076, aflNum)
 	assert.Equal(t, candidates[0].Title, got.Title)
@@ -186,7 +186,7 @@ func TestSelectAFLEpisodeForSonarrSupportsNegativeOneSpecialSeason(t *testing.T)
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	_, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, got, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.True(t, ok)
 	assert.Equal(t, models.EpisodeMixedCanon, got.Type)
 }
@@ -206,7 +206,7 @@ func TestSelectAFLEpisodeForSonarrDoesNotStealMainlineForUnmatchedSpecial(t *tes
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(candidates[0], candidates[1])}
 	byNumber := map[int][]models.AFLEpisode{1076: candidates}
 
-	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.False(t, ok)
 }
 
@@ -224,7 +224,7 @@ func TestSelectAFLEpisodeForSonarrDoesNotAutoMatchSingleCandidateSpecial(t *test
 	preferred := map[int]models.AFLEpisode{9001: candidates[0]}
 	byNumber := map[int][]models.AFLEpisode{9001: candidates}
 
-	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.False(t, ok)
 }
 
@@ -242,7 +242,7 @@ func TestSelectAFLEpisodeForSonarrRejectsWeakSingleTokenSpecialMatch(t *testing.
 	preferred := map[int]models.AFLEpisode{1077: candidates[0]}
 	byNumber := map[int][]models.AFLEpisode{1077: candidates}
 
-	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.False(t, ok)
 }
 
@@ -260,7 +260,7 @@ func TestSelectAFLEpisodeForSonarrFallsBackToGlobalStrictTitleForSpecial(t *test
 	}
 	preferred := map[int]models.AFLEpisode{1076: preferredAFLEpisode(byNumber[1076][0], byNumber[1076][1])}
 
-	aflNum, got, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	aflNum, got, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.True(t, ok)
 	assert.Equal(t, 1076, aflNum)
 	assert.Equal(t, models.EpisodeMixedCanon, got.Type)
@@ -279,7 +279,7 @@ func TestSelectAFLEpisodeForSonarrRejectsWeakGlobalSpecialMatch(t *testing.T) {
 	}
 	preferred := map[int]models.AFLEpisode{1077: byNumber[1077][0]}
 
-	_, _, ok := SelectAFLEpisodeForSonarr(sonarrEp, byNumber, preferred)
+	_, _, ok := selectAFLEpisode(sonarrEp, byNumber, preferred)
 	assert.False(t, ok)
 }
 
@@ -290,33 +290,33 @@ func TestAFLCoverageMaxEpisodeNumber(t *testing.T) {
 		{Number: 1196, Title: "1196", Type: models.EpisodeCanon},
 	}
 
-	assert.Equal(t, 1196, AFLCoverageMaxEpisodeNumber(aflEpisodes))
+	assert.Equal(t, 1196, aflCoverageMax(aflEpisodes))
 }
 
-func TestIsWithinAFLCoverageKeepsMainlineEpisodeBeyondCeiling(t *testing.T) {
+func TestPlaceKeepsMainlineEpisodeBeyondAFL(t *testing.T) {
 	absolute := 1197
-	sonarrEp := models.SonarrEpisode{
-		SeasonNumber:          21,
-		EpisodeNumber:         50,
-		AbsoluteEpisodeNumber: &absolute,
-		Title:                 "A New Successor Episode",
-	}
+	ep := models.SonarrEpisode{ID: 1, SeasonNumber: 21, EpisodeNumber: 50, AbsoluteEpisodeNumber: &absolute, Title: "A New Successor Episode"}
+	afl := []models.AFLEpisode{{Number: 1196, Title: "The Last Listed", Type: models.EpisodeCanon}}
 
-	// Episodes beyond AFL coverage are now kept so they show as "unknown"
-	// in the UI. They get reclassified when AFL updates.
-	assert.True(t, IsWithinAFLCoverage(sonarrEp, 1197, false, 1196))
+	// Shown as unknown until AFL lists it.
+	placed := Place([]models.SonarrEpisode{ep}, afl)
+	assert.Equal(t, Unlisted, placed[0].Kind)
+	assert.Equal(t, 1197, placed[0].Number)
 }
 
-func TestIsWithinAFLCoverageKeepsMatchedSpecial(t *testing.T) {
-	absolute := 1076
-	sonarrEp := models.SonarrEpisode{
-		SeasonNumber:          -1,
-		EpisodeNumber:         1,
-		AbsoluteEpisodeNumber: &absolute,
-		Title:                 "Special Episode",
+func TestPlaceTracksSpecialsAFLLists(t *testing.T) {
+	listed, other := 1076, 2000
+	specials := []models.SonarrEpisode{
+		{ID: 1, SeasonNumber: -1, EpisodeNumber: 1, AbsoluteEpisodeNumber: &listed, Title: "Special Episode"},
+		{ID: 2, SeasonNumber: 0, EpisodeNumber: 2, AbsoluteEpisodeNumber: &other, Title: "Behind the Scenes"},
 	}
+	afl := []models.AFLEpisode{{Number: 1076, Title: "Special Episode", Type: models.EpisodeFiller}}
 
-	assert.True(t, IsWithinAFLCoverage(sonarrEp, 1076, true, 1076))
+	placed := Place(specials, afl)
+	assert.Equal(t, Listed, placed[0].Kind)
+	assert.Equal(t, 1076, placed[0].Number)
+	assert.Equal(t, models.EpisodeFiller, placed[0].AFL.Type)
+	assert.Equal(t, Untracked, placed[1].Kind)
 }
 
 func TestShouldNotify(t *testing.T) {

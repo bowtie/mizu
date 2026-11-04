@@ -20,7 +20,7 @@ const (
 	anchorDrift = 3
 )
 
-// AlignToAFL moves Sonarr's absolute episode numbers onto AnimeFillerList's
+// alignToAFL moves Sonarr's absolute episode numbers onto AnimeFillerList's
 // numbering where the two count differently, and returns the adjusted
 // copies plus the IDs of episodes AFL has no entry for.
 //
@@ -42,7 +42,7 @@ const (
 // exact title match aired out of AFL's order keeps its own number. One that
 // lands on a number already taken has no AFL counterpart and is reported
 // as unmatched rather than given that episode's type.
-func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode) ([]models.SonarrEpisode, map[int]bool) {
+func alignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode) ([]models.SonarrEpisode, map[int]bool) {
 	norm := matcherpkg.New(0)
 	aflByTitle := uniqueTitles(len(aflEpisodes), func(i int) (string, int) {
 		return norm.Normalize(aflEpisodes[i].Title), aflEpisodes[i].Number

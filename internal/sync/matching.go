@@ -21,8 +21,7 @@ func (e *Engine) InitialWatermarkForSeries(ctx context.Context, seriesID int, af
 	if err != nil {
 		return 0, fmt.Errorf("fetching AFL episodes: %w", err)
 	}
-	aligned, _ := AlignToAFL(sonarrEpisodes, aflEpisodes)
-	return initialWatermarkForEpisodes(aligned, time.Now()), nil
+	return initialWatermarkForEpisodes(Place(sonarrEpisodes, aflEpisodes), time.Now()), nil
 }
 
 func (e *Engine) InitialWatermarkForStartMode(ctx context.Context, seriesID int, aflSlug string, startMode models.StartMode) (int, error) {

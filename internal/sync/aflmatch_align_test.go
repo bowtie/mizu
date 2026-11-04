@@ -36,7 +36,7 @@ func cardcaptorFixture() ([]models.SonarrEpisode, []models.AFLEpisode) {
 
 func TestAlignToAFLShiftsAnOffsetSeason(t *testing.T) {
 	sonarr, afl := cardcaptorFixture()
-	aligned, _ := AlignToAFL(sonarr, afl)
+	aligned, _ := alignToAFL(sonarr, afl)
 
 	byID := map[int]models.SonarrEpisode{}
 	for _, ep := range aligned {
@@ -49,8 +49,8 @@ func TestAlignToAFLShiftsAnOffsetSeason(t *testing.T) {
 	assert.Equal(t, 98, *sonarr[len(sonarr)-2].AbsoluteEpisodeNumber, "the input isn't modified")
 
 	// Every Clear Card episode now finds its AFL entry.
-	lookup, preferred := BuildAFLEpisodeLookup(afl)
-	num, ep, found := SelectAFLEpisodeForSonarr(byID[122], lookup, preferred)
+	lookup, preferred := buildAFLEpisodeLookup(afl)
+	num, ep, found := selectAFLEpisode(byID[122], lookup, preferred)
 	assert.True(t, found)
 	assert.Equal(t, 93, num)
 	assert.Equal(t, "Clear Card 22", ep.Title)
@@ -64,7 +64,7 @@ func TestAlignToAFLNeedsAgreeingTitles(t *testing.T) {
 			afl[i].Title = fmt.Sprintf("Different %d", afl[i].Number)
 		}
 	}
-	aligned, _ := AlignToAFL(sonarr, afl)
+	aligned, _ := alignToAFL(sonarr, afl)
 	for _, ep := range aligned {
 		if ep.ID == 101 {
 			assert.Equal(t, 77, *ep.AbsoluteEpisodeNumber)
@@ -75,7 +75,7 @@ func TestAlignToAFLNeedsAgreeingTitles(t *testing.T) {
 func TestAlignToAFLLeavesMatchingSeasonsAlone(t *testing.T) {
 	sonarr, afl := cardcaptorFixture()
 	sonarr = sonarr[:70] // season 3 only
-	aligned, _ := AlignToAFL(sonarr, afl)
+	aligned, _ := alignToAFL(sonarr, afl)
 	assert.Equal(t, sonarr, aligned)
 }
 
@@ -101,7 +101,7 @@ func TestAlignToAFLFollowsDriftWithinASeason(t *testing.T) {
 		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n), Title: title})
 	}
 
-	aligned, noEntry := AlignToAFL(sonarr, afl)
+	aligned, noEntry := alignToAFL(sonarr, afl)
 	assert.Equal(t, map[int]bool{4: true, 9: true}, noEntry, "banned episodes have no AFL entry")
 	got := map[int]int{}
 	for _, ep := range aligned {
@@ -111,12 +111,12 @@ func TestAlignToAFLFollowsDriftWithinASeason(t *testing.T) {
 	assert.Equal(t, 4, got[5], "one behind after the first banned episode")
 	assert.Equal(t, 8, got[10], "two behind after the second")
 
-	lookup, preferred := BuildAFLEpisodeLookup(afl)
+	lookup, preferred := buildAFLEpisodeLookup(afl)
 	for _, ep := range aligned {
 		if ep.ID != 10 {
 			continue
 		}
-		_, match, found := SelectAFLEpisodeForSonarr(ep, lookup, preferred)
+		_, match, found := selectAFLEpisode(ep, lookup, preferred)
 		assert.True(t, found)
 		assert.Equal(t, "Episode 10", match.Title)
 		assert.Equal(t, models.EpisodeFiller, match.Type)
@@ -135,7 +135,7 @@ func TestAlignToAFLIgnoresALoneMatch(t *testing.T) {
 		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n), Title: title})
 		afl = append(afl, models.AFLEpisode{Number: n, Title: fmt.Sprintf("AFL %d", n), Type: models.EpisodeCanon})
 	}
-	aligned, noEntry := AlignToAFL(sonarr, afl)
+	aligned, noEntry := alignToAFL(sonarr, afl)
 	assert.Empty(t, noEntry)
 	assert.Equal(t, sonarr, aligned)
 }
@@ -156,7 +156,7 @@ func TestAlignToAFLKeepsSwappedEpisodes(t *testing.T) {
 		sonarr = append(sonarr, models.SonarrEpisode{ID: i + 1, SeasonNumber: 1, EpisodeNumber: i + 1, AbsoluteEpisodeNumber: abs(i + 1), Title: title})
 	}
 
-	aligned, noEntry := AlignToAFL(sonarr, afl)
+	aligned, noEntry := alignToAFL(sonarr, afl)
 	assert.Equal(t, map[int]bool{2: true}, noEntry)
 	got := map[string]int{}
 	for _, ep := range aligned {
@@ -182,7 +182,7 @@ func TestAlignToAFLAnchorsByDateWhenTitlesDiffer(t *testing.T) {
 		// before the Japanese date AFL lists.
 		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n + 3), Title: fmt.Sprintf("TVDB wording %d", n), AirDateUTC: aired.Add(-6 * time.Hour)})
 	}
-	aligned, noEntry := AlignToAFL(sonarr, afl)
+	aligned, noEntry := alignToAFL(sonarr, afl)
 	assert.Empty(t, noEntry)
 	for _, ep := range aligned {
 		assert.Equal(t, ep.ID, *ep.AbsoluteEpisodeNumber)
@@ -204,7 +204,7 @@ func TestAlignToAFLIgnoresAWeekOffRun(t *testing.T) {
 		}
 		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n), Title: fmt.Sprintf("TVDB wording %d", n), AirDateUTC: sonarrAired})
 	}
-	aligned, noEntry := AlignToAFL(sonarr, afl)
+	aligned, noEntry := alignToAFL(sonarr, afl)
 	assert.Empty(t, noEntry)
 	assert.Equal(t, sonarr, aligned)
 }
@@ -222,7 +222,7 @@ func TestAlignToAFLIgnoresDatesThatMostlyDisagree(t *testing.T) {
 		// episode two before, and the shift those dates agree on is -2.
 		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(n), Title: fmt.Sprintf("TVDB wording %d", n), AirDateUTC: aired.AddDate(0, 0, -14*(n%3))})
 	}
-	aligned, noEntry := AlignToAFL(sonarr, afl)
+	aligned, noEntry := alignToAFL(sonarr, afl)
 	assert.Empty(t, noEntry)
 	assert.Equal(t, sonarr, aligned)
 }
@@ -238,7 +238,7 @@ func TestAlignToAFLDatesCantOverruleMatchingTitles(t *testing.T) {
 		afl = append(afl, models.AFLEpisode{Number: 73 + n, Title: fmt.Sprintf("Enemies of the North part %d", n), Type: models.EpisodeFiller, AirDate: start.AddDate(0, 0, 7*(n+6))})
 		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 2, EpisodeNumber: n, AbsoluteEpisodeNumber: abs(73 + n), Title: fmt.Sprintf("Enemies in the Far North chapter %d", n), AirDateUTC: start.AddDate(0, 0, 7*(n-1))})
 	}
-	aligned, noEntry := AlignToAFL(sonarr, afl)
+	aligned, noEntry := alignToAFL(sonarr, afl)
 	assert.Empty(t, noEntry)
 	assert.Equal(t, sonarr, aligned)
 }
@@ -264,7 +264,7 @@ func TestAlignToAFLFillsAFreeNumberBetweenAnchors(t *testing.T) {
 		add(6+n, 114+n, 106+n, title, title)
 	}
 
-	aligned, unmatched := AlignToAFL(sonarr, afl)
+	aligned, unmatched := alignToAFL(sonarr, afl)
 	assert.Equal(t, 106, *aligned[5].AbsoluteEpisodeNumber)
 	assert.False(t, unmatched[6])
 	assert.Equal(t, 107, *aligned[6].AbsoluteEpisodeNumber)
@@ -286,7 +286,7 @@ func TestAlignToAFLLeavesABannedEpisodeUnmatched(t *testing.T) {
 	}
 	sonarr = append(sonarr, models.SonarrEpisode{ID: 99, SeasonNumber: 1, EpisodeNumber: 6, AbsoluteEpisodeNumber: abs(6), Title: "Banned"})
 
-	aligned, unmatched := AlignToAFL(sonarr, afl)
+	aligned, unmatched := alignToAFL(sonarr, afl)
 	assert.True(t, unmatched[99])
 	assert.Equal(t, 6, *aligned[5].AbsoluteEpisodeNumber, "the episode after it is AFL 6")
 }
@@ -317,7 +317,7 @@ func TestAlignToAFLPlacesACloseTitleOutOfOrder(t *testing.T) {
 		models.AFLEpisode{Number: 17, Title: "Pokémon Ranger and the Kidnapped Riolu! Part 2", Type: models.EpisodeCanon},
 	)
 
-	aligned, unmatched := AlignToAFL(sonarr, afl)
+	aligned, unmatched := alignToAFL(sonarr, afl)
 	assert.Empty(t, unmatched)
 	assert.Equal(t, 16, *aligned[5].AbsoluteEpisodeNumber)
 	assert.Equal(t, 17, *aligned[6].AbsoluteEpisodeNumber)
@@ -359,7 +359,7 @@ func TestAlignToAFLFillsASwappedPairByTitle(t *testing.T) {
 		afl = append(afl, models.AFLEpisode{Number: 9 + n, Title: fmt.Sprintf("After %d", n)})
 	}
 
-	aligned, _ := AlignToAFL(sonarr, afl)
+	aligned, _ := alignToAFL(sonarr, afl)
 	assert.Equal(t, 7, *aligned[5].AbsoluteEpisodeNumber)
 	assert.Equal(t, 9, *aligned[6].AbsoluteEpisodeNumber, "White Day")
 	assert.Equal(t, 8, *aligned[7].AbsoluteEpisodeNumber, "Utau")
@@ -382,7 +382,7 @@ func TestAlignToAFLIsDeterministicAcrossSeasons(t *testing.T) {
 	}
 
 	numbers := func() string {
-		aligned, unmatched := AlignToAFL(sonarr, afl)
+		aligned, unmatched := alignToAFL(sonarr, afl)
 		var out []string
 		for _, ep := range aligned {
 			if unmatched[ep.ID] {

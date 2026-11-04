@@ -122,31 +122,25 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 		return nil, &httpError{http.StatusBadGateway, "failed to fetch AFL episodes: " + err.Error()}
 	}
 
-	sonarrEpisodes, noAFLEntry := sync.AlignToAFL(sonarrEpisodes, aflEpisodes)
-	aflByNumber, aflPreferred := sync.BuildAFLEpisodeLookup(aflEpisodes)
-	coverageMax := sync.AFLCoverageMaxEpisodeNumber(aflEpisodes)
-	enriched := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
-	for _, ep := range sonarrEpisodes {
-		aflNum, aflEpisode, found := sync.SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
-		if noAFLEntry[ep.ID] {
-			aflEpisode, found = models.AFLEpisode{}, false
-		}
-		if !sync.IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
+	placed := sync.Place(sonarrEpisodes, aflEpisodes)
+	enriched := make([]models.EpisodeInfo, 0, len(placed))
+	for _, p := range placed {
+		if p.Kind == sync.Untracked {
 			continue
 		}
+		ep := p.Sonarr
 
 		typeValue := models.EpisodeUnknown
-		if found {
-			typeValue = aflEpisode.Type
+		if p.Kind == sync.Listed {
+			typeValue = p.AFL.Type
 		}
 
-		episodeNum := aflNum
-		aflEpisodeNum := aflNum
+		episodeNum := p.Number
 		if ep.SeasonNumber == 0 || ep.SeasonNumber == -1 {
 			episodeNum = ep.EpisodeNumber
 		} else if episodeNum <= 0 {
-			if ep.AbsoluteEpisodeNumber != nil && *ep.AbsoluteEpisodeNumber > 0 {
-				episodeNum = *ep.AbsoluteEpisodeNumber
+			if p.Absolute != nil && *p.Absolute > 0 {
+				episodeNum = *p.Absolute
 			} else {
 				episodeNum = ep.EpisodeNumber
 			}
@@ -157,16 +151,15 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 		enriched = append(enriched, models.EpisodeInfo{
 			MappingID:             mappingID,
 			EpisodeNum:            episodeNum,
-			AFLEpisodeNumber:      aflEpisodeNum,
 			Title:                 ep.Title,
 			Type:                  typeValue,
 			SonarrEpisodeID:       ep.ID,
 			SeasonNumber:          ep.SeasonNumber,
 			SonarrEpisodeNumber:   ep.EpisodeNumber,
-			AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
+			AbsoluteEpisodeNumber: p.Absolute,
 			AirDate:               &airDateOnly,
 			Monitored:             ep.Monitored,
-			NotOnAFL:              noAFLEntry[ep.ID],
+			NotOnAFL:              p.Kind == sync.NotOnAFL,
 		})
 	}
 

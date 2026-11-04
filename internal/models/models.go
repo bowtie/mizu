@@ -10,7 +10,6 @@ const (
 	EpisodeMixedCanon EpisodeType = "mixed_canon"
 	EpisodeAnimeCanon EpisodeType = "anime_canon"
 	EpisodeFiller     EpisodeType = "filler"
-	EpisodeSpecial    EpisodeType = "special"
 	EpisodeUnknown    EpisodeType = "unknown"
 )
 
@@ -90,7 +89,6 @@ type EpisodeInfo struct {
 	ID                    int64       `json:"-"`
 	MappingID             int64       `json:"-"`
 	EpisodeNum            int         `json:"episode_num"` // UI identity/display number
-	AFLEpisodeNumber      int         `json:"-"`           // internal only, not used by frontend
 	Title                 string      `json:"title"`
 	Type                  EpisodeType `json:"type"`
 	LastScraped           time.Time   `json:"-"`

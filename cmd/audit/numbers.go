@@ -63,7 +63,13 @@ func printCatalogueNumbers(ctx context.Context, sc *sonarr.Client, afl *scraper.
 // episode of that season: Sonarr's number, Mizu's, and the AFL entry.
 func writeNumbers(title string, original []models.SonarrEpisode, aflEps []models.AFLEpisode, season int, out io.Writer) error {
 	m := models.ShowMapping{SonarrTitle: title}
-	aligned, noAFLEntry := syncpkg.AlignToAFL(original, aflEps)
+	placed := syncpkg.Place(original, aflEps)
+	notOnAFL := 0
+	for _, p := range placed {
+		if p.Kind == syncpkg.NotOnAFL {
+			notOnAFL++
+		}
+	}
 	defer func() {
 		if season <= 0 {
 			return
@@ -73,16 +79,17 @@ func writeNumbers(title string, original []models.SonarrEpisode, aflEps []models
 			byNum[a.Number] = a
 		}
 		fmt.Fprintf(out, "\n## Season %d\n\n| Ep | Sonarr abs | Mizu | Sonarr title | Sonarr date | AFL title | AFL date | Type |\n|---|---|---|---|---|---|---|---|\n", season)
-		for i, ep := range aligned {
-			if ep.SeasonNumber != season || ep.AbsoluteEpisodeNumber == nil {
+		for _, p := range placed {
+			ep := p.Sonarr
+			if ep.SeasonNumber != season || p.Absolute == nil {
 				continue
 			}
-			mizu := fmt.Sprint(*ep.AbsoluteEpisodeNumber)
-			a := byNum[*ep.AbsoluteEpisodeNumber]
-			if noAFLEntry[ep.ID] {
+			mizu := fmt.Sprint(*p.Absolute)
+			a := byNum[*p.Absolute]
+			if p.Kind == syncpkg.NotOnAFL {
 				mizu, a = "none", models.AFLEpisode{}
 			}
-			fmt.Fprintf(out, "| %d | %d | %s | %s | %s | %s | %s | %s |\n", ep.EpisodeNumber, *original[i].AbsoluteEpisodeNumber, mizu,
+			fmt.Fprintf(out, "| %d | %d | %s | %s | %s | %s | %s | %s |\n", ep.EpisodeNumber, *ep.AbsoluteEpisodeNumber, mizu,
 				ep.Title, ep.AirDateUTC.Format(time.DateOnly), a.Title, a.AirDate.Format(time.DateOnly), a.Type)
 		}
 	}()
@@ -90,12 +97,12 @@ func writeNumbers(title string, original []models.SonarrEpisode, aflEps []models
 	type numbered struct{ before, after int }
 	seasons := map[int][]numbered{}
 	used := map[int]int{}
-	for i, ep := range aligned {
-		if ep.SeasonNumber <= 0 || ep.AbsoluteEpisodeNumber == nil || noAFLEntry[ep.ID] {
+	for _, p := range placed {
+		if p.Sonarr.SeasonNumber <= 0 || p.Absolute == nil || p.Kind == syncpkg.NotOnAFL {
 			continue
 		}
-		n := numbered{before: *original[i].AbsoluteEpisodeNumber, after: *ep.AbsoluteEpisodeNumber}
-		seasons[ep.SeasonNumber] = append(seasons[ep.SeasonNumber], n)
+		n := numbered{before: *p.Sonarr.AbsoluteEpisodeNumber, after: *p.Absolute}
+		seasons[p.Sonarr.SeasonNumber] = append(seasons[p.Sonarr.SeasonNumber], n)
 		used[n.after]++
 	}
 	keys := make([]int, 0, len(seasons))
@@ -104,7 +111,7 @@ func writeNumbers(title string, original []models.SonarrEpisode, aflEps []models
 	}
 	sort.Ints(keys)
 
-	fmt.Fprintf(out, "# %s numbering\n\n%d AFL episodes; %d Sonarr episodes AFL leaves out.\n\n", m.SonarrTitle, len(aflEps), len(noAFLEntry))
+	fmt.Fprintf(out, "# %s numbering\n\n%d AFL episodes; %d Sonarr episodes AFL leaves out.\n\n", m.SonarrTitle, len(aflEps), notOnAFL)
 	fmt.Fprintln(out, "| Season | Eps | Sonarr abs | Mizu numbers | Used twice | Gap before |")
 	fmt.Fprintln(out, "|---|---|---|---|---|---|")
 	prevMax := 0

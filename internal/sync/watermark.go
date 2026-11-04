@@ -41,7 +41,7 @@ func normalizeWatermarkMode(mode models.WatermarkMode, startMode models.StartMod
 	return models.WatermarkModeAuto
 }
 
-func (e *Engine) refreshWatermark(ctx context.Context, mapping *models.ShowMapping, episodes []models.SonarrEpisode) (bool, int) {
+func (e *Engine) refreshWatermark(ctx context.Context, mapping *models.ShowMapping, episodes []PlacedEpisode) (bool, int) {
 	mapping.WatermarkMode = normalizeWatermarkMode(mapping.WatermarkMode, mapping.StartMode)
 	if mapping.SyncWatermark < 0 {
 		mapping.SyncWatermark = 0
@@ -70,7 +70,7 @@ func isBelowOrAtWatermark(episodeNum, watermark int) bool {
 	return episodeNum <= watermark
 }
 
-func nextAutoWatermark(current int, episodes []models.SonarrEpisode, now time.Time) int {
+func nextAutoWatermark(current int, episodes []PlacedEpisode, now time.Time) int {
 	computed := initialWatermarkForEpisodes(episodes, now)
 	if computed < current {
 		return current
@@ -78,9 +78,12 @@ func nextAutoWatermark(current int, episodes []models.SonarrEpisode, now time.Ti
 	return computed
 }
 
-func initialWatermarkForEpisodes(episodes []models.SonarrEpisode, now time.Time) int {
+// initialWatermarkForEpisodes is the highest AFL-numbered episode Sonarr has
+// downloaded and that has aired.
+func initialWatermarkForEpisodes(episodes []PlacedEpisode, now time.Time) int {
 	maxWatermark := 0
-	for _, ep := range episodes {
+	for _, p := range episodes {
+		ep := p.Sonarr
 		if isSpecialSeason(ep.SeasonNumber) {
 			continue
 		}
@@ -90,16 +93,16 @@ func initialWatermarkForEpisodes(episodes []models.SonarrEpisode, now time.Time)
 		if !ep.HasFile {
 			continue
 		}
-		// Same guard as SelectAFLEpisodeForSonarr: without an absolute
-		// episode number, MapEpisodeNumber falls back to the season-relative
+		// Same guard as selectAFLEpisode: without an absolute
+		// episode number, aflNumberOf falls back to the season-relative
 		// number, which would collide with early AFL entries (S23E17 → 17)
 		// and compute a watermark far below actual progress. Skip instead —
 		// the watermark then only advances on episodes with real absolute
 		// numbers.
-		if ep.AbsoluteEpisodeNumber == nil || *ep.AbsoluteEpisodeNumber <= 0 {
+		if p.Absolute == nil || *p.Absolute <= 0 {
 			continue
 		}
-		aflNum := *ep.AbsoluteEpisodeNumber
+		aflNum := *p.Absolute
 		if aflNum > maxWatermark {
 			maxWatermark = aflNum
 		}

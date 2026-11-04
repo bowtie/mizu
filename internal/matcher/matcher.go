@@ -148,15 +148,6 @@ func (m *Matcher) BestMatch(ctx context.Context, series models.SonarrSeries, afl
 	return nil
 }
 
-// MapEpisodeNumber maps a Sonarr episode to an AFL episode number,
-// accounting for the episode offset and absolute vs seasonal numbering.
-func MapEpisodeNumber(sonarrEp models.SonarrEpisode, offset int) int {
-	if sonarrEp.AbsoluteEpisodeNumber != nil && *sonarrEp.AbsoluteEpisodeNumber > 0 {
-		return *sonarrEp.AbsoluteEpisodeNumber + offset
-	}
-	return sonarrEp.EpisodeNumber + offset
-}
-
 // --- String Normalization ---
 
 func (m *Matcher) Normalize(s string) string {

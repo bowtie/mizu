@@ -169,9 +169,7 @@ func auditShow(ctx context.Context, sc *sonarr.Client, afl *scraper.Scraper, m m
 // analyze pairs a show's Sonarr (TVDB) episodes with AFL's the way sync
 // does and grades each pairing.
 func analyze(original []models.SonarrEpisode, aflEps []models.AFLEpisode) ([]row, []seasonStats) {
-	aligned, noAFLEntry := syncpkg.AlignToAFL(original, aflEps)
-	byNumber, preferred := syncpkg.BuildAFLEpisodeLookup(aflEps)
-	coverage := syncpkg.AFLCoverageMaxEpisodeNumber(aflEps)
+	placed := syncpkg.Place(original, aflEps)
 	norm := matcherpkg.New(0)
 
 	exactTitle := make(map[string]models.AFLEpisode)
@@ -183,26 +181,20 @@ func analyze(original []models.SonarrEpisode, aflEps []models.AFLEpisode) ([]row
 
 	bySeason := make(map[int]*seasonStats)
 	var rows []row
-	for i, ep := range aligned {
-		num, aflEp, found := syncpkg.SelectAFLEpisodeForSonarr(ep, byNumber, preferred)
-		if noAFLEntry[ep.ID] {
-			aflEp, found = models.AFLEpisode{}, false
+	for _, p := range placed {
+		if p.Kind == syncpkg.Untracked {
+			continue
 		}
-		special := ep.SeasonNumber <= 0
-		if special && !found {
-			continue // unmatched specials aren't tracked
-		}
-		if !syncpkg.IsWithinAFLCoverage(ep, num, found, coverage) && !special {
-			if ep.AbsoluteEpisodeNumber == nil {
-				continue
-			}
-		}
+		// The report shows Mizu's numbering.
+		ep := p.Sonarr
+		ep.AbsoluteEpisodeNumber = p.Absolute
+		num, aflEp, found := p.Number, p.AFL, p.Kind == syncpkg.Listed
 		s := bySeason[ep.SeasonNumber]
 		if s == nil {
 			s = &seasonStats{season: ep.SeasonNumber}
 			bySeason[ep.SeasonNumber] = s
 		}
-		if o, a := original[i].AbsoluteEpisodeNumber, ep.AbsoluteEpisodeNumber; o != nil && a != nil {
+		if o, a := p.Sonarr.AbsoluteEpisodeNumber, p.Absolute; o != nil && a != nil {
 			s.offset = *a - *o
 		}
 		s.total++
@@ -222,7 +214,7 @@ func analyze(original []models.SonarrEpisode, aflEps []models.AFLEpisode) ([]row
 		}
 		title := norm.Normalize(ep.Title)
 		switch {
-		case noAFLEntry[ep.ID]:
+		case p.Kind == syncpkg.NotOnAFL:
 			r.verdict = noEntry
 			s.noEntry++
 		case !found:

@@ -48,14 +48,13 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 	}
 
-	aflByNumber, aflPreferred := BuildAFLEpisodeLookup(aflEpisodes)
-	coverageMax := AFLCoverageMaxEpisodeNumber(aflEpisodes)
+	coverageMax := aflCoverageMax(aflEpisodes)
 
 	sonarrEpisodes, err := e.sonarrClient().GetEpisodes(ctx, series.ID)
 	if err != nil {
 		return processSeriesResult{}, fmt.Errorf("fetching Sonarr episodes: %w", err)
 	}
-	sonarrEpisodes, noAFLEntry := AlignToAFL(sonarrEpisodes, aflEpisodes)
+	placed := Place(sonarrEpisodes, aflEpisodes)
 
 	// Supersede guard (post-fetch): a user write may have landed while the
 	// Sonarr episode fetch was in flight. Check again before the watermark
@@ -65,7 +64,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		return processSeriesResult{}, errModifiedDuringSync
 	}
 
-	watermarkChanged, effectiveWatermark := e.refreshWatermark(ctx, mapping, sonarrEpisodes)
+	watermarkChanged, effectiveWatermark := e.refreshWatermark(ctx, mapping, placed)
 	effectiveWatermark = clampWatermarkToCoverage(effectiveWatermark, coverageMax)
 	if watermarkChanged {
 		log.Info().Str("series", series.Title).Int("watermark", effectiveWatermark).Str("mode", string(mapping.WatermarkMode)).Msg("updated sync watermark")
@@ -85,22 +84,18 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 	// toHold and toRelease update held_episodes once Sonarr has applied
 	// the monitor changes they come with.
 	var toHold, toRelease []int
-	seen := make(map[int]bool, len(sonarrEpisodes))
-	dbEpisodes := make([]models.EpisodeInfo, 0, len(sonarrEpisodes))
+	seen := make(map[int]bool, len(placed))
+	dbEpisodes := make([]models.EpisodeInfo, 0, len(placed))
 	result := processSeriesResult{}
 
-	for _, ep := range sonarrEpisodes {
+	for _, p := range placed {
+		ep := p.Sonarr
 		seen[ep.ID] = true
 		heldAt, isHeld := held[ep.ID]
-		aflNum, aflEpisode, found := SelectAFLEpisodeForSonarr(ep, aflByNumber, aflPreferred)
-		if noAFLEntry[ep.ID] {
-			// An episode AFL doesn't count (a banned one, say): left
-			// unclassified rather than given a neighbour's type.
-			aflEpisode, found = models.AFLEpisode{}, false
-		}
-		if !IsWithinAFLCoverage(ep, aflNum, found, coverageMax) {
+		if p.Kind == Untracked {
 			continue
 		}
+		aflNum, aflEpisode, found := p.Number, p.AFL, p.Kind == Listed
 		result.EpisodesSeen++
 
 		// For mainline episodes beyond AFL coverage without an absolute
@@ -160,10 +155,10 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 				SonarrEpisodeID:       ep.ID,
 				SeasonNumber:          ep.SeasonNumber,
 				SonarrEpisodeNumber:   ep.EpisodeNumber,
-				AbsoluteEpisodeNumber: ep.AbsoluteEpisodeNumber,
+				AbsoluteEpisodeNumber: p.Absolute,
 				AirDate:               &airDateOnly,
 				Monitored:             ep.Monitored,
-				NotOnAFL:              noAFLEntry[ep.ID],
+				NotOnAFL:              p.Kind == NotOnAFL,
 			})
 		}
 
