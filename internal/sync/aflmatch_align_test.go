@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"mizu/internal/models"
 )
@@ -362,4 +363,52 @@ func TestAlignToAFLFillsASwappedPairByTitle(t *testing.T) {
 	assert.Equal(t, 7, *aligned[5].AbsoluteEpisodeNumber)
 	assert.Equal(t, 9, *aligned[6].AbsoluteEpisodeNumber, "White Day")
 	assert.Equal(t, 8, *aligned[7].AbsoluteEpisodeNumber, "Utau")
+}
+
+// Two shifted seasons whose anchors leave the same two AFL numbers free (6
+// and 7, between season 1's "T3" and "T10" and season 2's "T5" and "T8")
+// must settle them the same way every sync, not by Go's map order.
+func TestAlignToAFLIsDeterministicAcrossSeasons(t *testing.T) {
+	var afl []models.AFLEpisode
+	for n := 1; n <= 12; n++ {
+		afl = append(afl, models.AFLEpisode{Number: n, Title: fmt.Sprintf("T%d", n), Type: models.EpisodeCanon})
+	}
+	var sonarr []models.SonarrEpisode
+	for pos, title := range []string{"T1", "T2", "T3", "Other A", "Other B", "T10", "T11", "T12"} {
+		sonarr = append(sonarr, models.SonarrEpisode{ID: 100 + pos, SeasonNumber: 1, EpisodeNumber: pos + 1, AbsoluteEpisodeNumber: abs(21 + pos), Title: title})
+	}
+	for pos, title := range []string{"T4", "T5", "Another A", "Another B", "T8", "T9"} {
+		sonarr = append(sonarr, models.SonarrEpisode{ID: 200 + pos, SeasonNumber: 2, EpisodeNumber: pos + 1, AbsoluteEpisodeNumber: abs(41 + pos), Title: title})
+	}
+
+	numbers := func() string {
+		aligned, unmatched := AlignToAFL(sonarr, afl)
+		var out []string
+		for _, ep := range aligned {
+			if unmatched[ep.ID] {
+				out = append(out, fmt.Sprintf("%d:-", ep.ID))
+			} else {
+				out = append(out, fmt.Sprintf("%d:%d", ep.ID, *ep.AbsoluteEpisodeNumber))
+			}
+		}
+		return fmt.Sprint(out)
+	}
+	first := numbers()
+	for range 50 {
+		require.Equal(t, first, numbers())
+	}
+}
+
+// When two shifts are equally common, the same one wins every time.
+func TestCommonShiftBreaksTiesTheSameWay(t *testing.T) {
+	shifts := []int{5, 2, 5, 2, 9}
+	keptShift := func() int {
+		kept := commonShift(shifts, func(d int) (int, bool) { return d, false })
+		require.NotEmpty(t, kept)
+		return kept[0]
+	}
+	first := keptShift()
+	for range 50 {
+		require.Equal(t, first, keptShift())
+	}
 }

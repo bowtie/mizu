@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -118,7 +120,8 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 	claimed := make(map[int]bool) // AFL numbers held by an anchor
 	var pending []season
 
-	for _, idxs := range seasons {
+	for _, sn := range slices.Sorted(maps.Keys(seasons)) {
+		idxs := seasons[sn]
 		sort.Slice(idxs, func(a, b int) bool { return episodes[idxs[a]].EpisodeNumber < episodes[idxs[b]].EpisodeNumber })
 		var titleCands, mixedCands []anchor
 		for pos, i := range idxs {
@@ -472,7 +475,7 @@ func commonShift[T any](cands []T, shift func(T) (int, bool)) []T {
 	}
 	best, bestCount := 0, -1
 	for d, n := range count {
-		if n > bestCount || (n == bestCount && d == 0) {
+		if n > bestCount || (n == bestCount && (d == 0 || (best != 0 && d < best))) {
 			best, bestCount = d, n
 		}
 	}

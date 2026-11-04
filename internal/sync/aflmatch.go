@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"maps"
+	"slices"
 	"strings"
 
 	matcherpkg "mizu/internal/matcher"
@@ -144,8 +146,8 @@ func matchAFLEpisodeByTitleStrict(title string, candidates []models.AFLEpisode) 
 
 func matchAFLEpisodeByTitleAcrossLookupStrict(title string, aflByNumber map[int][]models.AFLEpisode) (models.AFLEpisode, bool) {
 	allCandidates := make([]models.AFLEpisode, 0)
-	for _, candidates := range aflByNumber {
-		allCandidates = append(allCandidates, candidates...)
+	for _, num := range slices.Sorted(maps.Keys(aflByNumber)) {
+		allCandidates = append(allCandidates, aflByNumber[num]...)
 	}
 	return matchAFLEpisodeByTitleStrict(title, allCandidates)
 }
