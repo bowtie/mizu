@@ -432,13 +432,18 @@ export function ShowDetailPage() {
     }
   };
 
-  const saveTracking = () => {
+  // A toggle that couldn't be saved goes back to the saved rule: left as
+  // changed, it would be tried again every time a save finishes.
+  const saveTracking = async () => {
+    const keys = ["trackFiller", "trackMixed", "trackAnimeCanon"] as const;
     const rules = form.getValues();
-    return saveFields(["trackFiller", "trackMixed", "trackAnimeCanon"], {
+    const saved = await saveFields([...keys], {
       filler_action: trackedToAction(rules.trackFiller),
       mixed_action: trackedToAction(rules.trackMixed),
       anime_canon_action: trackedToAction(rules.trackAnimeCanon),
     });
+    if (!saved && savedRules) for (const key of keys) setRule(key, savedRules[key]);
+    return saved;
   };
 
   const saveWatermark = () => {

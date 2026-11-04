@@ -58,7 +58,12 @@ vi.mock("../components/TrackingRuleCard", () => ({
   }) =>
     createElement(
       "button",
-      { type: "button", "aria-label": switchLabel, onClick: () => onChange(!value) },
+      {
+        type: "button",
+        "aria-label": switchLabel,
+        "aria-pressed": value,
+        onClick: () => onChange(!value),
+      },
       switchLabel,
     ),
 }));
@@ -279,6 +284,35 @@ describe("ShowDetailPage", () => {
     expect(payload).toEqual(expect.objectContaining({ filler_action: "monitor" }));
     expect(payload).not.toHaveProperty("watermark_mode");
     expect(findButton("Save")).toBeUndefined();
+  });
+
+  it("tries a failed tracking save once and turns the toggle back", async () => {
+    mockedGetShow.mockResolvedValue(SHOW);
+    mockedGetEpisodes.mockResolvedValue([EPISODE]);
+    // Fails after a moment, as a request to an unreachable server would.
+    mockedUpdateShow.mockImplementation(
+      () => new Promise((_, reject) => setTimeout(() => reject(new Error("Sonarr is down")), 50)),
+    );
+    await renderPage();
+
+    const fillerToggle = () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Track filler"]')!;
+    const before = fillerToggle().getAttribute("aria-pressed");
+    await act(async () => {
+      fillerToggle().click();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 1000));
+    });
+    await flush(3);
+
+    expect(mockedUpdateShow).toHaveBeenCalledTimes(1);
+    expect(addNotificationMock).toHaveBeenCalledTimes(1);
+    expect(addNotificationMock).toHaveBeenCalledWith(
+      "Couldn't save anime: Sonarr is down",
+      "error",
+    );
+    expect(fillerToggle().getAttribute("aria-pressed")).toBe(before);
   });
 
   it("holds Auto/Manual for Save, shown only while it has a change", async () => {
