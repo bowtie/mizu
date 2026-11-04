@@ -144,8 +144,8 @@ export function ShowDetailPage() {
   const deleteShowMutation = useDeleteShow();
   const setEpisodeMonitorMutation = useSetEpisodeMonitor();
 
-  const show = (showQuery.data as Show | undefined) ?? null;
-  const episodes = (episodesQuery.data as Episode[] | undefined) ?? NO_EPISODES;
+  const show = showQuery.data ?? null;
+  const episodes = episodesQuery.data ?? NO_EPISODES;
   const { stats: epStats, maxEpisode } = useMemo(() => episodeStats(episodes), [episodes]);
 
   const showError = showQuery.error;

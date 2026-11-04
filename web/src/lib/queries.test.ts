@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Show, Episode } from "./schemas";
+import type { Show, Episode } from "./types";
 
 vi.mock("./api", () => ({
   getShow: vi.fn(),

@@ -182,9 +182,3 @@ export const SonarrAddOptionsSchema = v.object({
   root_folders: v.array(v.object({ path: v.string() })),
   quality_profiles: v.array(v.object({ id: v.number(), name: v.string() })),
 });
-
-// ── Inferred types (replace the manual interfaces in types.ts over time) ──
-
-export type Show = v.InferOutput<typeof ShowSchema>;
-export type Episode = v.InferOutput<typeof EpisodeSchema>;
-export type SonarrSeries = v.InferOutput<typeof SonarrSeriesSchema>;

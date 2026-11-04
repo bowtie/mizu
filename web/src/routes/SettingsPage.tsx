@@ -34,7 +34,7 @@ import {
   useAflCacheRefreshJob,
 } from "../lib/queries";
 import { SettingsFormSchema, type SettingsForm } from "../lib/schemas";
-import type { Settings as SettingsType, SelectOption } from "../lib/types";
+import type { Settings as SettingsType, SettingsUpdate, SelectOption } from "../lib/types";
 
 const actionToTracked = (action: string | undefined, fallback = true): boolean =>
   (action || (fallback ? "monitor" : "unmonitor")) === "monitor";
@@ -256,7 +256,7 @@ export function SettingsPage() {
     };
     const sourceChanged = formData.artworkDefaultSource !== pristineValues.artworkDefaultSource;
     try {
-      const payload: Partial<SettingsType> = {
+      const payload: SettingsUpdate = {
         sonarr_url: formData.sonarrUrl,
         default_filler_action: trackedToAction(formData.trackFillerDefault),
         default_mixed_canon_action: trackedToAction(formData.trackMixedDefault),

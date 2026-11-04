@@ -8,6 +8,7 @@ import type {
   Episode,
   MappingCreate,
   Settings,
+  SettingsUpdate,
   Show,
   ShowUpdate,
   SonarrAddOptions,
@@ -279,7 +280,7 @@ export function getSettings(): Promise<Settings> {
   return request<Settings>("GET", "/settings");
 }
 
-export function updateSettings(data: Settings | Partial<Settings>): Promise<{ status: string }> {
+export function updateSettings(data: SettingsUpdate): Promise<{ status: string }> {
   return request<{ status: string }>("PUT", "/settings", data);
 }
 

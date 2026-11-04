@@ -38,11 +38,8 @@ import {
   ArtworkProviderSchema,
   SyncLogResponseSchema,
   SonarrAddOptionsSchema,
-  type Show,
-  type SonarrSeries,
-  type Episode,
 } from "./schemas";
-import type { ShowUpdate } from "./types";
+import type { Episode, Show, ShowUpdate, SonarrSeries } from "./types";
 
 // TanStack Query is the only client-side cache: every server read goes
 // through a query below, and every write updates or invalidates the keys
