@@ -1,6 +1,11 @@
 package sync
 
-import "mizu/internal/models"
+import (
+	"cmp"
+	"slices"
+
+	"mizu/internal/models"
+)
 
 // PlacementKind says how one of Sonarr's episodes stands in
 // AnimeFillerList's list.
@@ -15,7 +20,7 @@ const (
 	// Unlisted is an episode AFL has no entry for at its number yet.
 	Unlisted
 	// NotOnAFL is an episode AFL doesn't count (a banned one, say). Its
-	// number is Sonarr's, not an AFL number.
+	// number is Sonarr's, not an AFL number; Before places it in AFL's list.
 	NotOnAFL
 )
 
@@ -30,6 +35,9 @@ type PlacedEpisode struct {
 	Absolute *int
 	// AFL is the AFL entry when Listed.
 	AFL models.AFLEpisode
+	// Before is, for NotOnAFL, the AFL number of the episode after it in
+	// Sonarr's order; zero when none follows.
+	Before int
 }
 
 // Place pairs each of Sonarr's episodes, in the order given, with where it
@@ -59,6 +67,28 @@ func Place(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode) []P
 			p.Number = num
 		}
 		placed[i] = p
+	}
+
+	// In Sonarr's order, each NotOnAFL episode comes just before the next
+	// episode that has an AFL number.
+	order := make([]int, len(placed))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortStableFunc(order, func(a, b int) int {
+		ea, eb := placed[a].Sonarr, placed[b].Sonarr
+		return cmp.Or(cmp.Compare(ea.SeasonNumber, eb.SeasonNumber), cmp.Compare(ea.EpisodeNumber, eb.EpisodeNumber))
+	})
+	next := 0
+	for _, i := range slices.Backward(order) {
+		switch placed[i].Kind {
+		case Listed, Unlisted:
+			if !isSpecialSeason(placed[i].Sonarr.SeasonNumber) {
+				next = placed[i].Number
+			}
+		case NotOnAFL:
+			placed[i].Before = next
+		}
 	}
 	return placed
 }

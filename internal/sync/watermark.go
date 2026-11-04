@@ -84,7 +84,8 @@ func initialWatermarkForEpisodes(episodes []PlacedEpisode, now time.Time) int {
 	maxWatermark := 0
 	for _, p := range episodes {
 		ep := p.Sonarr
-		if isSpecialSeason(ep.SeasonNumber) {
+		// An episode AFL doesn't count has no AFL number to reach.
+		if isSpecialSeason(ep.SeasonNumber) || p.Kind == NotOnAFL {
 			continue
 		}
 		if ep.AirDateUTC.After(now) {

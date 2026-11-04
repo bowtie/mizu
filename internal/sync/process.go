@@ -162,7 +162,11 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 			})
 		}
 
-		if isBelowOrAtWatermark(aflNum, effectiveWatermark) {
+		behind := isBelowOrAtWatermark(aflNum, effectiveWatermark)
+		if p.Kind == NotOnAFL {
+			behind = p.Before > 0 && isBelowOrAtWatermark(p.Before, effectiveWatermark)
+		}
+		if behind {
 			if ep.Monitored {
 				toUnmonitor = append(toUnmonitor, ep.ID)
 			}
@@ -170,8 +174,9 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		}
 
 		// An episode AnimeFillerList hasn't listed yet may wait unmonitored
-		// for it; once released (or never held) the rules below apply.
-		if !found {
+		// for it; once released (or never held) the rules below apply. One
+		// AFL doesn't count will never be listed, so it doesn't wait.
+		if p.Kind == Unlisted {
 			switch holdFor(ep, heldAt, isHeld, hold, now) {
 			case holdStart:
 				toHold = append(toHold, ep.ID)
