@@ -220,8 +220,10 @@ func TestExportOmitsSecretsByDefault(t *testing.T) {
 		rec, file := exportWith(t, db, mgr, tc.method, tc.body)
 		require.Equal(t, http.StatusOK, rec.Code)
 		assert.False(t, file.IncludesSecrets)
-		for k := range secretSettings {
-			assert.NotContains(t, file.Settings, k)
+		for _, k := range settingKeys {
+			if k.secret {
+				assert.NotContains(t, file.Settings, k.name)
+			}
 		}
 		assert.NotContains(t, rec.Body.String(), "-secret")
 		assert.NotContains(t, file.Settings, settingAuthMode, "sign-in mode is never exported")

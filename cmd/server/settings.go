@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"mizu/internal/artwork"
 	"mizu/internal/config"
 	"mizu/internal/database"
@@ -72,230 +73,82 @@ func handleGetSettings(cfg *config.Config, db *database.DB) http.HandlerFunc {
 
 func handleUpdateSettings(cfg *config.Config, db *database.DB, scheduler *schedulerController, syncEngine *sync.Engine, artworkMgr *artwork.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var update struct {
-			SonarrURL                 *string `json:"sonarr_url"`
-			SonarrAPIKey              *string `json:"sonarr_api_key"`
-			DefaultFillerAction       *string `json:"default_filler_action"`
-			DefaultMixedCanonAction   *string `json:"default_mixed_canon_action"`
-			DefaultAnimeCanonAction   *string `json:"default_anime_canon_action"`
-			SyncInterval              *string `json:"sync_interval"`
-			SonarrAddRootFolder       *string `json:"sonarr_add_root_folder"`
-			SonarrAddQualityProfileID *int    `json:"sonarr_add_quality_profile_id"`
-			SonarrAddMonitorMode      *string `json:"sonarr_add_monitor_mode"`
-			SonarrAddSeasonFolder     *bool   `json:"sonarr_add_season_folder"`
-			NtfyEnabled               *bool   `json:"ntfy_enabled"`
-			NtfyServerURL             *string `json:"ntfy_server_url"`
-			NtfyTopic                 *string `json:"ntfy_topic"`
-			NtfyToken                 *string `json:"ntfy_token"`
-			NtfyNotifyOn              *string `json:"ntfy_notify_on"`
-			NtfyNotifyNewTitles       *bool   `json:"ntfy_notify_new_titles"`
-			AFLRefreshInterval        *string `json:"afl_refresh_interval"`
-			HoldUnclassified          *string `json:"hold_unclassified"`
-			ArtworkDefaultSource      *string `json:"artwork_default_source"`
-			TMDBAPIKey                *string `json:"tmdb_api_key"`
-			FanartAPIKey              *string `json:"fanart_api_key"`
-			UISoundsEnabled           *bool   `json:"ui_sounds_enabled"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 
-		// Validate all fields before mutating any config. This prevents
-		// partial in-memory mutations when a later field fails validation,
-		// which would leave the running config out of sync with the DB.
-		if update.DefaultFillerAction != nil && !config.IsValidFillerAction(*update.DefaultFillerAction) {
-			writeError(w, http.StatusBadRequest, "invalid default_filler_action")
-			return
-		}
-		if update.DefaultMixedCanonAction != nil && !config.IsValidFillerAction(*update.DefaultMixedCanonAction) {
-			writeError(w, http.StatusBadRequest, "invalid default_mixed_canon_action")
-			return
-		}
-		if update.DefaultAnimeCanonAction != nil && !config.IsValidFillerAction(*update.DefaultAnimeCanonAction) {
-			writeError(w, http.StatusBadRequest, "invalid default_anime_canon_action")
-			return
-		}
-		var normalizedSyncInterval string
-		var syncDuration time.Duration
-		if update.SyncInterval != nil {
-			var err error
-			normalizedSyncInterval, syncDuration, err = normalizeScanInterval(*update.SyncInterval)
+		// Parse every field before mutating any config, so a later invalid
+		// field can't leave the running config half-updated.
+		update := make(map[string]string, len(body))
+		for name, raw := range body {
+			k, ok := settingByName[name]
+			if !ok || string(raw) == "null" {
+				continue
+			}
+			text, err := settingText(raw)
+			if err == nil {
+				text, err = k.parse(text)
+			}
 			if err != nil {
-				writeError(w, http.StatusBadRequest, "invalid sync interval")
+				writeError(w, http.StatusBadRequest, "invalid "+name+": "+err.Error())
 				return
 			}
+			update[name] = text
 		}
-		if update.SonarrAddMonitorMode != nil && !config.IsValidSonarrMonitorMode(*update.SonarrAddMonitorMode) {
-			writeError(w, http.StatusBadRequest, "invalid Sonarr monitor mode")
-			return
-		}
-		if update.NtfyNotifyOn != nil && !config.IsValidNtfyNotifyOn(*update.NtfyNotifyOn) {
-			writeError(w, http.StatusBadRequest, "invalid ntfy_notify_on")
-			return
-		}
-		if update.AFLRefreshInterval != nil && !config.IsValidAFLRefreshInterval(*update.AFLRefreshInterval) {
-			writeError(w, http.StatusBadRequest, "invalid afl_refresh_interval")
-			return
-		}
-		if update.HoldUnclassified != nil && !config.IsValidHoldUnclassified(*update.HoldUnclassified) {
-			writeError(w, http.StatusBadRequest, "invalid hold_unclassified")
-			return
-		}
-		if update.SonarrURL != nil && strings.TrimSpace(*update.SonarrURL) != "" {
-			if err := netguard.ValidateServiceURL(*update.SonarrURL); err != nil {
-				writeError(w, http.StatusBadRequest, "Sonarr URL: "+err.Error())
-				return
-			}
-		}
-		if update.NtfyServerURL != nil && strings.TrimSpace(*update.NtfyServerURL) != "" {
-			if err := netguard.ValidateServiceURL(*update.NtfyServerURL); err != nil {
-				writeError(w, http.StatusBadRequest, "ntfy server URL: "+err.Error())
-				return
-			}
-		}
-		// Compute effective ntfy values to validate without mutating cfg.
+
 		cfg.RLock()
 		ntfyEnabled := cfg.NtfyEnabled
 		ntfyServerURL := cfg.NtfyServerURL
 		ntfyTopic := cfg.NtfyTopic
 		cfg.RUnlock()
-		if update.NtfyEnabled != nil {
-			ntfyEnabled = *update.NtfyEnabled
+		if v, ok := update["ntfy_enabled"]; ok {
+			ntfyEnabled = v == "true"
 		}
-		if update.NtfyServerURL != nil {
-			ntfyServerURL = strings.TrimRight(*update.NtfyServerURL, "/")
+		if v, ok := update["ntfy_server_url"]; ok {
+			ntfyServerURL = v
 		}
-		if update.NtfyTopic != nil {
-			ntfyTopic = *update.NtfyTopic
+		if v, ok := update["ntfy_topic"]; ok {
+			ntfyTopic = v
 		}
 		if ntfyEnabled && (ntfyServerURL == "" || ntfyTopic == "") {
 			writeError(w, http.StatusBadRequest, "ntfy_server_url and ntfy_topic are required when ntfy is enabled")
 			return
 		}
-		if update.ArtworkDefaultSource != nil {
-			src := *update.ArtworkDefaultSource
-			if src != "" && src != "sonarr" {
-				valid := false
-				for _, p := range artworkMgr.Providers() {
-					if p.ID == src {
-						valid = true
-						break
-					}
-				}
-				if !valid {
-					writeError(w, http.StatusBadRequest, "invalid artwork_default_source: "+src)
-					return
-				}
-			}
+		if src, ok := update["artwork_default_source"]; ok && src != "" && src != "sonarr" && !artworkProviderRegistered(artworkMgr, src) {
+			writeError(w, http.StatusBadRequest, "invalid artwork_default_source: "+src)
+			return
 		}
 
-		// All validation passed — apply mutations under the write lock.
 		cfg.Lock()
 
 		// A saved credential belongs to the server it was entered for: the
 		// browser never sees it, so changing only the URL would otherwise
 		// send it to whatever address was typed in. Require it again
 		// (checked under the lock so a concurrent save can't slip past).
-		if update.SonarrURL != nil && cfg.SonarrAPIKey != "" && !sameBaseURL(*update.SonarrURL, cfg.SonarrURL) &&
-			(update.SonarrAPIKey == nil || *update.SonarrAPIKey == "") {
+		if url, ok := update["sonarr_url"]; ok && cfg.SonarrAPIKey != "" && !sameBaseURL(url, cfg.SonarrURL) && update["sonarr_api_key"] == "" {
 			cfg.Unlock()
 			writeError(w, http.StatusBadRequest, "enter the Sonarr API key again when changing the Sonarr URL")
 			return
 		}
-		if cfg.NtfyToken != "" && !sameBaseURL(ntfyServerURL, cfg.NtfyServerURL) && update.NtfyToken == nil {
+		if _, token := update["ntfy_token"]; cfg.NtfyToken != "" && !sameBaseURL(ntfyServerURL, cfg.NtfyServerURL) && !token {
 			cfg.Unlock()
 			writeError(w, http.StatusBadRequest, "enter the ntfy access token again (or clear it) when changing the ntfy server")
 			return
 		}
 
-		if update.SonarrURL != nil {
-			cfg.SonarrURL = strings.TrimRight(*update.SonarrURL, "/")
+		for name, v := range update {
+			settingByName[name].apply(cfg, v)
 		}
-		if update.SonarrAPIKey != nil {
-			cfg.SonarrAPIKey = *update.SonarrAPIKey
-		}
-		if update.DefaultFillerAction != nil {
-			cfg.DefaultFillerAction = config.FillerAction(*update.DefaultFillerAction)
-		}
-		if update.DefaultMixedCanonAction != nil {
-			cfg.DefaultMixedCanonAction = config.FillerAction(*update.DefaultMixedCanonAction)
-		}
-		if update.DefaultAnimeCanonAction != nil {
-			cfg.DefaultAnimeCanonAction = config.FillerAction(*update.DefaultAnimeCanonAction)
-		}
-		if update.SyncInterval != nil {
-			cfg.ScanInterval = syncDuration
-			scheduler.UpdateInterval(syncDuration)
-			update.SyncInterval = &normalizedSyncInterval
-		}
-		if update.SonarrAddRootFolder != nil {
-			cfg.SonarrAddRootFolder = *update.SonarrAddRootFolder
-		}
-		if update.SonarrAddQualityProfileID != nil {
-			cfg.SonarrAddQualityProfileID = *update.SonarrAddQualityProfileID
-		}
-		if update.SonarrAddMonitorMode != nil {
-			cfg.SonarrAddMonitorMode = *update.SonarrAddMonitorMode
-		}
-		if update.SonarrAddSeasonFolder != nil {
-			cfg.SonarrAddSeasonFolder = *update.SonarrAddSeasonFolder
-		}
-		cfg.NtfyEnabled = ntfyEnabled
-		cfg.NtfyServerURL = ntfyServerURL
-		cfg.NtfyTopic = ntfyTopic
-		if update.NtfyToken != nil {
-			cfg.NtfyToken = *update.NtfyToken
-		}
-		if update.NtfyNotifyNewTitles != nil {
-			cfg.NtfyNotifyNewTitles = *update.NtfyNotifyNewTitles
-		}
-		if update.NtfyNotifyOn != nil {
-			cfg.NtfyNotifyOn = *update.NtfyNotifyOn
-		}
-		if update.AFLRefreshInterval != nil {
-			cfg.AFLRefreshInterval = *update.AFLRefreshInterval
-		}
-		if update.HoldUnclassified != nil {
-			cfg.HoldUnclassified = *update.HoldUnclassified
-		}
-		if update.ArtworkDefaultSource != nil {
-			cfg.ArtworkDefaultSource = *update.ArtworkDefaultSource
-		}
-		if update.TMDBAPIKey != nil {
-			cfg.TMDBAPIKey = *update.TMDBAPIKey
-		}
-		if update.FanartAPIKey != nil {
-			cfg.FanartAPIKey = *update.FanartAPIKey
-		}
-		if update.UISoundsEnabled != nil {
-			cfg.UISoundsEnabled = *update.UISoundsEnabled
+		if _, ok := update["sync_interval"]; ok {
+			scheduler.UpdateInterval(cfg.ScanInterval)
 		}
 
 		// Snapshot values for DB persistence while still holding the lock.
-		settingsSnapshot := map[string]string{
-			"sonarr_url":                    cfg.SonarrURL,
-			"sonarr_api_key":                cfg.SonarrAPIKey,
-			"default_filler_action":         string(cfg.DefaultFillerAction),
-			"default_mixed_canon_action":    string(cfg.DefaultMixedCanonAction),
-			"default_anime_canon_action":    string(cfg.DefaultAnimeCanonAction),
-			"sync_interval":                 scanIntervalToValue(cfg.ScanInterval),
-			"sonarr_add_root_folder":        cfg.SonarrAddRootFolder,
-			"sonarr_add_quality_profile_id": strconv.Itoa(cfg.SonarrAddQualityProfileID),
-			"sonarr_add_monitor_mode":       cfg.SonarrAddMonitorMode,
-			"sonarr_add_season_folder":      strconv.FormatBool(cfg.SonarrAddSeasonFolder),
-			"ntfy_enabled":                  strconv.FormatBool(cfg.NtfyEnabled),
-			"ntfy_server_url":               cfg.NtfyServerURL,
-			"ntfy_topic":                    cfg.NtfyTopic,
-			"ntfy_token":                    cfg.NtfyToken,
-			"ntfy_notify_on":                cfg.NtfyNotifyOn,
-			"ntfy_notify_new_titles":        strconv.FormatBool(cfg.NtfyNotifyNewTitles),
-			"afl_refresh_interval":          cfg.AFLRefreshInterval,
-			"hold_unclassified":             cfg.HoldUnclassified,
-			"artwork_default_source":        cfg.ArtworkDefaultSource,
-			"tmdb_api_key":                  cfg.TMDBAPIKey,
-			"fanart_api_key":                cfg.FanartAPIKey,
-			"ui_sounds_enabled":             strconv.FormatBool(cfg.UISoundsEnabled),
+		settingsSnapshot := make(map[string]string, len(settingKeys))
+		for _, k := range settingKeys {
+			settingsSnapshot[k.name] = k.stored(cfg)
 		}
 		tmdbKey := cfg.TMDBAPIKey
 		fanartKey := cfg.FanartAPIKey
@@ -437,4 +290,36 @@ func handleTestNtfy(cfg *config.Config) http.HandlerFunc {
 // slashes.
 func sameBaseURL(a, b string) bool {
 	return strings.EqualFold(strings.TrimRight(strings.TrimSpace(a), "/"), strings.TrimRight(strings.TrimSpace(b), "/"))
+}
+
+// settingText is a JSON setting value in its stored form: a string as is,
+// a boolean as "true" or "false", a number as written.
+func settingText(raw json.RawMessage) (string, error) {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return "", err
+	}
+	switch v := v.(type) {
+	case string:
+		return v, nil
+	case bool:
+		return strconv.FormatBool(v), nil
+	case float64:
+		return strings.TrimSpace(string(raw)), nil
+	default:
+		return "", fmt.Errorf("not a string, boolean or number")
+	}
+}
+
+// artworkProviderRegistered reports whether mgr has a provider with id.
+func artworkProviderRegistered(mgr *artwork.Manager, id string) bool {
+	if mgr == nil {
+		return false
+	}
+	for _, p := range mgr.Providers() {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
 }

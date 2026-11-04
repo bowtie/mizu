@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
+	"slices"
 	"time"
 
 	"mizu/internal/artwork"
@@ -12,7 +12,6 @@ import (
 	"mizu/internal/config"
 	"mizu/internal/database"
 	"mizu/internal/models"
-	"mizu/internal/netguard"
 	"mizu/internal/scraper"
 	syncengine "mizu/internal/sync"
 
@@ -31,45 +30,17 @@ import (
 
 const backupFormatVersion = 1
 
-// importableSettings is the allowlist of app_settings keys a config
-// import may write. Everything the settings UI persists qualifies, plus
-// internal-but-portable keys (AFL refresh timestamp, pending manual
-// matches). Deliberately excludes auth_password_hash: a crafted import
-// file must never be able to replace the dashboard password.
-var importableSettings = map[string]struct{}{
-	"sonarr_url":                      {},
-	"sonarr_api_key":                  {},
-	"default_filler_action":           {},
-	"default_mixed_canon_action":      {},
-	"default_anime_canon_action":      {},
-	"sync_interval":                   {},
-	"sonarr_add_root_folder":          {},
-	"sonarr_add_quality_profile_id":   {},
-	"sonarr_add_monitor_mode":         {},
-	"sonarr_add_season_folder":        {},
-	"ntfy_enabled":                    {},
-	"ntfy_server_url":                 {},
-	"ntfy_topic":                      {},
-	"ntfy_token":                      {},
-	"ntfy_notify_on":                  {},
-	"ntfy_notify_new_titles":          {},
-	"afl_refresh_interval":            {},
-	"hold_unclassified":               {},
-	"artwork_default_source":          {},
-	"tmdb_api_key":                    {},
-	"fanart_api_key":                  {},
-	"ui_sounds_enabled":               {},
-	"afl_show_cache_refreshed_at":     {},
-	"manual_match_pending_series_ids": {},
-}
+// portableInternalSettings are app_settings keys a config export carries
+// besides the settingKeys: internal but portable (the AFL refresh
+// timestamp, pending manual matches). Never auth_password_hash or the
+// sign-in mode: a crafted import file must not replace the password.
+var portableInternalSettings = []string{"afl_show_cache_refreshed_at", "manual_match_pending_series_ids"}
 
-// secretSettings are the importable settings that hold credentials. They
-// are exported only on request (see handleExportConfig).
-var secretSettings = map[string]struct{}{
-	"sonarr_api_key": {},
-	"tmdb_api_key":   {},
-	"fanart_api_key": {},
-	"ntfy_token":     {},
+// importable reports whether a config export carries the key and an import
+// may write it.
+func importable(key string) bool {
+	_, ok := settingByName[key]
+	return ok || slices.Contains(portableInternalSettings, key)
 }
 
 // validAFLSlug reports whether s is a slug the scraper's URL builder
@@ -191,12 +162,9 @@ func handleExportConfig(db *database.DB, mgr *auth.Manager, acc *accessControl) 
 		}
 		// Only portable settings leave the instance: never the password
 		// hash or the sign-in mode, and secrets only when asked for.
-		settings := make(map[string]string, len(importableSettings))
+		settings := make(map[string]string, len(settingKeys)+len(portableInternalSettings))
 		for k, v := range all {
-			if _, ok := importableSettings[k]; !ok {
-				continue
-			}
-			if _, secret := secretSettings[k]; secret && !includeSecrets {
+			if !importable(k) || (settingByName[k].secret && !includeSecrets) {
 				continue
 			}
 			settings[k] = v
@@ -274,14 +242,14 @@ func handleImportConfig(cfg *config.Config, db *database.DB, scheduler *schedule
 
 		imported := make(map[string]string, len(file.Settings))
 		for k, v := range file.Settings {
-			if _, ok := importableSettings[k]; ok {
+			if importable(k) {
 				imported[k] = v
 			}
 		}
 		// Validate values with the same rules as PUT /api/settings: the
 		// runtime config is rebuilt from these, so an invalid action or
 		// interval would otherwise go live unchecked.
-		if err := validateImportedSettings(imported, artworkMgr); err != nil {
+		if err := validateImportedSettings(imported); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -341,62 +309,19 @@ func dropOrphanedCredential(imported map[string]string, urlKey, credKey, current
 	}
 }
 
-// knownArtworkSources are the artwork_default_source values every build
-// accepts; registered providers are checked too when a manager is present.
-var knownArtworkSources = map[string]struct{}{
-	"": {}, "sonarr": {}, "anilist": {}, "tmdb": {}, "fanart": {}, "kitsu": {},
-}
-
-// validateImportedSettings applies the PUT /api/settings validation rules
-// to imported values. sync_interval is normalized in place.
-func validateImportedSettings(settings map[string]string, artworkMgr *artwork.Manager) error {
+// validateImportedSettings checks imported values with the same rules as
+// saving them in Settings, normalizing them in place.
+func validateImportedSettings(settings map[string]string) error {
 	for key, value := range settings {
-		bad := false
-		switch key {
-		case "default_filler_action", "default_mixed_canon_action", "default_anime_canon_action":
-			bad = value != "" && !config.IsValidFillerAction(value)
-		case "sync_interval":
-			if value != "" {
-				normalized, _, err := normalizeScanInterval(value)
-				if err != nil {
-					bad = true
-				} else {
-					settings[key] = normalized
-				}
-			}
-		case "sonarr_add_monitor_mode":
-			bad = !config.IsValidSonarrMonitorMode(value)
-		case "ntfy_notify_on":
-			bad = value != "" && !config.IsValidNtfyNotifyOn(value)
-		case "afl_refresh_interval":
-			bad = value != "" && !config.IsValidAFLRefreshInterval(value)
-		case "hold_unclassified":
-			bad = value != "" && !config.IsValidHoldUnclassified(value)
-		case "ntfy_enabled", "sonarr_add_season_folder", "ui_sounds_enabled":
-			bad = value != "" && value != "true" && value != "false"
-		case "sonarr_add_quality_profile_id":
-			if value != "" {
-				id, err := strconv.Atoi(value)
-				bad = err != nil || id < 0
-			}
-		case "sonarr_url", "ntfy_server_url":
-			bad = value != "" && netguard.ValidateServiceURL(value) != nil
-		case "artwork_default_source":
-			if _, ok := knownArtworkSources[value]; !ok {
-				bad = true
-				if artworkMgr != nil {
-					for _, p := range artworkMgr.Providers() {
-						if p.ID == value {
-							bad = false
-							break
-						}
-					}
-				}
-			}
+		k, ok := settingByName[key]
+		if !ok {
+			continue
 		}
-		if bad {
+		parsed, err := k.parse(value)
+		if err != nil {
 			return fmt.Errorf("invalid value for %s: %q", key, value)
 		}
+		settings[key] = parsed
 	}
 	return nil
 }

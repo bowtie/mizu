@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -116,87 +114,23 @@ func applyRuntimeSettings(ctx context.Context, db *database.DB, cfg *config.Conf
 		return
 	}
 
-	// Keys gated on non-empty values skip when absent, matching the old
-	// per-key GetSetting behavior (absent rows returned "" and were skipped).
-	// Always-apply keys (API keys, topics) skip when the row is entirely
-	// missing, which is strictly safer than the old behavior of clobbering
-	// config.Load() defaults with "" on a fresh database.
-	//
 	// Mutations take the config write lock: startup calls this before the
 	// server is listening, but config import calls it from a request
-	// handler where concurrent readers hold the read lock.
+	// handler where concurrent readers hold the read lock. A stored value
+	// that no longer parses is skipped, leaving the default.
 	cfg.Lock()
 	defer cfg.Unlock()
-
-	if value, ok := settings["sonarr_url"]; ok && value != "" {
-		cfg.SonarrURL = strings.TrimRight(value, "/")
-	}
-	if value, ok := settings["sonarr_api_key"]; ok {
-		cfg.SonarrAPIKey = value
-	}
-	if value, ok := settings["default_filler_action"]; ok && config.IsValidFillerAction(value) {
-		cfg.DefaultFillerAction = config.FillerAction(value)
-	}
-	if value, ok := settings["default_mixed_canon_action"]; ok && config.IsValidFillerAction(value) {
-		cfg.DefaultMixedCanonAction = config.FillerAction(value)
-	}
-	if value, ok := settings["default_anime_canon_action"]; ok && config.IsValidFillerAction(value) {
-		cfg.DefaultAnimeCanonAction = config.FillerAction(value)
-	}
-	if value, ok := settings["sync_interval"]; ok && value != "" {
-		if _, d, parseErr := normalizeScanInterval(value); parseErr == nil {
-			cfg.ScanInterval = d
+	for _, k := range settingKeys {
+		value, ok := settings[k.name]
+		if !ok {
+			continue
 		}
-	}
-	if value, ok := settings["sonarr_add_root_folder"]; ok {
-		cfg.SonarrAddRootFolder = value
-	}
-	if value, ok := settings["sonarr_add_quality_profile_id"]; ok && value != "" {
-		if id, parseErr := strconv.Atoi(value); parseErr == nil {
-			cfg.SonarrAddQualityProfileID = id
+		parsed, err := k.parse(value)
+		if err != nil {
+			log.Warn().Err(err).Str("setting", k.name).Msg("ignoring stored setting")
+			continue
 		}
-	}
-	if value, ok := settings["sonarr_add_monitor_mode"]; ok && value != "" && config.IsValidSonarrMonitorMode(value) {
-		cfg.SonarrAddMonitorMode = value
-	}
-	if value, ok := settings["sonarr_add_season_folder"]; ok && value != "" {
-		cfg.SonarrAddSeasonFolder = value == "true"
-	}
-	if value, ok := settings["ntfy_enabled"]; ok && value != "" {
-		cfg.NtfyEnabled = value == "true"
-	}
-	if value, ok := settings["ntfy_server_url"]; ok && value != "" {
-		cfg.NtfyServerURL = strings.TrimRight(value, "/")
-	}
-	if value, ok := settings["ntfy_topic"]; ok {
-		cfg.NtfyTopic = value
-	}
-	if value, ok := settings["ntfy_token"]; ok {
-		cfg.NtfyToken = value
-	}
-	if value, ok := settings["ntfy_notify_new_titles"]; ok && value != "" {
-		cfg.NtfyNotifyNewTitles = value == "true"
-	}
-	if value, ok := settings["ntfy_notify_on"]; ok && config.IsValidNtfyNotifyOn(value) {
-		cfg.NtfyNotifyOn = value
-	}
-	if value, ok := settings["afl_refresh_interval"]; ok && config.IsValidAFLRefreshInterval(value) {
-		cfg.AFLRefreshInterval = value
-	}
-	if value, ok := settings["hold_unclassified"]; ok && config.IsValidHoldUnclassified(value) {
-		cfg.HoldUnclassified = value
-	}
-	if value, ok := settings["artwork_default_source"]; ok && value != "" {
-		cfg.ArtworkDefaultSource = value
-	}
-	if value, ok := settings["tmdb_api_key"]; ok {
-		cfg.TMDBAPIKey = value
-	}
-	if value, ok := settings["fanart_api_key"]; ok {
-		cfg.FanartAPIKey = value
-	}
-	if value, ok := settings["ui_sounds_enabled"]; ok && value != "" {
-		cfg.UISoundsEnabled = value == "true"
+		k.apply(cfg, parsed)
 	}
 }
 
