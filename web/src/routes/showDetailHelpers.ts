@@ -73,12 +73,9 @@ export function episodeBadgeInfo(
     case "anime_canon":
       return { label: "Anime", variant: "purple" };
     case "mixed_canon":
-    case "mixed":
       return { label: "Mixed", variant: "yellow" };
     case "filler":
       return { label: "Filler", variant: "red" };
-    case "special":
-      return { label: "Special", variant: "neutral" };
     default:
       return { label: "TBD", variant: "neutral" };
   }

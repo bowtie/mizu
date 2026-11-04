@@ -53,7 +53,7 @@ func main() {
 	}
 	zerolog.SetGlobalLevel(level)
 
-	log.Info().Str("version", version).Str("listen", cfg.ListenAddr).Str("sonarr", cfg.SonarrURL).Dur("scan_interval", cfg.ScanInterval).Msg("starting Mizu")
+	log.Info().Str("version", version).Str("listen", cfg.ListenAddr).Msg("starting Mizu")
 
 	db, err := database.New(cfg.DBPath)
 	if err != nil {
@@ -63,6 +63,7 @@ func main() {
 	log.Info().Str("path", cfg.DBPath).Msg("database initialized")
 
 	applyRuntimeSettings(context.Background(), db, cfg)
+	log.Info().Str("sonarr", cfg.SonarrURL).Dur("scan_interval", cfg.ScanInterval).Msg("settings loaded")
 	startupMaintenance(db)
 	scheduler := newSchedulerController(cfg.ScanInterval)
 
