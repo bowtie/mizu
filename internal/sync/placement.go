@@ -69,6 +69,30 @@ func Place(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode) []P
 		placed[i] = p
 	}
 
+	// A mainline episode without an absolute number (one Sonarr hasn't
+	// numbered yet) is numbered on from the highest-numbered episode before
+	// it in its season: S23E17 after S23E16 at 1171 is 1172, not 17. A
+	// number that wouldn't come after that one (a recap or rebroadcast out of
+	// order) is left as it is.
+	type last struct{ abs, episode int }
+	lastInSeason := make(map[int]last)
+	for i, p := range placed {
+		if p.Kind == Untracked {
+			continue
+		}
+		season := p.Sonarr.SeasonNumber
+		if p.Kind == Unlisted && !isSpecialSeason(season) && p.Sonarr.AbsoluteEpisodeNumber == nil {
+			if l := lastInSeason[season]; l.abs > 0 && l.episode > 0 {
+				if n := l.abs + p.Sonarr.EpisodeNumber - l.episode; n > l.abs {
+					placed[i].Number = n
+				}
+			}
+		}
+		if p.Absolute != nil && *p.Absolute > lastInSeason[season].abs {
+			lastInSeason[season] = last{abs: *p.Absolute, episode: p.Sonarr.EpisodeNumber}
+		}
+	}
+
 	// In Sonarr's order, each NotOnAFL episode comes just before the next
 	// episode that has an AFL number.
 	order := make([]int, len(placed))
@@ -91,4 +115,31 @@ func Place(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode) []P
 		}
 	}
 	return placed
+}
+
+// EpisodeRow is how Mizu lists a tracked episode: by its AFL number, under
+// AFL's title and type when AFL lists it.
+func EpisodeRow(mappingID int64, p PlacedEpisode) models.EpisodeInfo {
+	ep := p.Sonarr
+	title, epType := ep.Title, models.EpisodeUnknown
+	if p.Kind == Listed {
+		epType = p.AFL.Type
+		if p.AFL.Title != "" {
+			title = p.AFL.Title
+		}
+	}
+	airDate := models.DateOnly(ep.AirDateUTC)
+	return models.EpisodeInfo{
+		MappingID:             mappingID,
+		EpisodeNum:            p.Number,
+		Title:                 title,
+		Type:                  epType,
+		SonarrEpisodeID:       ep.ID,
+		SeasonNumber:          ep.SeasonNumber,
+		SonarrEpisodeNumber:   ep.EpisodeNumber,
+		AbsoluteEpisodeNumber: p.Absolute,
+		AirDate:               &airDate,
+		Monitored:             ep.Monitored,
+		NotOnAFL:              p.Kind == NotOnAFL,
+	}
 }

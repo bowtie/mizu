@@ -125,42 +125,9 @@ func fetchEpisodesLive(ctx context.Context, syncEngine *sync.Engine, mappingID i
 	placed := sync.Place(sonarrEpisodes, aflEpisodes)
 	enriched := make([]models.EpisodeInfo, 0, len(placed))
 	for _, p := range placed {
-		if p.Kind == sync.Untracked {
-			continue
+		if p.Kind != sync.Untracked {
+			enriched = append(enriched, sync.EpisodeRow(mappingID, p))
 		}
-		ep := p.Sonarr
-
-		typeValue := models.EpisodeUnknown
-		if p.Kind == sync.Listed {
-			typeValue = p.AFL.Type
-		}
-
-		episodeNum := p.Number
-		if ep.SeasonNumber == 0 || ep.SeasonNumber == -1 {
-			episodeNum = ep.EpisodeNumber
-		} else if episodeNum <= 0 {
-			if p.Absolute != nil && *p.Absolute > 0 {
-				episodeNum = *p.Absolute
-			} else {
-				episodeNum = ep.EpisodeNumber
-			}
-		}
-
-		airDate := ep.AirDateUTC
-		airDateOnly := models.DateOnly(airDate)
-		enriched = append(enriched, models.EpisodeInfo{
-			MappingID:             mappingID,
-			EpisodeNum:            episodeNum,
-			Title:                 ep.Title,
-			Type:                  typeValue,
-			SonarrEpisodeID:       ep.ID,
-			SeasonNumber:          ep.SeasonNumber,
-			SonarrEpisodeNumber:   ep.EpisodeNumber,
-			AbsoluteEpisodeNumber: p.Absolute,
-			AirDate:               &airDateOnly,
-			Monitored:             ep.Monitored,
-			NotOnAFL:              p.Kind == sync.NotOnAFL,
-		})
 	}
 
 	return enriched, nil

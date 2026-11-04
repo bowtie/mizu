@@ -95,44 +95,11 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		if p.Kind == Untracked {
 			continue
 		}
-		aflNum, aflEpisode, found := p.Number, p.AFL, p.Kind == Listed
+		aflNum := p.Number
 		result.EpisodesSeen++
 
-		// For mainline episodes beyond AFL coverage without an absolute
-		// episode number from Sonarr, compute one from the last known
-		// absolute number in the same season so the episode displays
-		// correctly (e.g. S23E17 → 1172, not 17).
-		if !found && !isSpecialSeason(ep.SeasonNumber) && ep.AbsoluteEpisodeNumber == nil {
-			lastAbs := 0
-			lastSonarrEp := 0
-			for _, dbe := range dbEpisodes {
-				if dbe.SeasonNumber == ep.SeasonNumber && dbe.AbsoluteEpisodeNumber != nil {
-					if *dbe.AbsoluteEpisodeNumber > lastAbs {
-						lastAbs = *dbe.AbsoluteEpisodeNumber
-						lastSonarrEp = dbe.SonarrEpisodeNumber
-					}
-				}
-			}
-			if lastAbs > 0 && lastSonarrEp > 0 {
-				computed := lastAbs + (ep.EpisodeNumber - lastSonarrEp)
-				// Only use the computed absolute number if it's greater than
-				// the last known absolute — out-of-order episodes (recaps,
-				// rebroadcasts) can produce incorrect or negative values.
-				if computed > lastAbs {
-					aflNum = computed
-				}
-			}
-		}
-
-		epType := models.EpisodeUnknown
-		title := ep.Title
-		if found {
-			epType = aflEpisode.Type
-			if aflEpisode.Title != "" {
-				title = aflEpisode.Title
-			}
-		}
-
+		row := EpisodeRow(mapping.ID, p)
+		epType := row.Type
 		switch epType {
 		case models.EpisodeFiller:
 			result.FillerFound++
@@ -141,26 +108,7 @@ func (e *Engine) processSeries(ctx context.Context, series models.SonarrSeries, 
 		case models.EpisodeAnimeCanon:
 			result.AnimeCanonFound++
 		}
-
-		// Specials are listed only when they match an AFL episode, like the
-		// Clear Card prologue that AFL counts as episode 71.
-		if !isSpecialSeason(ep.SeasonNumber) || found {
-			airDate := ep.AirDateUTC
-			airDateOnly := models.DateOnly(airDate)
-			dbEpisodes = append(dbEpisodes, models.EpisodeInfo{
-				MappingID:             mapping.ID,
-				EpisodeNum:            aflNum,
-				Title:                 title,
-				Type:                  epType,
-				SonarrEpisodeID:       ep.ID,
-				SeasonNumber:          ep.SeasonNumber,
-				SonarrEpisodeNumber:   ep.EpisodeNumber,
-				AbsoluteEpisodeNumber: p.Absolute,
-				AirDate:               &airDateOnly,
-				Monitored:             ep.Monitored,
-				NotOnAFL:              p.Kind == NotOnAFL,
-			})
-		}
+		dbEpisodes = append(dbEpisodes, row)
 
 		behind := isBelowOrAtWatermark(aflNum, effectiveWatermark)
 		if p.Kind == NotOnAFL {
