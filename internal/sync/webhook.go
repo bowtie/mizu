@@ -26,16 +26,31 @@ var queuePollDelays = []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 
 // slot if a sync holds it, and records the run in the activity log.
 //
 // For a grab (grabbed episode IDs and the download ID), it then cancels the
-// download if every grabbed episode was monitored and this resync
-// unmonitored it: Sonarr grabbed a filler before Mizu caught up. A grab of
-// an episode that was already unmonitored was made by hand and is left
-// alone.
+// download if every grabbed episode was monitored when the webhook arrived
+// and is unmonitored after the resync: Sonarr grabbed a filler before Mizu
+// caught up. A grab of an episode that was already unmonitored was made by
+// hand and is left alone. The state is read on arrival because a sync that
+// runs first, such as the resync of an earlier grab in the same burst, may
+// unmonitor the episode while this one waits.
 func (e *Engine) RunWebhook(ctx context.Context, mappingID int64, grabbed []int, downloadID string) error {
 	e.cfg.RLock()
 	apiKey := e.cfg.SonarrAPIKey
 	e.cfg.RUnlock()
 	if apiKey == "" {
 		return fmt.Errorf("sonarr API key not configured")
+	}
+
+	var before map[int]bool
+	if len(grabbed) > 0 {
+		mapping, err := e.db.GetMappingByID(ctx, mappingID)
+		if err != nil || mapping == nil {
+			return fmt.Errorf("mapping not found")
+		}
+		eps, err := e.sonarrClient().GetEpisodes(ctx, mapping.SonarrSeriesID)
+		if err != nil {
+			return fmt.Errorf("fetching Sonarr episodes: %w", err)
+		}
+		before = monitoredByID(eps)
 	}
 
 	done, err := e.waitForRun(ctx)
@@ -56,7 +71,7 @@ func (e *Engine) RunWebhook(ctx context.Context, mappingID int64, grabbed []int,
 	}
 	item := models.SyncLogItem{MappingID: mapping.ID, SonarrTitle: mapping.SonarrTitle}
 
-	result, cancel, err := e.webhookResync(ctx, mapping, epochs, grabbed)
+	result, cancel, err := e.webhookResync(ctx, mapping, epochs, grabbed, before)
 	done()
 	switch {
 	case errors.Is(err, errModifiedDuringSync):
@@ -120,21 +135,12 @@ func (e *Engine) waitForRun(ctx context.Context) (func(), error) {
 }
 
 // webhookResync processes the mapping's series and reports whether a grab
-// of the given episodes should be cancelled.
-func (e *Engine) webhookResync(ctx context.Context, mapping *models.ShowMapping, epochs map[int64]int64, grabbed []int) (processSeriesResult, bool, error) {
+// of the given episodes, monitored as before says, should be cancelled.
+func (e *Engine) webhookResync(ctx context.Context, mapping *models.ShowMapping, epochs map[int64]int64, grabbed []int, before map[int]bool) (processSeriesResult, bool, error) {
 	sc := e.sonarrClient()
 	series, err := sc.GetSeries(ctx, mapping.SonarrSeriesID)
 	if err != nil {
 		return processSeriesResult{}, false, fmt.Errorf("fetching Sonarr series: %w", err)
-	}
-
-	var before map[int]bool
-	if len(grabbed) > 0 {
-		eps, err := sc.GetEpisodes(ctx, series.ID)
-		if err != nil {
-			return processSeriesResult{}, false, fmt.Errorf("fetching Sonarr episodes: %w", err)
-		}
-		before = monitoredByID(eps)
 	}
 
 	result, err := e.processSeries(ctx, *series, mapping, false, epochs)

@@ -34,6 +34,7 @@ type webhookSonarr struct {
 	monitored bool
 	queue     []sonarr.QueueItem
 	removed   []string
+	reads     int // episode list fetches
 }
 
 func (f *webhookSonarr) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +45,7 @@ func (f *webhookSonarr) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/series/100":
 		_ = json.NewEncoder(w).Encode(models.SonarrSeries{ID: 100, Title: "Test Show"})
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/episode":
+		f.reads++
 		_ = json.NewEncoder(w).Encode([]models.SonarrEpisode{{
 			ID: 9001, SeriesID: 100, SeasonNumber: 1, EpisodeNumber: 1, AbsoluteEpisodeNumber: &abs,
 			Title: "Episode 1", Monitored: f.monitored, AirDateUTC: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -165,4 +167,38 @@ func TestWebhookWaitsForRunningSync(t *testing.T) {
 	}
 	assert.False(t, fake.monitored)
 	assert.Empty(t, fake.removed, "a series add cancels nothing")
+}
+
+// Sonarr grabbed a filler while it was monitored, but a sync running when
+// the webhook arrived unmonitored it first. The grab still wasn't made by
+// hand, so the download is cancelled.
+func TestWebhookCancelsAGrabUnmonitoredWhileItWaits(t *testing.T) {
+	e, fake, id := newWebhookEngine(t, true)
+	done, ok := e.TryAcquireRun()
+	require.True(t, ok)
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- e.RunWebhook(context.Background(), id, []int{9001}, "abc123") }()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		fake.mu.Lock()
+		read := fake.reads > 0
+		fake.mu.Unlock()
+		if read {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	fake.mu.Lock()
+	fake.monitored = false // the running sync's doing
+	fake.mu.Unlock()
+	done()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("webhook never ran")
+	}
+	assert.Equal(t, []string{"/api/v3/queue/7?removeFromClient=true&blocklist=false"}, fake.removed)
 }
