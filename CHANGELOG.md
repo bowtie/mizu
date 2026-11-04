@@ -59,6 +59,12 @@
   and an episode AFL leaves out is left unclassified (so monitored).
   The show page marks it "Not listed" instead of a number, which would
   repeat the one AFL gives its neighbour.
+- An episode whose title AFL spells differently takes the AFL number left
+  free between its neighbours (Pokémon's "The Fire-ring Squad" is AFL's
+  "The Fire-ing Squad!"), and one AFL files elsewhere under a near-identical
+  title is found there ("Kidnapped Riolu (1)" is AFL's "Riolu! Part 1",
+  ten episodes on). Five Pokémon episodes that showed as not on AFL now
+  have their type.
 - AFL's air dates are read too. A season whose titles are translated too
   differently to settle it can anchor by date instead (within a day, to
   allow for time zones). Dates are sometimes a week off where a broadcast
@@ -112,6 +118,8 @@
   that shows on the toolbar only while one of them has a change (on
   phones, the ⋯ button turns into a ✓). The "Unsaved changes" badge and
   the always-there Save button are gone.
+
+- TVDB specials no longer show an episode number under their title.
 
 ### Phones
 

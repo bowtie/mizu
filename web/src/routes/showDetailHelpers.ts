@@ -30,6 +30,9 @@ export function displayEpisodeNumber(ep: Episode): number {
  * shown for it would repeat its neighbour's, so it gets none.
  */
 export function episodeNumberText(ep: Episode): string {
+  // TVDB's specials sit in their own group; a number there says nothing.
+  // (Sonarr's season 0 arrives as no season at all.)
+  if (episodeSeason(ep) === -1) return "";
   if (ep.not_on_afl) return "Not listed";
   return `Episode ${displayEpisodeNumber(ep)}`;
 }

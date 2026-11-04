@@ -241,3 +241,125 @@ func TestAlignToAFLDatesCantOverruleMatchingTitles(t *testing.T) {
 	assert.Empty(t, noEntry)
 	assert.Equal(t, sonarr, aligned)
 }
+
+// Pokémon's "The Fire-ring Squad" is AFL's "The Fire-ing Squad!": no title
+// match, and TVDB skips an absolute number just before it, so following
+// the anchor before it would land on the next episode's AFL number. It
+// takes the one AFL number left free between its neighbours.
+func TestAlignToAFLFillsAFreeNumberBetweenAnchors(t *testing.T) {
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	add := func(id, absNum, aflNum int, sonarrTitle, aflTitle string) {
+		sonarr = append(sonarr, models.SonarrEpisode{ID: id, SeasonNumber: 3, EpisodeNumber: id, AbsoluteEpisodeNumber: abs(absNum), Title: sonarrTitle})
+		afl = append(afl, models.AFLEpisode{Number: aflNum, Title: aflTitle, Type: models.EpisodeFiller})
+	}
+	for n := 1; n <= 5; n++ {
+		title := fmt.Sprintf("Before %d", n)
+		add(n, 107+n, 100+n, title, title)
+	}
+	add(6, 114, 106, "The Fire-ring Squad", "The Fire-ing Squad!")
+	for n := 1; n <= 5; n++ {
+		title := fmt.Sprintf("After %d", n)
+		add(6+n, 114+n, 106+n, title, title)
+	}
+
+	aligned, unmatched := AlignToAFL(sonarr, afl)
+	assert.Equal(t, 106, *aligned[5].AbsoluteEpisodeNumber)
+	assert.False(t, unmatched[6])
+	assert.Equal(t, 107, *aligned[6].AbsoluteEpisodeNumber)
+}
+
+// A banned episode leaves no AFL number free between its neighbours, so it
+// stays unmatched rather than taking one.
+func TestAlignToAFLLeavesABannedEpisodeUnmatched(t *testing.T) {
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	for n := 1; n <= 10; n++ {
+		title := fmt.Sprintf("Episode %d", n)
+		absNum := n
+		if n > 5 {
+			absNum = n + 1
+		}
+		sonarr = append(sonarr, models.SonarrEpisode{ID: n, SeasonNumber: 1, EpisodeNumber: absNum, AbsoluteEpisodeNumber: abs(absNum), Title: title})
+		afl = append(afl, models.AFLEpisode{Number: n, Title: title, Type: models.EpisodeFiller})
+	}
+	sonarr = append(sonarr, models.SonarrEpisode{ID: 99, SeasonNumber: 1, EpisodeNumber: 6, AbsoluteEpisodeNumber: abs(6), Title: "Banned"})
+
+	aligned, unmatched := AlignToAFL(sonarr, afl)
+	assert.True(t, unmatched[99])
+	assert.Equal(t, 6, *aligned[5].AbsoluteEpisodeNumber, "the episode after it is AFL 6")
+}
+
+// Pokémon's Ranger two-parter sits after "The Bells Are Singing!" in TVDB
+// but ten episodes later on AFL, titled "...Riolu! Part 1" and "Part 2".
+// Each part finds its own AFL number.
+func TestAlignToAFLPlacesACloseTitleOutOfOrder(t *testing.T) {
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	id := 0
+	addSonarr := func(absNum int, title string) {
+		id++
+		sonarr = append(sonarr, models.SonarrEpisode{ID: id, SeasonNumber: 11, EpisodeNumber: id, AbsoluteEpisodeNumber: abs(absNum), Title: title})
+	}
+	for n := 1; n <= 5; n++ {
+		addSonarr(10+n, fmt.Sprintf("Before %d", n))
+		afl = append(afl, models.AFLEpisode{Number: n, Title: fmt.Sprintf("Before %d", n)})
+	}
+	addSonarr(16, "Pokemon Ranger and the Kidnapped Riolu (1)")
+	addSonarr(17, "Pokemon Ranger and the Kidnapped Riolu (2)")
+	for n := 1; n <= 10; n++ {
+		addSonarr(17+n, fmt.Sprintf("After %d", n))
+		afl = append(afl, models.AFLEpisode{Number: 5 + n, Title: fmt.Sprintf("After %d", n)})
+	}
+	afl = append(afl,
+		models.AFLEpisode{Number: 16, Title: "Pokémon Ranger and the Kidnapped Riolu! Part 1", Type: models.EpisodeCanon},
+		models.AFLEpisode{Number: 17, Title: "Pokémon Ranger and the Kidnapped Riolu! Part 2", Type: models.EpisodeCanon},
+	)
+
+	aligned, unmatched := AlignToAFL(sonarr, afl)
+	assert.Empty(t, unmatched)
+	assert.Equal(t, 16, *aligned[5].AbsoluteEpisodeNumber)
+	assert.Equal(t, 17, *aligned[6].AbsoluteEpisodeNumber)
+	assert.Equal(t, 6, *aligned[7].AbsoluteEpisodeNumber)
+}
+
+func TestCloseTitles(t *testing.T) {
+	assert.True(t, closeTitles("pokemon ranger and kidnapped riolu 1", "pokémon ranger and kidnapped riolu part 1"))
+	assert.False(t, closeTitles("pokemon ranger and kidnapped riolu 1", "pokemon ranger and kidnapped riolu part 2"))
+	assert.False(t, closeTitles("battle begins", "battle begins again"), "too short to pair")
+	assert.False(t, closeTitles("frenzied factory fiasco", "frenzy factory fiasco"))
+}
+
+// Shugo Chara: TVDB airs "White Day" before "Utau Came To My House", AFL
+// the other way round. Filling the gap between anchors keeps them apart by
+// their shared words rather than handing out numbers in order.
+func TestAlignToAFLFillsASwappedPairByTitle(t *testing.T) {
+	var sonarr []models.SonarrEpisode
+	var afl []models.AFLEpisode
+	id := 0
+	addSonarr := func(absNum int, title string) {
+		id++
+		sonarr = append(sonarr, models.SonarrEpisode{ID: id, SeasonNumber: 2, EpisodeNumber: id, AbsoluteEpisodeNumber: abs(absNum), Title: title})
+	}
+	for n := 1; n <= 5; n++ {
+		addSonarr(n, fmt.Sprintf("Before %d", n))
+		afl = append(afl, models.AFLEpisode{Number: n + 1, Title: fmt.Sprintf("Before %d", n)})
+	}
+	addSonarr(6, "On the Secret List! The Recipe of Reconciliation?")
+	addSonarr(7, "Heart-Thumping White Day!")
+	addSonarr(8, "The Jig is Up!? Utau Came To My House!")
+	afl = append(afl,
+		models.AFLEpisode{Number: 7, Title: "Classified! Make-up Recipe?"},
+		models.AFLEpisode{Number: 8, Title: "The Jig is Up!? Utau Pays a Visit"},
+		models.AFLEpisode{Number: 9, Title: "An Exciting White Day!"},
+	)
+	for n := 1; n <= 5; n++ {
+		addSonarr(8+n, fmt.Sprintf("After %d", n))
+		afl = append(afl, models.AFLEpisode{Number: 9 + n, Title: fmt.Sprintf("After %d", n)})
+	}
+
+	aligned, _ := AlignToAFL(sonarr, afl)
+	assert.Equal(t, 7, *aligned[5].AbsoluteEpisodeNumber)
+	assert.Equal(t, 9, *aligned[6].AbsoluteEpisodeNumber, "White Day")
+	assert.Equal(t, 8, *aligned[7].AbsoluteEpisodeNumber, "Utau")
+}

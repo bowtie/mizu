@@ -3,6 +3,11 @@ import type { Episode } from "../lib/types";
 import { episodeBadgeInfo, episodeNumberText } from "./showDetailHelpers";
 
 describe("episodeNumberText", () => {
+  it("gives TVDB specials no number line", () => {
+    expect(episodeNumberText({ season_number: 0, sonarr_episode_number: 3 } as Episode)).toBe("");
+    expect(episodeNumberText({ episode_num: 61, sonarr_episode_number: 61 } as Episode)).toBe("");
+  });
+
   it("uses the AFL-aligned number for an episode AFL counts", () => {
     const ep = {
       season_number: 1,

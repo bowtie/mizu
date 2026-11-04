@@ -69,17 +69,23 @@ const EpisodeListItem = memo(function EpisodeListItem({
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const epNum = displayEpisodeNumber(ep);
   const airDate = formatAirDate(ep.air_date);
+  const numberText = episodeNumberText(ep);
   return (
     <ListItem
       key={`${groupSeason}-${epNum}`}
       label={ep.title || "Untitled"}
       description={
-        <>
-          {episodeNumberText(ep)}
-          {airDate && (
-            <span className="episode-date-inline"> · {formatAirDate(ep.air_date, true)}</span>
-          )}
-        </>
+        numberText || airDate ? (
+          <>
+            {numberText}
+            {airDate && (
+              <span className="episode-date-inline">
+                {numberText && " · "}
+                {formatAirDate(ep.air_date, true)}
+              </span>
+            )}
+          </>
+        ) : undefined
       }
       endContent={
         <HStack gap={4} align="center" className="episode-row-end">

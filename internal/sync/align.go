@@ -198,6 +198,78 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 		}
 	}
 
+	// Between two anchors, episodes whose titles differ ("The Fire-ring
+	// Squad", AFL's "The Fire-ing Squad!") take AFL's free numbers there in
+	// order when there are exactly as many of each. Following the nearest
+	// anchor instead would run them into a number an anchor holds whenever
+	// an out-of-order episode or a banned one sits nearby.
+	for _, s := range pending {
+		for k := 0; k+1 < len(s.anchors); k++ {
+			lo, hi := s.anchors[k], s.anchors[k+1]
+			var run []int
+			for pos := lo.pos + 1; pos < hi.pos; pos++ {
+				if i := s.idxs[pos]; !isAnchor[i] {
+					run = append(run, i)
+				}
+			}
+			if len(run) == 0 {
+				continue
+			}
+			var free []int
+			for n := lo.afl + 1; n < hi.afl; n++ {
+				if _, onAFL := aflTitleByNum[n]; onAFL && !claimed[n] {
+					free = append(free, n)
+				}
+			}
+			if len(free) != len(run) {
+				continue
+			}
+			// Titles that share most words with exactly one free AFL title
+			// (and it with them alone) take it, which keeps two episodes TVDB
+			// airs swapped apart (Shugo Chara's "Heart-Thumping White Day!"
+			// is AFL's "An Exciting White Day!", one later). The rest take
+			// the numbers left in order.
+			pair := make(map[int]int) // run index → free index
+			taken := make(map[int]bool)
+			for j, i := range run {
+				t := norm.Normalize(episodes[i].Title)
+				found, n := -1, 0
+				for f, num := range free {
+					if mostWordsShared(t, aflTitleByNum[num]) {
+						found, n = f, n+1
+					}
+				}
+				if n != 1 {
+					continue
+				}
+				others := 0
+				for _, i2 := range run {
+					if mostWordsShared(norm.Normalize(episodes[i2].Title), aflTitleByNum[free[found]]) {
+						others++
+					}
+				}
+				if others == 1 {
+					pair[j] = found
+					taken[found] = true
+				}
+			}
+			rest := 0
+			for j, i := range run {
+				f, ok := pair[j]
+				if !ok {
+					for taken[rest] {
+						rest++
+					}
+					f = rest
+					rest++
+				}
+				target[i] = free[f]
+				isAnchor[i] = true
+				claimed[free[f]] = true
+			}
+		}
+	}
+
 	aligned := make([]models.SonarrEpisode, len(episodes))
 	copy(aligned, episodes)
 	unmatched := make(map[int]bool)
@@ -224,7 +296,89 @@ func AlignToAFL(episodes []models.SonarrEpisode, aflEpisodes []models.AFLEpisode
 			aligned[i].AbsoluteEpisodeNumber = &num
 		}
 	}
+
+	// An episode still without an AFL number may be one AFL files elsewhere
+	// under a slightly different title: Pokémon's "Pokemon Ranger and the
+	// Kidnapped Riolu (1)" is AFL's "...Riolu! Part 1", ten episodes later.
+	// It takes that number when no other episode has it and the titles
+	// pair up one to one.
+	if len(unmatched) > 0 {
+		used := make(map[int]bool)
+		for _, s := range pending {
+			for _, i := range s.idxs {
+				if !unmatched[episodes[i].ID] {
+					used[*aligned[i].AbsoluteEpisodeNumber] = true
+				}
+			}
+		}
+		for _, s := range pending {
+			for _, i := range s.idxs {
+				if !unmatched[episodes[i].ID] {
+					continue
+				}
+				t := norm.Normalize(episodes[i].Title)
+				num, ok := closeTitleMatch(t, aflTitleByNum)
+				if !ok || used[num] {
+					continue
+				}
+				// The AFL title may not suit another episode as well.
+				others := 0
+				for _, ep := range episodes {
+					if closeTitles(norm.Normalize(ep.Title), aflTitleByNum[num]) {
+						others++
+					}
+				}
+				if others != 1 {
+					continue
+				}
+				used[num] = true
+				delete(unmatched, episodes[i].ID)
+				aligned[i].AbsoluteEpisodeNumber = &num
+			}
+		}
+	}
 	return aligned, unmatched
+}
+
+// closeTitleMatch is the one AFL episode whose title closeTitles pairs
+// with t; false when none or several do.
+func closeTitleMatch(t string, aflTitleByNum map[int]string) (int, bool) {
+	found, n := 0, 0
+	for num, a := range aflTitleByNum {
+		if closeTitles(t, a) {
+			found, n = num, n+1
+		}
+	}
+	return found, n == 1
+}
+
+// closeTitles reports whether two normalized titles say the same thing
+// but for a "part" or one extra word: "kidnapped riolu 1" and "kidnapped
+// riolu part 1". Numbers count as words, so part 1 never pairs with part
+// 2, and a title needs three words to pair at all.
+func closeTitles(a, b string) bool {
+	words := func(s string) map[string]bool {
+		set := make(map[string]bool)
+		for _, w := range strings.Fields(foldAccents(s)) {
+			if w != "part" {
+				set[w] = true
+			}
+		}
+		return set
+	}
+	aw, bw := words(a), words(b)
+	if len(aw) > len(bw) {
+		aw, bw = bw, aw
+	}
+	if len(aw) < 3 || len(bw)-len(aw) > 1 {
+		return false
+	}
+	for w := range aw {
+		if !bw[w] {
+			return false
+		}
+	}
+	return true
 }
 
 // uniqueTitles maps each non-empty title that appears exactly once to its
@@ -362,3 +516,16 @@ func mostWordsShared(a, b string) bool {
 	}
 	return shared*2 >= len(aw)
 }
+
+// accentFold spells accented Latin letters plainly: TVDB writes "Pokemon"
+// where AFL writes "Pokémon".
+var accentFold = strings.NewReplacer(
+	"à", "a", "á", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
+	"è", "e", "é", "e", "ê", "e", "ë", "e",
+	"ì", "i", "í", "i", "î", "i", "ï", "i",
+	"ò", "o", "ó", "o", "ô", "o", "ö", "o", "õ", "o", "ō", "o",
+	"ù", "u", "ú", "u", "û", "u", "ü", "u", "ū", "u",
+	"ñ", "n", "ç", "c",
+)
+
+func foldAccents(s string) string { return accentFold.Replace(s) }

@@ -37,14 +37,18 @@ const VirtualEpisodeRow = memo(function VirtualEpisodeRow({
   const badge = episodeBadgeInfo(ep.type, ep.held, ep.not_on_afl);
   const monitored = !!ep.sonarr_episode_id && !!ep.monitored;
   const airDate = formatAirDate(ep.air_date);
+  const numberText = episodeNumberText(ep);
   return (
     <div className="virtual-episode-row" role="listitem">
       <div className="virtual-episode-row-content">
         <span className="virtual-episode-label">{ep.title || "Untitled"}</span>
         <span className="virtual-episode-desc">
-          {episodeNumberText(ep)}
+          {numberText}
           {airDate && (
-            <span className="episode-date-inline"> · {formatAirDate(ep.air_date, true)}</span>
+            <span className="episode-date-inline">
+              {numberText && " · "}
+              {formatAirDate(ep.air_date, true)}
+            </span>
           )}
         </span>
       </div>
