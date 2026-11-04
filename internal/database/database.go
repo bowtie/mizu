@@ -60,7 +60,7 @@ func New(dbPath string) (*DB, error) {
 	}
 
 	// Enable foreign key constraints so ON DELETE CASCADE actually fires.
-	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
+	if _, err := conn.ExecContext(context.Background(), "PRAGMA foreign_keys = ON"); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("enabling foreign keys: %w", err)
 	}

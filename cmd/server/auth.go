@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"mime"
 	"net/http"
 	"net/url"
@@ -242,10 +243,10 @@ func handleAuthSetup(mgr *auth.Manager, acc *accessControl, db *database.DB) htt
 		}
 		token, expiresAt, err := mgr.Setup(r.Context(), req.Password)
 		if err != nil {
-			switch err {
-			case auth.ErrAlreadyConfigured:
+			switch {
+			case errors.Is(err, auth.ErrAlreadyConfigured):
 				writeError(w, http.StatusConflict, err.Error())
-			case auth.ErrPasswordTooShort, auth.ErrPasswordTooLong:
+			case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong):
 				writeError(w, http.StatusBadRequest, err.Error())
 			default:
 				writeInternalError(w, err, "failed to set password")
@@ -307,10 +308,10 @@ func handleAuthChangePassword(mgr *auth.Manager, acc *accessControl) http.Handle
 			return
 		}
 		if err := mgr.ChangePassword(r.Context(), req.CurrentPassword, req.NewPassword); err != nil {
-			switch err {
-			case auth.ErrInvalidPassword:
+			switch {
+			case errors.Is(err, auth.ErrInvalidPassword):
 				writeError(w, http.StatusUnauthorized, err.Error())
-			case auth.ErrPasswordTooShort, auth.ErrPasswordTooLong:
+			case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong):
 				writeError(w, http.StatusBadRequest, err.Error())
 			default:
 				writeInternalError(w, err, "failed to change password")
@@ -415,7 +416,7 @@ func handleUpdateAccessSettings(mgr *auth.Manager, acc *accessControl, db *datab
 		}
 		if configured && !acc.get().open() {
 			if err := mgr.Verify(r.Context(), req.CurrentPassword); err != nil {
-				if err == auth.ErrInvalidPassword {
+				if errors.Is(err, auth.ErrInvalidPassword) {
 					writeError(w, http.StatusUnauthorized, "incorrect password")
 					return
 				}
@@ -443,8 +444,8 @@ func handleUpdateAccessSettings(mgr *auth.Manager, acc *accessControl, db *datab
 		if mode == authModePassword && !configured {
 			token, expiresAt, err := mgr.Setup(r.Context(), req.NewPassword)
 			if err != nil {
-				switch err {
-				case auth.ErrPasswordTooShort, auth.ErrPasswordTooLong:
+				switch {
+				case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong):
 					writeError(w, http.StatusBadRequest, err.Error())
 				default:
 					writeInternalError(w, err, "failed to set password")

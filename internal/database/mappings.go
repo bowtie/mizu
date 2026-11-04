@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,7 +28,7 @@ func (db *DB) GetAllMappings(ctx context.Context) ([]models.ShowMapping, error) 
 
 func (db *DB) GetMappingByID(ctx context.Context, id int64) (*models.ShowMapping, error) {
 	row, err := db.q.GetMappingByID(ctx, id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -39,7 +40,7 @@ func (db *DB) GetMappingByID(ctx context.Context, id int64) (*models.ShowMapping
 
 func (db *DB) GetMappingBySonarrID(ctx context.Context, seriesID int) (*models.ShowMapping, error) {
 	row, err := db.q.GetMappingBySonarrID(ctx, int64(seriesID))
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

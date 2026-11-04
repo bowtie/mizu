@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -144,7 +145,7 @@ func handleExportConfig(db *database.DB, mgr *auth.Manager, acc *accessControl) 
 			}
 			if pol := acc.get(); req.IncludeSecrets && pol.mode() == authModePassword {
 				if err := mgr.Verify(r.Context(), req.Password); err != nil {
-					if err == auth.ErrInvalidPassword {
+					if errors.Is(err, auth.ErrInvalidPassword) {
 						writeError(w, http.StatusUnauthorized, "incorrect password")
 						return
 					}

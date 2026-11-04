@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"mizu/internal/database/sqlcgen"
@@ -106,7 +107,7 @@ func (db *DB) GetAFLShowCacheStatus(ctx context.Context) (int, time.Time, error)
 
 func (db *DB) GetFillerStats(ctx context.Context) (canon, mixed, animeCanon, filler, total int, err error) {
 	row, err := db.q.GetFillerStats(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, 0, 0, 0, 0, nil
 	}
 	if err != nil {

@@ -9,6 +9,8 @@ linters:
     - staticcheck
     - unused
     - misspell
+    - errorlint
+    - noctx
   settings:
     staticcheck:
       checks: ["all", "-QF1001", "-ST1000"]
@@ -19,7 +21,7 @@ linters:
       - std-error-handling
     rules:
       - path: _test\.go
-        linters: [errcheck]
+        linters: [errcheck, noctx]
       - source: 'defer .+\.Close\(\)'
         linters: [errcheck]
       - source: 'defer .+\.Rollback\(\)'

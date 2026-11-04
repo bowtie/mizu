@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"mizu/internal/database/sqlcgen"
 
@@ -11,7 +12,7 @@ import (
 
 func (db *DB) GetSetting(ctx context.Context, key string) (string, error) {
 	row, err := db.q.GetSetting(ctx, key)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
 	return row.Value, err
