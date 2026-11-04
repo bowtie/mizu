@@ -45,6 +45,10 @@ jobs:
       - name: Vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
+      # The generated database code must match the queries and migrations.
+      - name: sqlc generated code is current
+        run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 diff
+
   web:
     runs-on: ubuntu-latest
     defaults:
