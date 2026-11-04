@@ -198,9 +198,9 @@ func handleCreateMapping(cfg *config.Config, db *database.DB, syncEngine *sync.E
 		startMode := startModeOrDefault(req.StartMode)
 		initialWatermark := 0
 		if syncEngine != nil {
-			watermark, err := syncEngine.InitialWatermarkForStartMode(r.Context(), req.SonarrSeriesID, startMode)
+			watermark, err := syncEngine.InitialWatermarkForStartMode(r.Context(), req.SonarrSeriesID, req.AFLSlug, startMode)
 			if err != nil {
-				writeError(w, http.StatusBadGateway, "failed to inspect Sonarr episodes: "+err.Error())
+				writeError(w, http.StatusBadGateway, "failed to compute the starting watermark: "+err.Error())
 				return
 			}
 			initialWatermark = watermark
@@ -384,9 +384,9 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 			mapping.StartMode = startModeOrDefault(update.StartMode)
 			mapping.WatermarkMode = watermarkModeOrDefault(nil, mapping.StartMode)
 			if syncEngine != nil {
-				watermark, err := syncEngine.InitialWatermarkForStartMode(r.Context(), mapping.SonarrSeriesID, mapping.StartMode)
+				watermark, err := syncEngine.InitialWatermarkForStartMode(r.Context(), mapping.SonarrSeriesID, mapping.AFLSlug, mapping.StartMode)
 				if err != nil {
-					writeError(w, http.StatusBadGateway, "failed to inspect Sonarr episodes: "+err.Error())
+					writeError(w, http.StatusBadGateway, "failed to compute the starting watermark: "+err.Error())
 					return
 				}
 				mapping.SyncWatermark = watermark
@@ -395,9 +395,9 @@ func handleUpdateMapping(syncEngine *sync.Engine, db *database.DB) http.HandlerF
 		if update.WatermarkMode != nil {
 			mapping.WatermarkMode = watermarkModeOrDefault(update.WatermarkMode, mapping.StartMode)
 			if mapping.WatermarkMode == models.WatermarkModeAuto && syncEngine != nil {
-				watermark, err := syncEngine.InitialWatermarkForSeries(r.Context(), mapping.SonarrSeriesID)
+				watermark, err := syncEngine.InitialWatermarkForSeries(r.Context(), mapping.SonarrSeriesID, mapping.AFLSlug)
 				if err != nil {
-					writeError(w, http.StatusBadGateway, "failed to inspect Sonarr episodes: "+err.Error())
+					writeError(w, http.StatusBadGateway, "failed to compute the starting watermark: "+err.Error())
 					return
 				}
 				if watermark > mapping.SyncWatermark {

@@ -12,19 +12,24 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (e *Engine) InitialWatermarkForSeries(ctx context.Context, seriesID int) (int, error) {
+func (e *Engine) InitialWatermarkForSeries(ctx context.Context, seriesID int, aflSlug string) (int, error) {
 	sonarrEpisodes, err := e.sonarrClient().GetEpisodes(ctx, seriesID)
 	if err != nil {
 		return 0, fmt.Errorf("fetching Sonarr episodes: %w", err)
 	}
-	return initialWatermarkForEpisodes(sonarrEpisodes, time.Now()), nil
+	_, aflEpisodes, err := e.scraper.GetShowEpisodes(ctx, aflSlug)
+	if err != nil {
+		return 0, fmt.Errorf("fetching AFL episodes: %w", err)
+	}
+	aligned, _ := AlignToAFL(sonarrEpisodes, aflEpisodes)
+	return initialWatermarkForEpisodes(aligned, time.Now()), nil
 }
 
-func (e *Engine) InitialWatermarkForStartMode(ctx context.Context, seriesID int, startMode models.StartMode) (int, error) {
+func (e *Engine) InitialWatermarkForStartMode(ctx context.Context, seriesID int, aflSlug string, startMode models.StartMode) (int, error) {
 	if normalizeStartMode(startMode) == models.StartModeFromBeginning {
 		return 0, nil
 	}
-	return e.InitialWatermarkForSeries(ctx, seriesID)
+	return e.InitialWatermarkForSeries(ctx, seriesID, aflSlug)
 }
 
 func (e *Engine) SuggestMatches(ctx context.Context, seriesID int) (*models.SonarrSeries, []matcherpkg.MatchResult, error) {
@@ -89,7 +94,7 @@ func (e *Engine) HydrateMapping(ctx context.Context, mappingID int64) (*models.S
 func (e *Engine) autoMatch(ctx context.Context, series models.SonarrSeries, bestMatch matcherpkg.MatchResult) (*models.ShowMapping, error) {
 	log.Info().Str("sonarr", series.Title).Str("afl", bestMatch.AFLShow.Title).Float64("confidence", bestMatch.Confidence).Str("method", bestMatch.Method).Msg("auto-matched series")
 
-	initialWatermark, err := e.InitialWatermarkForStartMode(ctx, series.ID, models.StartModeCurrentProgress)
+	initialWatermark, err := e.InitialWatermarkForStartMode(ctx, series.ID, bestMatch.AFLShow.Slug, models.StartModeCurrentProgress)
 	if err != nil {
 		return nil, fmt.Errorf("computing initial watermark: %w", err)
 	}
