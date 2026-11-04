@@ -7,13 +7,20 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  # Keyless cosign signing: the workflow's OIDC identity signs the image.
-  id-token: write
 
 jobs:
+  # The tagged commit passes CI before anything is published.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   image:
+    needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Keyless cosign signing: the workflow's OIDC identity signs the image.
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

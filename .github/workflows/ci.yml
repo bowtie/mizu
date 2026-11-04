@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
+    branches: ["**"]
   pull_request:
+  # Release runs this first, on the tagged commit, before building an image.
+  workflow_call:
 
 permissions:
   contents: read
@@ -38,6 +41,9 @@ jobs:
         run: go test -race ./...
         env:
           CGO_ENABLED: "1"
+
+      - name: Vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
   web:
     runs-on: ubuntu-latest
