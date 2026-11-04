@@ -2,6 +2,8 @@ module mizu
 
 go 1.27.0
 
+toolchain go1.27.3
+
 // web/node_modules can contain Go packages (e.g. flatted); keep ./... out of it.
 ignore ./web/node_modules
 
