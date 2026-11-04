@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-04
+
+Sonarr can tell Mizu about new episodes the moment it grabs them, filler
+files can be cleared out, and episodes AnimeFillerList hasn't listed yet
+can wait. Matching now lines Sonarr's numbering up with AFL's, the show
+pages work on phones, and they have readable URLs.
+
 ### Sonarr webhook
 
 - Sonarr can call Mizu the moment it grabs an episode or adds a series
