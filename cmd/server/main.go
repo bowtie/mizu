@@ -82,9 +82,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	go startScheduler(ctx, cfg, scheduler, syncEngine)
-	go startAFLCacheRefresher(ctx, cfg, syncEngine, db, &bgWG)
-	go sweepSessions(ctx, auth.NewManager(db))
+	startBackground(ctx, cfg, scheduler, syncEngine, db, &bgWG)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -104,8 +102,8 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("server shutdown error")
 	}
-	// Wait for background goroutines (sync, resync, artwork refresh) to finish
-	// before closing the database.
+	// Wait for background work (scheduled and requested syncs, AFL and
+	// artwork refreshes) to finish before closing the database.
 	bgWG.Wait()
 	log.Info().Msg("Mizu stopped")
 }
@@ -238,6 +236,14 @@ func sweepSessions(ctx context.Context, mgr *auth.Manager) {
 			}
 		}
 	}
+}
+
+// startBackground starts the loops that run until ctx is cancelled. They
+// join bgWG so shutdown waits for a sync or refresh they have under way.
+func startBackground(ctx context.Context, cfg *config.Config, scheduler *schedulerController, syncEngine *syncengine.Engine, db *database.DB, bgWG *sync.WaitGroup) {
+	bgWG.Go(func() { startScheduler(ctx, cfg, scheduler, syncEngine) })
+	bgWG.Go(func() { startAFLCacheRefresher(ctx, cfg, syncEngine, db) })
+	bgWG.Go(func() { sweepSessions(ctx, auth.NewManager(db)) })
 }
 
 func startScheduler(ctx context.Context, cfg *config.Config, scheduler *schedulerController, syncEngine *syncengine.Engine) {

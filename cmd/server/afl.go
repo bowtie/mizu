@@ -67,21 +67,19 @@ func aflCacheRefreshDue(count int, refreshedAt, now time.Time, interval time.Dur
 
 // refreshAFLCacheIfDue runs a refresh when the cache is due and no other
 // refresh is running, reporting whether it ran one.
-func refreshAFLCacheIfDue(ctx context.Context, cfg *config.Config, engine *sync.Engine, db *database.DB, bgWG *stdsync.WaitGroup) bool {
+func refreshAFLCacheIfDue(ctx context.Context, cfg *config.Config, engine *sync.Engine, db *database.DB) bool {
 	count, refreshedAt, err := db.GetAFLShowCacheStatus(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to read AFL cache status")
 		return false
 	}
-	// Skip once shutdown has begun, so bgWG isn't added to while main waits on it.
+	// Don't start a refresh once shutdown has begun.
 	cfg.RLock()
 	interval := config.AFLRefreshDuration(cfg.AFLRefreshInterval)
 	cfg.RUnlock()
 	if ctx.Err() != nil || !aflCacheRefreshDue(count, refreshedAt, time.Now(), interval) || !aflCacheRefreshing.CompareAndSwap(false, true) {
 		return false
 	}
-	bgWG.Add(1)
-	defer bgWG.Done()
 	defer aflCacheRefreshing.Store(false)
 	log.Info().Int("cached", count).Msg("AFL show list is due, refreshing")
 	runAFLCacheRefresh(ctx, engine, db)
@@ -92,7 +90,7 @@ func refreshAFLCacheIfDue(ctx context.Context, cfg *config.Config, engine *sync.
 // reach the add dialog and new-title alerts without a manual refresh. It
 // checks shortly after startup and then every aflCacheCheckInterval, and
 // refreshes as often as the afl_refresh_interval setting allows.
-func startAFLCacheRefresher(ctx context.Context, cfg *config.Config, engine *sync.Engine, db *database.DB, bgWG *stdsync.WaitGroup) {
+func startAFLCacheRefresher(ctx context.Context, cfg *config.Config, engine *sync.Engine, db *database.DB) {
 	first := time.NewTimer(catchUpSyncDelay)
 	defer first.Stop()
 	ticker := time.NewTicker(aflCacheCheckInterval)
@@ -105,7 +103,7 @@ func startAFLCacheRefresher(ctx context.Context, cfg *config.Config, engine *syn
 		case <-first.C:
 		case <-ticker.C:
 		}
-		refreshAFLCacheIfDue(ctx, cfg, engine, db, bgWG)
+		refreshAFLCacheIfDue(ctx, cfg, engine, db)
 	}
 }
 

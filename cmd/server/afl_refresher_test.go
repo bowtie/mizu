@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -34,7 +33,6 @@ func TestRefreshAFLCacheIfDue(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(aflShowListHTML))
 	}))
-	var bgWG sync.WaitGroup
 
 	cfg := config.DefaultConfig()
 
@@ -42,14 +40,14 @@ func TestRefreshAFLCacheIfDue(t *testing.T) {
 	_, err := db.ReplaceCachedAFLShows(t.Context(), []models.AFLShow{{Slug: "one-piece", Title: "One Piece"}},
 		time.Now().Add(-config.AFLRefreshDuration(cfg.AFLRefreshInterval)-time.Minute))
 	require.NoError(t, err)
-	require.True(t, refreshAFLCacheIfDue(t.Context(), cfg, engine, db, &bgWG))
+	require.True(t, refreshAFLCacheIfDue(t.Context(), cfg, engine, db))
 	count, refreshedAt, err := db.GetAFLShowCacheStatus(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 	assert.WithinDuration(t, time.Now(), refreshedAt, time.Minute)
 
 	// Now it's fresh, so the next check leaves AnimeFillerList alone.
-	assert.False(t, refreshAFLCacheIfDue(t.Context(), cfg, engine, db, &bgWG))
+	assert.False(t, refreshAFLCacheIfDue(t.Context(), cfg, engine, db))
 	assert.Equal(t, int32(1), fetches.Load())
 }
 
@@ -59,10 +57,9 @@ func TestRefreshAFLCacheIfDueSkipsWhileRefreshing(t *testing.T) {
 	engine, db := newAFLRefreshTestEngine(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fetches.Add(1)
 	}))
-	var bgWG sync.WaitGroup
 
 	aflCacheRefreshing.Store(true) // a manual refresh is in flight
-	assert.False(t, refreshAFLCacheIfDue(t.Context(), config.DefaultConfig(), engine, db, &bgWG))
+	assert.False(t, refreshAFLCacheIfDue(t.Context(), config.DefaultConfig(), engine, db))
 	assert.Zero(t, fetches.Load())
 }
 
