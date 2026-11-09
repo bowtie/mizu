@@ -29,7 +29,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
-    "@astryxdesign/cli": "0.7.4",
+    "@astryxdesign/cli": "0.7.9",
     "@stylexjs/unplugin": "^0.19.1",
     "@tanstack/react-query-devtools": "^5.105.0",
     "@types/node": "^26.6.6",

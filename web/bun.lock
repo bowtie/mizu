@@ -22,7 +22,7 @@
         "zustand": "^5.0.16",
       },
       "devDependencies": {
-        "@astryxdesign/cli": "0.7.4",
+        "@astryxdesign/cli": "0.7.9",
         "@stylexjs/unplugin": "^0.19.1",
         "@tanstack/react-query-devtools": "^5.105.0",
         "@types/node": "^26.6.6",
@@ -41,7 +41,7 @@
     "@astryxdesign/cli",
   ],
   "packages": {
-    "@astryxdesign/cli": ["@astryxdesign/cli@0.7.4", "", { "dependencies": { "@babel/core": "7.29.7", "@babel/parser": "7.29.8", "@babel/plugin-transform-typescript": "7.29.7", "@babel/types": "7.29.8", "ast-types": "0.16.3", "commander": "^12.1.0", "ignore": "^7.0.5", "jiti": "^2.7.0", "jscodeshift": "^17.3.0", "node-diff3": "3.2.1", "postcss": "^8.5.23", "postcss-selector-parser": "^7.1.6", "recast": "0.23.21", "zod": "^4.4.3" }, "peerDependencies": { "@astryxdesign/charts": "*", "@astryxdesign/core": "*", "@astryxdesign/lab": "*", "@astryxdesign/theme-neutral": "*" }, "optionalPeers": ["@astryxdesign/charts", "@astryxdesign/core", "@astryxdesign/lab", "@astryxdesign/theme-neutral"], "bin": { "cli": "./clients/cli/bin/astryx.mjs", "astryx": "./clients/cli/bin/astryx.mjs" } }, "sha512-5NmAlA4YhZIRYGObvk/zYaVmDINVnKl7A24XyaWz0KxRK747L+/5ZhyZ1aZiV+p1Zn+99zRqXLOy26lafMSnlg=="],
+    "@astryxdesign/cli": ["@astryxdesign/cli@0.7.9", "", { "dependencies": { "@babel/core": "7.29.7", "@babel/parser": "7.29.8", "@babel/plugin-transform-typescript": "7.29.7", "@babel/types": "7.29.8", "@stylexjs/babel-plugin": "^0.19.0", "ast-types": "0.16.3", "commander": "^12.1.0", "ignore": "^7.0.5", "jiti": "^2.7.0", "jscodeshift": "^17.3.0", "node-diff3": "3.2.1", "postcss": "^8.5.23", "postcss-selector-parser": "^7.1.6", "recast": "0.23.21", "zod": "^4.4.3" }, "peerDependencies": { "@astryxdesign/charts": "*", "@astryxdesign/core": "*", "@astryxdesign/lab": "*", "@astryxdesign/theme-neutral": "*" }, "optionalPeers": ["@astryxdesign/charts", "@astryxdesign/core", "@astryxdesign/lab", "@astryxdesign/theme-neutral"], "bin": { "cli": "./clients/cli/bin/astryx.mjs", "astryx": "./clients/cli/bin/astryx.mjs" } }, "sha512-7P0RaEzO/Nlq2AnQEWzEd7ikdN+c2JNLVDLJdHCGPxjyxMipzGLBBDKVnADc/0BOXjqJnOQYr7KKFkOkdKYs1g=="],
 
     "@astryxdesign/core": ["@astryxdesign/core@0.7.4", "", { "dependencies": { "intl-messageformat": "^11.2.9" }, "peerDependencies": { "@stylexjs/stylex": "^0.19.0", "react": ">=19.0.0", "react-dom": ">=19.0.0" } }, "sha512-zd/XfUw8OH8Dj65w6cPYamMXgb11P7oIgrlXgyBGaHXKJi3aedkU17Q+lERgv7YL3Bv4/UKPMqKL/QZkvoay1w=="],
 
